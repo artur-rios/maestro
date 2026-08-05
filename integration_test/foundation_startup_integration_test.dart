@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:maestro/app/maestro_app.dart';
@@ -26,7 +27,11 @@ void main() {
       await app.main();
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      expect(find.bySemanticsLabel('Foundation blocked'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Foundation blocked'),
+        findsNothing,
+        reason: _visibleText(tester),
+      );
       expect(
         find.bySemanticsLabel(RegExp(r'Foundation (ready|degraded)')),
         findsOneWidget,
@@ -34,6 +39,12 @@ void main() {
     },
   );
 }
+
+String _visibleText(WidgetTester tester) => tester
+    .widgetList<Text>(find.byType(Text))
+    .map((widget) => widget.data)
+    .whereType<String>()
+    .join(' | ');
 
 final class _ReadyProbe implements FoundationProbe {
   @override
