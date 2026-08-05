@@ -20,7 +20,7 @@ On Ubuntu, download the official `appimagetool-x86_64.AppImage`, verify the SHA-
 
 ```bash
 export APPIMAGETOOL_PATH=/verified/path/appimagetool
-tooling/packaging/package_linux.sh 0.1.0
+bash tooling/packaging/package_linux.sh 0.1.0
 ```
 
 Create and verify release metadata after all four artifacts are together:
