@@ -33,12 +33,22 @@ void main() {
     },
   );
 
-  for (final mutableUrl in <String>[
-    'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
-    'https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage',
-  ]) {
+  final mutableReleaseAssets = <String, String>{
+    'GitHubContinuous':
+        'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
+    'GitHubLatest':
+        'https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage',
+    'ExternalContinuous':
+        'https://downloads.example.com/tools/releases/download/continuous/tool-x86_64',
+    'ExternalLatest':
+        'http://downloads.example.com/tools/releases/latest/download/tool-x86_64',
+    'PrereleaseVersion':
+        'https://github.com/example/tool/releases/download/1.9.2-rc.1/tool-x86_64',
+  };
+  for (final MapEntry(key: scenario, value: mutableUrl)
+      in mutableReleaseAssets.entries) {
     test(
-      'GivenMutableReleaseAsset_WhenVerified_ThenExactUrlIsRejected',
+      'Given${scenario}ReleaseAsset_WhenVerified_ThenExactUrlIsRejected',
       () => _withWorkflow(
         '''
 name: Mutable tool

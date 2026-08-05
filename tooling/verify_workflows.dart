@@ -15,9 +15,9 @@ Future<void> main() async {
   final actionReference = RegExp(r'uses:\s*[^@\s]+@([^\s#]+)');
   final immutableSha = RegExp(r'^[0-9a-fA-F]{40}$');
   final releaseAssetReference = RegExp(
-    r'''https://github\.com/[^/\s"']+/[^/\s"']+/releases/(?:download/([^/\s"']+)/[^\s"']+|latest/download/[^\s"']+)''',
+    r'''https?://[^\s"']+/releases/(?:download/([^/\s"']+)/[^\s"']+|latest/download/[^\s"']+)''',
   );
-  final immutableVersion = RegExp(r'^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$');
+  final immutableVersion = RegExp(r'^v?\d+\.\d+\.\d+$');
   for (final workflow in workflows) {
     final source = await workflow.readAsString();
     final document = loadYaml(source);
