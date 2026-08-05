@@ -40,7 +40,43 @@ class OwnedResources extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
 
-@DriftDatabase(tables: <Type>[Settings, DiagnosticLogSegments, OwnedResources])
+@TableIndex.sql(
+  'CREATE UNIQUE INDEX local_users_single_operating_system '
+  "ON local_users (auth_method) WHERE auth_method = 'operatingSystem'",
+)
+class LocalUsers extends Table {
+  TextColumn get id => text()();
+  TextColumn get email => text().nullable().unique()();
+  TextColumn get authMethod => text()();
+  TextColumn get verifierKey => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get lastAuthenticatedAt => dateTime().nullable()();
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+class AuditEvents extends Table {
+  TextColumn get id => text()();
+  TextColumn get actorId => text()();
+  TextColumn get action => text()();
+  TextColumn get target => text()();
+  TextColumn get outcome => text()();
+  DateTimeColumn get occurredAt => dateTime()();
+  TextColumn get details => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+@DriftDatabase(
+  tables: <Type>[
+    Settings,
+    DiagnosticLogSegments,
+    OwnedResources,
+    LocalUsers,
+    AuditEvents,
+  ],
+)
 final class MaestroDatabase extends _$MaestroDatabase {
   MaestroDatabase(super.executor);
 
@@ -50,6 +86,13 @@ final class MaestroDatabase extends _$MaestroDatabase {
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) {
+        await migrator.createTable(localUsers);
+        await migrator.createTable(auditEvents);
+        await migrator.createIndex(localUsersSingleOperatingSystem);
+      }
+    },
     beforeOpen: (_) async {
       await customStatement('PRAGMA foreign_keys = ON');
       final result = await integrityCheck();

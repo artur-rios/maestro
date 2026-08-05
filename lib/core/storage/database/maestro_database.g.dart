@@ -1319,6 +1319,898 @@ class OwnedResourcesCompanion extends UpdateCompanion<OwnedResource> {
   }
 }
 
+class $LocalUsersTable extends LocalUsers
+    with TableInfo<$LocalUsersTable, LocalUser> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalUsersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _emailMeta = const VerificationMeta('email');
+  @override
+  late final GeneratedColumn<String> email = GeneratedColumn<String>(
+    'email',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _authMethodMeta = const VerificationMeta(
+    'authMethod',
+  );
+  @override
+  late final GeneratedColumn<String> authMethod = GeneratedColumn<String>(
+    'auth_method',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _verifierKeyMeta = const VerificationMeta(
+    'verifierKey',
+  );
+  @override
+  late final GeneratedColumn<String> verifierKey = GeneratedColumn<String>(
+    'verifier_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastAuthenticatedAtMeta =
+      const VerificationMeta('lastAuthenticatedAt');
+  @override
+  late final GeneratedColumn<DateTime> lastAuthenticatedAt =
+      GeneratedColumn<DateTime>(
+        'last_authenticated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    email,
+    authMethod,
+    verifierKey,
+    createdAt,
+    lastAuthenticatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_users';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalUser> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('email')) {
+      context.handle(
+        _emailMeta,
+        email.isAcceptableOrUnknown(data['email']!, _emailMeta),
+      );
+    }
+    if (data.containsKey('auth_method')) {
+      context.handle(
+        _authMethodMeta,
+        authMethod.isAcceptableOrUnknown(data['auth_method']!, _authMethodMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_authMethodMeta);
+    }
+    if (data.containsKey('verifier_key')) {
+      context.handle(
+        _verifierKeyMeta,
+        verifierKey.isAcceptableOrUnknown(
+          data['verifier_key']!,
+          _verifierKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('last_authenticated_at')) {
+      context.handle(
+        _lastAuthenticatedAtMeta,
+        lastAuthenticatedAt.isAcceptableOrUnknown(
+          data['last_authenticated_at']!,
+          _lastAuthenticatedAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LocalUser map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalUser(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      email: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}email'],
+      ),
+      authMethod: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}auth_method'],
+      )!,
+      verifierKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verifier_key'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      lastAuthenticatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_authenticated_at'],
+      ),
+    );
+  }
+
+  @override
+  $LocalUsersTable createAlias(String alias) {
+    return $LocalUsersTable(attachedDatabase, alias);
+  }
+}
+
+class LocalUser extends DataClass implements Insertable<LocalUser> {
+  final String id;
+  final String? email;
+  final String authMethod;
+  final String? verifierKey;
+  final DateTime createdAt;
+  final DateTime? lastAuthenticatedAt;
+  const LocalUser({
+    required this.id,
+    this.email,
+    required this.authMethod,
+    this.verifierKey,
+    required this.createdAt,
+    this.lastAuthenticatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || email != null) {
+      map['email'] = Variable<String>(email);
+    }
+    map['auth_method'] = Variable<String>(authMethod);
+    if (!nullToAbsent || verifierKey != null) {
+      map['verifier_key'] = Variable<String>(verifierKey);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || lastAuthenticatedAt != null) {
+      map['last_authenticated_at'] = Variable<DateTime>(lastAuthenticatedAt);
+    }
+    return map;
+  }
+
+  LocalUsersCompanion toCompanion(bool nullToAbsent) {
+    return LocalUsersCompanion(
+      id: Value(id),
+      email: email == null && nullToAbsent
+          ? const Value.absent()
+          : Value(email),
+      authMethod: Value(authMethod),
+      verifierKey: verifierKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifierKey),
+      createdAt: Value(createdAt),
+      lastAuthenticatedAt: lastAuthenticatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastAuthenticatedAt),
+    );
+  }
+
+  factory LocalUser.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalUser(
+      id: serializer.fromJson<String>(json['id']),
+      email: serializer.fromJson<String?>(json['email']),
+      authMethod: serializer.fromJson<String>(json['authMethod']),
+      verifierKey: serializer.fromJson<String?>(json['verifierKey']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      lastAuthenticatedAt: serializer.fromJson<DateTime?>(
+        json['lastAuthenticatedAt'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'email': serializer.toJson<String?>(email),
+      'authMethod': serializer.toJson<String>(authMethod),
+      'verifierKey': serializer.toJson<String?>(verifierKey),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'lastAuthenticatedAt': serializer.toJson<DateTime?>(lastAuthenticatedAt),
+    };
+  }
+
+  LocalUser copyWith({
+    String? id,
+    Value<String?> email = const Value.absent(),
+    String? authMethod,
+    Value<String?> verifierKey = const Value.absent(),
+    DateTime? createdAt,
+    Value<DateTime?> lastAuthenticatedAt = const Value.absent(),
+  }) => LocalUser(
+    id: id ?? this.id,
+    email: email.present ? email.value : this.email,
+    authMethod: authMethod ?? this.authMethod,
+    verifierKey: verifierKey.present ? verifierKey.value : this.verifierKey,
+    createdAt: createdAt ?? this.createdAt,
+    lastAuthenticatedAt: lastAuthenticatedAt.present
+        ? lastAuthenticatedAt.value
+        : this.lastAuthenticatedAt,
+  );
+  LocalUser copyWithCompanion(LocalUsersCompanion data) {
+    return LocalUser(
+      id: data.id.present ? data.id.value : this.id,
+      email: data.email.present ? data.email.value : this.email,
+      authMethod: data.authMethod.present
+          ? data.authMethod.value
+          : this.authMethod,
+      verifierKey: data.verifierKey.present
+          ? data.verifierKey.value
+          : this.verifierKey,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      lastAuthenticatedAt: data.lastAuthenticatedAt.present
+          ? data.lastAuthenticatedAt.value
+          : this.lastAuthenticatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalUser(')
+          ..write('id: $id, ')
+          ..write('email: $email, ')
+          ..write('authMethod: $authMethod, ')
+          ..write('verifierKey: $verifierKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastAuthenticatedAt: $lastAuthenticatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    email,
+    authMethod,
+    verifierKey,
+    createdAt,
+    lastAuthenticatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalUser &&
+          other.id == this.id &&
+          other.email == this.email &&
+          other.authMethod == this.authMethod &&
+          other.verifierKey == this.verifierKey &&
+          other.createdAt == this.createdAt &&
+          other.lastAuthenticatedAt == this.lastAuthenticatedAt);
+}
+
+class LocalUsersCompanion extends UpdateCompanion<LocalUser> {
+  final Value<String> id;
+  final Value<String?> email;
+  final Value<String> authMethod;
+  final Value<String?> verifierKey;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> lastAuthenticatedAt;
+  final Value<int> rowid;
+  const LocalUsersCompanion({
+    this.id = const Value.absent(),
+    this.email = const Value.absent(),
+    this.authMethod = const Value.absent(),
+    this.verifierKey = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.lastAuthenticatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalUsersCompanion.insert({
+    required String id,
+    this.email = const Value.absent(),
+    required String authMethod,
+    this.verifierKey = const Value.absent(),
+    required DateTime createdAt,
+    this.lastAuthenticatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       authMethod = Value(authMethod),
+       createdAt = Value(createdAt);
+  static Insertable<LocalUser> custom({
+    Expression<String>? id,
+    Expression<String>? email,
+    Expression<String>? authMethod,
+    Expression<String>? verifierKey,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? lastAuthenticatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (email != null) 'email': email,
+      if (authMethod != null) 'auth_method': authMethod,
+      if (verifierKey != null) 'verifier_key': verifierKey,
+      if (createdAt != null) 'created_at': createdAt,
+      if (lastAuthenticatedAt != null)
+        'last_authenticated_at': lastAuthenticatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalUsersCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? email,
+    Value<String>? authMethod,
+    Value<String?>? verifierKey,
+    Value<DateTime>? createdAt,
+    Value<DateTime?>? lastAuthenticatedAt,
+    Value<int>? rowid,
+  }) {
+    return LocalUsersCompanion(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      authMethod: authMethod ?? this.authMethod,
+      verifierKey: verifierKey ?? this.verifierKey,
+      createdAt: createdAt ?? this.createdAt,
+      lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (email.present) {
+      map['email'] = Variable<String>(email.value);
+    }
+    if (authMethod.present) {
+      map['auth_method'] = Variable<String>(authMethod.value);
+    }
+    if (verifierKey.present) {
+      map['verifier_key'] = Variable<String>(verifierKey.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (lastAuthenticatedAt.present) {
+      map['last_authenticated_at'] = Variable<DateTime>(
+        lastAuthenticatedAt.value,
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalUsersCompanion(')
+          ..write('id: $id, ')
+          ..write('email: $email, ')
+          ..write('authMethod: $authMethod, ')
+          ..write('verifierKey: $verifierKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastAuthenticatedAt: $lastAuthenticatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AuditEventsTable extends AuditEvents
+    with TableInfo<$AuditEventsTable, AuditEvent> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AuditEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorIdMeta = const VerificationMeta(
+    'actorId',
+  );
+  @override
+  late final GeneratedColumn<String> actorId = GeneratedColumn<String>(
+    'actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetMeta = const VerificationMeta('target');
+  @override
+  late final GeneratedColumn<String> target = GeneratedColumn<String>(
+    'target',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _outcomeMeta = const VerificationMeta(
+    'outcome',
+  );
+  @override
+  late final GeneratedColumn<String> outcome = GeneratedColumn<String>(
+    'outcome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _occurredAtMeta = const VerificationMeta(
+    'occurredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAt = GeneratedColumn<DateTime>(
+    'occurred_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailsMeta = const VerificationMeta(
+    'details',
+  );
+  @override
+  late final GeneratedColumn<String> details = GeneratedColumn<String>(
+    'details',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    actorId,
+    action,
+    target,
+    outcome,
+    occurredAt,
+    details,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'audit_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AuditEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('actor_id')) {
+      context.handle(
+        _actorIdMeta,
+        actorId.isAcceptableOrUnknown(data['actor_id']!, _actorIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actorIdMeta);
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('target')) {
+      context.handle(
+        _targetMeta,
+        target.isAcceptableOrUnknown(data['target']!, _targetMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetMeta);
+    }
+    if (data.containsKey('outcome')) {
+      context.handle(
+        _outcomeMeta,
+        outcome.isAcceptableOrUnknown(data['outcome']!, _outcomeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_outcomeMeta);
+    }
+    if (data.containsKey('occurred_at')) {
+      context.handle(
+        _occurredAtMeta,
+        occurredAt.isAcceptableOrUnknown(data['occurred_at']!, _occurredAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtMeta);
+    }
+    if (data.containsKey('details')) {
+      context.handle(
+        _detailsMeta,
+        details.isAcceptableOrUnknown(data['details']!, _detailsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailsMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AuditEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AuditEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      actorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_id'],
+      )!,
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      target: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target'],
+      )!,
+      outcome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}outcome'],
+      )!,
+      occurredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at'],
+      )!,
+      details: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}details'],
+      )!,
+    );
+  }
+
+  @override
+  $AuditEventsTable createAlias(String alias) {
+    return $AuditEventsTable(attachedDatabase, alias);
+  }
+}
+
+class AuditEvent extends DataClass implements Insertable<AuditEvent> {
+  final String id;
+  final String actorId;
+  final String action;
+  final String target;
+  final String outcome;
+  final DateTime occurredAt;
+  final String details;
+  const AuditEvent({
+    required this.id,
+    required this.actorId,
+    required this.action,
+    required this.target,
+    required this.outcome,
+    required this.occurredAt,
+    required this.details,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['actor_id'] = Variable<String>(actorId);
+    map['action'] = Variable<String>(action);
+    map['target'] = Variable<String>(target);
+    map['outcome'] = Variable<String>(outcome);
+    map['occurred_at'] = Variable<DateTime>(occurredAt);
+    map['details'] = Variable<String>(details);
+    return map;
+  }
+
+  AuditEventsCompanion toCompanion(bool nullToAbsent) {
+    return AuditEventsCompanion(
+      id: Value(id),
+      actorId: Value(actorId),
+      action: Value(action),
+      target: Value(target),
+      outcome: Value(outcome),
+      occurredAt: Value(occurredAt),
+      details: Value(details),
+    );
+  }
+
+  factory AuditEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AuditEvent(
+      id: serializer.fromJson<String>(json['id']),
+      actorId: serializer.fromJson<String>(json['actorId']),
+      action: serializer.fromJson<String>(json['action']),
+      target: serializer.fromJson<String>(json['target']),
+      outcome: serializer.fromJson<String>(json['outcome']),
+      occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
+      details: serializer.fromJson<String>(json['details']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'actorId': serializer.toJson<String>(actorId),
+      'action': serializer.toJson<String>(action),
+      'target': serializer.toJson<String>(target),
+      'outcome': serializer.toJson<String>(outcome),
+      'occurredAt': serializer.toJson<DateTime>(occurredAt),
+      'details': serializer.toJson<String>(details),
+    };
+  }
+
+  AuditEvent copyWith({
+    String? id,
+    String? actorId,
+    String? action,
+    String? target,
+    String? outcome,
+    DateTime? occurredAt,
+    String? details,
+  }) => AuditEvent(
+    id: id ?? this.id,
+    actorId: actorId ?? this.actorId,
+    action: action ?? this.action,
+    target: target ?? this.target,
+    outcome: outcome ?? this.outcome,
+    occurredAt: occurredAt ?? this.occurredAt,
+    details: details ?? this.details,
+  );
+  AuditEvent copyWithCompanion(AuditEventsCompanion data) {
+    return AuditEvent(
+      id: data.id.present ? data.id.value : this.id,
+      actorId: data.actorId.present ? data.actorId.value : this.actorId,
+      action: data.action.present ? data.action.value : this.action,
+      target: data.target.present ? data.target.value : this.target,
+      outcome: data.outcome.present ? data.outcome.value : this.outcome,
+      occurredAt: data.occurredAt.present
+          ? data.occurredAt.value
+          : this.occurredAt,
+      details: data.details.present ? data.details.value : this.details,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AuditEvent(')
+          ..write('id: $id, ')
+          ..write('actorId: $actorId, ')
+          ..write('action: $action, ')
+          ..write('target: $target, ')
+          ..write('outcome: $outcome, ')
+          ..write('occurredAt: $occurredAt, ')
+          ..write('details: $details')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, actorId, action, target, outcome, occurredAt, details);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AuditEvent &&
+          other.id == this.id &&
+          other.actorId == this.actorId &&
+          other.action == this.action &&
+          other.target == this.target &&
+          other.outcome == this.outcome &&
+          other.occurredAt == this.occurredAt &&
+          other.details == this.details);
+}
+
+class AuditEventsCompanion extends UpdateCompanion<AuditEvent> {
+  final Value<String> id;
+  final Value<String> actorId;
+  final Value<String> action;
+  final Value<String> target;
+  final Value<String> outcome;
+  final Value<DateTime> occurredAt;
+  final Value<String> details;
+  final Value<int> rowid;
+  const AuditEventsCompanion({
+    this.id = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.action = const Value.absent(),
+    this.target = const Value.absent(),
+    this.outcome = const Value.absent(),
+    this.occurredAt = const Value.absent(),
+    this.details = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AuditEventsCompanion.insert({
+    required String id,
+    required String actorId,
+    required String action,
+    required String target,
+    required String outcome,
+    required DateTime occurredAt,
+    required String details,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       actorId = Value(actorId),
+       action = Value(action),
+       target = Value(target),
+       outcome = Value(outcome),
+       occurredAt = Value(occurredAt),
+       details = Value(details);
+  static Insertable<AuditEvent> custom({
+    Expression<String>? id,
+    Expression<String>? actorId,
+    Expression<String>? action,
+    Expression<String>? target,
+    Expression<String>? outcome,
+    Expression<DateTime>? occurredAt,
+    Expression<String>? details,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (actorId != null) 'actor_id': actorId,
+      if (action != null) 'action': action,
+      if (target != null) 'target': target,
+      if (outcome != null) 'outcome': outcome,
+      if (occurredAt != null) 'occurred_at': occurredAt,
+      if (details != null) 'details': details,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AuditEventsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? actorId,
+    Value<String>? action,
+    Value<String>? target,
+    Value<String>? outcome,
+    Value<DateTime>? occurredAt,
+    Value<String>? details,
+    Value<int>? rowid,
+  }) {
+    return AuditEventsCompanion(
+      id: id ?? this.id,
+      actorId: actorId ?? this.actorId,
+      action: action ?? this.action,
+      target: target ?? this.target,
+      outcome: outcome ?? this.outcome,
+      occurredAt: occurredAt ?? this.occurredAt,
+      details: details ?? this.details,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (actorId.present) {
+      map['actor_id'] = Variable<String>(actorId.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (target.present) {
+      map['target'] = Variable<String>(target.value);
+    }
+    if (outcome.present) {
+      map['outcome'] = Variable<String>(outcome.value);
+    }
+    if (occurredAt.present) {
+      map['occurred_at'] = Variable<DateTime>(occurredAt.value);
+    }
+    if (details.present) {
+      map['details'] = Variable<String>(details.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AuditEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('actorId: $actorId, ')
+          ..write('action: $action, ')
+          ..write('target: $target, ')
+          ..write('outcome: $outcome, ')
+          ..write('occurredAt: $occurredAt, ')
+          ..write('details: $details, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$MaestroDatabase extends GeneratedDatabase {
   _$MaestroDatabase(QueryExecutor e) : super(e);
   $MaestroDatabaseManager get managers => $MaestroDatabaseManager(this);
@@ -1326,6 +2218,12 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final $DiagnosticLogSegmentsTable diagnosticLogSegments =
       $DiagnosticLogSegmentsTable(this);
   late final $OwnedResourcesTable ownedResources = $OwnedResourcesTable(this);
+  late final $LocalUsersTable localUsers = $LocalUsersTable(this);
+  late final $AuditEventsTable auditEvents = $AuditEventsTable(this);
+  late final Index localUsersSingleOperatingSystem = Index(
+    'local_users_single_operating_system',
+    'CREATE UNIQUE INDEX local_users_single_operating_system ON local_users (auth_method) WHERE auth_method = \'operatingSystem\'',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1334,6 +2232,9 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     settings,
     diagnosticLogSegments,
     ownedResources,
+    localUsers,
+    auditEvents,
+    localUsersSingleOperatingSystem,
   ];
 }
 
@@ -2044,6 +2945,471 @@ typedef $$OwnedResourcesTableProcessedTableManager =
       OwnedResource,
       PrefetchHooks Function()
     >;
+typedef $$LocalUsersTableCreateCompanionBuilder =
+    LocalUsersCompanion Function({
+      required String id,
+      Value<String?> email,
+      required String authMethod,
+      Value<String?> verifierKey,
+      required DateTime createdAt,
+      Value<DateTime?> lastAuthenticatedAt,
+      Value<int> rowid,
+    });
+typedef $$LocalUsersTableUpdateCompanionBuilder =
+    LocalUsersCompanion Function({
+      Value<String> id,
+      Value<String?> email,
+      Value<String> authMethod,
+      Value<String?> verifierKey,
+      Value<DateTime> createdAt,
+      Value<DateTime?> lastAuthenticatedAt,
+      Value<int> rowid,
+    });
+
+class $$LocalUsersTableFilterComposer
+    extends Composer<_$MaestroDatabase, $LocalUsersTable> {
+  $$LocalUsersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get authMethod => $composableBuilder(
+    column: $table.authMethod,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifierKey => $composableBuilder(
+    column: $table.verifierKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastAuthenticatedAt => $composableBuilder(
+    column: $table.lastAuthenticatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocalUsersTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $LocalUsersTable> {
+  $$LocalUsersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get authMethod => $composableBuilder(
+    column: $table.authMethod,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifierKey => $composableBuilder(
+    column: $table.verifierKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastAuthenticatedAt => $composableBuilder(
+    column: $table.lastAuthenticatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocalUsersTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $LocalUsersTable> {
+  $$LocalUsersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
+
+  GeneratedColumn<String> get authMethod => $composableBuilder(
+    column: $table.authMethod,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get verifierKey => $composableBuilder(
+    column: $table.verifierKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastAuthenticatedAt => $composableBuilder(
+    column: $table.lastAuthenticatedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$LocalUsersTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $LocalUsersTable,
+          LocalUser,
+          $$LocalUsersTableFilterComposer,
+          $$LocalUsersTableOrderingComposer,
+          $$LocalUsersTableAnnotationComposer,
+          $$LocalUsersTableCreateCompanionBuilder,
+          $$LocalUsersTableUpdateCompanionBuilder,
+          (
+            LocalUser,
+            BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser>,
+          ),
+          LocalUser,
+          PrefetchHooks Function()
+        > {
+  $$LocalUsersTableTableManager(_$MaestroDatabase db, $LocalUsersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalUsersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalUsersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocalUsersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> email = const Value.absent(),
+                Value<String> authMethod = const Value.absent(),
+                Value<String?> verifierKey = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> lastAuthenticatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalUsersCompanion(
+                id: id,
+                email: email,
+                authMethod: authMethod,
+                verifierKey: verifierKey,
+                createdAt: createdAt,
+                lastAuthenticatedAt: lastAuthenticatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> email = const Value.absent(),
+                required String authMethod,
+                Value<String?> verifierKey = const Value.absent(),
+                required DateTime createdAt,
+                Value<DateTime?> lastAuthenticatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalUsersCompanion.insert(
+                id: id,
+                email: email,
+                authMethod: authMethod,
+                verifierKey: verifierKey,
+                createdAt: createdAt,
+                lastAuthenticatedAt: lastAuthenticatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocalUsersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $LocalUsersTable,
+      LocalUser,
+      $$LocalUsersTableFilterComposer,
+      $$LocalUsersTableOrderingComposer,
+      $$LocalUsersTableAnnotationComposer,
+      $$LocalUsersTableCreateCompanionBuilder,
+      $$LocalUsersTableUpdateCompanionBuilder,
+      (
+        LocalUser,
+        BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser>,
+      ),
+      LocalUser,
+      PrefetchHooks Function()
+    >;
+typedef $$AuditEventsTableCreateCompanionBuilder =
+    AuditEventsCompanion Function({
+      required String id,
+      required String actorId,
+      required String action,
+      required String target,
+      required String outcome,
+      required DateTime occurredAt,
+      required String details,
+      Value<int> rowid,
+    });
+typedef $$AuditEventsTableUpdateCompanionBuilder =
+    AuditEventsCompanion Function({
+      Value<String> id,
+      Value<String> actorId,
+      Value<String> action,
+      Value<String> target,
+      Value<String> outcome,
+      Value<DateTime> occurredAt,
+      Value<String> details,
+      Value<int> rowid,
+    });
+
+class $$AuditEventsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $AuditEventsTable> {
+  $$AuditEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get details => $composableBuilder(
+    column: $table.details,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AuditEventsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $AuditEventsTable> {
+  $$AuditEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get details => $composableBuilder(
+    column: $table.details,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AuditEventsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $AuditEventsTable> {
+  $$AuditEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get actorId =>
+      $composableBuilder(column: $table.actorId, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get target =>
+      $composableBuilder(column: $table.target, builder: (column) => column);
+
+  GeneratedColumn<String> get outcome =>
+      $composableBuilder(column: $table.outcome, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get details =>
+      $composableBuilder(column: $table.details, builder: (column) => column);
+}
+
+class $$AuditEventsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $AuditEventsTable,
+          AuditEvent,
+          $$AuditEventsTableFilterComposer,
+          $$AuditEventsTableOrderingComposer,
+          $$AuditEventsTableAnnotationComposer,
+          $$AuditEventsTableCreateCompanionBuilder,
+          $$AuditEventsTableUpdateCompanionBuilder,
+          (
+            AuditEvent,
+            BaseReferences<_$MaestroDatabase, $AuditEventsTable, AuditEvent>,
+          ),
+          AuditEvent,
+          PrefetchHooks Function()
+        > {
+  $$AuditEventsTableTableManager(_$MaestroDatabase db, $AuditEventsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AuditEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AuditEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AuditEventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> actorId = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<String> target = const Value.absent(),
+                Value<String> outcome = const Value.absent(),
+                Value<DateTime> occurredAt = const Value.absent(),
+                Value<String> details = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AuditEventsCompanion(
+                id: id,
+                actorId: actorId,
+                action: action,
+                target: target,
+                outcome: outcome,
+                occurredAt: occurredAt,
+                details: details,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String actorId,
+                required String action,
+                required String target,
+                required String outcome,
+                required DateTime occurredAt,
+                required String details,
+                Value<int> rowid = const Value.absent(),
+              }) => AuditEventsCompanion.insert(
+                id: id,
+                actorId: actorId,
+                action: action,
+                target: target,
+                outcome: outcome,
+                occurredAt: occurredAt,
+                details: details,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AuditEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $AuditEventsTable,
+      AuditEvent,
+      $$AuditEventsTableFilterComposer,
+      $$AuditEventsTableOrderingComposer,
+      $$AuditEventsTableAnnotationComposer,
+      $$AuditEventsTableCreateCompanionBuilder,
+      $$AuditEventsTableUpdateCompanionBuilder,
+      (
+        AuditEvent,
+        BaseReferences<_$MaestroDatabase, $AuditEventsTable, AuditEvent>,
+      ),
+      AuditEvent,
+      PrefetchHooks Function()
+    >;
 
 class $MaestroDatabaseManager {
   final _$MaestroDatabase _db;
@@ -2054,4 +3420,8 @@ class $MaestroDatabaseManager {
       $$DiagnosticLogSegmentsTableTableManager(_db, _db.diagnosticLogSegments);
   $$OwnedResourcesTableTableManager get ownedResources =>
       $$OwnedResourcesTableTableManager(_db, _db.ownedResources);
+  $$LocalUsersTableTableManager get localUsers =>
+      $$LocalUsersTableTableManager(_db, _db.localUsers);
+  $$AuditEventsTableTableManager get auditEvents =>
+      $$AuditEventsTableTableManager(_db, _db.auditEvents);
 }
