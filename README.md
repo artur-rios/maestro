@@ -5,7 +5,7 @@ local software projects. A user selects a project folder, describes a task, choo
 steps, assigns an AI CLI and model to each step, and lets Maestro execute the workflow on an isolated Git
 branch in the background.
 
-> **Status:** specification complete, implementation not started.
+> **Status:** the M-01 desktop foundation is implemented on the `feature/issue-1-foundation` branch and is under review.
 
 ## What It Does
 
@@ -72,7 +72,7 @@ Start the application on Linux:
 flutter run -d linux
 ```
 
-These are intended commands for the planned project scaffold; implementation has not started.
+Operational prerequisites and clean-clone commands are documented in [Building and Testing](docs/development/building-and-testing.md). Release packaging and the current publisher-signing limitation are documented in [Releases and Signing](docs/development/releases-and-signing.md). Application data ownership and recovery are documented in [Application Data and Recovery](docs/development/application-data.md).
 
 ## Testing
 

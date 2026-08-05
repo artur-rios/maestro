@@ -40,10 +40,15 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test integration_test/platform/process_tree_integration_test.dart -d windows
+      - run: flutter test integration_test/foundation_startup_integration_test.dart -d windows
+      - run: flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows
       - run: flutter build windows --release
       - name: Package Windows artifacts
         shell: pwsh
         run: tooling/packaging/package_windows.ps1 -Version 0.1.0 -SkipBuild
+      - name: Smoke portable install and update staging
+        shell: pwsh
+        run: tooling/smoke/windows_install_update.ps1 -InitialPackage dist/maestro-windows-x64.zip -UpdatePackage dist/maestro-windows-x64.zip -WorkRoot "$env:RUNNER_TEMP/maestro-smoke"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-packages
@@ -68,6 +73,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev libayatana-appindicator3-dev xvfb
       - run: flutter pub get
       - run: xvfb-run -a flutter test integration_test/platform/process_tree_integration_test.dart -d linux
+      - run: xvfb-run -a flutter test integration_test/foundation_startup_integration_test.dart -d linux
+      - run: xvfb-run -a flutter test integration_test/performance/concurrent_streams_integration_test.dart -d linux
       - run: flutter build linux --release
       - name: Install pinned appimagetool
         run: |
@@ -76,6 +83,7 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/appimagetool"
           echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
       - run: tooling/packaging/package_linux.sh 0.1.0
+      - run: tooling/smoke/linux_install_update.sh dist/maestro-linux-x64.AppImage dist/maestro-linux-amd64.deb
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: linux-packages
