@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-appimage=${1:?AppImage path is required}
-debian_package=${2:?Debian package path is required}
+appimage=$(realpath "${1:?AppImage path is required}")
+debian_package=$(realpath "${2:?Debian package path is required}")
 test -f "$appimage"
 test -f "$debian_package"
 
