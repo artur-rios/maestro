@@ -32,6 +32,11 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# flutter_secure_storage_windows uses two ATL-only string conversion helpers.
+# Keep the Windows build portable across minimal Build Tools installations by
+# providing compatible UTF-8 conversions without pulling in the full ATL SDK.
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/compat")
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
