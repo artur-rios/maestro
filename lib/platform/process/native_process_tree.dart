@@ -1,0 +1,37 @@
+import 'dart:io';
+
+import 'package:maestro/platform/process/process_supervisor.dart';
+
+final class ProcessStartRequest {
+  const ProcessStartRequest({
+    required this.executable,
+    this.arguments = const <String>[],
+    this.workingDirectory,
+    this.environment = const <String, String>{},
+  });
+
+  final String executable;
+  final List<String> arguments;
+  final String? workingDirectory;
+  final Map<String, String> environment;
+}
+
+abstract interface class NativeProcessTree {
+  Future<OwnedNativeProcess> start(ProcessStartRequest request);
+}
+
+abstract interface class OwnedNativeProcess implements OwnedProcess {
+  int get pid;
+  Future<int> get exitCode;
+}
+
+Future<Process> startNativeProcess(ProcessStartRequest request) {
+  return Process.start(
+    request.executable,
+    request.arguments,
+    workingDirectory: request.workingDirectory,
+    environment: request.environment,
+    includeParentEnvironment: true,
+    runInShell: false,
+  );
+}
