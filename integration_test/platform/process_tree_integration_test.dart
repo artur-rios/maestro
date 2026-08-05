@@ -72,7 +72,10 @@ Future<bool> _waitUntilExited(int pid) async {
             'if (Get-Process -Id $pid -ErrorAction SilentlyContinue) { exit 1 }',
           ])
         : await Process.run('/bin/kill', <String>['-0', '$pid']);
-    if (result.exitCode == 0) {
+    final exited = Platform.isWindows
+        ? result.exitCode == 0
+        : result.exitCode != 0;
+    if (exited) {
       return true;
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
