@@ -21,18 +21,20 @@ void main() {
   });
 
   test(
-    'GivenExpensiveHashing_WhenStarted_ThenEventLoopRemainsResponsive',
+    'GivenExpensiveHashing_WhenStarted_ThenEventLoopAdvancesBeforeHashCompletes',
     () async {
-      var eventLoopProgressed = false;
+      var hashingCompleted = false;
+      final hashing = hasher.create('another correct horse battery staple');
       unawaited(
-        Future<void>.delayed(Duration.zero, () {
-          eventLoopProgressed = true;
+        hashing.then<void>((_) {
+          hashingCompleted = true;
         }),
       );
 
-      await hasher.create('another correct horse battery staple');
+      await Future<void>.delayed(Duration.zero);
 
-      expect(eventLoopProgressed, isTrue);
+      expect(hashingCompleted, isFalse);
+      await hashing;
     },
   );
 }

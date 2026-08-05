@@ -56,6 +56,26 @@ void main() {
       expect(await store.read(verifierKey), isNull);
     },
   );
+
+  test('GivenMissingVerifier_WhenRead_ThenNullIsReturned', () async {
+    final store = ProtectedPasswordVerifierStore(_MemoryProtectedStorage());
+
+    expect(await store.read(verifierKey), isNull);
+  });
+
+  test(
+    'GivenMalformedUtf8Bytes_WhenRead_ThenFormatExceptionIsThrown',
+    () async {
+      final storage = _MemoryProtectedStorage()
+        ..seed(verifierKey, Uint8List.fromList(<int>[0xC3, 0x28]));
+      final store = ProtectedPasswordVerifierStore(storage);
+
+      await expectLater(
+        store.read(verifierKey),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
 }
 
 final class _MemoryProtectedStorage implements ProtectedStorage {
@@ -64,6 +84,10 @@ final class _MemoryProtectedStorage implements ProtectedStorage {
   Set<String> get keys => _values.keys.toSet();
 
   Uint8List? valueFor(String key) => _values[key];
+
+  void seed(String key, Uint8List value) {
+    _values[key] = Uint8List.fromList(value);
+  }
 
   @override
   Future<void> delete(String key) async {
