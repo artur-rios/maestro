@@ -161,6 +161,33 @@
 | xml | 7.0.1 | 7.0.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | zmodem | 0.0.6 | 0.0.6 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 
+### Final `flutter pub outdated --json` comparison
+
+The final machine-readable check reports 20 package entries: 1 direct, 2 dev, and 17 transitive. All 20 have `current == upgradable`. All 17 transitive entries also have `upgradable == resolvable`, so **no transitive package has a newer resolvable stable version**. Their newer `latest` values are SDK-constrained graph exceptions: transitive packages cannot be upgraded independently, and Maestro does not use `dependency_overrides`. The one `resolvable > current` entry is the direct `drift` package, whose project-level compile exception is documented below.
+
+| Package | Kind | Current | Upgradable | Resolvable | Latest stable | Disposition |
+| --- | --- | --- | --- | --- | --- | --- |
+| _fe_analyzer_shared | transitive | 99.0.0 | 99.0.0 | 99.0.0 | 105.0.0 | SDK-constrained transitive exception. |
+| analyzer | transitive | 12.1.0 | 12.1.0 | 12.1.0 | 14.1.0 | SDK-constrained transitive exception. |
+| build | transitive | 4.0.7 | 4.0.7 | 4.0.7 | 4.0.10 | SDK-constrained transitive exception. |
+| build_runner | dev | 2.15.1 | 2.15.1 | 2.15.1 | 2.16.0 | Direct dev exception; see Exceptions. |
+| cli_util | transitive | 0.4.2 | 0.4.2 | 0.4.2 | 0.5.2 | SDK-constrained transitive exception. |
+| dart_style | transitive | 3.1.8 | 3.1.8 | 3.1.8 | 3.1.12 | SDK-constrained transitive exception. |
+| drift | direct | 2.34.0 | 2.34.0 | 2.34.3 | 2.34.3 | Project-level compile exception; see Exceptions. |
+| drift_dev | dev | 2.34.0 | 2.34.0 | 2.34.0 | 2.34.5 | Direct dev exception; see Exceptions. |
+| flutter_secure_storage_darwin | transitive | 0.3.2 | 0.3.2 | 0.3.2 | 0.4.0 | SDK-constrained transitive exception. |
+| hooks | transitive | 2.0.2 | 2.0.2 | 2.0.2 | 2.1.0 | SDK-constrained transitive exception. |
+| matcher | transitive | 0.12.19 | 0.12.19 | 0.12.19 | 0.12.20 | SDK-constrained transitive exception. |
+| meta | transitive | 1.18.0 | 1.18.0 | 1.18.0 | 1.19.0 | SDK-constrained transitive exception. |
+| native_toolchain_c | transitive | 0.19.2 | 0.19.2 | 0.19.2 | 0.19.3 | SDK-constrained transitive exception. |
+| package_config | transitive | 2.2.0 | 2.2.0 | 2.2.0 | 3.0.0 | SDK-constrained transitive exception. |
+| record_use | transitive | 0.6.0 | 0.6.0 | 0.6.0 | 1.0.0 | SDK-constrained transitive exception. |
+| sqlparser | transitive | 0.44.5 | 0.44.5 | 0.44.5 | 0.45.0 | SDK-constrained transitive exception. |
+| test | transitive | 1.31.0 | 1.31.0 | 1.31.0 | 1.31.2 | SDK-constrained transitive exception. |
+| test_api | transitive | 0.7.11 | 0.7.11 | 0.7.11 | 0.7.13 | SDK-constrained transitive exception. |
+| test_core | transitive | 0.6.17 | 0.6.17 | 0.6.17 | 0.6.19 | SDK-constrained transitive exception. |
+| vector_math | transitive | 2.2.0 | 2.2.0 | 2.2.0 | 2.4.2 | SDK-constrained transitive exception. |
+
 ## Ubuntu apt-get dependencies
 
 All versions are intentionally unpinned: the `ubuntu-24.04` GitHub-hosted runner resolves them from the current [Ubuntu 24.04 (Noble) stable repositories](https://packages.ubuntu.com/noble/). The workflow's `apt-get update` immediately precedes each installation, so a build selects the repository-provided stable package version at execution time.
