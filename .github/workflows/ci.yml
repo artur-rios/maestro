@@ -12,7 +12,7 @@ jobs:
   analyze-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -32,7 +32,7 @@ jobs:
   windows-platform:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -49,7 +49,7 @@ jobs:
       - name: Smoke portable install and update staging
         shell: pwsh
         run: tooling/smoke/windows_install_update.ps1 -InitialPackage dist/maestro-windows-x64.zip -UpdatePackage dist/maestro-windows-x64.zip -WorkRoot "$env:RUNNER_TEMP/maestro-smoke"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-packages
           path: |
@@ -63,7 +63,7 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: '1'
       APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -89,7 +89,7 @@ jobs:
           echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
       - run: bash tooling/packaging/package_linux.sh 0.1.0
       - run: bash tooling/smoke/linux_install_update.sh dist/maestro-linux-x64.AppImage dist/maestro-linux-amd64.deb
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-packages
           path: |
