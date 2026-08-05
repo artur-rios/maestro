@@ -28,7 +28,7 @@ sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
 git clone https://github.com/artur-rios/maestro.git
 cd maestro
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 ```
 
 ## Local gates

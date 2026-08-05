@@ -2,6 +2,19 @@
 
 **Audit date:** 2026-08-05
 
+## Verified implementation
+
+- Implementation SHA: `2d41a64c56e665917f8f9b5a37b58cada9438cdd`
+- Successful CI run: [31044364973](https://github.com/artur-rios/maestro/actions/runs/31044364973)
+- Selected toolchain: Flutter 3.44.8 stable and its bundled Dart 3.12.2 SDK
+- Pub graph: the final `flutter pub outdated --json` audit has no newer
+  resolvable stable package that passes Maestro's required compatibility gates.
+  `drift 2.34.3` is the sole resolver-only candidate, but the migration verifier
+  cannot compile it with the SDK-resolvable `drift_dev 2.34.0`; the exact API
+  incompatibility is documented in Exceptions.
+- Publisher signing: `unconfigured`; the release verifier fails closed if a
+  signature is present but cannot be verified.
+
 ## Toolchain
 
 | Dependency | Current | Latest stable | Selected | Source | Reason |
@@ -219,10 +232,25 @@ All versions are intentionally unpinned: the `ubuntu-24.04` GitHub-hosted runner
 | softprops/action-gh-release | `3d0d9888cb7fd7b750713d6e236d1fcb99157228` (v3) | v3.0.2 (v3) | `3d0d9888cb7fd7b750713d6e236d1fcb99157228` | [release](https://github.com/softprops/action-gh-release/releases/tag/v3.0.2), [v3 tag API](https://api.github.com/repos/softprops/action-gh-release/git/ref/tags/v3) | Current immutable revision resolves from the latest annotated stable major tag. |
 | appimagetool x86_64 | 1.9.1 asset; SHA-256 `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0` | 1.9.1 | 1.9.1 asset; SHA-256 `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0` | [1.9.1 release asset](https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage) | Current packaging uses the immutable stable release asset and verifies its published digest. |
 
+## Exact-head desktop artifacts
+
+The four packages uploaded by CI run
+[31044364973](https://github.com/artur-rios/maestro/actions/runs/31044364973)
+were downloaded together and checked with
+`tooling/release/verify_release.dart`. The verifier returned
+`release-verification: passed` and `publisher-signing: unconfigured`.
+
+| Artifact | Size (bytes) | SHA-256 |
+| --- | ---: | --- |
+| `maestro-linux-x64.AppImage` | 11,139,576 | `f5b35e73cafd80ae73ff08587bc96dee6158e741adcfad5d1a433a9af7457ece` |
+| `maestro-linux-amd64.deb` | 9,112,000 | `d329a1655f03424864ec1bbd49ebfc91d0aba5e3d59505787847e43aa782989a` |
+| `maestro-windows-x64.msix` | 15,621,593 | `2451b6c67e6d472e38d6a1316c3d3293085d75cae7b4eb6335f8be03aa9b631b` |
+| `maestro-windows-x64.zip` | 13,623,893 | `4fdd46a1ea11f42d94069d7d93c6cb51a589fe8a84d55866e3c902736b694235` |
+
 ## Exceptions
 
 Flutter 3.44.8 and Dart 3.12.2 cannot resolve the newest stable build-time package set. Running `flutter pub get` with `build_runner ^2.16.0` exits 1 because `flutter_test` from the Flutter SDK pins `meta 1.18.0`, while `build_runner >=2.15.2` requires `analyzer >=13.3.0`, which requires `meta ^1.18.3`. Maestro therefore retains the newest resolvable stable `build_runner`, 2.15.1, without a transitive override.
 
-Running `flutter pub get` with `drift_dev 2.34.5` also exits 1. `drift_dev >=2.34.1+1` requires analyzer 13, while the Flutter SDK test packages and Riverpod's `test` dependency keep the graph below analyzer 13 and pin `test_api 0.7.11`. Pub resolves `drift_dev 2.34.0`, but pairing it with `drift 2.34.3` fails to compile the migration test because the runtime's Drift 3 preview API replaced `GeneratedDatabase.allSchemaEntities` with `GeneratedDatabase.schema`, which the older generator does not implement. Maestro therefore keeps the compatible `drift 2.34.0` / `drift_dev 2.34.0` pair. No `dependency_overrides` are used.
+Running `flutter pub get` with `drift_dev 2.34.5` also exits 1. `drift_dev >=2.34.1+1` requires analyzer 13, while the Flutter SDK test packages and Riverpod's `test` dependency keep the graph below analyzer 13 and pin `test_api 0.7.11`. Pub resolves `drift_dev 2.34.0`, but pairing it with `drift 2.34.3` fails specifically in the migration-verifier path: generated `drift_dev 2.34.0` code implements the removed `GeneratedDatabase.allSchemaEntities` getter, while the runtime's Drift 3 preview API requires `GeneratedDatabase.schema`. Maestro therefore keeps the compatible `drift 2.34.0` / `drift_dev 2.34.0` pair. No `dependency_overrides` are used.
 
 AppImageTool rolling releases are excluded from stable-release selection in favor of the immutable 1.9.1 release asset.
