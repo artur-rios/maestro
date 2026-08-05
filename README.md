@@ -35,24 +35,24 @@ Start with the `initial/` documents for context, then use the `requirements/` do
 
 | Document | What's in it |
 | --- | --- |
-| [Brainstorm](initial/Brainstorm.md) | Original free-form project notes. |
-| [Project Overview](initial/Project%20Overview.md) | Product, audience, capabilities, non-goals, and success criteria. |
-| [Technology Stack](initial/Technology%20Stack.md) | Informal architecture and technology decisions. |
-| [Workflow](initial/Workflow.md) | Operational delivery flow for one unit of work. |
-| [Business Rules](initial/Business%20Rules.md) | Domain entities, relationships, lifecycle, permissions, and `BR-xx` rules. |
-| [Vision Document](requirements/Vision%20Document.md) | Product positioning, stakeholder, architecture, and `F-xx` features. |
-| [System Requirements Document](requirements/System%20Requirements%20Document.md) | Functional and non-functional requirements, data model, authorization, and traceability. |
-| [Use Case Specification Document](requirements/Use%20Case%20Specification%20Document.md) | `UC-xx` interactions, main flows, `AF-xx` alternatives, and requirement mappings. |
-| [Development Workflow Document](requirements/Development%20Workflow%20Document.md) | Branch patterns, delivery modes, testing gate, and Definition of Done. |
-| [Testing Specification Document](requirements/Testing%20Specification%20Document.md) | Test philosophy, layout, naming, categories, commands, and evidence rules. |
-| [Technology Stack Document](requirements/Technology%20Stack%20Document.md) | Single source of truth for technologies and version policy. |
-| [Operations & Infrastructure Document](requirements/Operations%20%26%20Infrastructure%20Document.md) | Repository layout, configuration, logging, diagnostics, packaging, delivery, and `IR-xx` requirements. |
+| [Brainstorm](docs/initial/Brainstorm.md) | Original free-form project notes. |
+| [Project Overview](docs/initial/Project%20Overview.md) | Product, audience, capabilities, non-goals, and success criteria. |
+| [Technology Stack](docs/initial/Technology%20Stack.md) | Informal architecture and technology decisions. |
+| [Workflow](docs/initial/Workflow.md) | Operational delivery flow for one unit of work. |
+| [Business Rules](docs/initial/Business%20Rules.md) | Domain entities, relationships, lifecycle, permissions, and `BR-xx` rules. |
+| [Vision Document](docs/requirements/Vision%20Document.md) | Product positioning, stakeholder, architecture, and `F-xx` features. |
+| [System Requirements Document](docs/requirements/System%20Requirements%20Document.md) | Functional and non-functional requirements, data model, authorization, and traceability. |
+| [Use Case Specification Document](docs/requirements/Use%20Case%20Specification%20Document.md) | `UC-xx` interactions, main flows, `AF-xx` alternatives, and requirement mappings. |
+| [Development Workflow Document](docs/requirements/Development%20Workflow%20Document.md) | Branch patterns, delivery modes, testing gate, and Definition of Done. |
+| [Testing Specification Document](docs/requirements/Testing%20Specification%20Document.md) | Test philosophy, layout, naming, categories, commands, and evidence rules. |
+| [Technology Stack Document](docs/requirements/Technology%20Stack%20Document.md) | Single source of truth for technologies and version policy. |
+| [Operations & Infrastructure Document](docs/requirements/Operations%20%26%20Infrastructure%20Document.md) | Repository layout, configuration, logging, diagnostics, packaging, delivery, and `IR-xx` requirements. |
 
 ## Installation
 
 Prerequisites are Git, the Flutter SDK, the platform desktop build toolchain, and any AI CLIs a workflow will
 use. PowerShell is required on Windows and Bash on Linux. The exact technology and version policy is defined in
-the [Technology Stack Document](requirements/Technology%20Stack%20Document.md).
+the [Technology Stack Document](docs/requirements/Technology%20Stack%20Document.md).
 
 ```bash
 git clone https://github.com/artur-rios/maestro.git
@@ -77,7 +77,7 @@ Operational prerequisites and clean-clone commands are documented in [Building a
 ## Testing
 
 Run the complete default suite described in the
-[Testing Specification Document](requirements/Testing%20Specification%20Document.md):
+[Testing Specification Document](docs/requirements/Testing%20Specification%20Document.md):
 
 ```bash
 flutter test
@@ -104,46 +104,46 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#1](https://github.com/artur-rios/maestro/issues/1) | Project scaffold and initial infrastructure | [Operations & Infrastructure](requirements/Operations%20%26%20Infrastructure%20Document.md), [Technology Stack](requirements/Technology%20Stack%20Document.md) |
+| [#1](https://github.com/artur-rios/maestro/issues/1) | Project scaffold and initial infrastructure | [Operations & Infrastructure](docs/requirements/Operations%20%26%20Infrastructure%20Document.md), [Technology Stack](docs/requirements/Technology%20Stack%20Document.md) |
 
 ### M-02 — Secure Project Workspace
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#2](https://github.com/artur-rios/maestro/issues/2) | UC-01 — Authenticate locally | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#3](https://github.com/artur-rios/maestro/issues/3) | UC-02 — Register and select a project | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#4](https://github.com/artur-rios/maestro/issues/4) | UC-03 — Manage a project record's lifecycle | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
+| [#2](https://github.com/artur-rios/maestro/issues/2) | UC-01 — Authenticate locally | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#3](https://github.com/artur-rios/maestro/issues/3) | UC-02 — Register and select a project | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#4](https://github.com/artur-rios/maestro/issues/4) | UC-03 — Manage a project record's lifecycle | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 ### M-03 — Workflow Authoring
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#5](https://github.com/artur-rios/maestro/issues/5) | UC-04 — Design a workflow | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#6](https://github.com/artur-rios/maestro/issues/6) | UC-05 — Configure step agents | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
+| [#5](https://github.com/artur-rios/maestro/issues/5) | UC-04 — Design a workflow | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#6](https://github.com/artur-rios/maestro/issues/6) | UC-05 — Configure step agents | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 ### M-04 — Execution and Control
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#7](https://github.com/artur-rios/maestro/issues/7) | UC-06 — Start isolated workflow runs | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#8](https://github.com/artur-rios/maestro/issues/8) | UC-07 — Observe active runs | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#9](https://github.com/artur-rios/maestro/issues/9) | UC-08 — Control and recover a run | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#10](https://github.com/artur-rios/maestro/issues/10) | UC-09 — Use the embedded terminal | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
+| [#7](https://github.com/artur-rios/maestro/issues/7) | UC-06 — Start isolated workflow runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#8](https://github.com/artur-rios/maestro/issues/8) | UC-07 — Observe active runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#9](https://github.com/artur-rios/maestro/issues/9) | UC-08 — Control and recover a run | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#10](https://github.com/artur-rios/maestro/issues/10) | UC-09 — Use the embedded terminal | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 ### M-05 — Governed Delivery
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#11](https://github.com/artur-rios/maestro/issues/11) | UC-10 — Complete supervised delivery | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#12](https://github.com/artur-rios/maestro/issues/12) | UC-11 — Complete autonomous delivery | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
+| [#11](https://github.com/artur-rios/maestro/issues/11) | UC-10 — Complete supervised delivery | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#12](https://github.com/artur-rios/maestro/issues/12) | UC-11 — Complete autonomous delivery | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 ### M-06 — History, Maintenance, and Updates
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#13](https://github.com/artur-rios/maestro/issues/13) | UC-12 — Inspect run history and audit evidence | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#14](https://github.com/artur-rios/maestro/issues/14) | UC-13 — Manage retention and record deletion | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
-| [#15](https://github.com/artur-rios/maestro/issues/15) | UC-14 — Check and install an application update | [Use Case Specification](requirements/Use%20Case%20Specification%20Document.md) |
+| [#13](https://github.com/artur-rios/maestro/issues/13) | UC-12 — Inspect run history and audit evidence | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#14](https://github.com/artur-rios/maestro/issues/14) | UC-13 — Manage retention and record deletion | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| [#15](https://github.com/artur-rios/maestro/issues/15) | UC-14 — Check and install an application update | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 The counts above reflect creation time. GitHub milestone pages are the live source for completion counts.
 
@@ -152,4 +152,4 @@ The counts above reflect creation time. GitHub milestone pages are the live sour
 One unit of work equals one workflow run, one branch, one GitHub issue when issue tracking applies, and one
 pull request. Branches use `feature/`, `fix/`, `refactor/`, or `hotfix/` prefixes. The full supervised and
 autonomous process is defined in the
-[Development Workflow Document](requirements/Development%20Workflow%20Document.md).
+[Development Workflow Document](docs/requirements/Development%20Workflow%20Document.md).
