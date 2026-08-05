@@ -8,7 +8,14 @@ import 'package:sodium/sodium.dart';
 
 typedef CurrentTime = DateTime Function();
 
-final class ManifestVerifier {
+abstract interface class ReleaseManifestVerifier {
+  Result<VerifiedReleaseManifest> verify(
+    Uint8List manifestBytes,
+    Uint8List signature,
+  );
+}
+
+final class ManifestVerifier implements ReleaseManifestVerifier {
   ManifestVerifier({
     required this.sodium,
     required Uint8List trustedPublicKey,
@@ -26,6 +33,7 @@ final class ManifestVerifier {
   final String targetPackageType;
   final CurrentTime _now;
 
+  @override
   Result<VerifiedReleaseManifest> verify(
     Uint8List manifestBytes,
     Uint8List signature,
