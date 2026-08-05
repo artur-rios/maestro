@@ -16,7 +16,7 @@
 | flutter | SDK 3.44.8 | SDK 3.44.8 | SDK 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
 | cupertino_icons | 1.0.9 | 1.0.9 | 1.0.9 | [pub.dev 1.0.9](https://pub.dev/packages/cupertino_icons/versions/1.0.9) | Current resolved version is latest stable. |
 | flutter_riverpod | 3.4.2 | 3.4.2 | 3.4.2 | [pub.dev 3.4.2](https://pub.dev/packages/flutter_riverpod/versions/3.4.2) | Current resolved version is latest stable. |
-| drift | 2.34.0 | 2.34.3 | 2.34.3 | [pub.dev 2.34.3](https://pub.dev/packages/drift/versions/2.34.3) | `flutter pub outdated --json` reports 2.34.3 as resolvable. |
+| drift | 2.34.0 | 2.34.3 | 2.34.0 | [pub.dev 2.34.3](https://pub.dev/packages/drift/versions/2.34.3) | Keep the newest version that compiles with the SDK-resolvable `drift_dev` generator; see Exceptions. |
 | drift_flutter | 0.3.1 | 0.3.1 | 0.3.1 | [pub.dev 0.3.1](https://pub.dev/packages/drift_flutter/versions/0.3.1) | Current resolved version is latest stable. |
 | sqlite3 | 3.5.1 | 3.5.1 | 3.5.1 | [pub.dev 3.5.1](https://pub.dev/packages/sqlite3/versions/3.5.1) | Current resolved version is latest stable. |
 | xterm | 4.0.0 | 4.0.0 | 4.0.0 | [pub.dev 4.0.0](https://pub.dev/packages/xterm/versions/4.0.0) | Current resolved version is latest stable. |
@@ -35,14 +35,14 @@
 | flutter_test | SDK 3.44.8 | SDK 3.44.8 | SDK 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
 | integration_test | SDK 3.44.8 | SDK 3.44.8 | SDK 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
 | flutter_lints | 6.0.0 | 6.0.0 | 6.0.0 | [pub.dev 6.0.0](https://pub.dev/packages/flutter_lints/versions/6.0.0) | Current resolved version is latest stable. |
-| drift_dev | 2.34.0 | 2.34.5 | 2.34.5 | [pub.dev 2.34.5](https://pub.dev/packages/drift_dev/versions/2.34.5) | Select newest stable; Task 2 will resolve its direct-constraint conflict. |
-| build_runner | 2.15.1 | 2.16.0 | 2.16.0 | [pub.dev 2.16.0](https://pub.dev/packages/build_runner/versions/2.16.0) | Select newest stable; Task 2 will resolve its direct-constraint conflict. |
+| drift_dev | 2.34.0 | 2.34.5 | 2.34.0 | [pub.dev 2.34.5](https://pub.dev/packages/drift_dev/versions/2.34.5) | Flutter 3.44.8's test graph prevents analyzer 13, required by newer releases; see Exceptions. |
+| build_runner | 2.15.1 | 2.16.0 | 2.15.1 | [pub.dev 2.16.0](https://pub.dev/packages/build_runner/versions/2.16.0) | Flutter 3.44.8 pins `meta` below the analyzer requirement of newer releases; see Exceptions. |
 | msix | 3.18.0 | 3.18.0 | 3.18.0 | [pub.dev 3.18.0](https://pub.dev/packages/msix/versions/3.18.0) | Current resolved version is latest stable. |
 | yaml | 3.1.3 | 3.1.3 | 3.1.3 | [pub.dev 3.1.3](https://pub.dev/packages/yaml/versions/3.1.3) | Current resolved version is latest stable. |
 
 ## Resolved transitive Dart packages
 
-`dart pub deps --json` and `pubspec.lock` resolve the following complete transitive graph. `Current resolved` and `Selected stable resolved` are intentionally the same lockfile value for this audit; Task 2 will regenerate this graph after upgrading direct constraints. Hosted packages use [pub.dev](https://pub.dev) provenance. Flutter SDK packages are grouped only where their Flutter ownership and resolved `0.0.0` SDK version are explicit.
+`dart pub deps --json` and `pubspec.lock` resolve the following complete transitive graph. `Current resolved` and `Selected stable resolved` are intentionally the same lockfile value after Task 2 resolution. Hosted packages use [pub.dev](https://pub.dev) provenance. Flutter SDK packages are grouped only where their Flutter ownership and resolved `0.0.0` SDK version are explicit.
 
 | Package | Current resolved | Selected stable resolved | Source / provenance | Reason |
 | --- | --- | --- | --- | --- |
@@ -194,4 +194,8 @@ All versions are intentionally unpinned: the `ubuntu-24.04` GitHub-hosted runner
 
 ## Exceptions
 
-No exceptions. `flutter pub outdated --json` currently reports direct-constraint conflicts for `build_runner` and `drift_dev`; their newest stable releases remain selected, and Task 2 explicitly resolves those direct constraints rather than retaining an older package. The mutable appimagetool `continuous` release is excluded from stable-release selection in favor of the immutable 1.9.1 release asset.
+Flutter 3.44.8 and Dart 3.12.2 cannot resolve the newest stable build-time package set. Running `flutter pub get` with `build_runner ^2.16.0` exits 1 because `flutter_test` from the Flutter SDK pins `meta 1.18.0`, while `build_runner >=2.15.2` requires `analyzer >=13.3.0`, which requires `meta ^1.18.3`. Maestro therefore retains the newest resolvable stable `build_runner`, 2.15.1, without a transitive override.
+
+Running `flutter pub get` with `drift_dev 2.34.5` also exits 1. `drift_dev >=2.34.1+1` requires analyzer 13, while the Flutter SDK test packages and Riverpod's `test` dependency keep the graph below analyzer 13 and pin `test_api 0.7.11`. Pub resolves `drift_dev 2.34.0`, but pairing it with `drift 2.34.3` fails to compile the migration test because the runtime's Drift 3 preview API replaced `GeneratedDatabase.allSchemaEntities` with `GeneratedDatabase.schema`, which the older generator does not implement. Maestro therefore keeps the compatible `drift 2.34.0` / `drift_dev 2.34.0` pair. No `dependency_overrides` are used.
+
+The mutable appimagetool `continuous` release is separately excluded from stable-release selection in favor of the immutable 1.9.1 release asset.

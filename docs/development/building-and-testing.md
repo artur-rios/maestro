@@ -1,6 +1,6 @@
 # Building and Testing
 
-Maestro pins Flutter 3.44.8 and Dart 3.12.2 in `.flutter-version` and `pubspec.lock`. Use that SDK version for local commands and CI parity.
+Maestro pins Flutter 3.44.8 in `.fvmrc` and Dart 3.12.2 in `pubspec.yaml`. Use that exact toolchain pair for local commands and CI parity.
 
 ## Windows prerequisites
 
