@@ -1,6 +1,6 @@
 # Building and Testing
 
-Maestro pins Flutter 3.44.8 and Dart 3.12.2 in `.flutter-version` and `pubspec.lock`. Use that SDK version for local commands and CI parity.
+Maestro pins Flutter 3.44.8 in `.fvmrc`; that Flutter release bundles Dart 3.12.2, while `pubspec.yaml` declares the compatible Dart 3.x range. Use the pinned Flutter toolchain for local commands and CI parity.
 
 ## Windows prerequisites
 
@@ -28,7 +28,7 @@ sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
 git clone https://github.com/artur-rios/maestro.git
 cd maestro
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 ```
 
 ## Local gates

@@ -16,10 +16,15 @@ $env:FLUTTER_ROOT = 'C:\path\to\flutter'
 tooling/packaging/package_windows.ps1 -Version 0.1.0
 ```
 
-On Ubuntu, download the official `appimagetool-x86_64.AppImage`, verify the SHA-256 pinned in `.github/workflows/ci.yml`, and run:
+On Ubuntu, download the official immutable AppImageTool 1.9.1 asset, verify its pinned SHA-256, and run:
 
 ```bash
-export APPIMAGETOOL_PATH=/verified/path/appimagetool
+curl --fail --location --output appimagetool \
+  https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+echo 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool' \
+  | sha256sum --check --strict
+chmod 0755 appimagetool
+export APPIMAGETOOL_PATH="$PWD/appimagetool"
 bash tooling/packaging/package_linux.sh 0.1.0
 ```
 
