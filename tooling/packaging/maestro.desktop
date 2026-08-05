@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Maestro
+Comment=Orchestrate local AI agents through workflows
+Exec=maestro
+Icon=maestro
+Terminal=false
+Categories=Development;

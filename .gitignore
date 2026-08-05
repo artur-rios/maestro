@@ -1,0 +1,18 @@
+.worktrees/
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+
+# IDE and platform-local files
+.idea/
+*.iml
+.vscode/
+
+# Maestro local outputs
+.artifacts/
+dist/
