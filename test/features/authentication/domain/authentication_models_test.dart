@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 
 void main() {
+  // FR-AU-02: email-account identifiers are normalized before use.
   test('GivenMixedCaseEmail_WhenParsed_ThenCanonicalValueIsLowercase', () {
     expect(
       NormalizedEmail.parse(' User@Example.COM ').value,
@@ -9,6 +10,7 @@ void main() {
     );
   });
 
+  // FR-AU-03 and FR-AU-04: reject underlength passwords with guidance.
   test(
     'GivenShortPassword_WhenValidated_ThenMinimumAndGuidanceAreReturned',
     () {
@@ -23,6 +25,23 @@ void main() {
     },
   );
 
+  // FR-AU-03: exactly eight characters is the accepted lower boundary.
+  test('GivenEightCharacterPassword_WhenValidated_ThenValueIsReturned', () {
+    expect(LocalPassword.validate('password').value, 'password');
+  });
+
+  // FR-AU-03: seven characters remains below the required boundary.
+  test(
+    'GivenSevenCharacterPassword_WhenValidated_ThenPasswordTooShortIsThrown',
+    () {
+      expect(
+        () => LocalPassword.validate('passw0r'),
+        throwsA(isA<PasswordTooShort>()),
+      );
+    },
+  );
+
+  // FR-AU-07 and BR-21: every authenticated local user has full control.
   test(
     'GivenAuthenticatedUser_WhenFullControlSessionIsCreated_ThenAllPermissionsAreGranted',
     () {

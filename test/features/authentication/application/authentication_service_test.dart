@@ -9,7 +9,7 @@ void main() {
   late _FakePasswordVerifierStore verifiers;
   late _FakePasswordHasher hasher;
   late _FakeAuditRepository audits;
-  late _FakeAuthenticationPort operatingSystemAuthentication;
+  late _FakeOperatingSystemAuthenticator operatingSystemAuthentication;
   late AuthenticationService service;
 
   setUp(() {
@@ -17,19 +17,19 @@ void main() {
     verifiers = _FakePasswordVerifierStore();
     hasher = _FakePasswordHasher();
     audits = _FakeAuditRepository();
-    operatingSystemAuthentication = _FakeAuthenticationPort();
+    operatingSystemAuthentication = _FakeOperatingSystemAuthenticator();
     service = AuthenticationService(
       users: users,
       verifiers: verifiers,
       hasher: hasher,
       audits: audits,
-      authenticateOperatingSystem:
-          operatingSystemAuthentication.authenticateCurrentUser,
+      operatingSystemAuthentication: operatingSystemAuthentication,
       clock: () => DateTime.utc(2026, 8, 5, 12),
       newId: _DeterministicIds().next,
     );
   });
 
+  // FR-AU-02 and FR-AU-05: normalized account creation stores a verifier only.
   test(
     'GivenNewEmailAccount_WhenCreated_ThenFullControlSessionIsOpened',
     () async {
@@ -47,6 +47,7 @@ void main() {
     },
   );
 
+  // FR-AU-02: normalized duplicates cannot mutate credentials or user storage.
   test(
     'GivenDuplicateNormalizedEmail_WhenCreating_ThenNothingIsStored',
     () async {
@@ -64,6 +65,7 @@ void main() {
     },
   );
 
+  // FR-AU-03 and FR-AU-04: short passwords fail with no persistence.
   test(
     'GivenShortPassword_WhenCreating_ThenValidationFailureLeavesStorageUntouched',
     () async {
@@ -79,6 +81,7 @@ void main() {
     },
   );
 
+  // FR-AU-05: persistence failure compensates the newly stored verifier.
   test('GivenUserSaveFailure_WhenCreating_ThenNewVerifierIsRemoved', () async {
     users.failWhenSaving = true;
 
@@ -89,6 +92,53 @@ void main() {
     expect(service.currentSession, isNull);
   });
 
+  // FR-AU-02 and FR-AU-05: an audit failure leaves no duplicate account state.
+  test(
+    'GivenAuditFailure_WhenCreating_ThenAccountIsCompensatedAndCanRetry',
+    () async {
+      audits.failWhenAppending = true;
+
+      final failed = await service.createAccount(
+        'user@example.com',
+        'password1',
+      );
+
+      expect(failed, isA<FailureResult<AuthenticatedSession>>());
+      expect(users.deletedUserIds, <String>['user-1']);
+      expect(verifiers.deleted, <String>['maestro.auth.verifier.user-1']);
+      expect(service.currentSession, isNull);
+
+      audits.failWhenAppending = false;
+      final retried = await service.createAccount(
+        'user@example.com',
+        'password1',
+      );
+
+      expect(retried, isA<Success<AuthenticatedSession>>());
+    },
+  );
+
+  // FR-AU-05: a failed credential cleanup is surfaced as a typed failure.
+  test(
+    'GivenVerifierRollbackFailure_WhenCreating_ThenCleanupFailureIsReturned',
+    () async {
+      users.failWhenSaving = true;
+      verifiers.failWhenDeleting = true;
+
+      final result = await service.createAccount(
+        'user@example.com',
+        'password1',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.verifier.cleanup.failed',
+      );
+    },
+  );
+
+  // FR-AU-02, FR-AU-05, and FR-AU-07: valid local credentials open full control.
   test(
     'GivenValidCredentials_WhenSigningInWithEmail_ThenFullControlSessionIsOpened',
     () async {
@@ -107,6 +157,7 @@ void main() {
     },
   );
 
+  // AF-04: invalid credentials remain signed out and write redacted evidence.
   test(
     'GivenInvalidCredentials_WhenSigningInWithEmail_ThenFailureIsAuditedWithoutCredentials',
     () async {
@@ -124,6 +175,38 @@ void main() {
     },
   );
 
+  // AF-04: an unknown principal gets only the required redacted marker.
+  test(
+    'GivenUnknownEmail_WhenSigningIn_ThenUnknownPrincipalFailureIsAudited',
+    () async {
+      final result = await service.signInWithEmail(
+        'unknown@example.com',
+        'wrong',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(audits.events.single.details, '{"principal":"unknown"}');
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  // AF-04: absent protected verifier material is never treated as success.
+  test(
+    'GivenMissingVerifier_WhenSigningIn_ThenCredentialsAreRejected',
+    () async {
+      users.existingEmail = 'user@example.com';
+
+      final result = await service.signInWithEmail(
+        'user@example.com',
+        'password1',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(audits.events.single.outcome, AuthenticationAuditOutcome.failure);
+    },
+  );
+
+  // FR-AU-01 and AF-01: OS denial preserves the signed-out fallback state.
   test(
     'GivenOperatingSystemFailure_WhenSigningIn_ThenFallbackFailureLeavesSessionSignedOut',
     () async {
@@ -136,6 +219,23 @@ void main() {
       expect(result, isA<FailureResult<AuthenticatedSession>>());
       expect(service.currentSession, isNull);
       expect(users.saved, isEmpty);
+    },
+  );
+
+  // FR-AU-01 and AF-01: thrown adapter failures are typed Results, not throws.
+  test(
+    'GivenThrownOperatingSystemAdapter_WhenSigningIn_ThenPlatformFailureIsReturned',
+    () async {
+      operatingSystemAuthentication.exception = StateError('native failed');
+
+      final result = await service.signInWithOperatingSystem();
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure,
+        isA<PlatformFailure>(),
+      );
+      expect(service.currentSession, isNull);
     },
   );
 
@@ -154,6 +254,21 @@ void main() {
     },
   );
 
+  // FR-AU-01: an existing OS user is updated instead of duplicated.
+  test(
+    'GivenExistingOperatingSystemUser_WhenSigningIn_ThenLastAuthenticatedAtIsUpdated',
+    () async {
+      users.operatingSystemUser = _operatingSystemUser();
+
+      final result = await service.signInWithOperatingSystem();
+
+      expect(result, isA<Success<AuthenticatedSession>>());
+      expect(users.saved, isEmpty);
+      expect(users.lastAuthenticatedUserIds, <String>['os-user-1']);
+    },
+  );
+
+  // FR-AU-06: sign-out returns the application to its unauthenticated state.
   test(
     'GivenAuthenticatedSession_WhenSigningOut_ThenOnlyInMemorySessionIsCleared',
     () async {
@@ -180,11 +295,19 @@ final class _FakeLocalUserRepository implements LocalUserRepository {
   String? existingEmail;
   bool failWhenSaving = false;
   final List<LocalUser> saved = <LocalUser>[];
+  final List<String> deletedUserIds = <String>[];
   final List<String> lastAuthenticatedUserIds = <String>[];
+  final Map<String, LocalUser> _usersByEmail = <String, LocalUser>{};
   LocalUser? _operatingSystemUser;
+
+  set operatingSystemUser(LocalUser? value) => _operatingSystemUser = value;
 
   @override
   Future<LocalUser?> findByEmail(NormalizedEmail email) async {
+    final saved = _usersByEmail[email.value];
+    if (saved != null) {
+      return saved;
+    }
     if (existingEmail != email.value) {
       return null;
     }
@@ -210,9 +333,18 @@ final class _FakeLocalUserRepository implements LocalUserRepository {
       );
     }
     saved.add(user);
+    if (user.email case final email?) {
+      _usersByEmail[email.value] = user;
+    }
     if (user.authenticationMethod == AuthenticationMethod.operatingSystem) {
       _operatingSystemUser = user;
     }
+  }
+
+  @override
+  Future<void> delete(String userId) async {
+    deletedUserIds.add(userId);
+    _usersByEmail.removeWhere((_, user) => user.id == userId);
   }
 
   @override
@@ -225,9 +357,16 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   final Map<String, String> values = <String, String>{};
   final Map<String, String> writes = <String, String>{};
   final List<String> deleted = <String>[];
+  bool failWhenDeleting = false;
 
   @override
   Future<void> delete(String key) async {
+    if (failWhenDeleting) {
+      throw const StorageFailure(
+        code: 'storage.cleanup',
+        message: 'Unavailable.',
+      );
+    }
     deleted.add(key);
     values.remove(key);
   }
@@ -254,15 +393,41 @@ final class _FakePasswordHasher implements PasswordHasher {
 
 final class _FakeAuditRepository implements AuditRepository {
   final List<AuthenticationAuditEvent> events = <AuthenticationAuditEvent>[];
+  bool failWhenAppending = false;
 
   @override
   Future<void> append(AuthenticationAuditEvent event) async {
+    if (failWhenAppending) {
+      throw const StorageFailure(
+        code: 'storage.audit',
+        message: 'Unavailable.',
+      );
+    }
     events.add(event);
   }
 }
 
-final class _FakeAuthenticationPort {
+final class _FakeOperatingSystemAuthenticator
+    implements OperatingSystemAuthenticator {
   Result<void> result = const Success<void>(null);
+  Object? exception;
 
-  Future<Result<void>> authenticateCurrentUser() async => result;
+  @override
+  Future<Result<void>> authenticateCurrentUser() async {
+    if (exception case final error?) {
+      throw error;
+    }
+    return result;
+  }
+}
+
+LocalUser _operatingSystemUser() {
+  return LocalUser(
+    id: 'os-user-1',
+    email: null,
+    authenticationMethod: AuthenticationMethod.operatingSystem,
+    verifierKey: null,
+    createdAt: DateTime.utc(2026, 8, 5),
+    lastAuthenticatedAt: null,
+  );
 }

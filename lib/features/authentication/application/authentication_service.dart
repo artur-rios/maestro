@@ -6,7 +6,12 @@ abstract interface class LocalUserRepository {
   Future<LocalUser?> findByEmail(NormalizedEmail email);
   Future<LocalUser?> findOperatingSystemUser();
   Future<void> save(LocalUser user);
+  Future<void> delete(String userId);
   Future<void> updateLastAuthenticatedAt(String userId, DateTime value);
+}
+
+abstract interface class OperatingSystemAuthenticator {
+  Future<Result<void>> authenticateCurrentUser();
 }
 
 abstract interface class PasswordVerifierStore {
@@ -54,7 +59,7 @@ final class AuthenticationService {
     required this._verifiers,
     required this._hasher,
     required this._audits,
-    required this.authenticateOperatingSystem,
+    required this._operatingSystemAuthentication,
     required this._clock,
     required this._newId,
   });
@@ -63,7 +68,7 @@ final class AuthenticationService {
   final PasswordVerifierStore _verifiers;
   final PasswordHasher _hasher;
   final AuditRepository _audits;
-  final Future<Result<void>> Function() authenticateOperatingSystem;
+  final OperatingSystemAuthenticator _operatingSystemAuthentication;
   final DateTime Function() _clock;
   final String Function() _newId;
 
@@ -114,17 +119,29 @@ final class AuthenticationService {
       try {
         await _users.save(user);
       } catch (error) {
-        await _rollbackVerifier(verifierKey);
-        return FailureResult<AuthenticatedSession>(_storageFailure(error));
+        final rollbackFailure = await _rollbackVerifier(verifierKey);
+        return FailureResult<AuthenticatedSession>(
+          rollbackFailure ?? _storageFailure(error),
+        );
       }
 
-      await _appendAudit(
-        actorId: user.id,
-        action: AuthenticationAuditAction.accountCreated,
-        target: user.id,
-        outcome: AuthenticationAuditOutcome.success,
-        details: '{"principal":"known"}',
-      );
+      try {
+        await _appendAudit(
+          actorId: user.id,
+          action: AuthenticationAuditAction.accountCreated,
+          target: user.id,
+          outcome: AuthenticationAuditOutcome.success,
+          details: '{"principal":"known"}',
+        );
+      } catch (error) {
+        final compensationFailure = await _compensateCreatedAccount(
+          user.id,
+          verifierKey,
+        );
+        return FailureResult<AuthenticatedSession>(
+          compensationFailure ?? _storageFailure(error),
+        );
+      }
       return _openSession(user.id);
     } catch (error) {
       return FailureResult<AuthenticatedSession>(_storageFailure(error));
@@ -164,12 +181,23 @@ final class AuthenticationService {
   }
 
   Future<Result<AuthenticatedSession>> signInWithOperatingSystem() async {
-    final verified = await authenticateOperatingSystem();
-    switch (verified) {
-      case FailureResult<void>(:final failure):
-        return FailureResult<AuthenticatedSession>(failure);
-      case Success<void>():
-        return _signInVerifiedOperatingSystemUser();
+    try {
+      final verified = await _operatingSystemAuthentication
+          .authenticateCurrentUser();
+      switch (verified) {
+        case FailureResult<void>(:final failure):
+          return FailureResult<AuthenticatedSession>(failure);
+        case Success<void>():
+          return _signInVerifiedOperatingSystemUser();
+      }
+    } catch (error) {
+      return FailureResult<AuthenticatedSession>(
+        PlatformFailure(
+          code: 'authentication.operating_system.failed',
+          message: 'Could not verify operating-system authentication.',
+          cause: error,
+        ),
+      );
     }
   }
 
@@ -249,12 +277,33 @@ final class AuthenticationService {
     );
   }
 
-  Future<void> _rollbackVerifier(String verifierKey) async {
+  Future<StorageFailure?> _compensateCreatedAccount(
+    String userId,
+    String verifierKey,
+  ) async {
+    try {
+      await _users.delete(userId);
+    } catch (error) {
+      return _cleanupFailure('authentication.account.cleanup.failed', error);
+    }
+    return _rollbackVerifier(verifierKey);
+  }
+
+  Future<StorageFailure?> _rollbackVerifier(String verifierKey) async {
     try {
       await _verifiers.delete(verifierKey);
-    } catch (_) {
-      // The original persistence error remains the actionable failure.
+      return null;
+    } catch (error) {
+      return _cleanupFailure('authentication.verifier.cleanup.failed', error);
     }
+  }
+
+  StorageFailure _cleanupFailure(String code, Object cause) {
+    return StorageFailure(
+      code: code,
+      message: 'Could not remove incomplete account credentials.',
+      cause: cause,
+    );
   }
 
   Result<AuthenticatedSession> _openSession(String userId) {
