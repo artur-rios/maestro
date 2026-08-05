@@ -23,7 +23,7 @@ to the implementation and verification evidence used for review.
 | Requirement | Implementation | Automated evidence | Local result | CI job | Artifact |
 | --- | --- | --- | --- | --- | --- |
 | IR-01 | `lib/core/`, `lib/features/foundation/`, `lib/platform/`; `tooling/verify_architecture.dart` | `test/tooling/architecture_test.dart` | Architecture validator and `flutter analyze` passed | `analyze-test` | All packages consume the validated architecture |
-| IR-02 | `lib/core/storage/database/database_factory.dart`, `maestro_database.dart`, `schema_versions.dart` | `database_factory_test.dart`, `maestro_database_test.dart`, `migration_test.dart` | Full 45-test suite passed | `analyze-test` | Database foundation is included in every desktop package |
+| IR-02 | `lib/core/storage/database/database_factory.dart`, `maestro_database.dart`, `schema_versions.dart` | `database_factory_test.dart`, `maestro_database_test.dart`, `migration_test.dart` | Full 46-test suite passed | `analyze-test` | Database foundation is included in every desktop package |
 | IR-03 | `lib/core/storage/application_paths.dart` | `application_paths_test.dart` | Per-user database, logs, updates, and worktree paths passed | `analyze-test` | All desktop packages |
 | IR-04 | `lib/platform/process/run_execution_context.dart`, `process_supervisor.dart` | `run_execution_context_test.dart`, `concurrent_streams_integration_test.dart` | Two concurrent 1 MiB streams passed | `windows-platform`, `linux-platform` | All desktop packages |
 | IR-05 | `windows_job_process_tree.dart`, `linux_group_process_tree.dart`, `native_process_tree.dart` | `process_tree_contract_test.dart`, `process_tree_integration_test.dart` | Contract and native Windows descendant cancellation passed | `analyze-test`, `windows-platform`, `linux-platform` | Native Windows and Linux packages |
@@ -50,7 +50,7 @@ dart format --output=none --set-exit-if-changed lib test integration_test test_s
 dart run tooling/verify_architecture.dart
 dart run tooling/verify_workflows.dart
 flutter analyze
-flutter test                              # 45 tests passed
+flutter test                              # 46 tests passed
 flutter test integration_test/platform/process_tree_integration_test.dart -d windows
 flutter test integration_test/foundation_startup_integration_test.dart -d windows
 flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows

@@ -1,6 +1,6 @@
 # Building and Testing
 
-Maestro pins Flutter 3.44.8 in `.fvmrc` and Dart 3.12.2 in `pubspec.yaml`. Use that exact toolchain pair for local commands and CI parity.
+Maestro pins Flutter 3.44.8 in `.fvmrc`; that Flutter release bundles Dart 3.12.2, while `pubspec.yaml` declares the compatible Dart 3.x range. Use the pinned Flutter toolchain for local commands and CI parity.
 
 ## Windows prerequisites
 

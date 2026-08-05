@@ -42,6 +42,7 @@ void main() {
         'https://downloads.example.com/tools/releases/download/continuous/tool-x86_64',
     'ExternalLatest':
         'http://downloads.example.com/tools/releases/latest/download/tool-x86_64',
+    'ArbitraryMutable': 'https://downloads.example.com/tool/latest/tool-x86_64',
     'PrereleaseVersion':
         'https://github.com/example/tool/releases/download/1.9.2-rc.1/tool-x86_64',
   };
