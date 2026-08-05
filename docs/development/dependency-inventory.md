@@ -1,0 +1,57 @@
+# Dependency inventory
+
+**Audit date:** 2026-08-05
+
+## Toolchain
+
+| Dependency | Current | Latest stable | Selected | Source | Reason |
+| --- | --- | --- | --- | --- | --- |
+| Flutter SDK | 3.44.8 | 3.44.8 | 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | The current stable Flutter release is already selected. |
+| Dart SDK | 3.12.2 | 3.12.2 (bundled with Flutter 3.44.8) | 3.12.2 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter 3.44.8 bundles this Dart SDK; keep the toolchain pair aligned. |
+
+## Direct Dart packages
+
+| Dependency | Current | Latest stable | Selected | Source | Reason |
+| --- | --- | --- | --- | --- | --- |
+| flutter | SDK 3.44.8 | SDK 3.44.8 | SDK 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
+| cupertino_icons | 1.0.9 | 1.0.9 | 1.0.9 | [pub.dev 1.0.9](https://pub.dev/packages/cupertino_icons/versions/1.0.9) | Current resolved version is latest stable. |
+| flutter_riverpod | 3.4.2 | 3.4.2 | 3.4.2 | [pub.dev 3.4.2](https://pub.dev/packages/flutter_riverpod/versions/3.4.2) | Current resolved version is latest stable. |
+| drift | 2.34.0 | 2.34.3 | 2.34.3 | [pub.dev 2.34.3](https://pub.dev/packages/drift/versions/2.34.3) | `flutter pub outdated --json` reports 2.34.3 as resolvable. |
+| drift_flutter | 0.3.1 | 0.3.1 | 0.3.1 | [pub.dev 0.3.1](https://pub.dev/packages/drift_flutter/versions/0.3.1) | Current resolved version is latest stable. |
+| sqlite3 | 3.5.1 | 3.5.1 | 3.5.1 | [pub.dev 3.5.1](https://pub.dev/packages/sqlite3/versions/3.5.1) | Current resolved version is latest stable. |
+| xterm | 4.0.0 | 4.0.0 | 4.0.0 | [pub.dev 4.0.0](https://pub.dev/packages/xterm/versions/4.0.0) | Current resolved version is latest stable. |
+| flutter_pty | 0.4.2 | 0.4.2 | 0.4.2 | [pub.dev 0.4.2](https://pub.dev/packages/flutter_pty/versions/0.4.2) | Current resolved version is latest stable. |
+| flutter_secure_storage | 10.3.1 | 10.3.1 | 10.3.1 | [pub.dev 10.3.1](https://pub.dev/packages/flutter_secure_storage/versions/10.3.1) | Current resolved version is latest stable. |
+| sodium | 4.0.4 | 4.0.4 | 4.0.4 | [pub.dev 4.0.4](https://pub.dev/packages/sodium/versions/4.0.4) | Current resolved version is latest stable. |
+| uuid | 4.6.0 | 4.6.0 | 4.6.0 | [pub.dev 4.6.0](https://pub.dev/packages/uuid/versions/4.6.0) | Current resolved version is latest stable. |
+| path_provider | 2.1.6 | 2.1.6 | 2.1.6 | [pub.dev 2.1.6](https://pub.dev/packages/path_provider/versions/2.1.6) | Current resolved version is latest stable. |
+| package_info_plus | 10.2.1 | 10.2.1 | 10.2.1 | [pub.dev 10.2.1](https://pub.dev/packages/package_info_plus/versions/10.2.1) | Current resolved version is latest stable. |
+| logging | 1.3.0 | 1.3.0 | 1.3.0 | [pub.dev 1.3.0](https://pub.dev/packages/logging/versions/1.3.0) | Current resolved version is latest stable. |
+| path | 1.9.1 | 1.9.1 | 1.9.1 | [pub.dev 1.9.1](https://pub.dev/packages/path/versions/1.9.1) | Current resolved version is latest stable. |
+| crypto | 3.0.7 | 3.0.7 | 3.0.7 | [pub.dev 3.0.7](https://pub.dev/packages/crypto/versions/3.0.7) | Current resolved version is latest stable. |
+| archive | 4.0.9 | 4.0.9 | 4.0.9 | [pub.dev 4.0.9](https://pub.dev/packages/archive/versions/4.0.9) | Current resolved version is latest stable. |
+| win32 | 6.4.0 | 6.4.0 | 6.4.0 | [pub.dev 6.4.0](https://pub.dev/packages/win32/versions/6.4.0) | Current resolved version is latest stable. |
+| ffi | 2.2.0 | 2.2.0 | 2.2.0 | [pub.dev 2.2.0](https://pub.dev/packages/ffi/versions/2.2.0) | Current resolved version is latest stable. |
+| flutter_test | SDK 3.44.8 | SDK 3.44.8 | SDK 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
+| integration_test | SDK 3.44.8 | SDK 3.44.8 | SDK 3.44.8 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
+| flutter_lints | 6.0.0 | 6.0.0 | 6.0.0 | [pub.dev 6.0.0](https://pub.dev/packages/flutter_lints/versions/6.0.0) | Current resolved version is latest stable. |
+| drift_dev | 2.34.0 | 2.34.5 | 2.34.5 | [pub.dev 2.34.5](https://pub.dev/packages/drift_dev/versions/2.34.5) | Select newest stable; Task 2 will resolve its direct-constraint conflict. |
+| build_runner | 2.15.1 | 2.16.0 | 2.16.0 | [pub.dev 2.16.0](https://pub.dev/packages/build_runner/versions/2.16.0) | Select newest stable; Task 2 will resolve its direct-constraint conflict. |
+| msix | 3.18.0 | 3.18.0 | 3.18.0 | [pub.dev 3.18.0](https://pub.dev/packages/msix/versions/3.18.0) | Current resolved version is latest stable. |
+| yaml | 3.1.3 | 3.1.3 | 3.1.3 | [pub.dev 3.1.3](https://pub.dev/packages/yaml/versions/3.1.3) | Current resolved version is latest stable. |
+
+## GitHub Actions and packaging tools
+
+| Dependency | Current | Latest stable | Selected | Source | Reason |
+| --- | --- | --- | --- | --- | --- |
+| actions/checkout | `11d5960a326750d5838078e36cf38b85af677262` (v4) | v7.0.1 (v7) | `3d3c42e5aac5ba805825da76410c181273ba90b1` | [release](https://github.com/actions/checkout/releases/tag/v7.0.1), [v7 tag API](https://api.github.com/repos/actions/checkout/git/ref/tags/v7) | Stable-major tag resolved to an immutable commit SHA. |
+| subosito/flutter-action | `1a449444c387b1966244ae4d4f8c696479add0b2` (v2) | v2.23.0 (v2) | `1a449444c387b1966244ae4d4f8c696479add0b2` | [release](https://github.com/subosito/flutter-action/releases/tag/v2.23.0), [v2 tag API](https://api.github.com/repos/subosito/flutter-action/git/ref/tags/v2) | Current immutable revision resolves from the latest stable major tag. |
+| actions/upload-artifact | `ea165f8d65b6e75b540449e92b4886f43607fa02` (v4) | v7.0.1 (v7) | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | [release](https://github.com/actions/upload-artifact/releases/tag/v7.0.1), [v7 tag API](https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7) | Stable-major tag resolved to an immutable commit SHA. |
+| actions/download-artifact | `d3f86a106a0bac45b974a628896c90dbdf5c8093` (v4) | v8.0.1 (v8) | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` | [release](https://github.com/actions/download-artifact/releases/tag/v8.0.1), [v8 tag API](https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8) | Stable-major tag resolved to an immutable commit SHA. |
+| actions/attest-build-provenance | `977bb373ede98d70efdf65b84cb5f73e068dcc2a` (v3) | v4.1.1 (v4) | `0f67c3f4856b2e3261c31976d6725780e5e4c373` | [release](https://github.com/actions/attest-build-provenance/releases/tag/v4.1.1), [v4 tag API](https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4) | Annotated stable-major tag resolved to its immutable commit SHA. |
+| softprops/action-gh-release | `3bb12739c298aeb8a4eeaf626c5b8d85266b0e65` (v2) | v3.0.2 (v3) | `3d0d9888cb7fd7b750713d6e236d1fcb99157228` | [release](https://github.com/softprops/action-gh-release/releases/tag/v3.0.2), [v3 tag API](https://api.github.com/repos/softprops/action-gh-release/git/ref/tags/v3) | Annotated stable-major tag resolved to its immutable commit SHA. |
+| appimagetool x86_64 | [continuous asset](https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage); SHA-256 `a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0` | 1.9.1 | 1.9.1 asset; SHA-256 `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0` | [1.9.1 release asset](https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage) | `continuous` is a mutable rolling release; select immutable stable 1.9.1 asset. |
+
+## Exceptions
+
+No exceptions. `flutter pub outdated --json` currently reports direct-constraint conflicts for `build_runner` and `drift_dev`; their newest stable releases remain selected, and Task 2 explicitly resolves those direct constraints rather than retaining an older package. The mutable appimagetool `continuous` release is excluded from stable-release selection in favor of the immutable 1.9.1 release asset.
