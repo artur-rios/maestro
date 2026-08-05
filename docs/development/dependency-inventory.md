@@ -40,6 +40,146 @@
 | msix | 3.18.0 | 3.18.0 | 3.18.0 | [pub.dev 3.18.0](https://pub.dev/packages/msix/versions/3.18.0) | Current resolved version is latest stable. |
 | yaml | 3.1.3 | 3.1.3 | 3.1.3 | [pub.dev 3.1.3](https://pub.dev/packages/yaml/versions/3.1.3) | Current resolved version is latest stable. |
 
+## Resolved transitive Dart packages
+
+`dart pub deps --json` and `pubspec.lock` resolve the following complete transitive graph. `Current resolved` and `Selected stable resolved` are intentionally the same lockfile value for this audit; Task 2 will regenerate this graph after upgrading direct constraints. Hosted packages use [pub.dev](https://pub.dev) provenance. Flutter SDK packages are grouped only where their Flutter ownership and resolved `0.0.0` SDK version are explicit.
+
+| Package | Current resolved | Selected stable resolved | Source / provenance | Reason |
+| --- | --- | --- | --- | --- |
+| _fe_analyzer_shared | 99.0.0 | 99.0.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| analyzer | 12.1.0 | 12.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| args | 2.7.0 | 2.7.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| async | 2.13.1 | 2.13.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| boolean_selector | 2.1.2 | 2.1.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| build | 4.0.7 | 4.0.7 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| build_config | 1.3.2 | 1.3.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| build_daemon | 4.1.4 | 4.1.4 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| built_collection | 5.1.1 | 5.1.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| built_value | 8.12.7 | 8.12.7 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| characters | 1.4.1 | 1.4.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| charcode | 1.4.0 | 1.4.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| checked_yaml | 2.0.4 | 2.0.4 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| cli_config | 0.2.0 | 0.2.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| cli_util | 0.4.2 | 0.4.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| clock | 1.1.2 | 1.1.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| code_assets | 1.2.1 | 1.2.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| collection | 1.19.1 | 1.19.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| console | 4.1.0 | 4.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| convert | 3.1.2 | 3.1.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| coverage | 1.15.1 | 1.15.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| csslib | 1.0.2 | 1.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| dart_style | 3.1.8 | 3.1.8 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| equatable | 2.1.0 | 2.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| fake_async | 1.3.3 | 1.3.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| ffi_leak_tracker | 0.1.2 | 0.1.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| file | 7.0.1 | 7.0.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| fixnum | 1.1.1 | 1.1.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| flutter_driver, flutter_web_plugins, fuchsia_remote_debug_protocol, sky_engine | Flutter SDK 3.44.8 (lockfile 0.0.0) | Flutter SDK 3.44.8 (lockfile 0.0.0) | Flutter SDK; pub deps --json | Flutter-owned SDK packages. |
+| flutter_secure_storage_darwin | 0.3.2 | 0.3.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| flutter_secure_storage_linux | 3.0.1 | 3.0.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| flutter_secure_storage_platform_interface | 2.0.3 | 2.0.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| flutter_secure_storage_web | 2.1.1 | 2.1.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| flutter_secure_storage_windows | 4.2.2 | 4.2.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| freezed_annotation | 3.1.0 | 3.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| frontend_server_client | 4.0.0 | 4.0.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| get_it | 9.2.1 | 9.2.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| glob | 2.1.3 | 2.1.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| graphs | 2.3.2 | 2.3.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| hooks | 2.0.2 | 2.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| html | 0.15.6 | 0.15.6 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| http | 1.6.0 | 1.6.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| http_multi_server | 3.2.2 | 3.2.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| http_parser | 4.1.2 | 4.1.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| image | 4.9.1 | 4.9.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| io | 1.0.5 | 1.0.5 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| jni | 1.0.3 | 1.0.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| jni_flutter | 1.0.2 | 1.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| jni_util | 1.0.0 | 1.0.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| json_annotation | 4.12.0 | 4.12.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| leak_tracker | 11.0.2 | 11.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| leak_tracker_flutter_testing | 3.0.10 | 3.0.10 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| leak_tracker_testing | 3.0.2 | 3.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| lints | 6.1.0 | 6.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| listen | 1.0.1 | 1.0.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| matcher | 0.12.19 | 0.12.19 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| material_color_utilities | 0.13.0 | 0.13.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| meta | 1.18.0 | 1.18.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| mime | 2.0.0 | 2.0.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| native_toolchain_c | 0.19.2 | 0.19.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| node_preamble | 2.0.2 | 2.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| objective_c | 9.5.0 | 9.5.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| package_config | 2.2.0 | 2.2.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| package_info_plus_platform_interface | 4.1.0 | 4.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| path_provider_android | 2.3.1 | 2.3.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| path_provider_foundation | 2.6.0 | 2.6.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| path_provider_linux | 2.2.2 | 2.2.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| path_provider_platform_interface | 2.1.3 | 2.1.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| path_provider_windows | 2.3.0 | 2.3.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| petitparser | 7.0.2 | 7.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| platform | 3.1.6 | 3.1.6 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| plugin_platform_interface | 2.1.8 | 2.1.8 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| pool | 1.5.2 | 1.5.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| posix | 6.5.2 | 6.5.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| process | 5.0.5 | 5.0.5 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| pub_semver | 2.2.0 | 2.2.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| pubspec_parse | 1.5.0 | 1.5.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| quiver | 3.2.2 | 3.2.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| recase | 4.1.0 | 4.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| record_use | 0.6.0 | 0.6.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| riverpod | 3.4.2 | 3.4.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| shelf | 1.4.2 | 1.4.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| shelf_packages_handler | 3.0.2 | 3.0.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| shelf_static | 1.1.3 | 1.1.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| shelf_web_socket | 3.0.0 | 3.0.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| source_gen | 4.2.4 | 4.2.4 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| source_map_stack_trace | 2.1.2 | 2.1.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| source_maps | 0.10.13 | 0.10.13 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| source_span | 1.10.2 | 1.10.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| sqlcipher_flutter_libs | 0.7.0+eol | 0.7.0+eol | pub.dev; pubspec.lock | Locked hosted transitive. |
+| sqlite3_flutter_libs | 0.6.0+eol | 0.6.0+eol | pub.dev; pubspec.lock | Locked hosted transitive. |
+| sqlparser | 0.44.5 | 0.44.5 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| stack_trace | 1.12.1 | 1.12.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| state_notifier | 1.0.0 | 1.0.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| stream_channel | 2.1.4 | 2.1.4 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| stream_transform | 2.1.1 | 2.1.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| string_scanner | 1.4.1 | 1.4.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| sync_http | 0.3.1 | 0.3.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| term_glyph | 1.2.2 | 1.2.2 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| test | 1.31.0 | 1.31.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| test_api | 0.7.11 | 0.7.11 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| test_core | 0.6.17 | 0.6.17 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| typed_data | 1.4.0 | 1.4.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| vector_math | 2.2.0 | 2.2.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| vm_service | 15.2.0 | 15.2.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| watcher | 1.2.1 | 1.2.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| web | 1.1.1 | 1.1.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| web_socket | 1.0.1 | 1.0.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| web_socket_channel | 3.0.3 | 3.0.3 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| webdriver | 3.1.0 | 3.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| webkit_inspection_protocol | 1.2.1 | 1.2.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| xdg_directories | 1.1.0 | 1.1.0 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| xml | 7.0.1 | 7.0.1 | pub.dev; pubspec.lock | Locked hosted transitive. |
+| zmodem | 0.0.6 | 0.0.6 | pub.dev; pubspec.lock | Locked hosted transitive. |
+
+## Ubuntu apt-get dependencies
+
+All versions are intentionally unpinned: the `ubuntu-24.04` GitHub-hosted runner resolves them from the current [Ubuntu 24.04 (Noble) stable repositories](https://packages.ubuntu.com/noble/). The workflow's `apt-get update` immediately precedes each installation, so a build selects the repository-provided stable package version at execution time.
+
+| Package | Current / selected | Source / provenance | Reason |
+| --- | --- | --- | --- |
+| clang | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| cmake | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| ninja-build | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| pkg-config | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| libgtk-3-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| libsecret-1-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI test and build prerequisite; intentionally not hard-pinned. |
+| libsqlite3-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI test prerequisite; intentionally not hard-pinned. |
+| libjsoncpp-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| libayatana-appindicator3-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| dbus-x11 | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI integration-test prerequisite; intentionally not hard-pinned. |
+| gnome-keyring | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI integration-test prerequisite; intentionally not hard-pinned. |
+| xvfb | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI integration-test prerequisite; intentionally not hard-pinned. |
+
 ## GitHub Actions and packaging tools
 
 | Dependency | Current | Latest stable | Selected | Source | Reason |
