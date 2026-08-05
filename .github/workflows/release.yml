@@ -13,7 +13,7 @@ jobs:
   windows-package:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -37,7 +37,7 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: '1'
       APPIMAGETOOL_SHA256: a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -65,7 +65,7 @@ jobs:
       MAESTRO_RELEASE_SECRET_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_SECRET_KEY_BASE64 }}
       MAESTRO_RELEASE_PUBLIC_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_PUBLIC_KEY_BASE64 }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
