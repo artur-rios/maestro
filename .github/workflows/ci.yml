@@ -12,7 +12,7 @@ jobs:
   analyze-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -32,7 +32,7 @@ jobs:
   windows-platform:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -49,7 +49,7 @@ jobs:
       - name: Smoke portable install and update staging
         shell: pwsh
         run: tooling/smoke/windows_install_update.ps1 -InitialPackage dist/maestro-windows-x64.zip -UpdatePackage dist/maestro-windows-x64.zip -WorkRoot "$env:RUNNER_TEMP/maestro-smoke"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-packages
           path: |
@@ -61,9 +61,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       APPIMAGE_EXTRACT_AND_RUN: '1'
-      APPIMAGETOOL_SHA256: a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
+      APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -83,13 +83,13 @@ jobs:
       - run: flutter build linux --release
       - name: Install pinned appimagetool
         run: |
-          curl --fail --location --output "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          curl --fail --location --output "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
           echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum --check --strict
           chmod 0755 "$RUNNER_TEMP/appimagetool"
           echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
       - run: bash tooling/packaging/package_linux.sh 0.1.0
       - run: bash tooling/smoke/linux_install_update.sh dist/maestro-linux-x64.AppImage dist/maestro-linux-amd64.deb
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-packages
           path: |

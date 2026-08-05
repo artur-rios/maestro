@@ -13,7 +13,11 @@ Future<void> main() async {
     throw StateError('No GitHub Actions workflows were found.');
   }
   final actionReference = RegExp(r'uses:\s*[^@\s]+@([^\s#]+)');
-  final immutableSha = RegExp(r'^[0-9a-f]{40}$');
+  final immutableSha = RegExp(r'^[0-9a-fA-F]{40}$');
+  final releaseAssetReference = RegExp(
+    r'''https://github\.com/[^/\s"']+/[^/\s"']+/releases/(?:download/([^/\s"']+)/[^\s"']+|latest/download/[^\s"']+)''',
+  );
+  final immutableVersion = RegExp(r'^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$');
   for (final workflow in workflows) {
     final source = await workflow.readAsString();
     final document = loadYaml(source);
@@ -25,6 +29,14 @@ Future<void> main() async {
       if (!immutableSha.hasMatch(reference)) {
         throw FormatException(
           '${workflow.path} uses a mutable action reference: $reference',
+        );
+      }
+    }
+    for (final match in releaseAssetReference.allMatches(source)) {
+      final version = match.group(1);
+      if (version == null || !immutableVersion.hasMatch(version)) {
+        throw FormatException(
+          '${workflow.path} downloads a mutable release asset: ${match.group(0)}',
         );
       }
     }

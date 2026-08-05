@@ -13,7 +13,7 @@ jobs:
   windows-package:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -25,7 +25,7 @@ jobs:
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart('v')
           tooling/packaging/package_windows.ps1 -Version $version
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-packages
           path: dist/maestro-windows-x64.*
@@ -35,9 +35,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       APPIMAGE_EXTRACT_AND_RUN: '1'
-      APPIMAGETOOL_SHA256: a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
+      APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
@@ -47,12 +47,12 @@ jobs:
       - run: flutter pub get
       - name: Install pinned appimagetool
         run: |
-          curl --fail --location --output "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          curl --fail --location --output "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
           echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum --check --strict
           chmod 0755 "$RUNNER_TEMP/appimagetool"
           echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
       - run: bash tooling/packaging/package_linux.sh "${GITHUB_REF_NAME#v}"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-packages
           path: dist/maestro-linux-*
@@ -65,13 +65,13 @@ jobs:
       MAESTRO_RELEASE_SECRET_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_SECRET_KEY_BASE64 }}
       MAESTRO_RELEASE_PUBLIC_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_PUBLIC_KEY_BASE64 }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: '*-packages'
           path: dist
@@ -87,10 +87,10 @@ jobs:
             echo 'publisher-signing: unconfigured'
           fi
           dart run tooling/release/verify_release.dart dist
-      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-path: dist/*
-      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           files: dist/*
           fail_on_unmatched_files: true
