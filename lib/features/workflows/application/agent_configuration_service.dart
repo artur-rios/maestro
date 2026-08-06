@@ -86,11 +86,14 @@ final class AgentConfigurationRejected extends AgentConfigurationResult {
 
 final class AgentExecutionPreflight {
   AgentExecutionPreflight({
+    required Iterable<AgentRowState> states,
     required Iterable<AgentRowState> agentBlockers,
     required this.hasMoreAgentBlockers,
     required this.projectReadiness,
-  }) : agentBlockers = List<AgentRowState>.unmodifiable(agentBlockers);
+  }) : states = List<AgentRowState>.unmodifiable(states),
+       agentBlockers = List<AgentRowState>.unmodifiable(agentBlockers);
 
+  final List<AgentRowState> states;
   final List<AgentRowState> agentBlockers;
   final bool hasMoreAgentBlockers;
   final WorkflowExecutionReadiness projectReadiness;
@@ -239,6 +242,7 @@ final class AgentConfigurationService {
       draft.projectIds,
     );
     return AgentExecutionPreflight(
+      states: configuration.states,
       agentBlockers: blockers.take(AgentRowBlockers.maximumVisible),
       hasMoreAgentBlockers: blockers.length > AgentRowBlockers.maximumVisible,
       projectReadiness: projectReadiness,

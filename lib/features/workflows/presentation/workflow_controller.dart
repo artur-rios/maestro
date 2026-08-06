@@ -164,11 +164,24 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     final catalogs = await agents.refreshAll();
     if (!_owns(generation)) return;
     final evaluation = agents.evaluateConfiguration(state.draft, catalogs);
+    final rowStates = Map<String, AgentRowState>.of(
+      _statesByRow(evaluation.states),
+    );
+    for (final entry in state.pendingCliKinds.entries) {
+      if (!evaluation.draft.steps.any((step) => step.rowKey == entry.key)) {
+        continue;
+      }
+      rowStates[entry.key] = agents.evaluatePendingCli(
+        rowKey: entry.key,
+        kind: entry.value,
+        catalog: catalogs,
+      );
+    }
     state = state.copyWith(
       catalogs: catalogs,
       catalogBusy: false,
       draft: evaluation.draft,
-      agentRowStates: _statesByRow(evaluation.states),
+      agentRowStates: rowStates,
     );
   }
 
@@ -446,6 +459,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     final agents = _agents;
     final preflight = agents == null
         ? AgentExecutionPreflight(
+            states: const <AgentRowState>[],
             agentBlockers: const <AgentRowState>[],
             hasMoreAgentBlockers: false,
             projectReadiness: await _service.executionReadiness(
@@ -454,10 +468,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
           )
         : await agents.executionPreflight(draft);
     if (!_owns(generation)) return;
-    final agentStates = Map<String, AgentRowState>.of(state.agentRowStates);
-    for (final blocker in preflight.agentBlockers) {
-      agentStates[blocker.rowKey] = blocker;
-    }
+    final agentStates = _statesByRow(preflight.states);
     final readiness = preflight.projectReadiness;
     switch (readiness) {
       case WorkflowExecutionReady() when preflight.agentBlockers.isEmpty:

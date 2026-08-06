@@ -451,6 +451,84 @@ void main() {
       expect(fixture.state.feedback, isNull);
     },
   );
+
+  test(
+    'GivenDisplayRefreshFailureThenSuccessfulPreflight_WhenSelected_ThenFreshReadyStateReplacesStaleRow',
+    () async {
+      final fixture = _Fixture(
+        codex: _SequenceAdapter(AgentCliKind.codex, <AgentCliCatalog>[
+          AgentCliCatalog(
+            kind: AgentCliKind.codex,
+            installation: AgentCliInstallation.transientFailure,
+            session: AgentCliSession.unverified,
+            modelVerification: AgentModelVerification.unverified,
+            models: const <String>[],
+            guidance: 'Try again.',
+          ),
+          _catalog(AgentCliKind.codex),
+        ]),
+      );
+      fixture.repository.last = _persistedDefinition();
+      addTearDown(fixture.dispose);
+
+      await fixture.controller.select('saved');
+
+      expect(fixture.state.readiness, WorkflowReadinessStatus.ready);
+      expect(
+        fixture.state.agentRowStates.values.map((state) => state.code),
+        everyElement(AgentRowStateCode.ready),
+      );
+    },
+  );
+
+  test(
+    'GivenPendingCli_WhenCatalogRefreshesMissingUnauthenticatedThenUsable_ThenGuidanceUpdatesWithoutAssignment',
+    () async {
+      final fixture = _Fixture(
+        codex: _SequenceAdapter(AgentCliKind.codex, <AgentCliCatalog>[
+          _catalog(AgentCliKind.codex),
+          AgentCliCatalog(
+            kind: AgentCliKind.codex,
+            installation: AgentCliInstallation.missing,
+            session: AgentCliSession.unverified,
+            modelVerification: AgentModelVerification.unverified,
+            models: const <String>[],
+            guidance: 'Install.',
+          ),
+          AgentCliCatalog(
+            kind: AgentCliKind.codex,
+            installation: AgentCliInstallation.available,
+            session: AgentCliSession.unauthenticated,
+            modelVerification: AgentModelVerification.unverified,
+            models: const <String>[],
+            guidance: 'Authenticate.',
+          ),
+          _catalog(AgentCliKind.codex),
+        ]),
+      );
+      addTearDown(fixture.dispose);
+      await fixture.controller.load();
+      fixture.controller.selectAgentCli('default-plan', AgentCliKind.codex);
+
+      await fixture.controller.refreshAgents();
+      expect(
+        fixture.state.agentRowStates['default-plan']?.code,
+        AgentRowStateCode.cliMissing,
+      );
+      await fixture.controller.refreshAgents();
+      expect(
+        fixture.state.agentRowStates['default-plan']?.code,
+        AgentRowStateCode.unauthenticated,
+      );
+      await fixture.controller.refreshAgents();
+      expect(
+        fixture.state.agentRowStates['default-plan']?.code,
+        AgentRowStateCode.unassigned,
+      );
+      expect(fixture.state.pendingCliKinds['default-plan'], AgentCliKind.codex);
+      expect(fixture.state.draft.steps.first.assignment, isNull);
+    },
+  );
 }
 
 Future<AgentRowStateCode> _pendingCode({
@@ -509,7 +587,7 @@ Future<AgentRowStateCode> _loadedCode({
 }
 
 final class _Fixture {
-  _Fixture({_Adapter? codex}) {
+  _Fixture({AgentCliAdapter? codex}) {
     design = WorkflowDesignService(
       repository: repository,
       projectReadiness: const _Readiness(),
@@ -553,6 +631,19 @@ final class _Adapter implements AgentCliAdapter {
   final Future<AgentCliCatalog> _catalog;
   @override
   Future<AgentCliCatalog> discover() => _catalog;
+}
+
+final class _SequenceAdapter implements AgentCliAdapter {
+  _SequenceAdapter(this.kind, List<AgentCliCatalog> values)
+    : _values = List<AgentCliCatalog>.of(values);
+  @override
+  final AgentCliKind kind;
+  final List<AgentCliCatalog> _values;
+  @override
+  Future<AgentCliCatalog> discover() async {
+    if (_values.isEmpty) throw StateError('No discovery result remains.');
+    return _values.removeAt(0);
+  }
 }
 
 AgentCliCatalog _catalog(AgentCliKind kind, {bool cliOnly = false}) =>
