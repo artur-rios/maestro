@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
@@ -280,6 +282,119 @@ void main() {
       expect(users.saved, hasLength(1));
     },
   );
+
+  test(
+    'GivenPendingOperatingSystemAuthentication_WhenSignedOut_ThenLateSuccessCannotRestoreSession',
+    () async {
+      final completion = Completer<Result<void>>();
+      operatingSystemAuthentication.authenticate = () => completion.future;
+      final pending = service.signInWithOperatingSystem();
+
+      service.signOut();
+      completion.complete(const Success<void>(null));
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenOlderOperatingSystemAuthentication_WhenNewerEmailSignInSucceeds_ThenLateCompletionCannotReplaceSession',
+    () async {
+      users.existingEmail = 'person@example.com';
+      users.operatingSystemUser = _operatingSystemUser();
+      verifiers.values['verifier-user-1'] = 'hashed:password1';
+      final completion = Completer<Result<void>>();
+      operatingSystemAuthentication.authenticate = () => completion.future;
+      final older = service.signInWithOperatingSystem();
+
+      final newer = await service.signInWithEmail(
+        'person@example.com',
+        'password1',
+      );
+      completion.complete(const Success<void>(null));
+      final olderResult = await older;
+
+      expect(newer, isA<Success<AuthenticatedSession>>());
+      expect(service.currentSession?.userId, 'user-1');
+      expect(olderResult, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (olderResult as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+    },
+  );
+
+  test(
+    'GivenPendingOperatingSystemAuthentication_WhenServiceIsDisposed_ThenLateSuccessCannotRestoreSession',
+    () async {
+      final completion = Completer<Result<void>>();
+      operatingSystemAuthentication.authenticate = () => completion.future;
+      final pending = service.signInWithOperatingSystem();
+
+      service.dispose();
+      completion.complete(const Success<void>(null));
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenPendingOperatingSystemAuthentication_WhenSignedOutAndAdapterFailsLate_ThenStaleFailureHasNoCause',
+    () async {
+      final completion = Completer<Result<void>>();
+      operatingSystemAuthentication.authenticate = () => completion.future;
+      final pending = service.signInWithOperatingSystem();
+
+      service.signOut();
+      completion.completeError(StateError('sentinel-late-native-detail'));
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.operation.stale');
+      expect(failure.cause, isNull);
+      expect(failure.message, isNot(contains('sentinel-late-native-detail')));
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenPendingEmailLookup_WhenServiceIsDisposed_ThenLaterCredentialStorageIsNotAccessed',
+    () async {
+      final lookup = Completer<LocalUser?>();
+      users.findEmail = (_) => lookup.future;
+      final pending = service.signInWithEmail(
+        'person@example.com',
+        'password1',
+      );
+
+      service.dispose();
+      lookup.complete(_emailUser());
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+      expect(verifiers.readKeys, isEmpty);
+      expect(users.lastAuthenticatedUserIds, isEmpty);
+      expect(audits.events, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
 }
 
 final class _DeterministicIds {
@@ -299,11 +414,15 @@ final class _FakeLocalUserRepository implements LocalUserRepository {
   final List<String> lastAuthenticatedUserIds = <String>[];
   final Map<String, LocalUser> _usersByEmail = <String, LocalUser>{};
   LocalUser? _operatingSystemUser;
+  Future<LocalUser?> Function(NormalizedEmail email)? findEmail;
 
   set operatingSystemUser(LocalUser? value) => _operatingSystemUser = value;
 
   @override
   Future<LocalUser?> findByEmail(NormalizedEmail email) async {
+    if (findEmail case final callback?) {
+      return callback(email);
+    }
     final saved = _usersByEmail[email.value];
     if (saved != null) {
       return saved;
@@ -357,6 +476,7 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   final Map<String, String> values = <String, String>{};
   final Map<String, String> writes = <String, String>{};
   final List<String> deleted = <String>[];
+  final List<String> readKeys = <String>[];
   bool failWhenDeleting = false;
 
   @override
@@ -372,7 +492,10 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   }
 
   @override
-  Future<String?> read(String key) async => values[key];
+  Future<String?> read(String key) async {
+    readKeys.add(key);
+    return values[key];
+  }
 
   @override
   Future<void> write(String key, String verifier) async {
@@ -411,11 +534,15 @@ final class _FakeOperatingSystemAuthenticator
     implements OperatingSystemAuthenticator {
   Result<void> result = const Success<void>(null);
   Object? exception;
+  Future<Result<void>> Function()? authenticate;
 
   @override
   Future<Result<void>> authenticateCurrentUser() async {
     if (exception case final error?) {
       throw error;
+    }
+    if (authenticate case final callback?) {
+      return callback();
     }
     return result;
   }
@@ -427,6 +554,17 @@ LocalUser _operatingSystemUser() {
     email: null,
     authenticationMethod: AuthenticationMethod.operatingSystem,
     verifierKey: null,
+    createdAt: DateTime.utc(2026, 8, 5),
+    lastAuthenticatedAt: null,
+  );
+}
+
+LocalUser _emailUser() {
+  return LocalUser(
+    id: 'email-user-1',
+    email: NormalizedEmail.parse('person@example.com'),
+    authenticationMethod: AuthenticationMethod.emailPassword,
+    verifierKey: 'verifier-email-user-1',
     createdAt: DateTime.utc(2026, 8, 5),
     lastAuthenticatedAt: null,
   );

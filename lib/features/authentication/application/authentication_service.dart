@@ -73,6 +73,8 @@ final class AuthenticationService {
   final String Function() _newId;
 
   AuthenticatedSession? _currentSession;
+  int _operationGeneration = 0;
+  bool _disposed = false;
 
   AuthenticatedSession? get currentSession => _currentSession;
 
@@ -80,6 +82,7 @@ final class AuthenticationService {
     String email,
     String password,
   ) async {
+    final operationGeneration = _beginAuthenticationOperation();
     final normalizedEmail = NormalizedEmail.parse(email);
     final localPassword = _validatedPassword(password);
     if (localPassword == null) {
@@ -94,7 +97,11 @@ final class AuthenticationService {
     }
 
     try {
-      if (await _users.findByEmail(normalizedEmail) != null) {
+      final existingUser = await _users.findByEmail(normalizedEmail);
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
+      if (existingUser != null) {
         return const FailureResult<AuthenticatedSession>(
           ValidationFailure(
             code: 'authentication.email.duplicate',
@@ -106,7 +113,13 @@ final class AuthenticationService {
       final userId = _newId();
       final verifierKey = 'maestro.auth.verifier.$userId';
       final verifier = await _hasher.create(localPassword.value);
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       await _verifiers.write(verifierKey, verifier);
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
 
       final user = LocalUser(
         id: userId,
@@ -120,9 +133,15 @@ final class AuthenticationService {
         await _users.save(user);
       } catch (error) {
         final rollbackFailure = await _rollbackVerifier(verifierKey);
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
         return FailureResult<AuthenticatedSession>(
           rollbackFailure ?? _storageFailure(error),
         );
+      }
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
       }
 
       try {
@@ -134,6 +153,9 @@ final class AuthenticationService {
           details: '{"principal":"known"}',
         );
       } catch (error) {
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
         final compensationFailure = await _compensateCreatedAccount(
           user.id,
           verifierKey,
@@ -142,8 +164,11 @@ final class AuthenticationService {
           compensationFailure ?? _storageFailure(error),
         );
       }
-      return _openSession(user.id);
+      return _openSession(user.id, operationGeneration);
     } catch (error) {
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       return FailureResult<AuthenticatedSession>(_storageFailure(error));
     }
   }
@@ -152,21 +177,48 @@ final class AuthenticationService {
     String email,
     String password,
   ) async {
+    final operationGeneration = _beginAuthenticationOperation();
     try {
       final user = await _users.findByEmail(NormalizedEmail.parse(email));
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       if (user == null || user.verifierKey == null) {
         await _appendFailedEmailSignIn(null);
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
         return _invalidCredentials();
       }
 
       final verifier = await _verifiers.read(user.verifierKey!);
-      if (verifier == null || !await _hasher.verify(verifier, password)) {
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
+      if (verifier == null) {
         await _appendFailedEmailSignIn(user.id);
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
+        return _invalidCredentials();
+      }
+      final matches = await _hasher.verify(verifier, password);
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
+      if (!matches) {
+        await _appendFailedEmailSignIn(user.id);
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
         return _invalidCredentials();
       }
 
       final authenticatedAt = _clock();
       await _users.updateLastAuthenticatedAt(user.id, authenticatedAt);
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       await _appendAudit(
         actorId: user.id,
         action: AuthenticationAuditAction.signIn,
@@ -174,23 +226,33 @@ final class AuthenticationService {
         outcome: AuthenticationAuditOutcome.success,
         details: '{"principal":"known"}',
       );
-      return _openSession(user.id);
+      return _openSession(user.id, operationGeneration);
     } catch (error) {
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       return FailureResult<AuthenticatedSession>(_storageFailure(error));
     }
   }
 
   Future<Result<AuthenticatedSession>> signInWithOperatingSystem() async {
+    final operationGeneration = _beginAuthenticationOperation();
     try {
       final verified = await _operatingSystemAuthentication
           .authenticateCurrentUser();
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       switch (verified) {
         case FailureResult<void>(:final failure):
           return FailureResult<AuthenticatedSession>(failure);
         case Success<void>():
-          return _signInVerifiedOperatingSystemUser();
+          return _signInVerifiedOperatingSystemUser(operationGeneration);
       }
     } catch (error) {
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       return FailureResult<AuthenticatedSession>(
         PlatformFailure(
           code: 'authentication.operating_system.failed',
@@ -202,6 +264,16 @@ final class AuthenticationService {
   }
 
   void signOut() {
+    _operationGeneration++;
+    _currentSession = null;
+  }
+
+  void dispose() {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    _operationGeneration++;
     _currentSession = null;
   }
 
@@ -213,10 +285,14 @@ final class AuthenticationService {
     }
   }
 
-  Future<Result<AuthenticatedSession>>
-  _signInVerifiedOperatingSystemUser() async {
+  Future<Result<AuthenticatedSession>> _signInVerifiedOperatingSystemUser(
+    int operationGeneration,
+  ) async {
     try {
       var user = await _users.findOperatingSystemUser();
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       if (user == null) {
         final userId = _newId();
         user = LocalUser(
@@ -231,6 +307,9 @@ final class AuthenticationService {
       } else {
         await _users.updateLastAuthenticatedAt(user.id, _clock());
       }
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       await _appendAudit(
         actorId: user.id,
         action: AuthenticationAuditAction.signIn,
@@ -238,8 +317,11 @@ final class AuthenticationService {
         outcome: AuthenticationAuditOutcome.success,
         details: '{"principal":"known"}',
       );
-      return _openSession(user.id);
+      return _openSession(user.id, operationGeneration);
     } catch (error) {
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleOperation();
+      }
       return FailureResult<AuthenticatedSession>(_storageFailure(error));
     }
   }
@@ -306,10 +388,32 @@ final class AuthenticationService {
     );
   }
 
-  Result<AuthenticatedSession> _openSession(String userId) {
+  int _beginAuthenticationOperation() => ++_operationGeneration;
+
+  bool _ownsAuthenticationOperation(int operationGeneration) {
+    return !_disposed && operationGeneration == _operationGeneration;
+  }
+
+  Result<AuthenticatedSession> _openSession(
+    String userId,
+    int operationGeneration,
+  ) {
+    if (!_ownsAuthenticationOperation(operationGeneration)) {
+      return _staleOperation();
+    }
     final session = AuthenticatedSession.fullControl(userId);
     _currentSession = session;
     return Success<AuthenticatedSession>(session);
+  }
+
+  FailureResult<AuthenticatedSession> _staleOperation() {
+    return const FailureResult<AuthenticatedSession>(
+      SecurityFailure(
+        code: 'authentication.operation.stale',
+        message: 'Authentication was superseded by a newer action.',
+        remediation: 'Try again if authentication is still required.',
+      ),
+    );
   }
 
   FailureResult<AuthenticatedSession> _invalidCredentials() {

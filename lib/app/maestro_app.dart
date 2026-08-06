@@ -26,6 +26,7 @@ class MaestroApp extends StatefulWidget {
 final class _MaestroAppState extends State<MaestroApp> {
   @override
   void dispose() {
+    widget.authenticationService.dispose();
     widget.onDispose?.call();
     super.dispose();
   }

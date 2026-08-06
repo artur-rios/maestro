@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,6 +72,36 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Foundation ready'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenAccountCreationMode_WhenOperatingSystemIsUnavailable_ThenDirectEmailSignInIsRestored',
+    (tester) async {
+      final service = _authenticationService(
+        operatingSystemResult: const FailureResult<void>(
+          PlatformFailure(
+            code: 'authentication.operating_system.unavailable',
+            message: 'Operating-system authentication is unavailable.',
+          ),
+        ),
+      );
+      await tester.pumpWidget(_testApp(service));
+      await tester.tap(find.bySemanticsLabel('Create a local account'));
+      await tester.pump();
+      expect(find.bySemanticsLabel('Create account'), findsOneWidget);
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.bySemanticsLabel('Sign in with email and password'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Create account'), findsNothing);
+      expect(find.text('Authentication was not successful.'), findsOneWidget);
     },
   );
 
@@ -194,6 +226,98 @@ void main() {
     expect(find.text('Foundation ready'), findsNothing);
     expect(find.text('Sign in with your operating system'), findsOneWidget);
   });
+
+  testWidgets(
+    'GivenValidAccountDetails_WhenCreated_ThenOneFullControlProtectedTransitionOccurs',
+    (tester) async {
+      final hashing = Completer<String>();
+      final service = _authenticationService(
+        hasher: _CompletingPasswordHasher(hashing),
+      );
+      var protectedBuilds = 0;
+      await tester.pumpWidget(
+        _testApp(
+          service,
+          authenticatedBuilder: (_) {
+            protectedBuilds++;
+            return const Text('Foundation ready');
+          },
+        ),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AuthenticationPage)),
+      );
+      await tester.tap(find.bySemanticsLabel('Create a local account'));
+      await tester.pump();
+      await tester.enterText(
+        find.bySemanticsLabel('Email address'),
+        'new@example.com',
+      );
+      await tester.enterText(
+        find.bySemanticsLabel('Password'),
+        'strong-password',
+      );
+
+      await tester.tap(find.bySemanticsLabel('Create account'));
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText).last)
+            .controller
+            .text,
+        isEmpty,
+      );
+      hashing.complete('hashed-verifier');
+      await tester.pumpAndSettle();
+
+      final state = container.read(authenticationControllerProvider);
+      expect(state, isA<AuthenticationAuthenticated>());
+      final session = (state as AuthenticationAuthenticated).session;
+      expect(session.canManageRecords, isTrue);
+      expect(session.canRunWorkflows, isTrue);
+      expect(session.canDeliverChanges, isTrue);
+      expect(protectedBuilds, 1);
+      expect(find.text('Foundation ready'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenPendingAuthentication_WhenSignedOut_ThenLateSuccessNeverBuildsProtectedContent',
+    (tester) async {
+      final operatingSystem = _CompletingOperatingSystemAuthenticator();
+      final service = _authenticationService(
+        operatingSystemAuthentication: operatingSystem,
+      );
+      var protectedBuilds = 0;
+      await tester.pumpWidget(
+        _testApp(
+          service,
+          authenticatedBuilder: (_) {
+            protectedBuilds++;
+            return const Text('Foundation ready');
+          },
+        ),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AuthenticationPage)),
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pump();
+
+      container.read(authenticationControllerProvider.notifier).signOut();
+      await tester.pump();
+      operatingSystem.complete(const Success<void>(null));
+      await tester.pumpAndSettle();
+
+      expect(protectedBuilds, 0);
+      expect(find.text('Foundation ready'), findsNothing);
+      expect(find.text('Sign in with your operating system'), findsOneWidget);
+      expect(service.currentSession, isNull);
+    },
+  );
 }
 
 Widget _testApp(
@@ -214,6 +338,8 @@ Widget _testApp(
 AuthenticationService _authenticationService({
   _MemoryAuthenticationRepository? users,
   _MemoryPasswordVerifierStore? verifiers,
+  PasswordHasher? hasher,
+  OperatingSystemAuthenticator? operatingSystemAuthentication,
   Result<void> operatingSystemResult = const Success<void>(null),
 }) {
   var nextId = 0;
@@ -221,11 +347,11 @@ AuthenticationService _authenticationService({
   return AuthenticationService(
     users: repository,
     verifiers: verifiers ?? _MemoryPasswordVerifierStore(),
-    hasher: const _PlainPasswordHasher(),
+    hasher: hasher ?? const _PlainPasswordHasher(),
     audits: repository,
-    operatingSystemAuthentication: _FakeOperatingSystemAuthenticator(
-      operatingSystemResult,
-    ),
+    operatingSystemAuthentication:
+        operatingSystemAuthentication ??
+        _FakeOperatingSystemAuthenticator(operatingSystemResult),
     clock: () => DateTime.utc(2026, 8, 5),
     newId: () => 'id-${nextId++}',
   );
@@ -310,6 +436,18 @@ final class _PlainPasswordHasher implements PasswordHasher {
   }
 }
 
+final class _CompletingPasswordHasher implements PasswordHasher {
+  const _CompletingPasswordHasher(this.completion);
+
+  final Completer<String> completion;
+
+  @override
+  Future<String> create(String password) => completion.future;
+
+  @override
+  Future<bool> verify(String verifier, String password) async => false;
+}
+
 final class _FakeOperatingSystemAuthenticator
     implements OperatingSystemAuthenticator {
   const _FakeOperatingSystemAuthenticator(this.result);
@@ -318,4 +456,14 @@ final class _FakeOperatingSystemAuthenticator
 
   @override
   Future<Result<void>> authenticateCurrentUser() async => result;
+}
+
+final class _CompletingOperatingSystemAuthenticator
+    implements OperatingSystemAuthenticator {
+  final Completer<Result<void>> _completion = Completer<Result<void>>();
+
+  void complete(Result<void> result) => _completion.complete(result);
+
+  @override
+  Future<Result<void>> authenticateCurrentUser() => _completion.future;
 }

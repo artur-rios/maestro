@@ -35,21 +35,42 @@ final class AuthenticationAuthenticated
 }
 
 final class AuthenticationError extends AuthenticationPresentationState {
-  const AuthenticationError({required this.message, this.remediation});
+  const AuthenticationError({
+    required this.category,
+    required this.message,
+    this.remediation,
+  });
 
+  final AuthenticationFailureCategory category;
   final String message;
   final String? remediation;
+}
+
+enum AuthenticationFailureCategory {
+  passwordPolicy,
+  accountCreation,
+  operatingSystem,
+  credentials,
 }
 
 enum _AuthenticationOperation { operatingSystem, emailSignIn, accountCreation }
 
 final class AuthenticationController
     extends Notifier<AuthenticationPresentationState> {
+  int _operationGeneration = 0;
+  bool _disposed = false;
+
   AuthenticationService get _service => ref.read(authenticationServiceProvider);
 
   @override
   AuthenticationPresentationState build() {
-    final session = ref.watch(authenticationServiceProvider).currentSession;
+    final service = ref.watch(authenticationServiceProvider);
+    ref.onDispose(() {
+      _disposed = true;
+      _operationGeneration++;
+      service.dispose();
+    });
+    final session = service.currentSession;
     return session == null
         ? const AuthenticationSignedOut()
         : AuthenticationAuthenticated(session);
@@ -83,6 +104,7 @@ final class AuthenticationController
   }
 
   void signOut() {
+    _operationGeneration++;
     _service.signOut();
     state = const AuthenticationSignedOut();
   }
@@ -91,19 +113,27 @@ final class AuthenticationController
     Future<Result<AuthenticatedSession>> Function() action,
     _AuthenticationOperation operation,
   ) async {
-    if (state is AuthenticationInProgress) {
-      return;
-    }
+    final operationGeneration = ++_operationGeneration;
     state = const AuthenticationInProgress();
     try {
       final result = await action();
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return;
+      }
       state = result.fold<AuthenticationPresentationState>(
         onSuccess: AuthenticationAuthenticated.new,
         onFailure: (failure) => _presentFailure(failure, operation),
       );
     } on Object {
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return;
+      }
       state = _genericFailure(operation);
     }
+  }
+
+  bool _ownsAuthenticationOperation(int operationGeneration) {
+    return !_disposed && operationGeneration == _operationGeneration;
   }
 
   static AuthenticationError _presentFailure(
@@ -112,23 +142,27 @@ final class AuthenticationController
   ) {
     if (failure.code == 'authentication.password.too_short') {
       return const AuthenticationError(
+        category: AuthenticationFailureCategory.passwordPolicy,
         message: 'Password must contain at least 8 characters.',
         remediation: 'Choose a strong, unique password.',
       );
     }
     if (operation == _AuthenticationOperation.accountCreation) {
       return const AuthenticationError(
+        category: AuthenticationFailureCategory.accountCreation,
         message: 'Account creation could not be completed.',
         remediation: 'Review the account details and try again.',
       );
     }
     if (operation == _AuthenticationOperation.operatingSystem) {
       return const AuthenticationError(
+        category: AuthenticationFailureCategory.operatingSystem,
         message: 'Authentication was not successful.',
         remediation: 'Try again or use email and password.',
       );
     }
     return const AuthenticationError(
+      category: AuthenticationFailureCategory.credentials,
       message: 'Authentication was not successful.',
       remediation: 'Check your credentials and try again.',
     );
@@ -139,13 +173,25 @@ final class AuthenticationController
   ) {
     if (operation == _AuthenticationOperation.accountCreation) {
       return const AuthenticationError(
+        category: AuthenticationFailureCategory.accountCreation,
         message: 'Account creation could not be completed.',
         remediation: 'Review the account details and try again.',
       );
     }
-    return const AuthenticationError(
-      message: 'Authentication was not successful.',
-      remediation: 'Try again or use email and password.',
-    );
+    return switch (operation) {
+      _AuthenticationOperation.operatingSystem => const AuthenticationError(
+        category: AuthenticationFailureCategory.operatingSystem,
+        message: 'Authentication was not successful.',
+        remediation: 'Try again or use email and password.',
+      ),
+      _AuthenticationOperation.emailSignIn => const AuthenticationError(
+        category: AuthenticationFailureCategory.credentials,
+        message: 'Authentication was not successful.',
+        remediation: 'Check your credentials and try again.',
+      ),
+      _AuthenticationOperation.accountCreation => throw StateError(
+        'Account creation failure was handled above.',
+      ),
+    };
   }
 }

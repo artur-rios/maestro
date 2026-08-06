@@ -147,10 +147,9 @@ final class _AuthenticationFormState
                       ),
                     ),
                     if (_creatingAccount &&
-                        error?.message !=
-                            'Password must contain at least 8 characters.') ...<
-                      Widget
-                    >[
+                        error?.category !=
+                            AuthenticationFailureCategory
+                                .passwordPolicy) ...<Widget>[
                       const SizedBox(height: 12),
                       const Text(
                         'Password must contain at least 8 characters.',
@@ -201,6 +200,9 @@ final class _AuthenticationFormState
 
   Future<void> _signInWithOperatingSystem() {
     _passwordController.clear();
+    if (_creatingAccount) {
+      setState(() => _creatingAccount = false);
+    }
     return ref
         .read(authenticationControllerProvider.notifier)
         .signInWithOperatingSystem();

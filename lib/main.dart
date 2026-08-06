@@ -68,7 +68,7 @@ final class _InitializationFailureApp extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Maestro could not initialize local protected storage. '
+              'Maestro could not initialize local security or storage services. '
               'Check local permissions and restart the application.',
             ),
           ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_app.dart';
@@ -30,22 +32,36 @@ void main() {
   testWidgets('GivenAppRemoval_WhenDisposed_ThenOwnedResourcesAreReleased', (
     tester,
   ) async {
+    final operatingSystem = _CompletingOperatingSystemAuthenticator();
+    final service = _authenticationService(
+      operatingSystemAuthentication: operatingSystem,
+    );
     var disposeCount = 0;
     await tester.pumpWidget(
       MaestroApp(
-        authenticationService: _authenticationService(),
+        authenticationService: service,
         onDispose: () => disposeCount++,
       ),
     );
+    await tester.tap(
+      find.bySemanticsLabel('Sign in with your operating system'),
+    );
+    await tester.pump();
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+    operatingSystem.complete(const Success<void>(null));
+    await tester.pumpAndSettle();
 
     expect(disposeCount, 1);
+    expect(service.currentSession, isNull);
   });
 }
 
-AuthenticationService _authenticationService() {
+AuthenticationService _authenticationService({
+  OperatingSystemAuthenticator operatingSystemAuthentication =
+      const _OperatingSystemAuthenticator(),
+}) {
   var nextId = 0;
   final repository = _AuthenticationRepository();
   return AuthenticationService(
@@ -53,7 +69,7 @@ AuthenticationService _authenticationService() {
     verifiers: _PasswordVerifierStore(),
     hasher: const _PasswordHasher(),
     audits: repository,
-    operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
+    operatingSystemAuthentication: operatingSystemAuthentication,
     clock: () => DateTime.utc(2026, 8, 5),
     newId: () => 'id-${nextId++}',
   );
@@ -111,4 +127,14 @@ final class _OperatingSystemAuthenticator
   Future<Result<void>> authenticateCurrentUser() async {
     return const Success<void>(null);
   }
+}
+
+final class _CompletingOperatingSystemAuthenticator
+    implements OperatingSystemAuthenticator {
+  final Completer<Result<void>> _completion = Completer<Result<void>>();
+
+  void complete(Result<void> result) => _completion.complete(result);
+
+  @override
+  Future<Result<void>> authenticateCurrentUser() => _completion.future;
 }
