@@ -11,10 +11,12 @@ import 'package:maestro/features/authentication/data/drift_authentication_reposi
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
 import 'package:maestro/features/authentication/data/sodium_password_hasher.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/data/file_selector_project_folder_picker.dart';
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
+import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
@@ -29,7 +31,10 @@ final class ProductionAppComposition {
   ProductionAppComposition._({
     required this.database,
     required this.authenticationService,
+    required this.projectRepository,
     required this.projectService,
+    required this.projectLifecycleService,
+    required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
     required this._closeDatabase,
@@ -37,7 +42,10 @@ final class ProductionAppComposition {
 
   final MaestroDatabase database;
   final AuthenticationService authenticationService;
+  final DriftProjectRepository projectRepository;
   final ProjectService projectService;
+  final ProjectLifecycleService projectLifecycleService;
+  final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
   final DatabaseCloser _closeDatabase;
@@ -46,6 +54,7 @@ final class ProductionAppComposition {
   Widget get app => MaestroApp(
     authenticationService: authenticationService,
     projectService: projectService,
+    projectLifecycleService: projectLifecycleService,
     projectFolderPicker: projectFolderPicker,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
@@ -70,6 +79,7 @@ Future<ProductionAppComposition> composeProductionApp({
       const FileSelectorProjectFolderPicker(),
   DateTime Function()? clock,
   String Function() newId = newProductionId,
+  ActiveProjectRunReader activeProjectRuns = const NoActiveProjectRuns(),
   DatabaseCloser closeDatabase = _closeDatabase,
 }) async {
   final authenticationRepository = DriftAuthenticationRepository(database);
@@ -87,8 +97,9 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
   );
+  final projectRepository = DriftProjectRepository(database);
   final projectService = ProjectService(
-    repository: DriftProjectRepository(database),
+    repository: projectRepository,
     folderValidator: LocalGitProjectValidator(
       git: CommandRunnerGitPort(commandRunner),
       directoryAccess: directoryAccess,
@@ -96,10 +107,20 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
   );
+  final projectLifecycleService = ProjectLifecycleService(
+    repository: projectRepository,
+    store: projectRepository,
+    activeRuns: activeProjectRuns,
+    clock: now,
+    newId: newId,
+  );
   return ProductionAppComposition._(
     database: database,
     authenticationService: authenticationService,
+    projectRepository: projectRepository,
     projectService: projectService,
+    projectLifecycleService: projectLifecycleService,
+    activeProjectRuns: activeProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: ProductionFoundation(
       paths: paths,
@@ -108,6 +129,19 @@ Future<ProductionAppComposition> composeProductionApp({
     ),
     closeDatabase: closeDatabase,
   );
+}
+
+/// Interim production adapter while workflows cannot yet create run records.
+///
+/// UC-06 must replace this with the shared run-store reader when run
+/// persistence enters production composition.
+final class NoActiveProjectRuns implements ActiveProjectRunReader {
+  const NoActiveProjectRuns();
+
+  @override
+  Future<List<ActiveProjectRun>> listActiveForProject(String projectId) async {
+    return const <ActiveProjectRun>[];
+  }
 }
 
 Future<void> _closeDatabase(MaestroDatabase database) => database.close();

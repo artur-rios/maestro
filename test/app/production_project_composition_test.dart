@@ -7,7 +7,9 @@ import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
+import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/main.dart' as app;
 import 'package:maestro/platform/common/command_runner.dart';
 
@@ -57,6 +59,17 @@ void main() {
       composition.authenticationService.signOut();
       final authentication = await composition.authenticationService
           .signInWithEmail('person@example.com', password);
+      final registeredProject =
+          (registration as Success<ProjectSelection>).value.record;
+      final actorId = composition.authenticationService.currentSession!.userId;
+      final softDelete = await composition.projectLifecycleService.softDelete(
+        projectId: registeredProject.id,
+        actorId: actorId,
+      );
+      final restore = await composition.projectLifecycleService.restore(
+        projectId: registeredProject.id,
+        actorId: actorId,
+      );
       final project = await database.select(database.projects).getSingle();
       final user = await database.select(database.localUsers).getSingle();
       final audits = await database.select(database.auditEvents).get();
@@ -64,6 +77,8 @@ void main() {
       expect(registration, isA<Success<Object>>());
       expect(account, isA<Success<Object>>());
       expect(authentication, isA<Success<Object>>());
+      expect(softDelete, isA<ProjectLifecycleSucceeded>());
+      expect(restore, isA<ProjectLifecycleSucceeded>());
       expect(project.id, _isCanonicalUuidV7);
       expect(project.name, 'Maestro Source');
       expect(project.normalizedName, 'maestro source');
@@ -74,10 +89,20 @@ void main() {
       expect(user.id, _isCanonicalUuidV7);
       expect(user.email, 'person@example.com');
       expect(user.verifierKey, 'maestro.auth.verifier.${user.id}');
-      expect(audits, hasLength(2));
+      expect(audits, hasLength(4));
       expect(audits.map((audit) => audit.id), everyElement(_isCanonicalUuidV7));
       expect(audits.map((audit) => audit.actorId), everyElement(user.id));
       expect(composition.foundation.database, same(database));
+      expect(composition.projectRepository, isA<ProjectLifecycleStore>());
+      expect(composition.activeProjectRuns, isA<app.NoActiveProjectRuns>());
+      expect(
+        await composition.activeProjectRuns.listActiveForProject(project.id),
+        isEmpty,
+      );
+      expect(
+        composition.projectLifecycleService,
+        isA<ProjectLifecycleService>(),
+      );
       expect(await _snapshot(source), before);
 
       final persistedText = <String>[
