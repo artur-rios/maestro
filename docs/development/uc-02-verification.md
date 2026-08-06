@@ -4,7 +4,8 @@ This record traces [issue #3](https://github.com/artur-rios/maestro/issues/3)
 and [UC-02](../requirements/Use%20Case%20Specification%20Document.md#uc-02-register-and-select-a-project)
 to the implementation and local verification evidence prepared for review.
 
-- Verified implementation: the Task 5 handoff at branch revision `eb5e9a1`
+- Verified implementation: the final-review-fix handoff at exact branch
+  revision `4c6ce68`
 - Toolchain: Flutter 3.44.8 and Dart 3.12.2
 - Local full-suite result: 199 tests passed
 - Native build evidence: the Windows debug runner built successfully for the
@@ -60,7 +61,8 @@ to the implementation and local verification evidence prepared for review.
 
 ## Local verification commands
 
-The following gates ran from the clean UC-02 feature worktree at `eb5e9a1`,
+The following gates ran from the clean UC-02 final-review-fix worktree at
+`4c6ce68`,
 with `TEMP` and `TMP` set to the same-drive `build/native-temp` directory for
 native hooks:
 
