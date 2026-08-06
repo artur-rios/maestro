@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 
@@ -12,12 +13,28 @@ final projectFolderPickerProvider = Provider<ProjectFolderPicker>((ref) {
   throw StateError('ProjectFolderPicker must be provided by the application.');
 });
 
+final projectLifecycleServiceProvider = Provider<ProjectLifecycleService>((
+  ref,
+) {
+  throw StateError(
+    'ProjectLifecycleService must be provided by the application.',
+  );
+});
+
+final projectLifecycleActorIdProvider = Provider<String>((ref) {
+  throw StateError('A project lifecycle actor ID must be provided.');
+});
+
 final projectControllerProvider =
     NotifierProvider<ProjectController, ProjectWorkspaceState>(
       ProjectController.new,
     );
 
 enum ProjectWorkspaceStatus { idle, loading, ready }
+
+enum SourcePreservationDecision { cancelled, confirmed }
+
+enum PermanentDeletionDecision { cancelled, confirmed }
 
 enum ProjectFailureCategory {
   invalidName,
@@ -44,32 +61,59 @@ final class ProjectPresentationFailure {
   final String remediation;
 }
 
+final class ProjectLifecycleFeedback {
+  const ProjectLifecycleFeedback({
+    required this.isSuccess,
+    required this.message,
+    this.remediation,
+    this.activeRunLabels = const <String>[],
+    this.hasAdditionalActiveRuns = false,
+  });
+
+  final bool isSuccess;
+  final String message;
+  final String? remediation;
+  final List<String> activeRunLabels;
+  final bool hasAdditionalActiveRuns;
+}
+
 final class ProjectWorkspaceState {
   const ProjectWorkspaceState({
     this.projects = const <ProjectSelection>[],
+    this.deletedProjects = const <ProjectRecord>[],
     this.selected,
     this.status = ProjectWorkspaceStatus.idle,
     this.failure,
+    this.lifecycleFeedback,
   });
 
   final List<ProjectSelection> projects;
+  final List<ProjectRecord> deletedProjects;
   final ProjectSelection? selected;
   final ProjectWorkspaceStatus status;
   final ProjectPresentationFailure? failure;
+  final ProjectLifecycleFeedback? lifecycleFeedback;
 
   ProjectWorkspaceState copyWith({
     List<ProjectSelection>? projects,
+    List<ProjectRecord>? deletedProjects,
     ProjectSelection? selected,
     bool clearSelection = false,
     ProjectWorkspaceStatus? status,
     ProjectPresentationFailure? failure,
     bool clearFailure = false,
+    ProjectLifecycleFeedback? lifecycleFeedback,
+    bool clearLifecycleFeedback = false,
   }) {
     return ProjectWorkspaceState(
       projects: projects ?? this.projects,
+      deletedProjects: deletedProjects ?? this.deletedProjects,
       selected: clearSelection ? null : selected ?? this.selected,
       status: status ?? this.status,
       failure: clearFailure ? null : failure ?? this.failure,
+      lifecycleFeedback: clearLifecycleFeedback
+          ? null
+          : lifecycleFeedback ?? this.lifecycleFeedback,
     );
   }
 }
@@ -77,9 +121,13 @@ final class ProjectWorkspaceState {
 final class ProjectController extends Notifier<ProjectWorkspaceState> {
   int _operationGeneration = 0;
   bool _disposed = false;
+  bool _lifecycleBusy = false;
 
   ProjectService get _service => ref.read(projectServiceProvider);
   ProjectFolderPicker get _picker => ref.read(projectFolderPickerProvider);
+  ProjectLifecycleService get _lifecycle =>
+      ref.read(projectLifecycleServiceProvider);
+  String get _actorId => ref.read(projectLifecycleActorIdProvider);
 
   @override
   ProjectWorkspaceState build() {
@@ -97,8 +145,10 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
       clearFailure: true,
     );
     final Result<List<ProjectSelection>> result;
+    final ProjectLifecycleListResult deletedResult;
     try {
       result = await _service.listWithAvailability();
+      deletedResult = await _lifecycle.listDeleted();
     } on Object {
       if (_owns(generation)) {
         state = state.copyWith(
@@ -111,12 +161,22 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
     if (!_owns(generation)) return;
     switch (result) {
       case Success<List<ProjectSelection>>(:final value):
+        if (deletedResult case ProjectLifecycleListRejected()) {
+          state = state.copyWith(
+            status: ProjectWorkspaceStatus.ready,
+            failure: _storageFailure,
+          );
+          return;
+        }
+        final deleted =
+            (deletedResult as ProjectLifecycleRecordsLoaded).records;
         final selectedId = state.selected?.record.id;
         final selected = selectedId == null
             ? null
             : value.where((item) => item.record.id == selectedId).firstOrNull;
         state = ProjectWorkspaceState(
           projects: List.unmodifiable(value),
+          deletedProjects: deleted,
           selected: selected,
           status: ProjectWorkspaceStatus.ready,
           failure: selected == null ? null : _availabilityFailure(selected),
@@ -175,6 +235,7 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
         ]..sort(_compareSelections);
         state = ProjectWorkspaceState(
           projects: List.unmodifiable(projects),
+          deletedProjects: state.deletedProjects,
           selected: value,
           status: ProjectWorkspaceStatus.ready,
         );
@@ -191,6 +252,150 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
   Future<void> refreshSelected() async {
     final id = state.selected?.record.id;
     if (id != null) await _select(id, refresh: true);
+  }
+
+  Future<void> softDelete(SourcePreservationDecision decision) async {
+    if (decision != SourcePreservationDecision.confirmed || _lifecycleBusy) {
+      return;
+    }
+    final project = state.selected?.record;
+    if (project == null) return;
+    await _runLifecycle(
+      () => _lifecycle.softDelete(projectId: project.id, actorId: _actorId),
+      onSuccess: (record) {
+        final deleted = <ProjectRecord>[
+          ...state.deletedProjects.where((value) => value.id != project.id),
+          record!,
+        ]..sort(_compareRecords);
+        state = state.copyWith(
+          projects: state.projects
+              .where((value) => value.record.id != project.id)
+              .toList(growable: false),
+          deletedProjects: List<ProjectRecord>.unmodifiable(deleted),
+          clearSelection: true,
+        );
+      },
+      successMessage:
+          'Project metadata moved to Deleted. Source files were not changed.',
+    );
+  }
+
+  Future<void> restore(String projectId) async {
+    if (_lifecycleBusy) return;
+    await _runLifecycle(
+      () => _lifecycle.restore(projectId: projectId, actorId: _actorId),
+      onSuccess: (record) {
+        final restored = record!;
+        final projects = <ProjectSelection>[
+          ...state.projects.where((value) => value.record.id != restored.id),
+          ProjectSelection(
+            record: restored,
+            availability: ProjectAvailability.transientFailure,
+            remediation: 'Refresh to check the registered source folder.',
+          ),
+        ]..sort(_compareSelections);
+        state = state.copyWith(
+          projects: List<ProjectSelection>.unmodifiable(projects),
+          deletedProjects: state.deletedProjects
+              .where((value) => value.id != restored.id)
+              .toList(growable: false),
+        );
+      },
+      successMessage:
+          'Project metadata restored. Source files were not accessed.',
+    );
+  }
+
+  Future<void> permanentlyDelete(
+    String projectId,
+    PermanentDeletionDecision decision,
+  ) async {
+    if (decision != PermanentDeletionDecision.confirmed || _lifecycleBusy) {
+      return;
+    }
+    await _runLifecycle(
+      () => _lifecycle.permanentlyDelete(
+        projectId: projectId,
+        actorId: _actorId,
+        confirmed: true,
+      ),
+      onSuccess: (_) {
+        state = state.copyWith(
+          deletedProjects: state.deletedProjects
+              .where((value) => value.id != projectId)
+              .toList(growable: false),
+        );
+      },
+      successMessage:
+          'Project metadata permanently deleted. Source files were not changed.',
+    );
+  }
+
+  Future<void> _runLifecycle(
+    Future<ProjectLifecycleResult> Function() operation, {
+    required void Function(ProjectRecord? record) onSuccess,
+    required String successMessage,
+  }) async {
+    if (_lifecycleBusy) return;
+    _lifecycleBusy = true;
+    final generation = ++_operationGeneration;
+    state = state.copyWith(
+      status: ProjectWorkspaceStatus.loading,
+      clearFailure: true,
+      clearLifecycleFeedback: true,
+    );
+    final ProjectLifecycleResult result;
+    try {
+      result = await operation();
+    } on Object {
+      if (_owns(generation)) {
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          lifecycleFeedback: const ProjectLifecycleFeedback(
+            isSuccess: false,
+            message: 'Could not update project metadata.',
+            remediation: 'Try again.',
+          ),
+        );
+      }
+      _lifecycleBusy = false;
+      return;
+    }
+    if (!_owns(generation)) {
+      _lifecycleBusy = false;
+      return;
+    }
+    switch (result) {
+      case ProjectLifecycleSucceeded(:final record):
+        onSuccess(record);
+        if (_owns(generation)) {
+          state = state.copyWith(
+            status: ProjectWorkspaceStatus.ready,
+            lifecycleFeedback: ProjectLifecycleFeedback(
+              isSuccess: true,
+              message: successMessage,
+            ),
+          );
+        }
+      case ProjectLifecycleRejected(
+        :final message,
+        :final remediation,
+        :final activeRuns,
+      ):
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          lifecycleFeedback: ProjectLifecycleFeedback(
+            isSuccess: false,
+            message: message,
+            remediation: remediation,
+            activeRunLabels: List<String>.unmodifiable(
+              activeRuns.values.map((run) => run.label),
+            ),
+            hasAdditionalActiveRuns: activeRuns.hasMore,
+          ),
+        );
+    }
+    _lifecycleBusy = false;
   }
 
   Future<void> _select(String id, {required bool refresh}) async {
@@ -219,6 +424,7 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
             .toList(growable: false);
         state = ProjectWorkspaceState(
           projects: projects,
+          deletedProjects: state.deletedProjects,
           selected: value,
           status: ProjectWorkspaceStatus.ready,
           failure: _availabilityFailure(value),
@@ -237,6 +443,11 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
   static int _compareSelections(ProjectSelection a, ProjectSelection b) {
     final byName = a.record.normalizedName.compareTo(b.record.normalizedName);
     return byName != 0 ? byName : a.record.id.compareTo(b.record.id);
+  }
+
+  static int _compareRecords(ProjectRecord a, ProjectRecord b) {
+    final byName = a.normalizedName.compareTo(b.normalizedName);
+    return byName != 0 ? byName : a.id.compareTo(b.id);
   }
 
   static ProjectPresentationFailure? _availabilityFailure(

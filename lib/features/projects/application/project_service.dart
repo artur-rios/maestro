@@ -9,6 +9,29 @@ abstract interface class ProjectRepository {
   Future<Result<void>> save(ProjectRecord record);
 }
 
+abstract interface class ProjectLifecycleStore {
+  Future<void> softDelete({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  });
+
+  Future<void> restore({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  });
+
+  Future<void> permanentlyDelete({
+    required ProjectRecord project,
+    required ProjectLifecycleAuditEvent audit,
+  });
+}
+
+abstract interface class ActiveProjectRunReader {
+  Future<List<ActiveProjectRun>> listActiveForProject(String projectId);
+}
+
 abstract interface class ProjectFolderValidator {
   Future<ProjectFolderValidation> validate(ProjectFolder folder);
 }

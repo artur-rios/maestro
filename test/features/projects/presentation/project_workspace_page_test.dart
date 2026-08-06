@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
@@ -192,6 +193,150 @@ void main() {
       expect(find.textContaining('already uses this name'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'GivenSelectedProject_WhenLifecycleMenuOpened_ThenAffectedRecordsAndSourcePreservationAreExplained',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Affected Maestro records'), findsOneWidget);
+      expect(find.textContaining('project metadata'), findsWidgets);
+      expect(
+        find.textContaining('source folder and files will remain untouched'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenMissingSourceProject_WhenSoftDeleted_ThenItMovesToDeletedAndSuccessIsAnnounced',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final validator = _Validator()
+        ..availability = ProjectAvailability.missing;
+      await tester.pumpWidget(
+        _app(repository: repository, validator: validator),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm metadata deletion'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Deleted projects'), findsOneWidget);
+      expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Project lifecycle success.*Project metadata moved to Deleted.*Source files were not changed',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel(RegExp(r'C:\\missing\\demo')), findsNothing);
+      expect(
+        find.textContaining('Source files were not changed'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('GivenDeletedProject_WhenRestored_ThenItReturnsToActiveProjects', (
+    tester,
+  ) async {
+    final repository = _Repository()..records.add(_deletedRecord());
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Restore Demo'));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Restore Demo'), findsNothing);
+    expect(find.text('Demo'), findsWidgets);
+    expect(
+      find.bySemanticsLabel(
+        RegExp(
+          r'^Project lifecycle success.*Project metadata restored.*Source files were not accessed',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'GivenPermanentDeletionDialog_WhenCancelled_ThenDeletedRecordRemains',
+    (tester) async {
+      final repository = _Repository()..records.add(_deletedRecord());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('cannot be undone'), findsOneWidget);
+      expect(
+        find.textContaining('source folder and files remain untouched'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenActiveRuns_WhenPermanentDeletionConfirmed_ThenRunLabelsAreAnnounced',
+    (tester) async {
+      final repository = _Repository()..records.add(_deletedRecord());
+      final activeRuns = _ActiveRuns()
+        ..runs = List<ActiveProjectRun>.generate(
+          ActiveProjectRuns.maximumVisible + 1,
+          (index) => ActiveProjectRun(
+            id: 'run-$index',
+            label: index == 0
+                ? 'Release validation'
+                : 'Active run ${index + 1}',
+          ),
+        );
+      await tester.pumpWidget(
+        _app(repository: repository, activeRuns: activeRuns),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Permanently delete metadata'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Project lifecycle error.*Active runs still reference this project.*Finish or remove the listed runs.*Release validation.*Additional active runs are not shown',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Release validation'), findsOneWidget);
+      expect(
+        find.text('Additional active runs are not shown.'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
+    },
+  );
 }
 
 Future<void> _register(WidgetTester tester, String name) async {
@@ -205,10 +350,19 @@ Future<void> _register(WidgetTester tester, String name) async {
 Widget _app({
   _Repository? repository,
   _Validator? validator,
+  _ActiveRuns? activeRuns,
   ProjectFolderPicker picker = const _Picker(null),
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
+  final runs = activeRuns ?? _ActiveRuns();
+  final lifecycle = ProjectLifecycleService(
+    repository: repo,
+    store: _LifecycleStore(repo),
+    activeRuns: runs,
+    clock: () => DateTime.utc(2026, 8, 6, 12),
+    newId: () => 'audit-id',
+  );
   return ProviderScope(
     overrides: [
       projectServiceProvider.overrideWithValue(
@@ -221,9 +375,11 @@ Widget _app({
       ),
       projectFolderPickerProvider.overrideWithValue(picker),
     ],
-    child: const MaterialApp(
+    child: MaterialApp(
       home: ProjectWorkspacePage(
-        emptyContent: Center(child: Text('Foundation diagnostics')),
+        actorId: 'actor-1',
+        lifecycleService: lifecycle,
+        emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
     ),
   );
@@ -234,6 +390,7 @@ Widget _host({
   required ProjectFolderPicker picker,
   required bool showWorkspace,
 }) {
+  final repository = _Repository();
   return ProviderScope(
     overrides: [
       projectServiceProvider.overrideWithValue(service),
@@ -241,8 +398,16 @@ Widget _host({
     ],
     child: MaterialApp(
       home: showWorkspace
-          ? const ProjectWorkspacePage(
-              emptyContent: Center(child: Text('Foundation diagnostics')),
+          ? ProjectWorkspacePage(
+              actorId: 'actor-1',
+              lifecycleService: ProjectLifecycleService(
+                repository: repository,
+                store: _LifecycleStore(repository),
+                activeRuns: _ActiveRuns(),
+                clock: () => DateTime.utc(2026, 8, 6, 12),
+                newId: () => 'audit-id',
+              ),
+              emptyContent: const Center(child: Text('Foundation diagnostics')),
             )
           : const SizedBox.shrink(),
     ),
@@ -283,6 +448,39 @@ final class _Validator implements ProjectFolderValidator {
       : ProjectFolderValidation.unavailable(availability);
 }
 
+final class _ActiveRuns implements ActiveProjectRunReader {
+  List<ActiveProjectRun> runs = <ActiveProjectRun>[];
+  @override
+  Future<List<ActiveProjectRun>> listActiveForProject(String projectId) async =>
+      List<ActiveProjectRun>.of(runs);
+}
+
+final class _LifecycleStore implements ProjectLifecycleStore {
+  _LifecycleStore(this.repository);
+  final _Repository repository;
+
+  @override
+  Future<void> softDelete({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  }) async => repository.replace(updated);
+
+  @override
+  Future<void> restore({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  }) async => repository.replace(updated);
+
+  @override
+  Future<void> permanentlyDelete({
+    required ProjectRecord project,
+    required ProjectLifecycleAuditEvent audit,
+  }) async =>
+      repository.records.removeWhere((record) => record.id == project.id);
+}
+
 final class _Repository implements ProjectRepository {
   final records = <ProjectRecord>[];
   Completer<Result<void>>? nextSave;
@@ -314,6 +512,11 @@ final class _Repository implements ProjectRepository {
     if (result is Success<void>) records.add(record);
     return result;
   }
+
+  void replace(ProjectRecord record) {
+    final index = records.indexWhere((value) => value.id == record.id);
+    records[index] = record;
+  }
 }
 
 ProjectRecord _record() => ProjectRecord(
@@ -324,4 +527,14 @@ ProjectRecord _record() => ProjectRecord(
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6),
   deletedAt: null,
+);
+
+ProjectRecord _deletedRecord() => ProjectRecord(
+  id: 'one',
+  name: 'Demo',
+  normalizedName: 'demo',
+  folderPath: r'C:\missing\demo',
+  createdAt: DateTime.utc(2026, 8, 6),
+  updatedAt: DateTime.utc(2026, 8, 6, 11),
+  deletedAt: DateTime.utc(2026, 8, 6, 11),
 );

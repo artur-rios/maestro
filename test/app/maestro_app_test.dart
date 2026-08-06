@@ -6,6 +6,7 @@ import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 
@@ -19,6 +20,7 @@ void main() {
           MaestroApp(
             authenticationService: _authenticationService(),
             projectService: _projectService(),
+            projectLifecycleService: _projectLifecycleService(),
             projectFolderPicker: const _ProjectFolderPicker(),
           ),
         );
@@ -47,6 +49,7 @@ void main() {
       MaestroApp(
         authenticationService: service,
         projectService: _projectService(),
+        projectLifecycleService: _projectLifecycleService(),
         projectFolderPicker: const _ProjectFolderPicker(),
         onDispose: () => disposeCount++,
       ),
@@ -72,6 +75,7 @@ void main() {
         MaestroApp(
           authenticationService: _authenticationService(),
           projectService: _projectService(),
+          projectLifecycleService: _projectLifecycleService(),
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
@@ -96,6 +100,9 @@ void main() {
         MaestroApp(
           authenticationService: _authenticationService(),
           projectService: _projectService(repository: projectRepository),
+          projectLifecycleService: _projectLifecycleService(
+            repository: projectRepository,
+          ),
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
@@ -116,6 +123,117 @@ void main() {
 
       expect(find.text(r'C:\projects\demo'), findsNothing);
       expect(find.text('Foundation ready'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticatedActor_WhenProjectSoftDeleted_ThenSessionUserIdIsPassedToLifecycleService',
+    (tester) async {
+      final repository = _ProjectRepository()..records.add(_projectRecord());
+      final store = _ProjectLifecycleStore(repository);
+      await tester.pumpWidget(
+        MaestroApp(
+          authenticationService: _authenticationService(),
+          projectService: _projectService(repository: repository),
+          projectLifecycleService: _projectLifecycleService(
+            repository: repository,
+            store: store,
+          ),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm metadata deletion'));
+      await tester.pumpAndSettle();
+
+      expect(store.actorId, 'id-0');
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticatedProjectWorkspaceWithoutLifecycleService_WhenUnlocked_ThenCompositionFailsClearly',
+    (tester) async {
+      await tester.pumpWidget(
+        MaestroApp(
+          authenticationService: _authenticationService(),
+          projectService: _projectService(),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.takeException(),
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('requires ProjectLifecycleService'),
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenPendingLifecycleMutation_WhenSigningOut_ThenLateCompletionCannotPublishIntoFreshWorkspace',
+    (tester) async {
+      final repository = _ProjectRepository()..records.add(_projectRecord());
+      final completion = Completer<void>();
+      final store = _ProjectLifecycleStore(repository)
+        ..nextSoftDelete = completion
+        ..softDeleteStarted = Completer<void>();
+      await tester.pumpWidget(
+        MaestroApp(
+          authenticationService: _authenticationService(),
+          projectService: _projectService(repository: repository),
+          projectLifecycleService: _projectLifecycleService(
+            repository: repository,
+            store: store,
+          ),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm metadata deletion'));
+      await tester.pump();
+      await store.softDeleteStarted!.future;
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      completion.complete();
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Project lifecycle success')),
+        findsNothing,
+      );
+      expect(find.text(r'C:\projects\demo'), findsNothing);
+      expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );
 }
@@ -146,6 +264,20 @@ ProjectService _projectService({_ProjectRepository? repository}) {
   );
 }
 
+ProjectLifecycleService _projectLifecycleService({
+  _ProjectRepository? repository,
+  _ProjectLifecycleStore? store,
+}) {
+  final projectRepository = repository ?? _ProjectRepository();
+  return ProjectLifecycleService(
+    repository: projectRepository,
+    store: store ?? _ProjectLifecycleStore(projectRepository),
+    activeRuns: const _NoActiveRuns(),
+    clock: () => DateTime.utc(2026, 8, 6, 12),
+    newId: () => 'lifecycle-audit-id',
+  );
+}
+
 final class _ProjectFolderPicker implements ProjectFolderPicker {
   const _ProjectFolderPicker();
 
@@ -160,6 +292,47 @@ final class _ProjectFolderValidator implements ProjectFolderValidator {
   Future<ProjectFolderValidation> validate(ProjectFolder folder) async {
     return ProjectFolderValidation.available(folder);
   }
+}
+
+final class _NoActiveRuns implements ActiveProjectRunReader {
+  const _NoActiveRuns();
+  @override
+  Future<List<ActiveProjectRun>> listActiveForProject(String projectId) async =>
+      const <ActiveProjectRun>[];
+}
+
+final class _ProjectLifecycleStore implements ProjectLifecycleStore {
+  _ProjectLifecycleStore(this.repository);
+  final _ProjectRepository repository;
+  String? actorId;
+  Completer<void>? nextSoftDelete;
+  Completer<void>? softDeleteStarted;
+
+  @override
+  Future<void> softDelete({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  }) async {
+    actorId = audit.actorId;
+    softDeleteStarted?.complete();
+    if (nextSoftDelete case final pending?) await pending.future;
+    repository.replace(updated);
+  }
+
+  @override
+  Future<void> restore({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  }) async => repository.replace(updated);
+
+  @override
+  Future<void> permanentlyDelete({
+    required ProjectRecord project,
+    required ProjectLifecycleAuditEvent audit,
+  }) async =>
+      repository.records.removeWhere((record) => record.id == project.id);
 }
 
 final class _ProjectRepository implements ProjectRepository {
@@ -182,6 +355,11 @@ final class _ProjectRepository implements ProjectRepository {
   Future<Result<void>> save(ProjectRecord record) async {
     records.add(record);
     return const Success<void>(null);
+  }
+
+  void replace(ProjectRecord record) {
+    final index = records.indexWhere((value) => value.id == record.id);
+    records[index] = record;
   }
 }
 

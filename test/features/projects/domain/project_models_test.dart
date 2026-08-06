@@ -109,4 +109,43 @@ void main() {
       },
     );
   });
+
+  group('Project lifecycle models', () {
+    test(
+      'GivenActiveRuns_WhenBounded_ThenIdentityListIsImmutableAndLimited',
+      () {
+        final runs = List.generate(
+          ActiveProjectRuns.maximumVisible,
+          (index) => ActiveProjectRun(id: 'run-$index', label: 'Run $index'),
+        );
+
+        final activeRuns = ActiveProjectRuns.bounded([...runs, ...runs]);
+
+        expect(activeRuns.values, runs);
+        expect(activeRuns.hasMore, isTrue);
+        expect(
+          () => activeRuns.values.add(
+            const ActiveProjectRun(id: 'extra', label: 'Extra'),
+          ),
+          throwsUnsupportedError,
+        );
+      },
+    );
+
+    test('GivenLifecycleActions_WhenAudited_ThenStableGenericNamesAreUsed', () {
+      expect(
+        ProjectLifecycleAction.softDelete.auditName,
+        'project.soft_delete',
+      );
+      expect(ProjectLifecycleAction.restore.auditName, 'project.restore');
+      expect(
+        ProjectLifecycleAction.permanentDelete.auditName,
+        'project.permanent_delete',
+      );
+      expect(
+        ProjectLifecycleAuditEvent.fixedDetails,
+        '{"scope":"project_metadata"}',
+      );
+    });
+  });
 }
