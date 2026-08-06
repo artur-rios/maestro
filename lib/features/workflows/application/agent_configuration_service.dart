@@ -1,6 +1,6 @@
+import 'package:maestro/features/workflows/application/agent_cli_discovery.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
-import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 enum AgentRowStateCode {
   ready,

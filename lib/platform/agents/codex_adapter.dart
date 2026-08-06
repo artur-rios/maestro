@@ -44,15 +44,13 @@ final class CodexAdapter implements AgentCliAdapter {
     ]);
     final stdoutStatus = login.stdout.trim();
     final stderrStatus = login.stderr.trim();
-    final status = stdoutStatus.isNotEmpty && stderrStatus.isEmpty
-        ? stdoutStatus
-        : stderrStatus.isNotEmpty && stdoutStatus.isEmpty
-        ? stderrStatus
-        : '';
+    final hasPositiveStatus =
+        _positiveLoginStatus.hasMatch(stdoutStatus) ||
+        (stdoutStatus.isEmpty && _positiveLoginStatus.hasMatch(stderrStatus));
     if (!login.succeeded ||
         login.stdoutTruncated ||
         login.stderrTruncated ||
-        !_positiveLoginStatus.hasMatch(status)) {
+        !hasPositiveStatus) {
       return _support.catalog(
         version: start.version,
         session: AgentCliSession.unauthenticated,

@@ -22,9 +22,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Create workflow'), findsOneWidget);
       expect(find.text('Plan'), findsOneWidget);
+      await _scrollTo(tester, find.text('Execute'));
       expect(find.text('Execute'), findsOneWidget);
-      await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
-      await tester.pump();
+      await _scrollTo(tester, find.text('Review'));
       expect(find.text('Review'), findsOneWidget);
     },
   );
@@ -63,6 +63,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
       await tester.pumpAndSettle();
+      await _scrollTo(
+        tester,
+        find.byKey(const ValueKey('workflow-project-one')),
+      );
       expect(
         tester
             .widget<CheckboxListTile>(
@@ -95,7 +99,7 @@ void main() {
         'Release after deletion',
       );
       final save = find.widgetWithText(FilledButton, 'Save workflow');
-      await tester.ensureVisible(save);
+      await _scrollTo(tester, save);
       await tester.tap(save.hitTestable());
       await tester.pumpAndSettle();
 
@@ -140,6 +144,10 @@ void main() {
 
       catalogGate.complete();
       await tester.pumpAndSettle();
+      await _scrollTo(
+        tester,
+        find.byKey(const ValueKey('workflow-project-one')),
+      );
       expect(
         tester
             .widget<CheckboxListTile>(
@@ -156,6 +164,7 @@ void main() {
             .value,
         isTrue,
       );
+      await _scrollTo(tester, find.text('Save workflow'));
       await tester.tap(find.text('Save workflow'));
       await tester.pumpAndSettle();
 
@@ -187,6 +196,7 @@ void main() {
         find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
         'Saved against empty catalog',
       );
+      await _scrollTo(tester, find.text('Save workflow'));
       await tester.tap(find.text('Save workflow'));
       await tester.pumpAndSettle();
 
@@ -514,6 +524,19 @@ void main() {
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );
+}
+
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 12; attempt++) {
+    if (finder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(finder);
+      await tester.pump();
+      return;
+    }
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -500));
+    await tester.pump();
+  }
+  throw TestFailure('Could not reveal the requested widget: $finder.');
 }
 
 Future<void> _register(WidgetTester tester, String name) async {

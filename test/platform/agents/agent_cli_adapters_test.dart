@@ -293,6 +293,39 @@ void main() {
 
   group('CodexAdapter', () {
     test(
+      'GivenExactCodexLoginOnStdoutWithHostNoise_WhenDiscovered_ThenAuthenticationIsAccepted',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('codex-cli 0.114.0'),
+            const CommandResult(
+              exitCode: 0,
+              stdout: 'Logged in using ChatGPT',
+              stderr: '#< CLIXML host progress only',
+            ),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(<Object?>[
+            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+            jsonEncode(<String, Object?>{
+              'id': 2,
+              'result': <String, Object?>{
+                'data': <Object>[
+                  <String, String>{'id': 'gpt-5.2-codex'},
+                ],
+                'nextCursor': null,
+              },
+            }),
+          ]),
+        ).discover();
+
+        expect(catalog.session, AgentCliSession.authenticated);
+        expect(catalog.models, <String>['gpt-5.2-codex']);
+        expect(catalog.guidance, isNot(contains('CLIXML')));
+      },
+    );
+
+    test(
       'GivenPagedOutOfOrderFrames_WhenDiscovered_ThenHandshakePrecedesEveryPage',
       () async {
         final sessionRunner = _ScriptedSessionRunner(<Object?>[
@@ -454,6 +487,27 @@ void main() {
           expect(catalog.session, AgentCliSession.unauthenticated);
           expect(runner.requests, hasLength(2));
         }
+      },
+    );
+
+    test(
+      'GivenNegativeCodexStdoutAndPositiveLookingStderr_WhenDiscovered_ThenAuthenticationIsRejected',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            const CommandResult(
+              exitCode: 0,
+              stdout: 'Not logged in',
+              stderr: 'Logged in using ChatGPT',
+            ),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+        ).discover();
+
+        expect(catalog.session, AgentCliSession.unauthenticated);
+        expect(catalog.models, isEmpty);
       },
     );
 

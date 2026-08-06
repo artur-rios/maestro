@@ -43,6 +43,8 @@ void main() {
       expect(resolved.argumentPrefix, <String>[
         '-NoProfile',
         '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
         '-File',
         wrapper.path,
       ]);

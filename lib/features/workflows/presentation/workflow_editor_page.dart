@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/agent_cli_discovery.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
-import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 final class WorkflowEditorPage extends ConsumerStatefulWidget {
   const WorkflowEditorPage({

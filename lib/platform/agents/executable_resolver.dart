@@ -65,6 +65,8 @@ final class ExecutableResolver implements ExecutableLocator {
                 argumentPrefix: <String>[
                   '-NoProfile',
                   '-NonInteractive',
+                  '-ExecutionPolicy',
+                  'Bypass',
                   '-File',
                   wrapper.absolute.path,
                 ],
