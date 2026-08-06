@@ -244,6 +244,57 @@ void main() {
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'GivenPendingWorkflowEdit_WhenSigningOut_ThenLateCompletionCannotPublishIntoFreshWorkspace',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition())
+        ..pendingSave = Completer<WorkflowRepositorySaveResult>()
+        ..saveStarted = Completer<void>();
+      await tester.pumpWidget(
+        MaestroApp(
+          authenticationService: _authenticationService(),
+          projectService: _projectService(),
+          projectLifecycleService: _projectLifecycleService(),
+          projectFolderPicker: const _ProjectFolderPicker(),
+          workflowDesignService: _workflowService(repository),
+        ),
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Late edit',
+      );
+      await tester.tap(find.text('Save workflow'));
+      await tester.pump();
+      await repository.saveStarted!.future.timeout(const Duration(seconds: 2));
+      await tester.tap(find.text('Sign out'));
+      await tester.pump();
+      expect(
+        find.bySemanticsLabel('Sign in with your operating system'),
+        findsOneWidget,
+      );
+      repository.pendingSave!.complete(
+        WorkflowRepositorySaved(repository.lastDefinition!),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel(RegExp(r'^Workflow success')), findsNothing);
+    },
+  );
 }
 
 WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
@@ -256,8 +307,12 @@ WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
 
 final class _WorkflowRepository implements WorkflowRepository {
   final definitions = <WorkflowDefinition>[];
+  Completer<WorkflowRepositorySaveResult>? pendingSave;
+  Completer<void>? saveStarted;
+  WorkflowDefinition? lastDefinition;
   @override
-  Future<WorkflowDefinition?> findById(String id) async => null;
+  Future<WorkflowDefinition?> findById(String id) async =>
+      definitions.where((value) => value.id == id).firstOrNull;
   @override
   Future<List<WorkflowDefinition>> list() async => List.of(definitions);
   @override
@@ -265,10 +320,40 @@ final class _WorkflowRepository implements WorkflowRepository {
     required WorkflowDefinition definition,
     required int? expectedRevision,
   }) async {
+    lastDefinition = definition;
+    saveStarted?.complete();
+    if (pendingSave case final pending?) await pending.future;
+    definitions.removeWhere((value) => value.id == definition.id);
     definitions.add(definition);
     return WorkflowRepositorySaved(definition);
   }
 }
+
+WorkflowDefinition _workflowDefinition() => WorkflowDefinition(
+  id: 'workflow-id',
+  revision: 1,
+  kind: WorkflowKind.reusable,
+  name: 'Release',
+  unitType: WorkItemType.useCase,
+  supervisedDelivery: true,
+  createdAt: DateTime.utc(2026, 8, 1),
+  updatedAt: DateTime.utc(2026, 8, 6),
+  steps: const [
+    WorkflowStep(
+      id: 'plan',
+      position: 0,
+      kind: WorkflowStepKind.plan,
+      name: 'Plan',
+    ),
+    WorkflowStep(
+      id: 'execute',
+      position: 1,
+      kind: WorkflowStepKind.execute,
+      name: 'Execute',
+    ),
+  ],
+  projectIds: const [],
+);
 
 final class _WorkflowReadiness implements ProjectExecutionReadinessReader {
   const _WorkflowReadiness();

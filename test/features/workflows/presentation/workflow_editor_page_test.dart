@@ -114,6 +114,193 @@ void main() {
       expect(find.text('Publish'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'GivenNarrowWindow_WhenEditorAndRowsRender_ThenNothingOverflowsAndActionsStayOrdered',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.bySemanticsLabel('Move step 1 down'), findsOneWidget);
+      expect(find.bySemanticsLabel('Remove step 1'), findsOneWidget);
+      final down = tester.getTopLeft(find.byTooltip('Move step 1 down'));
+      final remove = tester.getTopLeft(find.byTooltip('Remove step 1'));
+      expect(down.dx, lessThan(remove.dx));
+    },
+  );
+
+  testWidgets(
+    'GivenSavedWorkflowWithUnavailableRetainedProjects_WhenSelectedThenEdited_ThenLinksRemainAndSuccessIsLive',
+    (tester) async {
+      await _largeSurface(tester);
+      final repository = _Repository()
+        ..definitions.add(_definition(projectIds: const ['one', 'deleted']));
+      final readiness = _Readiness()
+        ..values['one'] = ProjectExecutionAvailability.missing
+        ..values['deleted'] = ProjectExecutionAvailability.softDeleted;
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          readiness: readiness,
+          projects: [_project('one', true), _project('two', true)],
+          deletedProjects: [_deletedProject('deleted')],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      expect(find.text('Unavailable'), findsOneWidget);
+      expect(
+        find.text('Unavailable — Deleted project metadata'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-deleted')),
+            )
+            .value,
+        isTrue,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Release updated',
+      );
+      await tester.tap(find.byKey(const ValueKey('workflow-project-two')));
+      await tester.pump();
+      await tester.tap(find.text('Save workflow'));
+      await tester.pumpAndSettle();
+      expect(repository.definitions.single.id, 'workflow-id');
+      expect(repository.definitions.single.revision, 4);
+      expect(repository.definitions.single.projectIds, ['deleted', 'one', 'two']);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Workflow success')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenReadinessCheckFails_WhenSavedWorkflowSelected_ThenSanitizedLiveErrorKeepsSaveEnabled',
+    (tester) async {
+      await _largeSurface(tester);
+      final repository = _Repository()
+        ..definitions.add(_definition(projectIds: const ['one']));
+      final readiness = _Readiness()
+        ..throwOnRead = StateError(r'C:\private\token');
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          readiness: readiness,
+          projects: [_project('one', true)],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Workflow error.*Could not check')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('private'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save workflow'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenExistingRevisionWithBlankStep_WhenSaved_ThenAf02HighlightsWithoutMutation',
+    (tester) async {
+      await _largeSurface(tester);
+      final repository = _Repository()..definitions.add(_definition());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('step-name-plan')), '');
+      await tester.tap(find.text('Save workflow'));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 1 requires a name.'), findsOneWidget);
+      expect(repository.saveCalls, 0);
+      expect(repository.definitions.single.revision, 3);
+    },
+  );
+
+  testWidgets(
+    'GivenCreateAndStandardStepMenus_WhenUsed_ThenBothKindsAndDownRemoveActionsWork',
+    (tester) async {
+      await _largeSurface(tester);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Create workflow'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New one-off workflow'));
+      await tester.pump();
+      expect(find.text('Workflow name (optional)'), findsOneWidget);
+      await tester.tap(find.byTooltip('Create workflow'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New reusable workflow'));
+      await tester.pump();
+      expect(find.text('Workflow name'), findsOneWidget);
+      await tester.tap(find.text('Add step'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add Plan step'));
+      await tester.pump();
+      final lastDown = find.ancestor(
+        of: find.byTooltip('Move step 4 down'),
+        matching: find.byType(IconButton),
+      );
+      expect(tester.widget<IconButton>(lastDown).onPressed, isNull);
+      await tester.tap(find.byTooltip('Move step 3 down'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Remove step 4'));
+      await tester.pump();
+      expect(find.byTooltip('Remove step 4'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenExecuteRemoved_WhenSaved_ThenAf01GlobalInvariantIsLiveAndNothingPersists',
+    (tester) async {
+      await _largeSurface(tester);
+      final repository = _Repository();
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Remove step 2'));
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-new-reusable')),
+        'Release',
+      );
+      await tester.tap(find.text('Work-item approach'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free-form task').last);
+      final saveButtonFinder = find.widgetWithText(
+        FilledButton,
+        'Save workflow',
+      );
+      await tester.ensureVisible(saveButtonFinder);
+      await tester.pump();
+      final saveButton = saveButtonFinder.hitTestable();
+      expect(saveButton, findsOneWidget);
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel(
+          RegExp(r'^Workflow error.*exactly one Execute step'),
+        ),
+        findsOneWidget,
+      );
+      expect(repository.saveCalls, 0);
+    },
+  );
 }
 
 Future<void> _largeSurface(WidgetTester tester) async {
@@ -121,21 +308,31 @@ Future<void> _largeSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Widget _app({List<ProjectSelection> projects = const []}) {
-  final repository = _Repository();
+Widget _app({
+  List<ProjectSelection> projects = const [],
+  List<ProjectRecord> deletedProjects = const [],
+  _Repository? repository,
+  _Readiness? readiness,
+}) {
+  final workflowRepository = repository ?? _Repository();
   return ProviderScope(
     overrides: [
       workflowDesignServiceProvider.overrideWithValue(
         WorkflowDesignService(
-          repository: repository,
-          projectReadiness: const _Readiness(),
+          repository: workflowRepository,
+          projectReadiness: readiness ?? _Readiness(),
           clock: () => DateTime.utc(2026, 8, 6),
-          newId: () => 'id-${repository.nextId++}',
+          newId: () => 'id-${workflowRepository.nextId++}',
         ),
       ),
     ],
     child: MaterialApp(
-      home: Scaffold(body: WorkflowEditorPage(projects: projects)),
+      home: Scaffold(
+        body: WorkflowEditorPage(
+          projects: projects,
+          deletedProjects: deletedProjects,
+        ),
+      ),
     ),
   );
 }
@@ -159,6 +356,7 @@ ProjectSelection _project(String id, bool available) => ProjectSelection(
 final class _Repository implements WorkflowRepository {
   int nextId = 0;
   final definitions = <WorkflowDefinition>[];
+  int saveCalls = 0;
   @override
   Future<WorkflowDefinition?> findById(String id) async =>
       definitions.where((e) => e.id == id).firstOrNull;
@@ -169,6 +367,7 @@ final class _Repository implements WorkflowRepository {
     required WorkflowDefinition definition,
     required int? expectedRevision,
   }) async {
+    saveCalls++;
     definitions.removeWhere((value) => value.id == definition.id);
     definitions.add(definition);
     return WorkflowRepositorySaved(definition);
@@ -176,8 +375,48 @@ final class _Repository implements WorkflowRepository {
 }
 
 final class _Readiness implements ProjectExecutionReadinessReader {
-  const _Readiness();
+  final values = <String, ProjectExecutionAvailability>{};
+  Object? throwOnRead;
   @override
-  Future<ProjectExecutionAvailability> availability(String projectId) async =>
-      ProjectExecutionAvailability.available;
+  Future<ProjectExecutionAvailability> availability(String projectId) async {
+    if (throwOnRead case final error?) throw error;
+    return values[projectId] ?? ProjectExecutionAvailability.available;
+  }
 }
+
+ProjectRecord _deletedProject(String id) => ProjectRecord(
+  id: id,
+  name: 'Project $id',
+  normalizedName: 'project-$id',
+  folderPath: r'C:\must-not-be-read',
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+  deletedAt: DateTime.utc(2026, 8, 6),
+);
+
+WorkflowDefinition _definition({List<String> projectIds = const []}) =>
+    WorkflowDefinition(
+      id: 'workflow-id',
+      revision: 3,
+      kind: WorkflowKind.reusable,
+      name: 'Release',
+      unitType: WorkItemType.useCase,
+      supervisedDelivery: true,
+      createdAt: DateTime.utc(2026, 8, 1),
+      updatedAt: DateTime.utc(2026, 8, 6),
+      steps: const [
+        WorkflowStep(
+          id: 'plan',
+          position: 0,
+          kind: WorkflowStepKind.plan,
+          name: 'Plan',
+        ),
+        WorkflowStep(
+          id: 'execute',
+          position: 1,
+          kind: WorkflowStepKind.execute,
+          name: 'Execute',
+        ),
+      ],
+      projectIds: projectIds,
+    );

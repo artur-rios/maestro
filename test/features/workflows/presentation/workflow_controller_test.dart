@@ -171,11 +171,100 @@ void main() {
       expect(repository.saved, isEmpty);
     },
   );
+
+  test(
+    'GivenPendingSelect_WhenCreateRequested_ThenCreateIsIgnoredAndLoadedDraftWins',
+    () async {
+      final definition = _definition(
+        id: 'saved-id',
+        projectIds: const ['missing'],
+      );
+      final repository = _Repository()
+        ..pendingFind = Completer<WorkflowDefinition?>();
+      final readiness = _Readiness()
+        ..values['missing'] = ProjectExecutionAvailability.missing;
+      final container = ProviderContainer(
+        overrides: [
+          workflowDesignServiceProvider.overrideWithValue(
+            _service(repository, readiness: readiness),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(workflowControllerProvider.notifier);
+      final select = controller.select('saved-id');
+      await Future<void>.delayed(Duration.zero);
+      controller.create(WorkflowKind.oneOff);
+      repository.pendingFind!.complete(definition);
+      await select;
+      final state = container.read(workflowControllerProvider);
+      expect(state.draft.id, 'saved-id');
+      expect(state.unavailableProjectIds, {'missing'});
+    },
+  );
+
+  test(
+    'GivenPendingSave_WhenCreateRequested_ThenCreateIsIgnoredAndSavedDraftWins',
+    () async {
+      final repository = _Repository()
+        ..pending = Completer<WorkflowRepositorySaveResult>();
+      final container = ProviderContainer(
+        overrides: [
+          workflowDesignServiceProvider.overrideWithValue(_service(repository)),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(workflowControllerProvider.notifier);
+      controller.create(WorkflowKind.oneOff);
+      controller.setUnitType(WorkItemType.useCase);
+      final save = controller.save();
+      await Future<void>.delayed(Duration.zero);
+      controller.create(WorkflowKind.reusable);
+      repository.pending!.complete(WorkflowRepositorySaved(repository.last!));
+      await save;
+      expect(container.read(workflowControllerProvider).draft.id, isNotNull);
+      expect(
+        container.read(workflowControllerProvider).draft.kind,
+        WorkflowKind.oneOff,
+      );
+    },
+  );
+
+  test(
+    'GivenReadinessFailure_WhenSavedWorkflowSelected_ThenSanitizedFailureIsPublished',
+    () async {
+      final repository = _Repository()
+        ..saved.add(_definition(projectIds: const ['secret-project']));
+      final readiness = _Readiness()
+        ..throwOnRead = StateError(r'C:\private\token');
+      final container = ProviderContainer(
+        overrides: [
+          workflowDesignServiceProvider.overrideWithValue(
+            _service(repository, readiness: readiness),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container
+          .read(workflowControllerProvider.notifier)
+          .select('workflow-id');
+      final state = container.read(workflowControllerProvider);
+      expect(state.readiness, WorkflowReadinessStatus.failed);
+      expect(
+        state.feedback?.message,
+        'Could not check whether associated projects are available.',
+      );
+      expect(state.feedback?.message, isNot(contains('private')));
+    },
+  );
 }
 
-WorkflowDesignService _service(_Repository repository) => WorkflowDesignService(
+WorkflowDesignService _service(
+  _Repository repository, {
+  _Readiness? readiness,
+}) => WorkflowDesignService(
   repository: repository,
-  projectReadiness: const _Readiness(),
+  projectReadiness: readiness ?? _Readiness(),
   clock: () => DateTime.utc(2026, 8, 6),
   newId: () => 'id-${repository.ids++}',
 );
@@ -186,9 +275,13 @@ final class _Repository implements WorkflowRepository {
   Completer<WorkflowRepositorySaveResult>? pending;
   WorkflowDefinition? last;
   int saveCalls = 0;
+  Completer<WorkflowDefinition?>? pendingFind;
   @override
-  Future<WorkflowDefinition?> findById(String id) async =>
-      saved.where((e) => e.id == id).firstOrNull;
+  Future<WorkflowDefinition?> findById(String id) async {
+    if (pendingFind case final pending?) return pending.future;
+    return saved.where((e) => e.id == id).firstOrNull;
+  }
+
   @override
   Future<List<WorkflowDefinition>> list() async => List.of(saved);
   @override
@@ -206,8 +299,40 @@ final class _Repository implements WorkflowRepository {
 }
 
 final class _Readiness implements ProjectExecutionReadinessReader {
-  const _Readiness();
+  final values = <String, ProjectExecutionAvailability>{};
+  Object? throwOnRead;
   @override
-  Future<ProjectExecutionAvailability> availability(String projectId) async =>
-      ProjectExecutionAvailability.available;
+  Future<ProjectExecutionAvailability> availability(String projectId) async {
+    if (throwOnRead case final error?) throw error;
+    return values[projectId] ?? ProjectExecutionAvailability.available;
+  }
 }
+
+WorkflowDefinition _definition({
+  String id = 'workflow-id',
+  List<String> projectIds = const [],
+}) => WorkflowDefinition(
+  id: id,
+  revision: 3,
+  kind: WorkflowKind.reusable,
+  name: 'Release',
+  unitType: WorkItemType.useCase,
+  supervisedDelivery: true,
+  createdAt: DateTime.utc(2026, 8, 1),
+  updatedAt: DateTime.utc(2026, 8, 6),
+  steps: const [
+    WorkflowStep(
+      id: 'plan',
+      position: 0,
+      kind: WorkflowStepKind.plan,
+      name: 'Plan',
+    ),
+    WorkflowStep(
+      id: 'execute',
+      position: 1,
+      kind: WorkflowStepKind.execute,
+      name: 'Execute',
+    ),
+  ],
+  projectIds: projectIds,
+);

@@ -1,5 +1,3 @@
-// ignore_for_file: prefer_initializing_formals
-
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
@@ -96,9 +94,14 @@ final class WorkflowDesignService {
     required ProjectExecutionReadinessReader projectReadiness,
     required DateTime Function() clock,
     required String Function() newId,
-  }) : _repository = repository,
+  }) : // Public constructor names describe ports; stored fields stay private.
+       // ignore: prefer_initializing_formals
+       _repository = repository,
+       // ignore: prefer_initializing_formals
        _projectReadiness = projectReadiness,
+       // ignore: prefer_initializing_formals
        _clock = clock,
+       // ignore: prefer_initializing_formals
        _newId = newId;
 
   final WorkflowRepository _repository;

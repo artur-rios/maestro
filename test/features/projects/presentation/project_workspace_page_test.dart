@@ -23,6 +23,8 @@ void main() {
       expect(find.text('Create workflow'), findsOneWidget);
       expect(find.text('Plan'), findsOneWidget);
       expect(find.text('Execute'), findsOneWidget);
+      await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+      await tester.pump();
       expect(find.text('Review'), findsOneWidget);
     },
   );

@@ -124,7 +124,10 @@ final class _ProjectWorkspacePageState
           Expanded(
             child: _destination == 0
                 ? projectsBody
-                : WorkflowEditorPage(projects: state.projects),
+                : WorkflowEditorPage(
+                    projects: state.projects,
+                    deletedProjects: state.deletedProjects,
+                  ),
           ),
         ],
       ),

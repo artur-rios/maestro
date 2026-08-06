@@ -5,8 +5,13 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 
 final class WorkflowEditorPage extends ConsumerStatefulWidget {
-  const WorkflowEditorPage({required this.projects, super.key});
+  const WorkflowEditorPage({
+    required this.projects,
+    this.deletedProjects = const [],
+    super.key,
+  });
   final List<ProjectSelection> projects;
+  final List<ProjectRecord> deletedProjects;
 
   @override
   ConsumerState<WorkflowEditorPage> createState() => _WorkflowEditorPageState();
@@ -25,86 +30,126 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(workflowControllerProvider);
     final controller = ref.read(workflowControllerProvider.notifier);
-    return Row(
-      children: [
-        SizedBox(
-          width: 260,
-          child: Material(
-            elevation: 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    final workflowList = Material(
+      elevation: 1,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 8, 8),
+            child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 8, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Workflows',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      PopupMenuButton<WorkflowKind>(
-                        tooltip: 'Create workflow',
-                        onSelected: controller.create,
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: WorkflowKind.reusable,
-                            child: Text('New reusable workflow'),
-                          ),
-                          PopupMenuItem(
-                            value: WorkflowKind.oneOff,
-                            child: Text('New one-off workflow'),
-                          ),
-                        ],
-                        icon: const Icon(Icons.add),
-                      ),
-                    ],
+                Expanded(
+                  child: Text(
+                    'Workflows',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                if (state.busy) const LinearProgressIndicator(),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      if (state.definitions.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text('No saved workflows.'),
-                        ),
-                      for (final definition in state.definitions)
-                        ListTile(
-                          key: ValueKey('workflow-${definition.id}'),
-                          selected: state.draft.id == definition.id,
-                          title: Text(definition.name ?? 'One-off workflow'),
-                          subtitle: Text('Revision ${definition.revision}'),
-                          onTap: state.busy
-                              ? null
-                              : () => controller.select(definition.id),
-                        ),
-                    ],
-                  ),
+                PopupMenuButton<WorkflowKind>(
+                  tooltip: 'Create workflow',
+                  enabled: !state.busy,
+                  onSelected: controller.create,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: WorkflowKind.reusable,
+                      child: Text('New reusable workflow'),
+                    ),
+                    PopupMenuItem(
+                      value: WorkflowKind.oneOff,
+                      child: Text('New one-off workflow'),
+                    ),
+                  ],
+                  icon: const Icon(Icons.add),
                 ),
               ],
             ),
           ),
-        ),
-        Expanded(
-          child: _Editor(state: state, projects: widget.projects),
-        ),
-      ],
+          if (state.busy) const LinearProgressIndicator(),
+          Expanded(
+            child: ListView(
+              children: [
+                if (state.definitions.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No saved workflows.'),
+                  ),
+                for (final definition in state.definitions)
+                  ListTile(
+                    key: ValueKey('workflow-${definition.id}'),
+                    selected: state.draft.id == definition.id,
+                    title: Text(definition.name ?? 'One-off workflow'),
+                    subtitle: Text('Revision ${definition.revision}'),
+                    onTap: state.busy
+                        ? null
+                        : () => controller.select(definition.id),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    final editor = _Editor(
+      state: state,
+      projects: widget.projects,
+      deletedProjects: widget.deletedProjects,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth < 760
+          ? Column(
+              children: [
+                SizedBox(height: 190, child: workflowList),
+                Expanded(child: editor),
+              ],
+            )
+          : Row(
+              children: [
+                SizedBox(width: 260, child: workflowList),
+                Expanded(child: editor),
+              ],
+            ),
     );
   }
 }
 
 final class _Editor extends ConsumerWidget {
-  const _Editor({required this.state, required this.projects});
+  const _Editor({
+    required this.state,
+    required this.projects,
+    required this.deletedProjects,
+  });
   final WorkflowEditorState state;
   final List<ProjectSelection> projects;
+  final List<ProjectRecord> deletedProjects;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(workflowControllerProvider.notifier);
     final draft = state.draft;
+    final projectOptions =
+        <_WorkflowProjectOption>[
+          for (final project in projects)
+            _WorkflowProjectOption(
+              id: project.record.id,
+              name: project.record.name,
+              unavailable:
+                  !project.folderActionsEnabled ||
+                  state.unavailableProjectIds.contains(project.record.id),
+              deleted: false,
+            ),
+          for (final project in deletedProjects)
+            if (draft.projectIds.contains(project.id) &&
+                !projects.any((active) => active.record.id == project.id))
+              _WorkflowProjectOption(
+                id: project.id,
+                name: project.name,
+                unavailable: true,
+                deleted: true,
+              ),
+        ]..sort(
+          (first, second) =>
+              first.name.toLowerCase().compareTo(second.name.toLowerCase()),
+        );
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -218,22 +263,24 @@ final class _Editor extends ConsumerWidget {
               ? 'One-off workflows choose a project when a run starts.'
               : 'Optional. Select every project that can reuse this workflow.',
         ),
-        for (final project in projects)
+        for (final project in projectOptions)
           CheckboxListTile(
-            key: ValueKey('workflow-project-${project.record.id}'),
-            value: draft.projectIds.contains(project.record.id),
+            key: ValueKey('workflow-project-${project.id}'),
+            value: draft.projectIds.contains(project.id),
             onChanged: state.busy || draft.kind == WorkflowKind.oneOff
                 ? null
-                : (value) => controller.toggleProject(
-                    project.record.id,
-                    value ?? false,
-                  ),
-            title: Text(project.record.name),
-            subtitle: project.folderActionsEnabled
-                ? null
-                : const Text('Unavailable'),
+                : (value) =>
+                      controller.toggleProject(project.id, value ?? false),
+            title: Text(project.name),
+            subtitle: project.unavailable
+                ? Text(
+                    project.deleted
+                        ? 'Unavailable — Deleted project metadata'
+                        : 'Unavailable',
+                  )
+                : null,
           ),
-        if (projects.any((project) => !project.folderActionsEnabled) ||
+        if (projectOptions.any((project) => project.unavailable) ||
             state.unavailableProjectIds.isNotEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 8),
@@ -283,57 +330,88 @@ final class _StepRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(workflowControllerProvider.notifier);
     final position = index + 1;
-    return Row(
-      children: [
-        SizedBox(width: 32, child: Text('$position')),
-        Expanded(
-          child: TextFormField(
-            key: ValueKey('step-name-${step.rowKey}'),
-            initialValue: step.name,
-            enabled: enabled,
-            decoration: InputDecoration(
-              labelText: '${step.kind.name} step name',
-              errorText: hasError ? 'Step $position requires a name.' : null,
+    final nameField = TextFormField(
+      key: ValueKey('step-name-${step.rowKey}'),
+      initialValue: step.name,
+      enabled: enabled,
+      decoration: InputDecoration(
+        labelText: '${step.kind.name} step name',
+        errorText: hasError ? 'Step $position requires a name.' : null,
+      ),
+      onChanged: (value) => controller.renameStep(step.rowKey, value),
+    );
+    final actions = <Widget>[
+      Semantics(
+        button: true,
+        label: 'Move step $position up',
+        child: IconButton(
+          tooltip: 'Move step $position up',
+          onPressed: enabled && index > 0
+              ? () => controller.moveStepUp(step.rowKey)
+              : null,
+          icon: const Icon(Icons.arrow_upward),
+        ),
+      ),
+      Semantics(
+        button: true,
+        label: 'Move step $position down',
+        child: IconButton(
+          tooltip: 'Move step $position down',
+          onPressed: enabled && index < count - 1
+              ? () => controller.moveStepDown(step.rowKey)
+              : null,
+          icon: const Icon(Icons.arrow_downward),
+        ),
+      ),
+      Semantics(
+        button: true,
+        label: 'Remove step $position',
+        child: IconButton(
+          tooltip: 'Remove step $position',
+          onPressed: enabled ? () => controller.removeStep(step.rowKey) : null,
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth < 560
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Step $position'),
+                  nameField,
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(children: actions),
+                  ),
+                ],
+              ),
+            )
+          : Row(
+              children: [
+                SizedBox(width: 32, child: Text('$position')),
+                Expanded(child: nameField),
+                ...actions,
+              ],
             ),
-            onChanged: (value) => controller.renameStep(step.rowKey, value),
-          ),
-        ),
-        Semantics(
-          button: true,
-          label: 'Move step $position up',
-          child: IconButton(
-            tooltip: 'Move step $position up',
-            onPressed: enabled && index > 0
-                ? () => controller.moveStepUp(step.rowKey)
-                : null,
-            icon: const Icon(Icons.arrow_upward),
-          ),
-        ),
-        Semantics(
-          button: true,
-          label: 'Move step $position down',
-          child: IconButton(
-            tooltip: 'Move step $position down',
-            onPressed: enabled && index < count - 1
-                ? () => controller.moveStepDown(step.rowKey)
-                : null,
-            icon: const Icon(Icons.arrow_downward),
-          ),
-        ),
-        Semantics(
-          button: true,
-          label: 'Remove step $position',
-          child: IconButton(
-            tooltip: 'Remove step $position',
-            onPressed: enabled
-                ? () => controller.removeStep(step.rowKey)
-                : null,
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ),
-      ],
     );
   }
+}
+
+final class _WorkflowProjectOption {
+  const _WorkflowProjectOption({
+    required this.id,
+    required this.name,
+    required this.unavailable,
+    required this.deleted,
+  });
+
+  final String id;
+  final String name;
+  final bool unavailable;
+  final bool deleted;
 }
 
 final class _WorkflowMessage extends StatelessWidget {

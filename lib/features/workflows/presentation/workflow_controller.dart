@@ -25,6 +25,8 @@ final class WorkflowFeedback {
   final String? remediation;
 }
 
+enum WorkflowReadinessStatus { unchecked, ready, blocked, failed }
+
 final class WorkflowEditorState {
   WorkflowEditorState({
     this.definitions = const [],
@@ -34,6 +36,7 @@ final class WorkflowEditorState {
     this.workflowError,
     this.feedback,
     this.unavailableProjectIds = const {},
+    this.readiness = WorkflowReadinessStatus.unchecked,
   }) : draft = draft ?? WorkflowDraft.initial(kind: WorkflowKind.reusable);
 
   final List<WorkflowDefinition> definitions;
@@ -43,6 +46,7 @@ final class WorkflowEditorState {
   final String? workflowError;
   final WorkflowFeedback? feedback;
   final Set<String> unavailableProjectIds;
+  final WorkflowReadinessStatus readiness;
 
   WorkflowEditorState copyWith({
     List<WorkflowDefinition>? definitions,
@@ -54,6 +58,7 @@ final class WorkflowEditorState {
     WorkflowFeedback? feedback,
     bool clearFeedback = false,
     Set<String>? unavailableProjectIds,
+    WorkflowReadinessStatus? readiness,
   }) => WorkflowEditorState(
     definitions: definitions ?? this.definitions,
     draft: draft ?? this.draft,
@@ -64,6 +69,7 @@ final class WorkflowEditorState {
         : workflowError ?? this.workflowError,
     feedback: clearFeedback ? null : feedback ?? this.feedback,
     unavailableProjectIds: unavailableProjectIds ?? this.unavailableProjectIds,
+    readiness: readiness ?? this.readiness,
   );
 }
 
@@ -103,8 +109,11 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     }
   }
 
-  void create(WorkflowKind kind) =>
-      _replaceDraft(WorkflowDraft.initial(kind: kind));
+  void create(WorkflowKind kind) {
+    if (state.busy) return;
+    _generation++;
+    _replaceDraft(WorkflowDraft.initial(kind: kind));
+  }
 
   Future<void> select(String id) async {
     if (state.busy) return;
@@ -124,7 +133,12 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
             ),
           );
         } else {
-          _replaceDraft(WorkflowDraft.fromDefinition(value));
+          state = state.copyWith(
+            draft: WorkflowDraft.fromDefinition(value),
+            readiness: WorkflowReadinessStatus.unchecked,
+            unavailableProjectIds: const {},
+          );
+          await _refreshReadiness(generation, value);
         }
       case FailureResult<WorkflowDefinition?>(:final failure):
         state = state.copyWith(
@@ -203,7 +217,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
         state = state.copyWith(
           definitions: List.unmodifiable(definitions),
           draft: WorkflowDraft.fromDefinition(definition),
-          busy: false,
+          busy: true,
           feedback: const WorkflowFeedback(
             isSuccess: true,
             message: 'Workflow saved.',
@@ -236,14 +250,32 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   ) async {
     final readiness = await _service.executionReadiness(definition.projectIds);
     if (!_owns(generation)) return;
-    if (readiness case WorkflowExecutionBlocked(:final projects)) {
-      state = state.copyWith(
-        unavailableProjectIds: Set.unmodifiable(
-          projects.map((item) => item.projectId),
-        ),
-      );
-    } else {
-      state = state.copyWith(unavailableProjectIds: const {});
+    switch (readiness) {
+      case WorkflowExecutionReady():
+        state = state.copyWith(
+          busy: false,
+          readiness: WorkflowReadinessStatus.ready,
+          unavailableProjectIds: const {},
+        );
+      case WorkflowExecutionBlocked(:final projects):
+        state = state.copyWith(
+          busy: false,
+          readiness: WorkflowReadinessStatus.blocked,
+          unavailableProjectIds: Set.unmodifiable(
+            projects.map((item) => item.projectId),
+          ),
+        );
+      case WorkflowExecutionReadinessFailed(:final message, :final remediation):
+        state = state.copyWith(
+          busy: false,
+          readiness: WorkflowReadinessStatus.failed,
+          unavailableProjectIds: const {},
+          feedback: WorkflowFeedback(
+            isSuccess: false,
+            message: message,
+            remediation: remediation,
+          ),
+        );
     }
   }
 
