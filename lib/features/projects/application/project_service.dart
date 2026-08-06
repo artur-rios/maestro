@@ -23,10 +23,19 @@ final class ProjectService {
     required ProjectFolderValidator folderValidator,
     required DateTime Function() clock,
     required String Function() newId,
-  }) : _repository = repository,
-       _folderValidator = folderValidator,
-       _clock = clock,
-       _newId = newId;
+  }) : this._(
+         repository: repository,
+         folderValidator: folderValidator,
+         clock: clock,
+         newId: newId,
+       );
+
+  const ProjectService._({
+    required this._repository,
+    required this._folderValidator,
+    required this._clock,
+    required this._newId,
+  });
 
   final ProjectRepository _repository;
   final ProjectFolderValidator _folderValidator;
