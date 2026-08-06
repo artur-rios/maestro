@@ -26,11 +26,12 @@ flutter_test, integration_test, GitHub Actions.
 
 - [ ] **Step 1: Write failing domain/application tests**
 
-Cover reusable/one-off drafts, default Plan/Execute/Review, add/remove/rename/
-reorder, custom steps, all unit types, exactly-one-Execute AF-01, indexed missing
-value AF-02, validation-before-save, stable workflow/step IDs on edit, UUIDv7/UTC
-injection, stale typed errors, immutable results, sanitized repository failures,
-and AF-03 editing versus typed project execution readiness.
+Cover reusable/one-off drafts, one-off association clearing, default Plan/
+Execute/Review, add/remove/rename/reorder, custom steps, all unit types,
+exactly-one-Execute AF-01, indexed missing value AF-02, validation-before-save,
+stable workflow/step IDs on edit, UUIDv7/UTC injection, integer revision and
+equal-clock stale errors, immutable results, sanitized repository failures, and
+AF-03 editing versus typed project execution readiness.
 
 - [ ] **Step 2: Capture RED and implement the smallest pure-Dart policy/service**
 
@@ -56,13 +57,18 @@ Commit as `feat: add workflow design policy`.
 - Create/regenerate: `test/fixtures/schema/drift_schema_v4.json`
 - Create/regenerate: `test/generated/schema_v4.dart`, `test/generated/schema.dart`
 - Create: `test/features/workflows/data/drift_workflow_repository_test.dart`
+- Modify: `test/features/projects/data/drift_project_lifecycle_test.dart`
 
 - [ ] **Step 1: Write failing migration/repository transaction tests**
 
 Cover versions 1-3 to 4, existing-data preservation, constraints, deterministic
-round trips, atomic insert/edit rollback, optimistic revision checks, stable IDs,
-contiguous positions, nullable UC-05 assignments, project associations, cascade,
-unrelated rows, and path-free stored metadata.
+round trips, atomic insert/edit rollback, integer revision checks including two
+same-clock edits plus a stale third edit, stable IDs, contiguous positions,
+null/null and non-null/non-null UC-05 assignments, rejection/rollback of partial
+assignment pairs, reusable project associations, one-off no-association invariant,
+workflow-side cascade, project-side association-only cascade, unrelated rows,
+and path-free stored metadata. Prove UC-03 permanent project deletion still
+succeeds and leaves the associated workflow editable.
 
 - [ ] **Step 2: Capture RED and implement schema/repository transaction**
 
@@ -90,12 +96,14 @@ Commit as `feat: persist workflow definitions`.
 - Modify: `lib/app/maestro_app.dart`
 - Create: `test/features/workflows/presentation/workflow_controller_test.dart`
 - Create: `test/features/workflows/presentation/workflow_editor_page_test.dart`
+- Modify: `test/features/projects/presentation/project_workspace_page_test.dart`
 - Modify: `test/app/maestro_app_test.dart`
 
 - [ ] **Step 1: Write failing controller/widget/app tests**
 
 Cover destinations, create/edit/list, defaults, all row actions, work-item type,
-reusable/one-off fields, multiple project associations, unavailable labels,
+reusable fields with multiple project associations, one-off association clearing/
+disabled controls, unavailable labels, permanent-project-delete association copy,
 AF-01/02 highlighting without saved mutation, stable ID on edit, live regions,
 keyboard/semantic actions, double submit, and late completion after sign-out.
 
@@ -124,10 +132,11 @@ Commit as `feat: add workflow design editor`.
 
 - [ ] **Step 1: Write failing production/integration tests**
 
-Prove shared DB composition, authenticated actor workspace ownership, reusable
-and one-off save/edit/restart, stable identities, atomic revision, multi-project
-reuse, unavailable-project edit success/readiness block, path-free storage, and
-close-once behavior.
+Prove shared DB composition, authenticated workspace/session scoping without
+per-user workflow filtering, reusable and one-off save/edit/restart, stable
+identities, atomic revision, multi-project reuse, unavailable-project edit
+success/readiness block, path-free storage, permanent-project-delete association
+cleanup/source preservation, and close-once behavior.
 
 - [ ] **Step 2: Capture RED and implement production adapters/composition**
 

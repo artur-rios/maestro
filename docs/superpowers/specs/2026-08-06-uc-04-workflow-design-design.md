@@ -24,8 +24,10 @@ A definition may be saved by UC-04 when it has:
 - one or more ordered, non-empty named steps; and
 - exactly one Execute step.
 
-The database reserves nullable CLI/model fields on steps for UC-05. Null means
-"not configured yet", never a fake executable or model. UC-05 must populate and
+The database reserves nullable CLI/model fields on steps for UC-05. Null/null
+means "not configured yet", never a fake executable or model. A table check
+requires both fields to be null or both to be non-null, so a half-configured
+step cannot exist. UC-04 always writes null/null; UC-05 must populate and
 validate both before a workflow is execution-ready. This staged representation
 is the only deliberate relaxation of the final data-field constraint.
 
@@ -33,11 +35,13 @@ is the only deliberate relaxation of the final data-field constraint.
 
 The application generates a workflow UUIDv7 and step UUIDv7 values only after a
 new draft passes validation. Edits retain the workflow identifier and retain
-step identifiers for existing rows. A repository transaction replaces the
-definition, ordered steps, and project associations atomically. It checks the
-expected `updatedAt` value so stale editors cannot overwrite a newer revision.
-Validation happens before persistence; AF-01 and AF-02 therefore leave the saved
-revision byte-for-byte unchanged.
+step identifiers for existing rows. Every definition has an integer `revision`
+starting at 1. A repository transaction replaces the definition, ordered steps,
+and project associations with `WHERE id = ? AND revision = ?`, then atomically
+increments the revision. `updatedAt` is informational and is not a concurrency
+token. This remains correct when multiple edits use the same UTC instant.
+Validation happens before persistence; AF-01, AF-02, and stale edits therefore
+leave the saved revision byte-for-byte unchanged.
 
 ### Ordering and permitted steps
 
@@ -52,27 +56,34 @@ produce indexed field errors so the UI can highlight the exact row.
 
 Reusable definitions are global and may be associated with zero or many
 registered projects. One-off definitions use the same durable representation
-and stable identity but are marked non-reusable for later single-run
-materialization. Associations are metadata references only and never imply
-ownership of a project folder.
+and stable identity but have no durable project associations; UC-06 chooses the
+single project when materializing their one run. Switching a draft from reusable
+to one-off clears associations before validation and persistence. Associations
+are metadata references only and never imply ownership of a project folder.
 
 Project availability is evaluated through a read-only application port. Saving
 and editing never reads or mutates project source. An associated active project
 whose folder is missing, inaccessible, or no longer a Git root remains editable,
 while a typed execution-readiness result identifies it as unavailable. UC-06
-must call that gate before starting a run. Soft-deleted/missing project records
-are also unavailable for execution but do not invalidate the workflow revision.
+must call that gate before starting a run. Soft-deleted project records are
+unavailable for execution but do not invalidate the workflow revision.
+Permanent project deletion cascades only its `workflow_project_refs` rows; the
+workflow survives, remains editable, and is no longer associated with the
+removed record. The project-deletion confirmation discloses that associated
+workflow links are removed while project source remains untouched.
 
 ### Persistence and migration
 
 Schema version 4 adds:
 
-- `workflows`: identity, optional name, reusable flag, unit type, supervised
-  delivery default, timestamps, and future lifecycle marker;
+- `workflows`: identity, integer revision, optional name, reusable flag, unit
+  type, supervised delivery default, timestamps, and future lifecycle marker;
 - `workflow_steps`: identity, workflow foreign key, contiguous position, kind,
-  name, nullable future CLI/model values, and `{}` configuration;
+  name, paired-nullable future CLI/model values enforced by `CHECK`, and `{}`
+  configuration;
 - `workflow_project_refs`: composite workflow/project identity with foreign
-  keys and cascading workflow cleanup.
+  keys, cascading workflow cleanup, and project-side cascade of association
+  metadata only.
 
 No project source path is copied into workflow tables. Migration creates the new
 empty tables while preserving every version 1-3 record. Drift schema snapshots
@@ -100,7 +111,8 @@ contains a definition list and an editor. It supports:
 - default Plan/Execute/Review rows;
 - add custom/standard rows, edit names, remove, and move up/down;
 - select a work-item approach;
-- associate any number of active project records;
+- associate any number of active project records for reusable definitions;
+- clear and disable project associations for one-off definitions;
 - load and edit an existing definition while retaining its ID;
 - show indexed field errors and an accessible success/error live region; and
 - disable duplicate submission and ignore late completion after sign-out.
@@ -113,11 +125,15 @@ icon action has a semantic label.
 ### Production and integration evidence
 
 Production composes one shared Drift workflow repository and service with the
-existing project service through a read-only availability adapter. Integration
-tests create and edit reusable/one-off workflows, restart over the same database,
-prove stable identities and atomic revisions, and prove an unavailable project
-does not block editing while readiness is blocked. Windows and Linux CI run the
-new integration suite using their established device patterns.
+existing project service through a read-only availability adapter. Authentication
+gates and session-scopes the workspace; workflows remain shared local Maestro
+data and are never filtered or owned by actor ID. Integration tests create and
+edit reusable/one-off workflows, restart over the same database, prove stable
+identities and atomic revisions (including equal-clock edits), and prove an
+unavailable project does not block editing while readiness is blocked. They also
+prove permanent project deletion removes association metadata, leaves the
+workflow editable, and never touches source. Windows and Linux CI run the new
+integration suite using their established device patterns.
 
 ## Error and privacy rules
 
@@ -132,8 +148,9 @@ new integration suite using their established device patterns.
 
 - Domain/application tests cover defaults, every edit operation, validation,
   identity stability, stale revisions, repository non-mutation, and readiness.
-- Drift tests cover schema v4 migration, constraints, round trips, transaction
-  rollback, ordering, associations, and unrelated data.
+- Drift tests cover schema v4 migration, paired assignment constraints, round
+  trips, transaction rollback, equal-clock revision conflicts, ordering,
+  association cascades, and unrelated data.
 - Controller/widget/app tests cover the complete accessible editor, errors,
   unavailable-project editing, duplicate submission, and sign-out races.
 - Production integration proves restart persistence and composition on the
