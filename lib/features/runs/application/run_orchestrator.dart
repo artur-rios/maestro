@@ -146,6 +146,7 @@ final class RunOrchestrator {
 
   static const int maximumPersistedFrameBytes = 16 * 1024;
   static const int maximumTailBytes = 64 * 1024;
+  static const int maximumTailRuns = 8;
   final RunExecutionRepository _repository;
   final StepProcessLauncher _launcher;
   final AttemptResultFiles _resultFiles;
@@ -162,6 +163,7 @@ final class RunOrchestrator {
   final Map<String, Future<void>> _active = <String, Future<void>>{};
 
   Stream<RunLogSummary> get events => _events.stream;
+  int get retainedTailRunCount => _tails.length;
 
   Uint8List tailFor(String runId) => Uint8List.fromList(
     (_tails[runId] ?? Queue<Uint8List>())
@@ -174,7 +176,11 @@ final class RunOrchestrator {
     if (existing != null) return existing;
     final future = _execute(runId);
     _active[runId] = future;
-    return future.whenComplete(() => _active.remove(runId));
+    return future.whenComplete(() {
+      _active.remove(runId);
+      _tails.remove(runId);
+      _tailSizes.remove(runId);
+    });
   }
 
   Future<void> _execute(String runId) async {
@@ -245,6 +251,20 @@ final class RunOrchestrator {
       }
       var sequence = 0;
       final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
+      final batcher = _LogBatcher(
+        maximumBytes: maximumPersistedFrameBytes,
+        maximumDelay: const Duration(milliseconds: 25),
+        persist: (channel, bytes) async {
+          sequence = await _persist(
+            runId,
+            attemptId,
+            step.id,
+            channel,
+            sequence,
+            bytes,
+          );
+        },
+      );
       final drain = () async {
         await for (final frame in process.frames) {
           final redactor = redactors.putIfAbsent(
@@ -252,28 +272,15 @@ final class RunOrchestrator {
             () => _StreamingFrameRedactor(_environment),
           );
           for (final bytes in redactor.add(frame.bytes)) {
-            sequence = await _persist(
-              runId,
-              attemptId,
-              step.id,
-              frame.channel,
-              sequence,
-              bytes,
-            );
+            await batcher.add(frame.channel, bytes);
           }
         }
         for (final entry in redactors.entries) {
           for (final bytes in entry.value.close()) {
-            sequence = await _persist(
-              runId,
-              attemptId,
-              step.id,
-              entry.key,
-              sequence,
-              bytes,
-            );
+            await batcher.add(entry.key, bytes);
           }
         }
+        await batcher.close();
       }();
       final exitCode = await process.exitCode;
       await drain;
@@ -356,7 +363,14 @@ final class RunOrchestrator {
   }
 
   void _appendTail(String runId, Uint8List bytes) {
-    final tail = _tails.putIfAbsent(runId, Queue<Uint8List>.new);
+    final existing = _tails.remove(runId);
+    final tail = existing ?? Queue<Uint8List>();
+    _tails[runId] = tail;
+    while (_tails.length > maximumTailRuns) {
+      final oldest = _tails.keys.first;
+      _tails.remove(oldest);
+      _tailSizes.remove(oldest);
+    }
     tail.add(Uint8List.fromList(bytes));
     var size = (_tailSizes[runId] ?? 0) + bytes.length;
     while (size > maximumTailBytes && tail.isNotEmpty) {
@@ -393,9 +407,16 @@ Do not add fields and do not write this protocol to stdout.
 }
 
 final class _StreamingFrameRedactor {
-  _StreamingFrameRedactor(this.environment);
+  _StreamingFrameRedactor(this.environment)
+    : _overlapBytes = environment.values.fold<int>(
+        512,
+        (largest, value) => largest > utf8.encode(value).length
+            ? largest
+            : utf8.encode(value).length,
+      );
   static const int maximumPendingBytes = 64 * 1024;
   final Map<String, String> environment;
+  final int _overlapBytes;
   final List<int> _pending = <int>[];
   final SecretRedactor _redactor = SecretRedactor();
 
@@ -405,8 +426,8 @@ final class _StreamingFrameRedactor {
       final newline = _pending.indexOf(0x0a);
       if (newline >= 0) {
         yield _redact(_take(newline + 1));
-      } else if (_pending.length >= maximumPendingBytes) {
-        yield _redact(_take(maximumPendingBytes));
+      } else if (_pending.length >= maximumPendingBytes + _overlapBytes) {
+        yield _redact(_take(_pending.length - _overlapBytes));
       } else {
         break;
       }
@@ -431,4 +452,65 @@ final class _StreamingFrameRedactor {
       ),
     ),
   );
+}
+
+final class _LogBatcher {
+  _LogBatcher({
+    required this.maximumBytes,
+    required this.maximumDelay,
+    required this.persist,
+  });
+
+  final int maximumBytes;
+  final Duration maximumDelay;
+  final Future<void> Function(RunLogChannel channel, Uint8List bytes) persist;
+  final BytesBuilder _pending = BytesBuilder(copy: false);
+  RunLogChannel? _channel;
+  Timer? _timer;
+  Future<void> _serial = Future<void>.value();
+  bool _closed = false;
+
+  Future<void> add(RunLogChannel channel, Uint8List bytes) async {
+    if (_closed) throw StateError('The log batcher is closed.');
+    if (_channel != null && _channel != channel) await _flush();
+    _channel = channel;
+    var offset = 0;
+    while (offset < bytes.length) {
+      final count = (maximumBytes - _pending.length).clamp(
+        0,
+        bytes.length - offset,
+      );
+      _pending.add(Uint8List.sublistView(bytes, offset, offset + count));
+      offset += count;
+      if (_pending.length == maximumBytes) {
+        await _flush();
+        _channel = channel;
+      } else {
+        _scheduleTimer();
+      }
+    }
+  }
+
+  void _scheduleTimer() {
+    _timer ??= Timer(maximumDelay, () {
+      _timer = null;
+      unawaited(_flush());
+    });
+  }
+
+  Future<void> _flush() async {
+    _timer?.cancel();
+    _timer = null;
+    if (_pending.isEmpty || _channel == null) return _serial;
+    final channel = _channel!;
+    final bytes = _pending.takeBytes();
+    _channel = null;
+    _serial = _serial.then((_) => persist(channel, bytes));
+    await _serial;
+  }
+
+  Future<void> close() async {
+    _closed = true;
+    await _flush();
+  }
 }

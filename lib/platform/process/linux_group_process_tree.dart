@@ -20,7 +20,7 @@ final class LinuxGroupProcessTree implements NativeProcessTree {
       <String>[request.executable, ...request.arguments],
       workingDirectory: request.workingDirectory,
       environment: request.environment,
-      includeParentEnvironment: true,
+      includeParentEnvironment: request.includeParentEnvironment,
       runInShell: false,
     );
     return _LinuxOwnedProcess(process, _bindings);

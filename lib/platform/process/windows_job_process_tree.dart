@@ -167,7 +167,7 @@ exit $LASTEXITCODE
         ],
         workingDirectory: request.workingDirectory,
         environment: environment,
-        includeParentEnvironment: true,
+        includeParentEnvironment: request.includeParentEnvironment,
         runInShell: false,
       );
       return WindowsGatedLaunch(process, gate);

@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
+import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   test(
@@ -80,6 +83,96 @@ void main() {
   );
 
   test(
+    'redacts a secret crossing the bounded no-newline flush boundary',
+    () async {
+      final fixture = _Fixture(
+        stepCount: 1,
+        environment: const <String, String>{'TOKEN': 'split-secret'},
+      );
+      final prefix = List<int>.filled(64 * 1024 - 'split-'.length, 0x78);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(<int>[...prefix, ...utf8.encode('split-')]),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('secret\n')),
+            ),
+          ],
+        ),
+      );
+
+      await fixture.orchestrator.execute('run-1');
+
+      final output = utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(output, isNot(contains('split-secret')));
+      expect(output, contains('[REDACTED]'));
+    },
+  );
+
+  test('coalesces newline floods and releases completed-run tails', () async {
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: List<StepOutputFrame>.generate(
+          1000,
+          (_) => StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('line\n')),
+          ),
+        ),
+      ),
+    );
+    var summaries = 0;
+    fixture.orchestrator.events.listen((_) => summaries++);
+
+    await fixture.orchestrator.execute('run-1');
+
+    expect(
+      utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      ),
+      List<String>.filled(1000, 'line\n').join(),
+    );
+    expect(fixture.repository.logs.length, lessThan(10));
+    expect(summaries, lessThan(10));
+    expect(fixture.orchestrator.retainedTailRunCount, 0);
+  });
+
+  test('flushes a partial durable batch on the bounded time cadence', () async {
+    final repository = _Repository()
+      ..aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 1,
+        worktreePath: Directory.current.path,
+      );
+    var attempt = 0;
+    var log = 0;
+    final orchestrator = RunOrchestrator(
+      repository: repository,
+      launcher: _TimedLauncher(),
+      resultFiles: _Results(),
+      executableFor: (cli) => cli,
+      environment: const <String, String>{},
+      newAttemptId: () => 'attempt-${++attempt}',
+      newLogId: () => 'log-${++log}',
+      newNonce: () => 'nonce',
+      now: () => DateTime.now().toUtc(),
+    );
+    final firstSummary = orchestrator.events.first;
+    final execution = orchestrator.execute('run-1');
+
+    await firstSummary.timeout(const Duration(milliseconds: 80));
+    expect(repository.logs, isNotEmpty);
+    await execution;
+  });
+
+  test(
     'nonzero and spawn failures terminate the current run with evidence',
     () async {
       final nonzero = _Fixture(stepCount: 2)
@@ -113,6 +206,186 @@ void main() {
     second.complete();
     await Future.wait(<Future<void>>[one, two]);
   });
+
+  test(
+    'real process writes nonce-bound results and receives prior context',
+    () async {
+      final real = await _RealFixture.create(mode: 'success', stepCount: 2);
+      addTearDown(real.dispose);
+
+      await real.orchestrator.execute('run-1');
+
+      expect(real.repository.completed, <String>['attempt-1', 'attempt-2']);
+      expect(real.repository.failed, isEmpty);
+      expect(real.repository.logs, isNotEmpty);
+    },
+  );
+
+  test('real nonzero process preserves output and fails the run', () async {
+    final real = await _RealFixture.create(mode: 'nonzero', stepCount: 1);
+    addTearDown(real.dispose);
+
+    await real.orchestrator.execute('run-1');
+
+    expect(real.repository.failed.single.$2, 'run.step.nonzero_exit');
+    expect(
+      utf8.decode(
+        real.repository.logs.expand((segment) => segment.bytes).toList(),
+      ),
+      contains('nonzero-evidence'),
+    );
+  });
+
+  test('real sustained output is byte-preserving under backpressure', () async {
+    final real = await _RealFixture.create(mode: 'flood', stepCount: 1);
+    addTearDown(real.dispose);
+
+    await real.orchestrator.execute('run-1');
+
+    expect(
+      real.repository.logs
+          .where((segment) => segment.channel == RunLogChannel.stdout)
+          .fold<int>(0, (sum, segment) => sum + segment.bytes.length),
+      200000,
+    );
+    expect(
+      real.repository.logs
+          .where((segment) => segment.channel == RunLogChannel.stdout)
+          .length,
+      lessThanOrEqualTo(13),
+    );
+  });
+
+  test(
+    'two real owned processes overlap instead of serializing globally',
+    () async {
+      final real = await _RealFixture.create(mode: 'overlap', stepCount: 1);
+      addTearDown(real.dispose);
+      real.repository.aggregates['run-2'] = real.aggregate('run-2', count: 1);
+
+      await Future.wait(<Future<void>>[
+        real.orchestrator.execute('run-1'),
+        real.orchestrator.execute('run-2'),
+      ]);
+
+      expect(real.repository.completed, hasLength(2));
+      expect(real.repository.failed, isEmpty);
+    },
+  );
+}
+
+final class _RealFixture {
+  _RealFixture._(this.root, this.repository, this.orchestrator, this.mode);
+  final Directory root;
+  final _Repository repository;
+  final RunOrchestrator orchestrator;
+  final String mode;
+
+  static Future<_RealFixture> create({
+    required String mode,
+    required int stepCount,
+  }) async {
+    final root = await Directory.systemTemp.createTemp('maestro-real-step-');
+    await Directory(p.join(root.path, 'worktree')).create();
+    final repository = _Repository();
+    final ids = _Ids();
+    late _RealFixture fixture;
+    final orchestrator = RunOrchestrator(
+      repository: repository,
+      launcher: OwnedStepProcessLauncher(
+        commands: _RealFixtureCommands(mode, p.join(root.path, 'barrier')),
+      ),
+      resultFiles: _DiskResults(p.join(root.path, 'results')),
+      executableFor: (_) => _dartExecutable(),
+      environment: Platform.environment,
+      newAttemptId: () => 'attempt-${++ids.attempt}',
+      newLogId: () => 'log-${++ids.log}',
+      newNonce: () => 'nonce-${ids.attempt}',
+      now: () => DateTime.now().toUtc(),
+    );
+    fixture = _RealFixture._(root, repository, orchestrator, mode);
+    repository.aggregates['run-1'] = fixture.aggregate(
+      'run-1',
+      count: stepCount,
+    );
+    return fixture;
+  }
+
+  RunExecutionAggregate aggregate(String id, {required int count}) =>
+      _aggregate(id, count: count, worktreePath: p.join(root.path, 'worktree'));
+
+  Future<void> dispose() async {
+    if (await root.exists()) await root.delete(recursive: true);
+  }
+}
+
+final class _Ids {
+  int attempt = 0;
+  int log = 0;
+}
+
+final class _RealFixtureCommands implements StepCommandFactory {
+  const _RealFixtureCommands(this.mode, this.barrier);
+  final String mode;
+  final String barrier;
+  @override
+  StepCommand create({
+    required String cli,
+    required String model,
+    required String prompt,
+    required String executable,
+  }) => StepCommand(
+    executable: executable,
+    arguments: <String>[
+      p.join(Directory.current.path, 'test', 'fixtures', 'step_agent.dart'),
+      mode,
+      barrier,
+    ],
+    stdinText: prompt,
+  );
+}
+
+final class _DiskResults implements AttemptResultFiles {
+  _DiskResults(this.root);
+  final String root;
+  final AttemptResultProtocol protocol = AttemptResultProtocol();
+  @override
+  Future<String> prepare({
+    required String runId,
+    required String attemptId,
+  }) async {
+    await Directory(root).create(recursive: true);
+    return p.join(root, '$attemptId.json');
+  }
+
+  @override
+  Future<AttemptResultRead> consume({
+    required String path,
+    required String attemptId,
+    required String nonce,
+  }) => protocol.consume(
+    path: path,
+    resultRoot: root,
+    attemptId: attemptId,
+    nonce: nonce,
+  );
+  @override
+  Future<void> resolve(String path) async {
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+  }
+}
+
+String _dartExecutable() {
+  final flutter = Platform.environment['FLUTTER_ROOT']!;
+  return p.join(
+    flutter,
+    'bin',
+    'cache',
+    'dart-sdk',
+    'bin',
+    Platform.isWindows ? 'dart.exe' : 'dart',
+  );
 }
 
 final class _Fixture {
@@ -143,48 +416,54 @@ final class _Fixture {
   int _log = 0;
 
   RunExecutionAggregate aggregate(String id, {int count = 1}) =>
-      RunExecutionAggregate(
-        run: WorkflowRun(
-          id: id,
-          projectId: 'p',
-          workflowId: 'w',
-          label: id,
-          status: RunStatus.starting,
-          currentStepPosition: 0,
-          branchName: 'feature/$id',
-          worktreePath: '/tmp/$id',
-          createdAt: DateTime.utc(2026),
-          updatedAt: DateTime.utc(2026),
-        ),
-        snapshot: RunSnapshot(
-          schemaVersion: 1,
-          projectId: 'p',
-          projectName: 'project',
-          canonicalSourcePath: '/source',
-          sourceRevision: 'abc',
-          workflowId: 'w',
-          workflowRevision: 1,
-          workflowName: 'flow',
-          workItem: FreeFormRunWorkItem(text: 'diagnostic-only task'),
-          deliveryMode: DeliveryMode.supervised,
-          branchWorkType: BranchWorkType.feature,
-          steps: List<RunSnapshotStep>.generate(
-            count,
-            (index) => RunSnapshotStep(
-              id: 's$index',
-              sourceWorkflowStepId: 'ws$index',
-              position: index,
-              kind: 'execute',
-              name: 'Step $index',
-              cli: 'codex',
-              model: 'm',
-              configuration: const <String, Object?>{},
-            ),
-          ),
-        ),
-        attempts: const <RunAttempt>[],
-      );
+      _aggregate(id, count: count, worktreePath: '/tmp/$id');
 }
+
+RunExecutionAggregate _aggregate(
+  String id, {
+  required int count,
+  required String worktreePath,
+}) => RunExecutionAggregate(
+  run: WorkflowRun(
+    id: id,
+    projectId: 'p',
+    workflowId: 'w',
+    label: id,
+    status: RunStatus.starting,
+    currentStepPosition: 0,
+    branchName: 'feature/$id',
+    worktreePath: worktreePath,
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+  ),
+  snapshot: RunSnapshot(
+    schemaVersion: 1,
+    projectId: 'p',
+    projectName: 'project',
+    canonicalSourcePath: '/source',
+    sourceRevision: 'abc',
+    workflowId: 'w',
+    workflowRevision: 1,
+    workflowName: 'flow',
+    workItem: FreeFormRunWorkItem(text: 'diagnostic-only task'),
+    deliveryMode: DeliveryMode.supervised,
+    branchWorkType: BranchWorkType.feature,
+    steps: List<RunSnapshotStep>.generate(
+      count,
+      (index) => RunSnapshotStep(
+        id: 's$index',
+        sourceWorkflowStepId: 'ws$index',
+        position: index,
+        kind: 'execute',
+        name: 'Step $index',
+        cli: 'codex',
+        model: 'm',
+        configuration: const <String, Object?>{},
+      ),
+    ),
+  ),
+  attempts: const <RunAttempt>[],
+);
 
 final class _Repository implements RunExecutionRepository {
   final Map<String, RunExecutionAggregate> aggregates =
@@ -257,6 +536,28 @@ final class _Process implements StepProcess {
     await script.gate?.future;
     return script.exitCode;
   }
+}
+
+final class _TimedLauncher implements StepProcessLauncher {
+  @override
+  Future<StepProcessStart> start(StepLaunchRequest request) async =>
+      StepProcessStart.started(_TimedProcess());
+}
+
+final class _TimedProcess implements StepProcess {
+  final Completer<int> _exit = Completer<int>();
+  @override
+  Stream<StepOutputFrame> get frames async* {
+    yield StepOutputFrame(
+      RunLogChannel.stdout,
+      Uint8List.fromList(utf8.encode('tiny\n')),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    _exit.complete(0);
+  }
+
+  @override
+  Future<int> get exitCode => _exit.future;
 }
 
 final class _Results implements AttemptResultFiles {
