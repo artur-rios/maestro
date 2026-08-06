@@ -257,6 +257,63 @@ void main() {
       expect(state.feedback?.message, isNot(contains('private')));
     },
   );
+
+  test(
+    'GivenUnsavedEdits_WhenRetainedProjectsChange_ThenOnlyPermanentlyMissingAssociationsAreRemoved',
+    () {
+      final container = ProviderContainer(
+        overrides: [
+          workflowDesignServiceProvider.overrideWithValue(
+            _service(_Repository()),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(workflowControllerProvider.notifier);
+      controller.create(WorkflowKind.reusable);
+      controller.setName('Unsaved name');
+      controller.setUnitType(WorkItemType.githubIssue);
+      controller.renameStep('default-plan', 'Unsaved plan');
+      controller.toggleProject('active', true);
+      controller.toggleProject('soft-deleted', true);
+      controller.toggleProject('permanently-deleted', true);
+
+      controller.reconcileRetainedProjectIds({'active', 'soft-deleted'});
+
+      final draft = container.read(workflowControllerProvider).draft;
+      expect(draft.name, 'Unsaved name');
+      expect(draft.unitType, WorkItemType.githubIssue);
+      expect(draft.steps.first.name, 'Unsaved plan');
+      expect(draft.projectIds, unorderedEquals(['active', 'soft-deleted']));
+    },
+  );
+
+  test(
+    'GivenPendingSelect_WhenRetainedSnapshotChanges_ThenLoadedDraftUsesLatestSnapshot',
+    () async {
+      final repository = _Repository()
+        ..pendingFind = Completer<WorkflowDefinition?>();
+      final container = ProviderContainer(
+        overrides: [
+          workflowDesignServiceProvider.overrideWithValue(_service(repository)),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(workflowControllerProvider.notifier);
+      controller.reconcileRetainedProjectIds({'kept', 'removed'});
+      final select = controller.select('workflow-id');
+      await Future<void>.delayed(Duration.zero);
+      controller.reconcileRetainedProjectIds({'kept'});
+      repository.pendingFind!.complete(
+        _definition(projectIds: const ['kept', 'removed']),
+      );
+      await select;
+
+      expect(container.read(workflowControllerProvider).draft.projectIds, [
+        'kept',
+      ]);
+    },
+  );
 }
 
 WorkflowDesignService _service(

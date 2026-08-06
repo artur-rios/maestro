@@ -77,6 +77,8 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   int _generation = 0;
   int _nextRow = 0;
   bool _disposed = false;
+  bool _hasRetainedProjectSnapshot = false;
+  Set<String> _retainedProjectIds = const {};
 
   WorkflowDesignService get _service => ref.read(workflowDesignServiceProvider);
 
@@ -115,6 +117,21 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     _replaceDraft(WorkflowDraft.initial(kind: kind));
   }
 
+  void reconcileRetainedProjectIds(Iterable<String> ids) {
+    _hasRetainedProjectSnapshot = true;
+    _retainedProjectIds = Set<String>.unmodifiable(ids);
+    if (state.busy || _disposed) return;
+    final reconciled = _reconcileDraft(state.draft);
+    if (_sameProjectIds(reconciled.projectIds, state.draft.projectIds)) return;
+    state = state.copyWith(
+      draft: reconciled,
+      readiness: WorkflowReadinessStatus.unchecked,
+      unavailableProjectIds: Set<String>.unmodifiable(
+        state.unavailableProjectIds.intersection(_retainedProjectIds),
+      ),
+    );
+  }
+
   Future<void> select(String id) async {
     if (state.busy) return;
     final generation = ++_generation;
@@ -134,7 +151,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
           );
         } else {
           state = state.copyWith(
-            draft: WorkflowDraft.fromDefinition(value),
+            draft: _reconcileDraft(WorkflowDraft.fromDefinition(value)),
             readiness: WorkflowReadinessStatus.unchecked,
             unavailableProjectIds: const {},
           );
@@ -200,13 +217,15 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   Future<void> save() async {
     if (state.busy) return;
     final generation = ++_generation;
+    final reconciledDraft = _reconcileDraft(state.draft);
     state = state.copyWith(
+      draft: reconciledDraft,
       busy: true,
       rowErrors: const {},
       clearWorkflowError: true,
       clearFeedback: true,
     );
-    final result = await _service.save(state.draft);
+    final result = await _service.save(reconciledDraft);
     if (!_owns(generation)) return;
     switch (result) {
       case WorkflowSaved(:final definition):
@@ -216,7 +235,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
         ];
         state = state.copyWith(
           definitions: List.unmodifiable(definitions),
-          draft: WorkflowDraft.fromDefinition(definition),
+          draft: _reconcileDraft(WorkflowDraft.fromDefinition(definition)),
           busy: true,
           feedback: const WorkflowFeedback(
             isSuccess: true,
@@ -295,4 +314,21 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   }
 
   bool _owns(int generation) => !_disposed && generation == _generation;
+
+  WorkflowDraft _reconcileDraft(WorkflowDraft draft) {
+    if (!_hasRetainedProjectSnapshot || draft.kind == WorkflowKind.oneOff) {
+      return draft;
+    }
+    return draft.copyWith(
+      projectIds: draft.projectIds.where(_retainedProjectIds.contains),
+    );
+  }
+
+  static bool _sameProjectIds(List<String> first, List<String> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index] != second[index]) return false;
+    }
+    return true;
+  }
 }

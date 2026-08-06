@@ -41,6 +41,75 @@ void main() {
   );
 
   testWidgets(
+    'GivenOpenAssociatedWorkflow_WhenProjectPermanentlyDeleted_ThenRemountReconcilesBeforeEditSave',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final projects = _Repository()..records.add(_deletedRecord());
+      final workflows = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition(projectIds: const ['one']))
+        ..validProjectIds.add('one');
+      final lifecycleStore = _LifecycleStore(projects)
+        ..onPermanentDelete = workflows.cascadeProject;
+      await tester.pumpWidget(
+        _app(
+          repository: projects,
+          lifecycleStore: lifecycleStore,
+          workflowService: _workflowService(workflows),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-one')),
+            )
+            .value,
+        isTrue,
+      );
+
+      await tester.tap(find.text('Projects'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('source folder and files remain untouched'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Associated workflow links are removed'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Permanently delete metadata'));
+      await tester.pumpAndSettle();
+      expect(lifecycleStore.sourceMutationCalls, 0);
+
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Release after deletion',
+      );
+      final save = find.widgetWithText(FilledButton, 'Save workflow');
+      await tester.ensureVisible(save);
+      await tester.tap(save.hitTestable());
+      await tester.pumpAndSettle();
+
+      expect(workflows.definitions.single.revision, 4);
+      expect(workflows.definitions.single.projectIds, isEmpty);
+      expect(workflows.definitions.single.name, 'Release after deletion');
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Workflow success')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'GivenPendingPicker_WhenWorkspaceIsRemoved_ThenCompletionNeverInvokesProjectService',
     (tester) async {
       final repository = _Repository();
@@ -375,13 +444,14 @@ Widget _app({
   _ActiveRuns? activeRuns,
   ProjectFolderPicker picker = const _Picker(null),
   WorkflowDesignService? workflowService,
+  _LifecycleStore? lifecycleStore,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
   final runs = activeRuns ?? _ActiveRuns();
   final lifecycle = ProjectLifecycleService(
     repository: repo,
-    store: _LifecycleStore(repo),
+    store: lifecycleStore ?? _LifecycleStore(repo),
     activeRuns: runs,
     clock: () => DateTime.utc(2026, 8, 6, 12),
     newId: () => 'audit-id',
@@ -409,23 +479,47 @@ Widget _app({
   );
 }
 
-WorkflowDesignService _workflowService() => WorkflowDesignService(
-  repository: _WorkflowRepository(),
-  projectReadiness: const _WorkflowReadiness(),
-  clock: () => DateTime.utc(2026, 8, 6),
-  newId: () => 'workflow-id',
-);
+WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
+    WorkflowDesignService(
+      repository: repository ?? _WorkflowRepository(),
+      projectReadiness: const _WorkflowReadiness(),
+      clock: () => DateTime.utc(2026, 8, 6),
+      newId: () => 'workflow-id',
+    );
 
 final class _WorkflowRepository implements WorkflowRepository {
+  final definitions = <WorkflowDefinition>[];
+  final validProjectIds = <String>{};
   @override
-  Future<WorkflowDefinition?> findById(String id) async => null;
+  Future<WorkflowDefinition?> findById(String id) async =>
+      definitions.where((value) => value.id == id).firstOrNull;
   @override
-  Future<List<WorkflowDefinition>> list() async => const [];
+  Future<List<WorkflowDefinition>> list() async => List.of(definitions);
   @override
   Future<WorkflowRepositorySaveResult> save({
     required WorkflowDefinition definition,
     required int? expectedRevision,
-  }) async => WorkflowRepositorySaved(definition);
+  }) async {
+    if (definition.projectIds.any((id) => !validProjectIds.contains(id))) {
+      throw StateError('Foreign key constraint failed.');
+    }
+    definitions
+      ..removeWhere((value) => value.id == definition.id)
+      ..add(definition);
+    return WorkflowRepositorySaved(definition);
+  }
+
+  void cascadeProject(String projectId) {
+    validProjectIds.remove(projectId);
+    for (var index = 0; index < definitions.length; index++) {
+      final value = definitions[index];
+      definitions[index] = _workflowDefinition(
+        revision: value.revision,
+        name: value.name,
+        projectIds: value.projectIds.where((id) => id != projectId).toList(),
+      );
+    }
+  }
 }
 
 final class _WorkflowReadiness implements ProjectExecutionReadinessReader {
@@ -508,6 +602,8 @@ final class _ActiveRuns implements ActiveProjectRunReader {
 final class _LifecycleStore implements ProjectLifecycleStore {
   _LifecycleStore(this.repository);
   final _Repository repository;
+  void Function(String projectId)? onPermanentDelete;
+  int sourceMutationCalls = 0;
 
   @override
   Future<void> softDelete({
@@ -527,8 +623,10 @@ final class _LifecycleStore implements ProjectLifecycleStore {
   Future<void> permanentlyDelete({
     required ProjectRecord project,
     required ProjectLifecycleAuditEvent audit,
-  }) async =>
-      repository.records.removeWhere((record) => record.id == project.id);
+  }) async {
+    repository.records.removeWhere((record) => record.id == project.id);
+    onPermanentDelete?.call(project.id);
+  }
 }
 
 final class _Repository implements ProjectRepository {
@@ -587,4 +685,34 @@ ProjectRecord _deletedRecord() => ProjectRecord(
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6, 11),
   deletedAt: DateTime.utc(2026, 8, 6, 11),
+);
+
+WorkflowDefinition _workflowDefinition({
+  int revision = 3,
+  String? name = 'Release',
+  List<String> projectIds = const [],
+}) => WorkflowDefinition(
+  id: 'workflow-id',
+  revision: revision,
+  kind: WorkflowKind.reusable,
+  name: name,
+  unitType: WorkItemType.useCase,
+  supervisedDelivery: true,
+  createdAt: DateTime.utc(2026, 8, 1),
+  updatedAt: DateTime.utc(2026, 8, 6),
+  steps: const [
+    WorkflowStep(
+      id: 'plan',
+      position: 0,
+      kind: WorkflowStepKind.plan,
+      name: 'Plan',
+    ),
+    WorkflowStep(
+      id: 'execute',
+      position: 1,
+      kind: WorkflowStepKind.execute,
+      name: 'Execute',
+    ),
+  ],
+  projectIds: projectIds,
 );

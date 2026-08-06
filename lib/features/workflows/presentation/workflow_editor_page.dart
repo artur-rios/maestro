@@ -21,9 +21,25 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(
-      () => ref.read(workflowControllerProvider.notifier).load(),
-    );
+    _scheduleProjectReconciliation(loadDefinitions: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant WorkflowEditorPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleProjectReconciliation();
+  }
+
+  void _scheduleProjectReconciliation({bool loadDefinitions = false}) {
+    Future<void>.microtask(() async {
+      if (!mounted) return;
+      final controller = ref.read(workflowControllerProvider.notifier);
+      controller.reconcileRetainedProjectIds(<String>{
+        for (final project in widget.projects) project.record.id,
+        for (final project in widget.deletedProjects) project.id,
+      });
+      if (loadDefinitions) await controller.load();
+    });
   }
 
   @override
