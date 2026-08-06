@@ -2,12 +2,64 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
+import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 void main() {
+  testWidgets(
+    'GivenAgentCatalogs_WhenEditorLoads_ThenAccessibleCliAndModelControlsConfigureRows',
+    (tester) async {
+      await _largeSurface(tester);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Refresh agent catalogs'), findsOneWidget);
+      final cli = find.byKey(const ValueKey('step-cli-default-plan'));
+      expect(cli, findsOneWidget);
+      await tester.tap(cli);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Codex').last);
+      await tester.pump();
+      final model = find.byKey(const ValueKey('step-model-default-plan'));
+      await tester.tap(model);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('gpt-5.4').last);
+      await tester.pump();
+
+      expect(find.text('This agent and model are ready.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenClaudeAlias_WhenSelected_ThenUiNeverClaimsAccountVerification',
+    (tester) async {
+      await _largeSurface(tester);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('step-cli-default-plan')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Claude Code').last);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('step-model-default-plan')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('sonnet').last);
+      await tester.pump();
+
+      expect(
+        find.textContaining(
+          'documented CLI alias; account access is checked when the step starts',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('available to your account'), findsNothing);
+      expect(find.textContaining('account verified'), findsNothing);
+    },
+  );
+
   testWidgets(
     'GivenNewWorkflow_WhenShown_ThenAccessibleDefaultsAndActionsExist',
     (tester) async {
@@ -319,14 +371,23 @@ Widget _app({
   _Readiness? readiness,
 }) {
   final workflowRepository = repository ?? _Repository();
+  final design = WorkflowDesignService(
+    repository: workflowRepository,
+    projectReadiness: readiness ?? _Readiness(),
+    clock: () => DateTime.utc(2026, 8, 6),
+    newId: () => 'id-${workflowRepository.nextId++}',
+  );
   return ProviderScope(
     overrides: [
-      workflowDesignServiceProvider.overrideWithValue(
-        WorkflowDesignService(
-          repository: workflowRepository,
-          projectReadiness: readiness ?? _Readiness(),
-          clock: () => DateTime.utc(2026, 8, 6),
-          newId: () => 'id-${workflowRepository.nextId++}',
+      workflowDesignServiceProvider.overrideWithValue(design),
+      agentConfigurationServiceProvider.overrideWithValue(
+        AgentConfigurationService(
+          adapters: <AgentCliAdapter>[
+            _CatalogAdapter(_agentCatalog(AgentCliKind.claudeCode)),
+            _CatalogAdapter(_agentCatalog(AgentCliKind.codex)),
+            _CatalogAdapter(_agentCatalog(AgentCliKind.openCode)),
+          ],
+          workflowDesignService: design,
         ),
       ),
     ],
@@ -340,6 +401,28 @@ Widget _app({
     ),
   );
 }
+
+final class _CatalogAdapter implements AgentCliAdapter {
+  const _CatalogAdapter(this.catalog);
+  final AgentCliCatalog catalog;
+  @override
+  AgentCliKind get kind => catalog.kind;
+  @override
+  Future<AgentCliCatalog> discover() async => catalog;
+}
+
+AgentCliCatalog _agentCatalog(AgentCliKind kind) => AgentCliCatalog(
+  kind: kind,
+  installation: AgentCliInstallation.available,
+  session: AgentCliSession.authenticated,
+  modelVerification: kind == AgentCliKind.claudeCode
+      ? AgentModelVerification.cliOnly
+      : AgentModelVerification.accountVerified,
+  models: kind == AgentCliKind.claudeCode
+      ? const <String>['sonnet']
+      : const <String>['gpt-5.4'],
+  guidance: 'Safe catalog.',
+);
 
 ProjectSelection _project(String id, bool available) => ProjectSelection(
   record: ProjectRecord(
@@ -414,12 +497,16 @@ WorkflowDefinition _definition({List<String> projectIds = const []}) =>
           position: 0,
           kind: WorkflowStepKind.plan,
           name: 'Plan',
+          cli: 'codex',
+          model: 'gpt-5.4',
         ),
         WorkflowStep(
           id: 'execute',
           position: 1,
           kind: WorkflowStepKind.execute,
           name: 'Execute',
+          cli: 'codex',
+          model: 'gpt-5.4',
         ),
       ],
       projectIds: projectIds,

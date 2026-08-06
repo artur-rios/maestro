@@ -138,10 +138,10 @@ final class AgentConfigurationService {
     WorkflowDraft draft,
   ) async {
     final catalog = await _refreshKinds(_selectedKinds(draft));
-    return _evaluateConfiguration(draft, catalog);
+    return evaluateConfiguration(draft, catalog);
   }
 
-  AgentConfigurationResult _evaluateConfiguration(
+  AgentConfigurationResult evaluateConfiguration(
     WorkflowDraft draft,
     AgentCatalogSnapshot catalog,
   ) {
@@ -169,7 +169,7 @@ final class AgentConfigurationService {
     WorkflowDraft draft,
   ) async {
     final catalog = await _refreshKinds(_selectedKinds(draft));
-    final configuration = _evaluateConfiguration(draft, catalog);
+    final configuration = evaluateConfiguration(draft, catalog);
     final blockers = configuration.states
         .where((state) => !state.isConfigurationValid)
         .toList(growable: false);

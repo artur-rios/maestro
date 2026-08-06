@@ -113,26 +113,8 @@ final class WorkflowDesignService {
     WorkflowDraft draft, {
     bool requireAgentConfiguration = false,
   }) async {
-    final issues = _validate(draft);
-    final executeCount = draft.steps
-        .where((step) => step.kind == WorkflowStepKind.execute)
-        .length;
-    if (executeCount != 1) {
-      return WorkflowSaveRejected(
-        code: 'workflow.execute.count',
-        message: 'A workflow must contain exactly one Execute step.',
-        remediation: 'Add or remove Execute steps, then save again.',
-        issues: issues,
-      );
-    }
-    if (issues.isNotEmpty) {
-      return WorkflowSaveRejected(
-        code: 'workflow.validation_failed',
-        message: 'The workflow has invalid required values.',
-        remediation: 'Correct the highlighted fields, then save again.',
-        issues: issues,
-      );
-    }
+    final structureRejection = validateStructure(draft);
+    if (structureRejection != null) return structureRejection;
     final assignmentIssues = _validateAgentAssignments(
       draft,
       requireCompleteConfiguration: requireAgentConfiguration,
@@ -201,6 +183,30 @@ final class WorkflowDesignService {
         remediation: 'Try again.',
       );
     }
+  }
+
+  WorkflowSaveRejected? validateStructure(WorkflowDraft draft) {
+    final issues = _validate(draft);
+    final executeCount = draft.steps
+        .where((step) => step.kind == WorkflowStepKind.execute)
+        .length;
+    if (executeCount != 1) {
+      return WorkflowSaveRejected(
+        code: 'workflow.execute.count',
+        message: 'A workflow must contain exactly one Execute step.',
+        remediation: 'Add or remove Execute steps, then save again.',
+        issues: issues,
+      );
+    }
+    if (issues.isNotEmpty) {
+      return WorkflowSaveRejected(
+        code: 'workflow.validation_failed',
+        message: 'The workflow has invalid required values.',
+        remediation: 'Correct the highlighted fields, then save again.',
+        issues: issues,
+      );
+    }
+    return null;
   }
 
   Future<Result<List<WorkflowDefinition>>> list() async {

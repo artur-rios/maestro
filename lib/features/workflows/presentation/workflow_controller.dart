@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
@@ -8,6 +9,10 @@ final workflowDesignServiceProvider = Provider<WorkflowDesignService>((ref) {
     'WorkflowDesignService must be provided by the application.',
   );
 });
+
+final agentConfigurationServiceProvider = Provider<AgentConfigurationService?>(
+  (ref) => null,
+);
 
 final workflowControllerProvider =
     NotifierProvider<WorkflowController, WorkflowEditorState>(
@@ -37,6 +42,10 @@ final class WorkflowEditorState {
     this.feedback,
     this.unavailableProjectIds = const {},
     this.readiness = WorkflowReadinessStatus.unchecked,
+    this.catalogs,
+    this.catalogBusy = false,
+    this.agentRowStates = const {},
+    this.pendingCliKinds = const {},
   }) : draft = draft ?? WorkflowDraft.initial(kind: WorkflowKind.reusable);
 
   final List<WorkflowDefinition> definitions;
@@ -47,6 +56,10 @@ final class WorkflowEditorState {
   final WorkflowFeedback? feedback;
   final Set<String> unavailableProjectIds;
   final WorkflowReadinessStatus readiness;
+  final AgentCatalogSnapshot? catalogs;
+  final bool catalogBusy;
+  final Map<String, AgentRowState> agentRowStates;
+  final Map<String, AgentCliKind> pendingCliKinds;
 
   WorkflowEditorState copyWith({
     List<WorkflowDefinition>? definitions,
@@ -59,6 +72,11 @@ final class WorkflowEditorState {
     bool clearFeedback = false,
     Set<String>? unavailableProjectIds,
     WorkflowReadinessStatus? readiness,
+    AgentCatalogSnapshot? catalogs,
+    bool clearCatalogs = false,
+    bool? catalogBusy,
+    Map<String, AgentRowState>? agentRowStates,
+    Map<String, AgentCliKind>? pendingCliKinds,
   }) => WorkflowEditorState(
     definitions: definitions ?? this.definitions,
     draft: draft ?? this.draft,
@@ -70,6 +88,14 @@ final class WorkflowEditorState {
     feedback: clearFeedback ? null : feedback ?? this.feedback,
     unavailableProjectIds: unavailableProjectIds ?? this.unavailableProjectIds,
     readiness: readiness ?? this.readiness,
+    catalogs: clearCatalogs ? null : catalogs ?? this.catalogs,
+    catalogBusy: catalogBusy ?? this.catalogBusy,
+    agentRowStates: Map<String, AgentRowState>.unmodifiable(
+      agentRowStates ?? this.agentRowStates,
+    ),
+    pendingCliKinds: Map<String, AgentCliKind>.unmodifiable(
+      pendingCliKinds ?? this.pendingCliKinds,
+    ),
   );
 }
 
@@ -81,6 +107,8 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   Set<String> _retainedProjectIds = const {};
 
   WorkflowDesignService get _service => ref.read(workflowDesignServiceProvider);
+  AgentConfigurationService? get _agents =>
+      ref.read(agentConfigurationServiceProvider);
 
   @override
   WorkflowEditorState build() {
@@ -99,6 +127,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     switch (result) {
       case Success<List<WorkflowDefinition>>(:final value):
         state = state.copyWith(definitions: value, busy: false);
+        await _refreshAgentsOwned(generation);
       case FailureResult<List<WorkflowDefinition>>(:final failure):
         state = state.copyWith(
           busy: false,
@@ -115,6 +144,30 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     if (state.busy) return;
     _generation++;
     _replaceDraft(WorkflowDraft.initial(kind: kind));
+  }
+
+  Future<void> refreshAgents() async {
+    if (_disposed || state.catalogBusy) return;
+    final generation = ++_generation;
+    state = state.copyWith(catalogBusy: true, clearFeedback: true);
+    await _refreshAgentsOwned(generation);
+  }
+
+  Future<void> _refreshAgentsOwned(int generation) async {
+    final agents = _agents;
+    if (agents == null) {
+      if (_owns(generation)) state = state.copyWith(catalogBusy: false);
+      return;
+    }
+    final catalogs = await agents.refreshAll();
+    if (!_owns(generation)) return;
+    final evaluation = agents.evaluateConfiguration(state.draft, catalogs);
+    state = state.copyWith(
+      catalogs: catalogs,
+      catalogBusy: false,
+      draft: evaluation.draft,
+      agentRowStates: _statesByRow(evaluation.states),
+    );
   }
 
   void reconcileRetainedProjectIds(Iterable<String> ids) {
@@ -155,7 +208,9 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
             readiness: WorkflowReadinessStatus.unchecked,
             unavailableProjectIds: const {},
           );
-          await _refreshReadiness(generation, value);
+          await _refreshAgentsOwned(generation);
+          if (!_owns(generation)) return;
+          await _refreshReadiness(generation, state.draft);
         }
       case FailureResult<WorkflowDefinition?>(:final failure):
         state = state.copyWith(
@@ -207,6 +262,63 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   void moveStepUp(String rowKey) => _move(rowKey, -1);
   void moveStepDown(String rowKey) => _move(rowKey, 1);
 
+  void selectAgentCli(String rowKey, AgentCliKind kind) {
+    if (state.busy || state.catalogBusy || _disposed) return;
+    final step = state.draft.steps
+        .where((step) => step.rowKey == rowKey)
+        .firstOrNull;
+    if (step == null) return;
+    final agents = _agents;
+    if (agents == null) return;
+    if (step.assignment?.kind == kind) return;
+    final pending = Map<String, AgentCliKind>.of(state.pendingCliKinds)
+      ..[rowKey] = kind;
+    final rows = Map<String, AgentRowState>.of(state.agentRowStates)
+      ..[rowKey] = AgentRowState(
+        rowKey: rowKey,
+        kind: kind,
+        code: AgentRowStateCode.unassigned,
+        guidance: 'Select a model for this agent CLI.',
+      );
+    _change(
+      agents.clearAssignment(state.draft, rowKey),
+      pendingCliKinds: pending,
+      agentRowStates: rows,
+    );
+  }
+
+  void selectAgentModel(String rowKey, String model) {
+    if (state.busy || state.catalogBusy || _disposed) return;
+    final catalogs = state.catalogs;
+    if (catalogs == null) return;
+    final agents = _agents;
+    if (agents == null) return;
+    final step = state.draft.steps
+        .where((step) => step.rowKey == rowKey)
+        .firstOrNull;
+    if (step == null) return;
+    final kind = state.pendingCliKinds[rowKey] ?? step.assignment?.kind;
+    if (kind == null) return;
+    final change = agents.applyAssignment(
+      draft: state.draft,
+      rowKey: rowKey,
+      assignment: AgentAssignment(kind: kind, model: model),
+      catalog: catalogs,
+    );
+    final rows = Map<String, AgentRowState>.of(state.agentRowStates)
+      ..[rowKey] = switch (change) {
+        AgentAssignmentApplied(:final state) => state,
+        AgentAssignmentRejected(:final state) => state,
+      };
+    if (change is AgentAssignmentRejected) {
+      state = state.copyWith(agentRowStates: rows);
+      return;
+    }
+    final pending = Map<String, AgentCliKind>.of(state.pendingCliKinds)
+      ..remove(rowKey);
+    _change(change.draft, pendingCliKinds: pending, agentRowStates: rows);
+  }
+
   void _move(String rowKey, int offset) {
     final index = state.draft.steps.indexWhere((step) => step.rowKey == rowKey);
     final target = index + offset;
@@ -218,6 +330,11 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     if (state.busy) return;
     final generation = ++_generation;
     final reconciledDraft = _reconcileDraft(state.draft);
+    final structureRejection = _service.validateStructure(reconciledDraft);
+    if (structureRejection != null) {
+      _publishSaveRejection(structureRejection, draft: reconciledDraft);
+      return;
+    }
     state = state.copyWith(
       draft: reconciledDraft,
       busy: true,
@@ -225,8 +342,53 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
       clearWorkflowError: true,
       clearFeedback: true,
     );
-    final result = await _service.save(reconciledDraft);
+    final agents = _agents;
+    if (agents == null) {
+      final result = await _service.save(reconciledDraft);
+      if (!_owns(generation)) return;
+      await _handleSaveResult(generation, result);
+      return;
+    }
+    final completion = await agents.completeConfiguration(reconciledDraft);
     if (!_owns(generation)) return;
+    state = state.copyWith(
+      draft: completion.draft,
+      agentRowStates: _statesByRow(completion.states),
+    );
+    final metadataFallback =
+        completion is AgentConfigurationRejected &&
+        _canSaveUnchangedAfterDiscoveryFailure(completion);
+    if (completion is AgentConfigurationRejected && !metadataFallback) {
+      final invalid = completion.states
+          .where((value) => !value.isConfigurationValid)
+          .map((value) => value.rowKey)
+          .toSet();
+      state = state.copyWith(
+        busy: false,
+        rowErrors: invalid,
+        workflowError:
+            'Every workflow step requires a verified agent and model.',
+        feedback: const WorkflowFeedback(
+          isSuccess: false,
+          message: 'Agent configuration is incomplete or unverified.',
+          remediation:
+              'Correct the highlighted agent selections, then save again.',
+        ),
+      );
+      return;
+    }
+    final result = await _service.save(
+      completion.draft,
+      requireAgentConfiguration: !metadataFallback,
+    );
+    if (!_owns(generation)) return;
+    await _handleSaveResult(generation, result);
+  }
+
+  Future<void> _handleSaveResult(
+    int generation,
+    WorkflowSaveResult result,
+  ) async {
     switch (result) {
       case WorkflowSaved(:final definition):
         final definitions = [
@@ -242,39 +404,62 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
             message: 'Workflow saved.',
           ),
         );
-        await _refreshReadiness(generation, definition);
-      case WorkflowSaveRejected(
-        :final message,
-        :final remediation,
-        :final issues,
-      ):
-        state = state.copyWith(
-          busy: false,
-          rowErrors: Set.unmodifiable(
-            issues.map((issue) => issue.rowKey).nonNulls,
-          ),
-          workflowError: message,
-          feedback: WorkflowFeedback(
-            isSuccess: false,
-            message: message,
-            remediation: remediation,
-          ),
-        );
+        await _refreshReadiness(generation, state.draft);
+      case final WorkflowSaveRejected rejection:
+        _publishSaveRejection(rejection);
     }
   }
 
-  Future<void> _refreshReadiness(
-    int generation,
-    WorkflowDefinition definition,
-  ) async {
-    final readiness = await _service.executionReadiness(definition.projectIds);
+  void _publishSaveRejection(
+    WorkflowSaveRejected rejection, {
+    WorkflowDraft? draft,
+  }) {
+    state = state.copyWith(
+      draft: draft,
+      busy: false,
+      rowErrors: Set.unmodifiable(
+        rejection.issues.map((issue) => issue.rowKey).nonNulls,
+      ),
+      workflowError: rejection.message,
+      feedback: WorkflowFeedback(
+        isSuccess: false,
+        message: rejection.message,
+        remediation: rejection.remediation,
+      ),
+    );
+  }
+
+  Future<void> _refreshReadiness(int generation, WorkflowDraft draft) async {
+    final agents = _agents;
+    final preflight = agents == null
+        ? AgentExecutionPreflight(
+            agentBlockers: const <AgentRowState>[],
+            hasMoreAgentBlockers: false,
+            projectReadiness: await _service.executionReadiness(
+              draft.projectIds,
+            ),
+          )
+        : await agents.executionPreflight(draft);
     if (!_owns(generation)) return;
+    final agentStates = Map<String, AgentRowState>.of(state.agentRowStates);
+    for (final blocker in preflight.agentBlockers) {
+      agentStates[blocker.rowKey] = blocker;
+    }
+    final readiness = preflight.projectReadiness;
     switch (readiness) {
-      case WorkflowExecutionReady():
+      case WorkflowExecutionReady() when preflight.agentBlockers.isEmpty:
         state = state.copyWith(
           busy: false,
           readiness: WorkflowReadinessStatus.ready,
           unavailableProjectIds: const {},
+          agentRowStates: agentStates,
+        );
+      case WorkflowExecutionReady():
+        state = state.copyWith(
+          busy: false,
+          readiness: WorkflowReadinessStatus.blocked,
+          unavailableProjectIds: const {},
+          agentRowStates: agentStates,
         );
       case WorkflowExecutionBlocked(:final projects):
         state = state.copyWith(
@@ -283,6 +468,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
           unavailableProjectIds: Set.unmodifiable(
             projects.map((item) => item.projectId),
           ),
+          agentRowStates: agentStates,
         );
       case WorkflowExecutionReadinessFailed(:final message, :final remediation):
         state = state.copyWith(
@@ -303,13 +489,20 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     state = WorkflowEditorState(definitions: state.definitions, draft: draft);
   }
 
-  void _change(WorkflowDraft draft) {
+  void _change(
+    WorkflowDraft draft, {
+    Map<String, AgentCliKind>? pendingCliKinds,
+    Map<String, AgentRowState>? agentRowStates,
+  }) {
     if (state.busy || _disposed) return;
     state = state.copyWith(
       draft: draft,
       rowErrors: const {},
       clearWorkflowError: true,
       clearFeedback: true,
+      readiness: WorkflowReadinessStatus.unchecked,
+      pendingCliKinds: pendingCliKinds,
+      agentRowStates: agentRowStates,
     );
   }
 
@@ -330,5 +523,24 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
       if (first[index] != second[index]) return false;
     }
     return true;
+  }
+
+  static Map<String, AgentRowState> _statesByRow(
+    Iterable<AgentRowState> states,
+  ) => Map<String, AgentRowState>.unmodifiable({
+    for (final value in states) value.rowKey: value,
+  });
+
+  bool _canSaveUnchangedAfterDiscoveryFailure(
+    AgentConfigurationRejected completion,
+  ) {
+    if (completion.draft.steps.any(
+      (step) => !step.isUnchangedPersistedAssignment,
+    )) {
+      return false;
+    }
+    return completion.states.every(
+      (value) => value.code == AgentRowStateCode.catalogUnverified,
+    );
   }
 }

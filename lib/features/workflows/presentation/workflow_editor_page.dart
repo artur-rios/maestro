@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
+import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 final class WorkflowEditorPage extends ConsumerStatefulWidget {
   const WorkflowEditorPage({
@@ -236,7 +238,28 @@ final class _Editor extends ConsumerWidget {
                 },
         ),
         const SizedBox(height: 20),
-        Text('Steps', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Steps',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            Semantics(
+              label: 'Refresh agent catalogs',
+              button: true,
+              child: IconButton(
+                tooltip: 'Refresh agent catalogs',
+                onPressed: state.busy || state.catalogBusy
+                    ? null
+                    : controller.refreshAgents,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ],
+        ),
+        if (state.catalogBusy) const LinearProgressIndicator(),
         for (final (index, step) in draft.steps.indexed)
           _StepRow(
             key: ValueKey(step.rowKey),
@@ -245,6 +268,9 @@ final class _Editor extends ConsumerWidget {
             count: draft.steps.length,
             hasError: state.rowErrors.contains(step.rowKey),
             enabled: !state.busy,
+            catalogs: state.catalogs,
+            rowState: state.agentRowStates[step.rowKey],
+            pendingKind: state.pendingCliKinds[step.rowKey],
           ),
         Align(
           alignment: Alignment.centerLeft,
@@ -338,6 +364,9 @@ final class _StepRow extends ConsumerWidget {
     required this.count,
     required this.hasError,
     required this.enabled,
+    required this.catalogs,
+    required this.rowState,
+    required this.pendingKind,
     super.key,
   });
   final WorkflowDraftStep step;
@@ -345,11 +374,29 @@ final class _StepRow extends ConsumerWidget {
   final int count;
   final bool hasError;
   final bool enabled;
+  final AgentCatalogSnapshot? catalogs;
+  final AgentRowState? rowState;
+  final AgentCliKind? pendingKind;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(workflowControllerProvider.notifier);
     final position = index + 1;
+    final selectedKind = pendingKind ?? step.assignment?.kind;
+    final catalog = selectedKind == null || catalogs == null
+        ? null
+        : catalogs!.forKind(selectedKind);
+    final catalogUsable =
+        catalog != null &&
+        catalog.installation == AgentCliInstallation.available &&
+        catalog.session == AgentCliSession.authenticated &&
+        (catalog.modelVerification == AgentModelVerification.accountVerified ||
+            (selectedKind == AgentCliKind.claudeCode &&
+                catalog.modelVerification == AgentModelVerification.cliOnly));
+    final selectedModel = step.assignment?.kind == selectedKind
+        ? step.assignment?.model
+        : null;
+    final models = catalog?.models ?? const <String>[];
     final nameField = TextFormField(
       key: ValueKey('step-name-${step.rowKey}'),
       initialValue: step.name,
@@ -393,6 +440,66 @@ final class _StepRow extends ConsumerWidget {
         ),
       ),
     ];
+    final agentControls = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<AgentCliKind>(
+          key: ValueKey('step-cli-${step.rowKey}'),
+          initialValue: selectedKind,
+          decoration: InputDecoration(
+            labelText: 'Agent CLI for step $position',
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: AgentCliKind.claudeCode,
+              child: Text('Claude Code'),
+            ),
+            DropdownMenuItem(value: AgentCliKind.codex, child: Text('Codex')),
+            DropdownMenuItem(
+              value: AgentCliKind.openCode,
+              child: Text('OpenCode'),
+            ),
+          ],
+          onChanged: enabled
+              ? (value) {
+                  if (value != null) {
+                    controller.selectAgentCli(step.rowKey, value);
+                  }
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey('step-model-${step.rowKey}'),
+          initialValue: selectedModel != null && models.contains(selectedModel)
+              ? selectedModel
+              : null,
+          decoration: InputDecoration(
+            labelText: 'Model for step $position',
+            hintText: selectedModel != null && !models.contains(selectedModel)
+                ? 'Replacement required'
+                : 'Select model',
+          ),
+          items: [
+            for (final model in models)
+              DropdownMenuItem(value: model, child: Text(model)),
+          ],
+          onChanged: enabled && catalogUsable
+              ? (value) {
+                  if (value != null) {
+                    controller.selectAgentModel(step.rowKey, value);
+                  }
+                }
+              : null,
+        ),
+        const SizedBox(height: 6),
+        Semantics(
+          liveRegion: true,
+          label: 'Agent status for step $position. ${_guidance(rowState)}',
+          child: Text(_guidance(rowState)),
+        ),
+      ],
+    );
     return LayoutBuilder(
       builder: (context, constraints) => constraints.maxWidth < 560
           ? Padding(
@@ -402,6 +509,8 @@ final class _StepRow extends ConsumerWidget {
                 children: [
                   Text('Step $position'),
                   nameField,
+                  const SizedBox(height: 8),
+                  agentControls,
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Wrap(children: actions),
@@ -409,14 +518,37 @@ final class _StepRow extends ConsumerWidget {
                 ],
               ),
             )
-          : Row(
-              children: [
-                SizedBox(width: 32, child: Text('$position')),
-                Expanded(child: nameField),
-                ...actions,
-              ],
+          : Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 32, child: Text('$position')),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        nameField,
+                        const SizedBox(height: 8),
+                        agentControls,
+                      ],
+                    ),
+                  ),
+                  ...actions,
+                ],
+              ),
             ),
     );
+  }
+
+  static String _guidance(AgentRowState? state) {
+    if (state == null) return 'Select an agent CLI and model.';
+    return switch (state.code) {
+      AgentRowStateCode.unauthenticated =>
+        'Authenticate in the project terminal (embedded terminal when available), then refresh. Maestro never starts login.',
+      AgentRowStateCode.cliOnly =>
+        'This is a documented CLI alias; account access is checked when the step starts.',
+      _ => state.guidance,
+    };
   }
 }
 
