@@ -27,6 +27,9 @@ final class CodexAdapter implements AgentCliAdapter {
   static final RegExp _positiveLoginStatus = RegExp(
     r'^(?:Logged in using ChatGPT|Logged in using access token|Logged in using personal access token|Logged in using Amazon Bedrock API key|Logged in using an API key - [^\x00-\x1F\x7F]{1,200})$',
   );
+  static final RegExp _negativeLoginStatus = RegExp(
+    r'^(?:Not logged in|You are not logged in|Logged out)$',
+  );
   static final RegExp _benignPowerShellProgress = RegExp(
     r'^#< CLIXML\r?\n<Objs Version="1\.1\.0\.1" xmlns="http://schemas\.microsoft\.com/powershell/2004/04">'
     r'(?:<Obj S="progress" RefId="\d+">'
@@ -56,22 +59,27 @@ final class CodexAdapter implements AgentCliAdapter {
     ]);
     final stdoutStatus = login.stdout.trim();
     final stderrStatus = login.stderr.trim();
-    final stdoutIsPositive = _positiveLoginStatus.hasMatch(stdoutStatus);
-    final hasPositiveStatus = stdoutIsPositive
-        ? stderrStatus.isEmpty ||
-              (_benignPowerShellProgress.hasMatch(stderrStatus) &&
-                  !_loginStatusMarker.hasMatch(stderrStatus))
-        : stdoutStatus.isEmpty && _positiveLoginStatus.hasMatch(stderrStatus);
-    if (!login.succeeded ||
-        login.stdoutTruncated ||
-        login.stderrTruncated ||
-        !hasPositiveStatus) {
+    if (!login.succeeded || login.stdoutTruncated || login.stderrTruncated) {
+      return _unverified(start.version!);
+    }
+    final stderrIsBenignProgress =
+        _benignPowerShellProgress.hasMatch(stderrStatus) &&
+        !_loginStatusMarker.hasMatch(stderrStatus);
+    final hasNegativeStatus = _negativeLoginStatus.hasMatch(stdoutStatus)
+        ? stderrStatus.isEmpty || stderrIsBenignProgress
+        : stdoutStatus.isEmpty && _negativeLoginStatus.hasMatch(stderrStatus);
+    if (hasNegativeStatus) {
       return _support.catalog(
         version: start.version,
         session: AgentCliSession.unauthenticated,
         guidance: 'Authenticate Codex in the project terminal, then refresh.',
       );
     }
+    final stdoutIsPositive = _positiveLoginStatus.hasMatch(stdoutStatus);
+    final hasPositiveStatus = stdoutIsPositive
+        ? stderrStatus.isEmpty || stderrIsBenignProgress
+        : stdoutStatus.isEmpty && _positiveLoginStatus.hasMatch(stderrStatus);
+    if (!hasPositiveStatus) return _unverified(start.version!);
 
     final launch = await _sessionRunner.start(
       CommandRequest(

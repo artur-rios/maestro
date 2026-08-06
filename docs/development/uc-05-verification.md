@@ -67,7 +67,9 @@ The Windows fixture exposed three real boundary defects before passing:
    positive stdout only with empty stderr or the exact `PSCustomObject` progress
    envelope (without embedded login-status markers), and accepts positive
    stderr only with empty stdout. Conflicting statuses, arbitrary noise, and
-   raw CLIXML/status text are rejected without becoming user guidance;
+   raw CLIXML/status text remain unverified with sanitized retry guidance. Only
+   a successful, nontruncated exact negative status is classified
+   unauthenticated and receives authentication guidance;
 3. JSON-RPC responses are trusted only for a positive, currently outstanding
    request ID registered before send. Null, zero, negative, future,
    unsolicited/conflicting, and duplicate IDs fail closed instead of being
@@ -93,13 +95,14 @@ flutter test integration_test/workflows/step_agent_process_integration_test.dart
 # Exit 0; 1 desktop integration test passed using only disposable fixture CLIs.
 
 flutter test test/platform/agents test/platform/common/command_runner_test.dart test/platform/common/command_session_test.dart test/features/workflows
-# Exit 0; 134 focused adapter, transport, workflow domain, application,
+# Exit 0; 136 focused adapter, transport, workflow domain, application,
 # persistence, controller, and widget tests passed.
 
 flutter test test/platform/agents/agent_cli_adapters_test.dart
 # Exit 0; 35 adapter contracts passed, including outstanding-ID enforcement,
-# both stream-polarity conflicts, exact stderr positive status, the exact benign
-# PowerShell progress envelope, arbitrary noise, and status-bearing CLIXML.
+# login timeout/start/not-found/permission failures, truncation, nonzero and
+# malformed/noisy output, exact negative and positive statuses, both stream
+# polarity conflicts, and the exact benign PowerShell progress envelope.
 
 flutter test test/features/projects/presentation/project_workspace_page_test.dart
 # Exit 0; 17 workspace composition tests passed with bounded lazy-list
@@ -113,7 +116,7 @@ dart run tooling/verify_workflows.dart
 # Exit 0; workflow-verification: passed.
 
 flutter test --reporter compact
-# Exit 0; clean default-concurrency suite passed 386/386 in 33 seconds.
+# Exit 0; clean default-concurrency suite passed 388/388 in 38 seconds.
 
 flutter analyze
 # Exit 0; No issues found. Generated listener files from an earlier timed-out
@@ -130,7 +133,7 @@ dart format --output=none --set-exit-if-changed lib test integration_test test_s
   target. No manual UI result or live CLI session is claimed.
 - An earlier default-parallel rerun hit its outer watchdog and left three
   task-owned `flutter_tester` processes; those exact PIDs were inspected and
-  terminated. The final clean default-concurrency suite passed 386/386 in 33
+  terminated. The final clean default-concurrency suite passed 388/388 in 38
   seconds. CI remains the default-parallel gate.
 - Linux: equivalent executable fixtures and an `xvfb-run` CI invocation are
   committed; this Windows host cannot execute the Linux desktop target, so the
