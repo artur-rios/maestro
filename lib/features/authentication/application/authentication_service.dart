@@ -51,6 +51,7 @@ final class AuthenticationAuditEvent {
 
 abstract interface class AuditRepository {
   Future<void> append(AuthenticationAuditEvent event);
+  Future<void> deleteEvent(String eventId);
 }
 
 final class AuthenticationService {
@@ -116,9 +117,20 @@ final class AuthenticationService {
       if (!_ownsAuthenticationOperation(operationGeneration)) {
         return _staleOperation();
       }
-      await _verifiers.write(verifierKey, verifier);
+      try {
+        await _verifiers.write(verifierKey, verifier);
+      } catch (error) {
+        final rollbackFailure = await _rollbackVerifier(verifierKey);
+        if (rollbackFailure != null) {
+          return FailureResult<AuthenticatedSession>(rollbackFailure);
+        }
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
+        return FailureResult<AuthenticatedSession>(_storageFailure(error));
+      }
       if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
+        return _staleAfterCompensation(await _rollbackVerifier(verifierKey));
       }
 
       final user = LocalUser(
@@ -132,36 +144,54 @@ final class AuthenticationService {
       try {
         await _users.save(user);
       } catch (error) {
-        final rollbackFailure = await _rollbackVerifier(verifierKey);
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
-        return FailureResult<AuthenticatedSession>(
-          rollbackFailure ?? _storageFailure(error),
-        );
-      }
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-
-      try {
-        await _appendAudit(
-          actorId: user.id,
-          action: AuthenticationAuditAction.accountCreated,
-          target: user.id,
-          outcome: AuthenticationAuditOutcome.success,
-          details: '{"principal":"known"}',
-        );
-      } catch (error) {
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
-        final compensationFailure = await _compensateCreatedAccount(
+        final rollbackFailure = await _compensateCreatedAccount(
           user.id,
           verifierKey,
         );
-        return FailureResult<AuthenticatedSession>(
-          compensationFailure ?? _storageFailure(error),
+        if (rollbackFailure != null) {
+          return FailureResult<AuthenticatedSession>(rollbackFailure);
+        }
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
+        return FailureResult<AuthenticatedSession>(_storageFailure(error));
+      }
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleAfterCompensation(
+          await _compensateCreatedAccount(user.id, verifierKey),
+        );
+      }
+
+      final accountCreatedAudit = _newAuditEvent(
+        actorId: user.id,
+        action: AuthenticationAuditAction.accountCreated,
+        target: user.id,
+        outcome: AuthenticationAuditOutcome.success,
+        details: '{"principal":"known"}',
+      );
+      try {
+        await _audits.append(accountCreatedAudit);
+      } catch (error) {
+        final compensationFailure = await _compensateCreatedAccount(
+          user.id,
+          verifierKey,
+          auditEventId: accountCreatedAudit.id,
+        );
+        if (compensationFailure != null) {
+          return FailureResult<AuthenticatedSession>(compensationFailure);
+        }
+        if (!_ownsAuthenticationOperation(operationGeneration)) {
+          return _staleOperation();
+        }
+        return FailureResult<AuthenticatedSession>(_storageFailure(error));
+      }
+      if (!_ownsAuthenticationOperation(operationGeneration)) {
+        return _staleAfterCompensation(
+          await _compensateCreatedAccount(
+            user.id,
+            verifierKey,
+            auditEventId: accountCreatedAudit.id,
+          ),
         );
       }
       return _openSession(user.id, operationGeneration);
@@ -347,45 +377,78 @@ final class AuthenticationService {
     required String details,
   }) {
     return _audits.append(
-      AuthenticationAuditEvent(
-        id: _newId(),
+      _newAuditEvent(
         actorId: actorId,
         action: action,
         target: target,
         outcome: outcome,
-        occurredAt: _clock(),
         details: details,
       ),
     );
   }
 
+  AuthenticationAuditEvent _newAuditEvent({
+    required String actorId,
+    required AuthenticationAuditAction action,
+    required String target,
+    required AuthenticationAuditOutcome outcome,
+    required String details,
+  }) {
+    return AuthenticationAuditEvent(
+      id: _newId(),
+      actorId: actorId,
+      action: action,
+      target: target,
+      outcome: outcome,
+      occurredAt: _clock(),
+      details: details,
+    );
+  }
+
   Future<StorageFailure?> _compensateCreatedAccount(
     String userId,
-    String verifierKey,
-  ) async {
+    String verifierKey, {
+    String? auditEventId,
+  }) async {
+    StorageFailure? firstFailure;
+    if (auditEventId != null) {
+      try {
+        await _audits.deleteEvent(auditEventId);
+      } catch (_) {
+        firstFailure ??= _cleanupFailure('authentication.audit.cleanup.failed');
+      }
+    }
     try {
       await _users.delete(userId);
-    } catch (error) {
-      return _cleanupFailure('authentication.account.cleanup.failed', error);
+    } catch (_) {
+      firstFailure ??= _cleanupFailure('authentication.account.cleanup.failed');
     }
-    return _rollbackVerifier(verifierKey);
+    final verifierFailure = await _rollbackVerifier(verifierKey);
+    return firstFailure ?? verifierFailure;
   }
 
   Future<StorageFailure?> _rollbackVerifier(String verifierKey) async {
     try {
       await _verifiers.delete(verifierKey);
       return null;
-    } catch (error) {
-      return _cleanupFailure('authentication.verifier.cleanup.failed', error);
+    } catch (_) {
+      return _cleanupFailure('authentication.verifier.cleanup.failed');
     }
   }
 
-  StorageFailure _cleanupFailure(String code, Object cause) {
+  StorageFailure _cleanupFailure(String code) {
     return StorageFailure(
       code: code,
       message: 'Could not remove incomplete account credentials.',
-      cause: cause,
     );
+  }
+
+  FailureResult<AuthenticatedSession> _staleAfterCompensation(
+    StorageFailure? compensationFailure,
+  ) {
+    return compensationFailure == null
+        ? _staleOperation()
+        : FailureResult<AuthenticatedSession>(compensationFailure);
   }
 
   int _beginAuthenticationOperation() => ++_operationGeneration;

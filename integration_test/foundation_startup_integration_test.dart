@@ -86,6 +86,9 @@ final class _AuthenticationRepository
   Future<void> append(AuthenticationAuditEvent event) async {}
 
   @override
+  Future<void> deleteEvent(String eventId) async {}
+
+  @override
   Future<void> delete(String userId) async {}
 
   @override

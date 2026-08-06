@@ -133,10 +133,161 @@ void main() {
       );
 
       expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.verifier.cleanup.failed');
+      expect(failure.cause, isNull);
+      expect(failure.message, isNot(contains('password1')));
+      expect(failure.message, isNot(contains('maestro.auth.verifier.user-1')));
+    },
+  );
+
+  test(
+    'GivenVerifierWriteCompletesAfterSignOut_WhenCreating_ThenVerifierIsRolledBack',
+    () async {
+      final writeStarted = Completer<void>();
+      final releaseWrite = Completer<void>();
+      verifiers.afterWrite = (_, _) {
+        writeStarted.complete();
+        return releaseWrite.future;
+      };
+      final pending = service.createAccount('user@example.com', 'password1');
+      await writeStarted.future;
+
+      service.signOut();
+      releaseWrite.complete();
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
       expect(
         (result as FailureResult<AuthenticatedSession>).failure.code,
-        'authentication.verifier.cleanup.failed',
+        'authentication.operation.stale',
       );
+      expect(verifiers.values, isEmpty);
+      expect(
+        await users.findByEmail(NormalizedEmail.parse('user@example.com')),
+        isNull,
+      );
+      expect(audits.events, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenUserSaveCompletesAfterSignOut_WhenCreating_ThenUserAndVerifierAreRolledBack',
+    () async {
+      final saveStarted = Completer<void>();
+      final releaseSave = Completer<void>();
+      users.afterSave = (_) {
+        saveStarted.complete();
+        return releaseSave.future;
+      };
+      final pending = service.createAccount('user@example.com', 'password1');
+      await saveStarted.future;
+
+      service.signOut();
+      releaseSave.complete();
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+      expect(verifiers.values, isEmpty);
+      expect(
+        await users.findByEmail(NormalizedEmail.parse('user@example.com')),
+        isNull,
+      );
+      expect(audits.events, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenAuditAppendCompletesAfterSignOut_WhenCreating_ThenAllAccountStateIsRolledBack',
+    () async {
+      final appendStarted = Completer<void>();
+      final releaseAppend = Completer<void>();
+      audits.afterAppend = (_) {
+        appendStarted.complete();
+        return releaseAppend.future;
+      };
+      final pending = service.createAccount('user@example.com', 'password1');
+      await appendStarted.future;
+
+      service.signOut();
+      releaseAppend.complete();
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+      expect(audits.events, isEmpty);
+      expect(
+        await users.findByEmail(NormalizedEmail.parse('user@example.com')),
+        isNull,
+      );
+      expect(verifiers.values, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenStaleUserSaveAndUserCleanupFailure_WhenCreating_ThenVerifierCleanupStillRuns',
+    () async {
+      final saveStarted = Completer<void>();
+      final releaseSave = Completer<void>();
+      users.afterSave = (_) {
+        saveStarted.complete();
+        return releaseSave.future;
+      };
+      users.failWhenDeleting = true;
+      final pending = service.createAccount('user@example.com', 'password1');
+      await saveStarted.future;
+
+      service.signOut();
+      releaseSave.complete();
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.account.cleanup.failed');
+      expect(failure.cause, isNull);
+      expect(verifiers.values, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenStaleAuditAndAuditCleanupFailure_WhenCreating_ThenCredentialsStillRollBack',
+    () async {
+      final appendStarted = Completer<void>();
+      final releaseAppend = Completer<void>();
+      audits.afterAppend = (_) {
+        appendStarted.complete();
+        return releaseAppend.future;
+      };
+      audits.failWhenDeleting = true;
+      final pending = service.createAccount('user@example.com', 'password1');
+      await appendStarted.future;
+
+      service.signOut();
+      releaseAppend.complete();
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.audit.cleanup.failed');
+      expect(failure.cause, isNull);
+      expect(audits.events, hasLength(1));
+      expect(
+        await users.findByEmail(NormalizedEmail.parse('user@example.com')),
+        isNull,
+      );
+      expect(verifiers.values, isEmpty);
+      expect(service.currentSession, isNull);
     },
   );
 
@@ -409,12 +560,14 @@ final class _DeterministicIds {
 final class _FakeLocalUserRepository implements LocalUserRepository {
   String? existingEmail;
   bool failWhenSaving = false;
+  bool failWhenDeleting = false;
   final List<LocalUser> saved = <LocalUser>[];
   final List<String> deletedUserIds = <String>[];
   final List<String> lastAuthenticatedUserIds = <String>[];
   final Map<String, LocalUser> _usersByEmail = <String, LocalUser>{};
   LocalUser? _operatingSystemUser;
   Future<LocalUser?> Function(NormalizedEmail email)? findEmail;
+  Future<void> Function(LocalUser user)? afterSave;
 
   set operatingSystemUser(LocalUser? value) => _operatingSystemUser = value;
 
@@ -458,11 +611,20 @@ final class _FakeLocalUserRepository implements LocalUserRepository {
     if (user.authenticationMethod == AuthenticationMethod.operatingSystem) {
       _operatingSystemUser = user;
     }
+    if (afterSave case final callback?) {
+      await callback(user);
+    }
   }
 
   @override
   Future<void> delete(String userId) async {
     deletedUserIds.add(userId);
+    if (failWhenDeleting) {
+      throw const StorageFailure(
+        code: 'storage.user_cleanup',
+        message: 'Unavailable.',
+      );
+    }
     _usersByEmail.removeWhere((_, user) => user.id == userId);
   }
 
@@ -478,6 +640,7 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   final List<String> deleted = <String>[];
   final List<String> readKeys = <String>[];
   bool failWhenDeleting = false;
+  Future<void> Function(String key, String verifier)? afterWrite;
 
   @override
   Future<void> delete(String key) async {
@@ -501,6 +664,9 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   Future<void> write(String key, String verifier) async {
     writes[key] = verifier;
     values[key] = verifier;
+    if (afterWrite case final callback?) {
+      await callback(key, verifier);
+    }
   }
 }
 
@@ -517,6 +683,8 @@ final class _FakePasswordHasher implements PasswordHasher {
 final class _FakeAuditRepository implements AuditRepository {
   final List<AuthenticationAuditEvent> events = <AuthenticationAuditEvent>[];
   bool failWhenAppending = false;
+  bool failWhenDeleting = false;
+  Future<void> Function(AuthenticationAuditEvent event)? afterAppend;
 
   @override
   Future<void> append(AuthenticationAuditEvent event) async {
@@ -527,6 +695,20 @@ final class _FakeAuditRepository implements AuditRepository {
       );
     }
     events.add(event);
+    if (afterAppend case final callback?) {
+      await callback(event);
+    }
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    if (failWhenDeleting) {
+      throw const StorageFailure(
+        code: 'storage.audit_cleanup',
+        message: 'Unavailable.',
+      );
+    }
+    events.removeWhere((event) => event.id == eventId);
   }
 }
 

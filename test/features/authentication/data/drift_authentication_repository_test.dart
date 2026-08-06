@@ -200,6 +200,39 @@ void main() {
       );
     },
   );
+
+  test(
+    'GivenTwoAuditEvents_WhenOneIsDeleted_ThenOnlyThatEventIsRemoved',
+    () async {
+      await repository.append(
+        _audit(
+          id: 'audit-1',
+          occurredAt: DateTime.utc(2026, 8, 5, 14),
+          action: AuthenticationAuditAction.accountCreated,
+          outcome: AuthenticationAuditOutcome.success,
+          details: '{"principal":"known"}',
+        ),
+      );
+      await repository.append(
+        _audit(
+          id: 'audit-2',
+          occurredAt: DateTime.utc(2026, 8, 5, 15),
+          action: AuthenticationAuditAction.signIn,
+          outcome: AuthenticationAuditOutcome.success,
+          details: '{"principal":"known"}',
+        ),
+      );
+
+      await repository.deleteEvent('audit-1');
+
+      final rows = await database
+          .customSelect('SELECT id FROM audit_events ORDER BY id')
+          .get();
+      expect(rows.map((row) => row.read<String>('id')).toList(), <String>[
+        'audit-2',
+      ]);
+    },
+  );
 }
 
 LocalUser _user({

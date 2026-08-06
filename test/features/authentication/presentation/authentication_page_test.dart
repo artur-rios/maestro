@@ -378,6 +378,11 @@ final class _MemoryAuthenticationRepository
       events.add(event);
 
   @override
+  Future<void> deleteEvent(String eventId) async {
+    events.removeWhere((event) => event.id == eventId);
+  }
+
+  @override
   Future<void> delete(String userId) async {
     users.removeWhere((user) => user.id == userId);
   }

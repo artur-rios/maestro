@@ -83,6 +83,13 @@ final class DriftAuthenticationRepository
         );
   }
 
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    await (_database.delete(
+      _database.auditEvents,
+    )..where((table) => table.id.equals(eventId))).go();
+  }
+
   static auth.LocalUser _toDomain(db.LocalUser row) {
     return auth.LocalUser(
       id: row.id,
