@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart' as db;
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/domain/run_models.dart' as domain;
 
@@ -36,7 +37,10 @@ final class RunLogPage {
 }
 
 final class DriftRunRepository
-    implements ActiveProjectRunReader, RunStartRepository {
+    implements
+        ActiveProjectRunReader,
+        RunStartRepository,
+        RunExecutionRepository {
   const DriftRunRepository(this._database);
 
   final db.MaestroDatabase _database;
@@ -151,6 +155,25 @@ final class DriftRunRepository
   }
 
   @override
+  Future<RunExecutionAggregate?> load(String runId) async {
+    final aggregate = await findById(runId);
+    if (aggregate == null) return null;
+    return RunExecutionAggregate(
+      run: aggregate.run,
+      snapshot: aggregate.snapshot,
+      attempts: aggregate.attempts,
+    );
+  }
+
+  @override
+  Future<void> markRunning(String runId, DateTime at) => transitionRun(
+    runId: runId,
+    expectedStatus: domain.RunStatus.starting,
+    nextStatus: domain.RunStatus.running,
+    at: at,
+  );
+
+  @override
   Future<void> transitionRun({
     required String runId,
     required domain.RunStatus expectedStatus,
@@ -189,6 +212,7 @@ final class DriftRunRepository
     _requireOne(affected);
   }
 
+  @override
   Future<void> beginAttempt(domain.RunAttempt attempt) async {
     if (attempt.status != domain.AttemptStatus.starting &&
         attempt.status != domain.AttemptStatus.running) {
@@ -241,6 +265,7 @@ final class DriftRunRepository
     });
   }
 
+  @override
   Future<void> appendLog(domain.RunLogSegment segment) async {
     if (segment.sequence < 0 ||
         segment.originalByteLength < 0 ||
@@ -313,6 +338,7 @@ final class DriftRunRepository
     );
   }
 
+  @override
   Future<void> completeAttemptAndAdvance({
     required String attemptId,
     required DateTime completedAt,
@@ -391,6 +417,7 @@ final class DriftRunRepository
     });
   }
 
+  @override
   Future<void> failAttemptAndRun({
     required String attemptId,
     required DateTime completedAt,

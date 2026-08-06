@@ -8,12 +8,14 @@ final class ProcessStartRequest {
     this.arguments = const <String>[],
     this.workingDirectory,
     this.environment = const <String, String>{},
+    this.includeParentEnvironment = true,
   });
 
   final String executable;
   final List<String> arguments;
   final String? workingDirectory;
   final Map<String, String> environment;
+  final bool includeParentEnvironment;
 }
 
 abstract interface class NativeProcessTree {
@@ -34,7 +36,7 @@ Future<Process> startNativeProcess(ProcessStartRequest request) {
     request.arguments,
     workingDirectory: request.workingDirectory,
     environment: request.environment,
-    includeParentEnvironment: true,
+    includeParentEnvironment: request.includeParentEnvironment,
     runInShell: false,
   );
 }

@@ -1,4 +1,11 @@
-enum OwnedResourceKind { branch, worktree, update, process, unknown }
+enum OwnedResourceKind {
+  branch,
+  worktree,
+  update,
+  process,
+  resultFile,
+  unknown,
+}
 
 final class OwnedResourceRecord {
   const OwnedResourceRecord({
