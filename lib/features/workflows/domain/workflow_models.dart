@@ -1,25 +1,11 @@
+import 'package:maestro/core/agents/agent_cli_kind.dart';
+export 'package:maestro/core/agents/agent_cli_kind.dart';
+
 enum WorkflowKind { reusable, oneOff }
 
 enum WorkItemType { useCase, githubIssue, freeFormTask }
 
 enum WorkflowStepKind { plan, execute, review, custom }
-
-enum AgentCliKind {
-  claudeCode('claude-code'),
-  codex('codex'),
-  openCode('opencode');
-
-  const AgentCliKind(this.persistedValue);
-
-  final String persistedValue;
-
-  static AgentCliKind fromPersistedValue(String value) {
-    for (final kind in values) {
-      if (kind.persistedValue == value) return kind;
-    }
-    throw ArgumentError.value(value, 'value', 'Unsupported agent CLI kind.');
-  }
-}
 
 final class AgentAssignment {
   AgentAssignment({required this.kind, required String model})
