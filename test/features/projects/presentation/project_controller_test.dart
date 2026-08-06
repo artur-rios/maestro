@@ -262,6 +262,75 @@ void main() {
   );
 
   test(
+    'GivenLoadedDeletedProjects_WhenActiveProjectSelected_ThenDeletedProjectsArePreserved',
+    () async {
+      final harness = _Harness(
+        records: <ProjectRecord>[
+          _record(id: 'active', name: 'Active'),
+          _record(id: 'deleted', name: 'Deleted', deleted: true),
+        ],
+      );
+      final container = harness.container();
+      addTearDown(container.dispose);
+      final controller = container.read(projectControllerProvider.notifier);
+      await controller.load();
+
+      await controller.select('active');
+
+      expect(
+        container.read(projectControllerProvider).deletedProjects.single.id,
+        'deleted',
+      );
+    },
+  );
+
+  test(
+    'GivenLoadedDeletedProjects_WhenActiveProjectRefreshed_ThenDeletedProjectsArePreserved',
+    () async {
+      final harness = _Harness(
+        records: <ProjectRecord>[
+          _record(id: 'active', name: 'Active'),
+          _record(id: 'deleted', name: 'Deleted', deleted: true),
+        ],
+      );
+      final container = harness.container();
+      addTearDown(container.dispose);
+      final controller = container.read(projectControllerProvider.notifier);
+      await controller.load();
+      await controller.select('active');
+
+      await controller.refreshSelected();
+
+      expect(
+        container.read(projectControllerProvider).deletedProjects.single.id,
+        'deleted',
+      );
+    },
+  );
+
+  test(
+    'GivenLoadedDeletedProjects_WhenProjectRegistered_ThenDeletedProjectsArePreserved',
+    () async {
+      final harness = _Harness(
+        records: <ProjectRecord>[
+          _record(id: 'deleted', name: 'Deleted', deleted: true),
+        ],
+      );
+      final container = harness.container();
+      addTearDown(container.dispose);
+      final controller = container.read(projectControllerProvider.notifier);
+      await controller.load();
+
+      await controller.register('New project');
+
+      expect(
+        container.read(projectControllerProvider).deletedProjects.single.id,
+        'deleted',
+      );
+    },
+  );
+
+  test(
     'GivenSelectedMissingSource_WhenSoftDeleted_ThenMetadataMovesToDeletedAndSourceIsNotRead',
     () async {
       final harness = _Harness(
@@ -389,6 +458,43 @@ void main() {
       ]);
       expect(state.lifecycleFeedback?.isSuccess, isFalse);
       expect(harness.store.permanentDeleteCalls, 0);
+    },
+  );
+
+  test(
+    'GivenMoreThanVisibleActiveRuns_WhenPermanentDeletionBlocked_ThenTruncationIsPreserved',
+    () async {
+      final harness =
+          _Harness(
+              records: <ProjectRecord>[
+                _record(id: 'one', name: 'One', deleted: true),
+              ],
+            )
+            ..activeRuns.runs = List<ActiveProjectRun>.generate(
+              ActiveProjectRuns.maximumVisible + 1,
+              (index) => ActiveProjectRun(
+                id: 'run-$index',
+                label: 'Active run ${index + 1}',
+              ),
+            );
+      final container = harness.container();
+      addTearDown(container.dispose);
+      final controller = container.read(projectControllerProvider.notifier);
+      await controller.load();
+
+      await controller.permanentlyDelete(
+        'one',
+        PermanentDeletionDecision.confirmed,
+      );
+
+      final feedback = container
+          .read(projectControllerProvider)
+          .lifecycleFeedback;
+      expect(
+        feedback?.activeRunLabels,
+        hasLength(ActiveProjectRuns.maximumVisible),
+      );
+      expect(feedback?.hasAdditionalActiveRuns, isTrue);
     },
   );
 

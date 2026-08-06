@@ -239,9 +239,14 @@ void main() {
       expect(find.text('Deleted projects'), findsOneWidget);
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
       expect(
-        find.bySemanticsLabel('Project lifecycle success'),
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Project lifecycle success.*Project metadata moved to Deleted.*Source files were not changed',
+          ),
+        ),
         findsOneWidget,
       );
+      expect(find.bySemanticsLabel(RegExp(r'C:\\missing\\demo')), findsNothing);
       expect(
         find.textContaining('Source files were not changed'),
         findsOneWidget,
@@ -249,24 +254,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'GivenDeletedProject_WhenRestored_ThenItReturnsToActiveProjects',
-    (tester) async {
-      final repository = _Repository()..records.add(_deletedRecord());
-      await tester.pumpWidget(_app(repository: repository));
-      await tester.pumpAndSettle();
+  testWidgets('GivenDeletedProject_WhenRestored_ThenItReturnsToActiveProjects', (
+    tester,
+  ) async {
+    final repository = _Repository()..records.add(_deletedRecord());
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.bySemanticsLabel('Restore Demo'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Restore Demo'));
+    await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Restore Demo'), findsNothing);
-      expect(find.text('Demo'), findsWidgets);
-      expect(
-        find.bySemanticsLabel('Project lifecycle success'),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(find.bySemanticsLabel('Restore Demo'), findsNothing);
+    expect(find.text('Demo'), findsWidgets);
+    expect(
+      find.bySemanticsLabel(
+        RegExp(
+          r'^Project lifecycle success.*Project metadata restored.*Source files were not accessed',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'GivenPermanentDeletionDialog_WhenCancelled_ThenDeletedRecordRemains',
@@ -294,9 +302,15 @@ void main() {
     (tester) async {
       final repository = _Repository()..records.add(_deletedRecord());
       final activeRuns = _ActiveRuns()
-        ..runs = const <ActiveProjectRun>[
-          ActiveProjectRun(id: 'run-1', label: 'Release validation'),
-        ];
+        ..runs = List<ActiveProjectRun>.generate(
+          ActiveProjectRuns.maximumVisible + 1,
+          (index) => ActiveProjectRun(
+            id: 'run-$index',
+            label: index == 0
+                ? 'Release validation'
+                : 'Active run ${index + 1}',
+          ),
+        );
       await tester.pumpWidget(
         _app(repository: repository, activeRuns: activeRuns),
       );
@@ -307,8 +321,19 @@ void main() {
       await tester.tap(find.text('Permanently delete metadata'));
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Project lifecycle error'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Project lifecycle error.*Active runs still reference this project.*Finish or remove the listed runs.*Release validation.*Additional active runs are not shown',
+          ),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Release validation'), findsOneWidget);
+      expect(
+        find.text('Additional active runs are not shown.'),
+        findsOneWidget,
+      );
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );

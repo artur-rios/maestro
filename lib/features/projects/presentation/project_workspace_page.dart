@@ -453,32 +453,44 @@ final class _ProjectLifecycleMessage extends StatelessWidget {
     return Semantics(
       container: true,
       liveRegion: true,
-      excludeSemantics: true,
-      label: feedback.isSuccess
-          ? 'Project lifecycle success'
-          : 'Project lifecycle error',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: feedback.isSuccess
-              ? Theme.of(context).colorScheme.secondaryContainer
-              : Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(feedback.message),
-              if (feedback.remediation case final remediation?)
-                Text(remediation),
-              for (final label in feedback.activeRunLabels) Text(label),
-            ],
+      label: _announcement,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: feedback.isSuccess
+                ? Theme.of(context).colorScheme.secondaryContainer
+                : Theme.of(context).colorScheme.errorContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(feedback.message),
+                if (feedback.remediation case final remediation?)
+                  Text(remediation),
+                for (final label in feedback.activeRunLabels) Text(label),
+                if (feedback.hasAdditionalActiveRuns)
+                  const Text('Additional active runs are not shown.'),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  String get _announcement => <String>[
+    feedback.isSuccess
+        ? 'Project lifecycle success'
+        : 'Project lifecycle error',
+    feedback.message,
+    ?feedback.remediation,
+    ...feedback.activeRunLabels,
+    if (feedback.hasAdditionalActiveRuns)
+      'Additional active runs are not shown.',
+  ].join('. ');
 }
 
 final class _ProjectFailureMessage extends StatelessWidget {

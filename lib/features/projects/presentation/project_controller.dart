@@ -67,12 +67,14 @@ final class ProjectLifecycleFeedback {
     required this.message,
     this.remediation,
     this.activeRunLabels = const <String>[],
+    this.hasAdditionalActiveRuns = false,
   });
 
   final bool isSuccess;
   final String message;
   final String? remediation;
   final List<String> activeRunLabels;
+  final bool hasAdditionalActiveRuns;
 }
 
 final class ProjectWorkspaceState {
@@ -233,6 +235,7 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
         ]..sort(_compareSelections);
         state = ProjectWorkspaceState(
           projects: List.unmodifiable(projects),
+          deletedProjects: state.deletedProjects,
           selected: value,
           status: ProjectWorkspaceStatus.ready,
         );
@@ -388,6 +391,7 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
             activeRunLabels: List<String>.unmodifiable(
               activeRuns.values.map((run) => run.label),
             ),
+            hasAdditionalActiveRuns: activeRuns.hasMore,
           ),
         );
     }
@@ -420,6 +424,7 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
             .toList(growable: false);
         state = ProjectWorkspaceState(
           projects: projects,
+          deletedProjects: state.deletedProjects,
           selected: value,
           status: ProjectWorkspaceStatus.ready,
           failure: _availabilityFailure(value),

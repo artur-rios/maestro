@@ -228,7 +228,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Project lifecycle success'), findsNothing);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Project lifecycle success')),
+        findsNothing,
+      );
       expect(find.text(r'C:\projects\demo'), findsNothing);
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
