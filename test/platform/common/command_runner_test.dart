@@ -61,6 +61,52 @@ Future<void> main() async {
 
     expect(result.failureKind, CommandFailureKind.timeout);
   });
+
+  test(
+    'GivenExitedParentWithInheritedPipe_WhenRun_ThenEofWaitIsBounded',
+    () async {
+      final root = await Directory.systemTemp.createTemp('maestro-command-');
+      addTearDown(() => root.delete(recursive: true));
+      final child = File('${root.path}/child.dart');
+      await child.writeAsString('''
+Future<void> main() async => Future<void>.delayed(const Duration(seconds: 10));
+''');
+      final parent = File('${root.path}/parent.dart');
+      final pidFile = File('${root.path}/child.pid');
+      await parent.writeAsString('''
+import 'dart:io';
+Future<void> main(List<String> args) async {
+  final child = await Process.start(
+    args[0],
+    <String>[args[1]],
+    mode: ProcessStartMode.detachedWithStdio,
+  );
+  File(args[2]).writeAsStringSync(child.pid.toString());
+}
+''');
+
+      final watch = Stopwatch()..start();
+      final result = await const ProcessCommandRunner()
+          .run(
+            CommandRequest(
+              executable: _dartExecutable(),
+              arguments: <String>[
+                parent.path,
+                _dartExecutable(),
+                child.path,
+                pidFile.path,
+              ],
+              timeout: const Duration(seconds: 2),
+            ),
+          )
+          .timeout(const Duration(seconds: 3));
+
+      expect(result.succeeded, isTrue);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      final childPid = int.parse(await pidFile.readAsString());
+      expect(Process.killPid(childPid), isFalse);
+    },
+  );
 }
 
 String _dartExecutable() {

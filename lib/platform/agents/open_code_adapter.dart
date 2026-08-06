@@ -16,7 +16,10 @@ final class OpenCodeAdapter implements AgentCliAdapter {
   static final RegExp _ansi = RegExp(
     r'\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))',
   );
-  static final RegExp _provider = RegExp(r'^[a-z0-9][a-z0-9._-]{0,63}$');
+  static final RegExp _credentialRecord = RegExp(
+    r'^\s*●\s+([a-z0-9][a-z0-9._-]{0,63})\s+(?:api|oauth)\s*$',
+    caseSensitive: false,
+  );
   final AgentAdapterSupport _support;
 
   @override
@@ -69,29 +72,11 @@ final class OpenCodeAdapter implements AgentCliAdapter {
   }
 
   Set<String> _authenticatedProviders(String output) {
-    final clean = _stripAnsi(output).toLowerCase();
-    if (clean.contains('no providers')) return const <String>{};
+    final clean = _stripAnsi(output);
     final providers = <String>{};
     for (final line in clean.split(RegExp(r'\r?\n'))) {
-      for (final token in line.split(RegExp(r'[^a-z0-9._-]+'))) {
-        if (_provider.hasMatch(token) &&
-            !const <String>{
-              'credentials',
-              'credential',
-              'auth',
-              'authentication',
-              'oauth',
-              'provider',
-              'providers',
-              'logged',
-              'in',
-              'using',
-              'api',
-              'key',
-            }.contains(token)) {
-          providers.add(token);
-        }
-      }
+      final provider = _credentialRecord.firstMatch(line)?.group(1);
+      if (provider != null) providers.add(provider.toLowerCase());
     }
     return providers;
   }

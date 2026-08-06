@@ -12,7 +12,9 @@ final class AgentAdapterSupport {
   });
 
   static final RegExp _version = RegExp(r'\b(\d+\.\d+(?:\.\d+)?)\b');
-  static final RegExp _model = RegExp(r'^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$');
+  static final RegExp _model = RegExp(
+    r'^[A-Za-z0-9][A-Za-z0-9._:/-]*(?:\[1m\])?$',
+  );
 
   final AgentCliKind kind;
   final String command;
@@ -98,7 +100,10 @@ final class AgentAdapterSupport {
     final seen = <String>{};
     return <String>[
       for (final candidate in candidates.map((value) => value.trim()))
-        if (_model.hasMatch(candidate) && seen.add(candidate)) candidate,
+        if (candidate.length <= 200 &&
+            _model.hasMatch(candidate) &&
+            seen.add(candidate))
+          candidate,
     ];
   }
 }

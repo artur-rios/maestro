@@ -15,14 +15,18 @@ final class ClaudeCodeAdapter implements AgentCliAdapter {
         resolver: resolver ?? ExecutableResolver(),
       );
 
-  /// Exact stock-CLI aliases documented in the Claude Code CLI reference.
+  /// Exact aliases documented by the versioned model-configuration snapshot.
   static const List<String> documentedAliases = <String>[
+    'best',
     'sonnet',
     'opus',
     'haiku',
+    'sonnet[1m]',
+    'opus[1m]',
+    'opusplan',
   ];
   static const String aliasCatalogSource =
-      'Claude Code CLI reference model aliases (snapshot 2026-08-06)';
+      'https://code.claude.com/docs/en/model-config (snapshot 2026-08-06)';
   static const String aliasCatalogVersion = '2026-08-06';
 
   final AgentAdapterSupport _support;

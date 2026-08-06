@@ -39,8 +39,6 @@ final class WindowsJobProcessTree implements NativeProcessTree {
       }
 
       final process = await startNativeProcess(request);
-      unawaited(process.stdout.drain<void>());
-      unawaited(process.stderr.drain<void>());
       final processResult = OpenProcess(
         PROCESS_ACCESS_RIGHTS(PROCESS_SET_QUOTA | PROCESS_TERMINATE),
         false,
@@ -86,6 +84,15 @@ final class _WindowsOwnedProcess implements OwnedNativeProcess {
 
   @override
   Future<int> get exitCode => _process.exitCode;
+
+  @override
+  IOSink get stdin => _process.stdin;
+
+  @override
+  Stream<List<int>> get stdout => _process.stdout;
+
+  @override
+  Stream<List<int>> get stderr => _process.stderr;
 
   @override
   Future<ProcessTerminalState> terminateTree() async {

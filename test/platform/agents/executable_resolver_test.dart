@@ -64,4 +64,47 @@ void main() {
       expect(result, isA<InaccessibleExecutable>());
     },
   );
+
+  test(
+    'GivenStaleFirstPathEntry_WhenResolved_ThenSearchContinuesToValidCandidate',
+    () async {
+      final first = await Directory.systemTemp.createTemp('maestro-stale-');
+      final second = await Directory.systemTemp.createTemp('maestro-valid-');
+      addTearDown(() async {
+        await first.delete(recursive: true);
+        await second.delete(recursive: true);
+      });
+      await File(p.join(first.path, 'codex.exe')).writeAsString('stale');
+      final valid = File(p.join(second.path, 'codex.exe'));
+      await valid.writeAsString('valid');
+
+      final result = await ExecutableResolver(
+        path: '${first.path};${second.path}',
+        isWindows: true,
+        executableCheck: (file) async => file.path == valid.path,
+      ).resolve('codex');
+
+      expect((result as ResolvedExecutable).executable, valid.path);
+    },
+  );
+
+  test(
+    'GivenUnreadablePowerShellWrapper_WhenResolved_ThenItIsInaccessible',
+    () async {
+      final root = await Directory.systemTemp.createTemp('maestro-resolver-');
+      addTearDown(() => root.delete(recursive: true));
+      final wrapper = File(p.join(root.path, 'claude.ps1'));
+      final powershell = File(p.join(root.path, 'powershell.exe'));
+      await wrapper.writeAsString('unreadable');
+      await powershell.writeAsString('valid');
+
+      final result = await ExecutableResolver(
+        path: root.path,
+        isWindows: true,
+        executableCheck: (file) async => file.path == powershell.path,
+      ).resolve('claude');
+
+      expect(result, isA<InaccessibleExecutable>());
+    },
+  );
 }

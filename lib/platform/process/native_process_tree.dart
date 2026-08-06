@@ -23,6 +23,9 @@ abstract interface class NativeProcessTree {
 abstract interface class OwnedNativeProcess implements OwnedProcess {
   int get pid;
   Future<int> get exitCode;
+  IOSink get stdin;
+  Stream<List<int>> get stdout;
+  Stream<List<int>> get stderr;
 }
 
 Future<Process> startNativeProcess(ProcessStartRequest request) {

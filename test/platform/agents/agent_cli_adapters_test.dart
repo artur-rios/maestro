@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -102,6 +103,15 @@ void main() {
         expect(catalog.kind, AgentCliKind.claudeCode);
         expect(catalog.session, AgentCliSession.authenticated);
         expect(catalog.modelVerification, AgentModelVerification.cliOnly);
+        expect(catalog.models, <String>[
+          'best',
+          'sonnet',
+          'opus',
+          'haiku',
+          'sonnet[1m]',
+          'opus[1m]',
+          'opusplan',
+        ]);
         expect(catalog.models, ClaudeCodeAdapter.documentedAliases);
         expect(ClaudeCodeAdapter.aliasCatalogSource, isNotEmpty);
         expect(
@@ -153,7 +163,15 @@ void main() {
       () async {
         final runner = _QueueRunner(<CommandResult>[
           _ok('opencode version 1.1.2'),
-          _ok('\u001b[32mopenai\u001b[0m\n anthropic'),
+          _ok('''
+\u001b[32m┌  Credentials ~/.local/share/opencode/auth.json\u001b[0m
+│
+●  openai oauth
+│
+●  anthropic api
+│
+└  2 credentials
+'''),
           _ok(
             'openai/gpt-5\nanthropic/claude-sonnet-4-5\ngoogle/gemini\nopenai/bad\u0001\nopenai/${'x' * 300}',
           ),
@@ -193,7 +211,7 @@ void main() {
         final catalog = await OpenCodeAdapter(
           _QueueRunner(<CommandResult>[
             _ok('1.1.2'),
-            _ok('openai'),
+            _ok('●  openai oauth'),
             _failed('provider offline'),
           ]),
           resolver: _resolved(),
@@ -203,50 +221,106 @@ void main() {
         expect(catalog.guidance, isNot(contains('provider offline')));
       },
     );
+
+    test(
+      'GivenCredentialPathTokens_WhenParsed_ThenTheyCannotAuthorizeModels',
+      () async {
+        final catalog = await OpenCodeAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('1.1.2'),
+            _ok('''
+┌  Credentials /home/openai/.local/share/opencode/auth.json
+│
+└  0 credentials
+'''),
+          ]),
+          resolver: _resolved(),
+        ).discover();
+        expect(catalog.session, AgentCliSession.unauthenticated);
+        expect(catalog.models, isEmpty);
+      },
+    );
+
+    test(
+      'GivenOneCredentialRecord_WhenParsed_ThenOnlyExactProviderIdIsAuthorized',
+      () async {
+        final catalog = await OpenCodeAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('1.1.2'),
+            _ok('''
+┌  Credentials ~/.local/share/opencode/auth.json
+│
+●  openai oauth
+│
+└  1 credentials
+'''),
+            _ok('openai/gpt-5\nanthropic/claude-sonnet'),
+          ]),
+          resolver: _resolved(),
+        ).discover();
+        expect(catalog.models, <String>['openai/gpt-5']);
+      },
+    );
   });
 
   group('CodexAdapter', () {
     test(
-      'GivenOutOfOrderFrames_WhenDiscovered_ThenMatchingModelResponseWins',
+      'GivenPagedOutOfOrderFrames_WhenDiscovered_ThenHandshakePrecedesEveryPage',
       () async {
-        final frames = <Object>[
-          <String, Object>{
+        final sessionRunner = _ScriptedSessionRunner(<Object?>[
+          jsonEncode(<String, Object>{
             'method': 'account/updated',
             'params': <String, Object>{'email': 'person@example.com'},
-          },
-          <String, Object>{
+          }),
+          jsonEncode(<String, Object>{
             'id': 99,
             'result': <String, Object>{
               'data': <Object>[
                 <String, String>{'id': 'wrong'},
               ],
             },
-          },
-          <String, Object>{
+          }),
+          jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+          jsonEncode(<String, Object?>{
             'id': 2,
-            'result': <String, Object>{
+            'result': <String, Object?>{
               'data': <Object>[
                 <String, String>{'id': 'gpt-5.2-codex'},
-                <String, String>{'model': 'gpt-5.1-codex'},
                 <String, String>{'id': 'bad\u0001'},
               ],
+              'nextCursor': 'page-2',
             },
-          },
-          <String, Object>{'id': 1, 'result': <String, Object>{}},
-        ];
+          }),
+          jsonEncode(<String, Object?>{
+            'id': 3,
+            'result': <String, Object?>{
+              'data': <Object>[
+                <String, String>{'model': 'gpt-5.1-codex'},
+              ],
+              'nextCursor': null,
+            },
+          }),
+        ]);
         final catalog = await CodexAdapter(
           _QueueRunner(<CommandResult>[
             _ok('codex-cli 0.114.0'),
             _ok('Logged in using ChatGPT'),
-            _ok(frames.map(jsonEncode).join('\n')),
           ]),
           resolver: _resolved(),
+          sessionRunner: sessionRunner,
         ).discover();
         expect(catalog.session, AgentCliSession.authenticated);
         expect(catalog.models, <String>['gpt-5.2-codex', 'gpt-5.1-codex']);
-        final request =
-            (catalog.kind == AgentCliKind.codex); // keep analyzer explicit
-        expect(request, isTrue);
+        final writes = sessionRunner.session.writes
+            .map((line) => jsonDecode(line) as Map<String, Object?>)
+            .toList();
+        expect(writes[0]['method'], 'initialize');
+        expect(writes[1]['method'], 'initialized');
+        expect(writes[2]['method'], 'model/list');
+        expect(writes[2]['params'], <String, Object?>{});
+        expect(writes[3]['method'], 'model/list');
+        expect(writes[3]['params'], <String, Object?>{'cursor': 'page-2'});
+        expect(sessionRunner.session.closed, isTrue);
       },
     );
 
@@ -256,12 +330,13 @@ void main() {
         final catalog = await CodexAdapter(
           _QueueRunner(<CommandResult>[
             _ok('0.114.0'),
-            _ok('Logged in'),
-            _ok(
-              '{"id":2,"error":{"message":"token=secret person@example.com"}}',
-            ),
+            _ok('Logged in using ChatGPT'),
           ]),
           resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(<Object?>[
+            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+            '{"id":2,"error":{"message":"token=secret person@example.com"}}',
+          ]),
         ).discover();
         expect(catalog.session, AgentCliSession.unverified);
         expect(catalog.models, isEmpty);
@@ -275,18 +350,21 @@ void main() {
     test(
       'GivenMalformedOrMissingCodexFrame_WhenDiscovered_ThenFailureIsTyped',
       () async {
-        for (final output in <String>[
-          'partial {',
-          '{"id":1,"result":{}}',
-          '',
+        for (final frames in <List<Object?>>[
+          <Object?>['partial {', null],
+          <Object?>[
+            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+            null,
+          ],
+          <Object?>[null],
         ]) {
           final catalog = await CodexAdapter(
             _QueueRunner(<CommandResult>[
               _ok('0.114.0'),
-              _ok('Logged in'),
-              _ok(output),
+              _ok('Logged in using ChatGPT'),
             ]),
             resolver: _resolved(),
+            sessionRunner: _ScriptedSessionRunner(frames),
           ).discover();
           expect(catalog.session, AgentCliSession.unverified);
           expect(catalog.models, isEmpty);
@@ -316,13 +394,55 @@ void main() {
         final catalog = await CodexAdapter(
           _QueueRunner(<CommandResult>[
             _ok('0.114.0'),
-            _ok('Logged in'),
-            _timeout('secret'),
+            _ok('Logged in using ChatGPT'),
           ]),
           resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(<Object?>[
+            TimeoutException('secret'),
+          ]),
         ).discover();
         expect(catalog.session, AgentCliSession.unverified);
         expect(catalog.models, isEmpty);
+      },
+    );
+
+    test(
+      'GivenNegativeCodexLoginText_WhenDiscovered_ThenItIsNeverAuthenticated',
+      () async {
+        for (final status in <String>[
+          'Not logged in',
+          'You are not logged in',
+          'Logged out',
+        ]) {
+          final runner = _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            _ok(status),
+          ]);
+          final catalog = await CodexAdapter(
+            runner,
+            resolver: _resolved(),
+            sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+          ).discover();
+          expect(catalog.session, AgentCliSession.unauthenticated);
+          expect(runner.requests, hasLength(2));
+        }
+      },
+    );
+
+    test(
+      'GivenOversizedCodexFrame_WhenRead_ThenDiscoveryFailsClosed',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            _ok('Logged in using ChatGPT'),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(<Object?>[
+            const CommandFrameTooLargeException(),
+          ]),
+        ).discover();
+        expect(catalog.session, AgentCliSession.unverified);
       },
     );
   });
@@ -362,4 +482,40 @@ final class _QueueRunner implements CommandRunner {
     }
     return _results.removeAt(0);
   }
+}
+
+final class _ScriptedSessionRunner implements CommandSessionRunner {
+  _ScriptedSessionRunner(List<Object?> reads)
+    : session = _ScriptedSession(reads);
+
+  final _ScriptedSession session;
+
+  @override
+  Future<CommandSessionStart> start(CommandRequest request) async =>
+      CommandSessionStart.success(session);
+}
+
+final class _ScriptedSession implements CommandSession {
+  _ScriptedSession(List<Object?> reads) : _reads = List<Object?>.of(reads);
+
+  final List<Object?> _reads;
+  final List<String> writes = <String>[];
+  bool closed = false;
+
+  @override
+  Future<void> writeLine(String line) async => writes.add(line);
+
+  @override
+  Future<String?> readLine({
+    required Duration timeout,
+    required int maximumBytes,
+  }) async {
+    if (_reads.isEmpty) return null;
+    final value = _reads.removeAt(0);
+    if (value is Exception) throw value;
+    return value as String?;
+  }
+
+  @override
+  Future<void> close() async => closed = true;
 }

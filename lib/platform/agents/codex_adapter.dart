@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:maestro/core/agents/agent_cli_kind.dart';
@@ -7,16 +8,28 @@ import 'package:maestro/platform/agents/executable_resolver.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 
 final class CodexAdapter implements AgentCliAdapter {
-  CodexAdapter(CommandRunner runner, {ExecutableLocator? resolver})
-    : _support = AgentAdapterSupport(
-        kind: AgentCliKind.codex,
-        command: 'codex',
-        runner: runner,
-        resolver: resolver ?? ExecutableResolver(),
-      );
+  CodexAdapter(
+    CommandRunner runner, {
+    ExecutableLocator? resolver,
+    CommandSessionRunner? sessionRunner,
+  }) : _support = AgentAdapterSupport(
+         kind: AgentCliKind.codex,
+         command: 'codex',
+         runner: runner,
+         resolver: resolver ?? ExecutableResolver(),
+       ),
+       _sessionRunner = sessionRunner ?? const ProcessCommandSessionRunner();
 
-  static const int _modelListId = 2;
+  static const int _maximumPages = 16;
+  static const int _maximumModels = 1000;
+  static const int _maximumFrames = 512;
+  static const int _maximumFrameBytes = 64 * 1024;
+  static final RegExp _positiveLoginStatus = RegExp(
+    r'^Logged in using (?:ChatGPT|an API key)$',
+  );
+
   final AgentAdapterSupport _support;
+  final CommandSessionRunner _sessionRunner;
 
   @override
   AgentCliKind get kind => AgentCliKind.codex;
@@ -29,76 +42,112 @@ final class CodexAdapter implements AgentCliAdapter {
       'login',
       'status',
     ]);
+    final status = login.stdout.trim();
     if (!login.succeeded ||
         login.stdoutTruncated ||
         login.stderrTruncated ||
-        !login.stdout.toLowerCase().contains('logged in')) {
+        !_positiveLoginStatus.hasMatch(status)) {
       return _support.catalog(
         version: start.version,
         session: AgentCliSession.unauthenticated,
         guidance: 'Authenticate Codex in the project terminal, then refresh.',
       );
     }
-    final protocol = <Object>[
-      <String, Object>{
-        'id': 1,
-        'method': 'initialize',
-        'params': <String, Object>{
-          'clientInfo': <String, String>{'name': 'maestro', 'version': '0.1.0'},
-        },
-      },
-      <String, Object>{'method': 'initialized', 'params': <String, Object>{}},
-      <String, Object>{
-        'id': _modelListId,
-        'method': 'model/list',
-        'params': <String, Object>{},
-      },
-    ].map(jsonEncode).join('\n');
-    final response = await _support.run(start.executable!, const <String>[
-      'app-server',
-    ], stdin: utf8.encode('$protocol\n'));
-    if (!response.succeeded ||
-        response.stdoutTruncated ||
-        response.stderrTruncated) {
-      return _unverified(start.version!);
-    }
-    final models = _parseModels(response.stdout);
-    if (models.isEmpty) return _unverified(start.version!);
-    return _support.catalog(
-      version: start.version,
-      session: AgentCliSession.authenticated,
-      verification: AgentModelVerification.accountVerified,
-      models: models,
-      guidance:
-          'Codex models were verified through the local authenticated session.',
-    );
-  }
 
-  List<String> _parseModels(String output) {
-    for (final line in const LineSplitter().convert(output)) {
-      try {
-        final frame = jsonDecode(line);
-        if (frame is! Map<String, Object?> ||
-            frame['id'] != _modelListId ||
-            frame.containsKey('error')) {
-          continue;
-        }
-        final result = frame['result'];
-        if (result is! Map<String, Object?>) return const <String>[];
-        final values = result['data'] ?? result['models'];
-        if (values is! List<Object?>) return const <String>[];
-        return AgentAdapterSupport.normalizeModels(
-          values.map((value) {
-            if (value is! Map<String, Object?>) return '';
-            final id = value['id'] ?? value['model'];
-            return id is String ? id : '';
+    final launch = await _sessionRunner.start(
+      CommandRequest(
+        executable: start.executable!.executable,
+        arguments: <String>[...start.executable!.argumentPrefix, 'app-server'],
+        timeout: const Duration(seconds: 8),
+        maximumOutputBytes: _maximumFrameBytes,
+      ),
+    );
+    final session = launch.session;
+    if (session == null) return _unverified(start.version!);
+
+    try {
+      final deadline = DateTime.now().add(const Duration(seconds: 8));
+      final inbox = _JsonRpcInbox(session, deadline: deadline);
+      await session.writeLine(
+        jsonEncode(<String, Object>{
+          'id': 1,
+          'method': 'initialize',
+          'params': <String, Object>{
+            'clientInfo': <String, String>{
+              'name': 'maestro',
+              'version': '0.1.0',
+            },
+          },
+        }),
+      );
+      final initialize = await inbox.response(1);
+      _successfulResult(initialize);
+
+      await session.writeLine(
+        jsonEncode(<String, Object>{
+          'method': 'initialized',
+          'params': <String, Object>{},
+        }),
+      );
+
+      final candidates = <String>[];
+      String? cursor;
+      for (var page = 0; page < _maximumPages; page++) {
+        final id = page + 2;
+        await session.writeLine(
+          jsonEncode(<String, Object>{
+            'id': id,
+            'method': 'model/list',
+            'params': cursor == null
+                ? <String, Object>{}
+                : <String, Object>{'cursor': cursor},
           }),
         );
-      } on FormatException {
-        continue;
+        final result = _successfulResult(await inbox.response(id));
+        final data = result['data'];
+        if (data is! List<Object?>) throw const FormatException();
+        for (final value in data) {
+          if (value is! Map<String, Object?>) continue;
+          final identifier = value['id'] ?? value['model'];
+          if (identifier is String) candidates.add(identifier);
+          if (candidates.length > _maximumModels) {
+            throw const FormatException('Model limit exceeded.');
+          }
+        }
+        final next = result['nextCursor'];
+        if (next != null && next is! String) throw const FormatException();
+        cursor = next as String?;
+        if (cursor == null) break;
+        if (page == _maximumPages - 1) {
+          throw const FormatException('Page limit exceeded.');
+        }
+      }
+      final models = AgentAdapterSupport.normalizeModels(candidates);
+      if (models.isEmpty) return _unverified(start.version!);
+      return _support.catalog(
+        version: start.version,
+        session: AgentCliSession.authenticated,
+        verification: AgentModelVerification.accountVerified,
+        models: models,
+        guidance:
+            'Codex models were verified through the local authenticated session.',
+      );
+    } on Object {
+      return _unverified(start.version!);
+    } finally {
+      try {
+        await session.close();
+      } on Object {
+        // A failed child is already represented as unverified discovery.
       }
     }
-    return const <String>[];
+  }
+
+  Map<String, Object?> _successfulResult(Map<String, Object?> frame) {
+    if (frame.containsKey('error')) throw const FormatException();
+    final result = frame['result'];
+    if (result is! Map<String, Object?>) throw const FormatException();
+    return result;
   }
 
   AgentCliCatalog _unverified(String version) => _support.catalog(
@@ -106,4 +155,39 @@ final class CodexAdapter implements AgentCliAdapter {
     guidance:
         'Codex model discovery could not be verified. Retry from the project terminal.',
   );
+}
+
+final class _JsonRpcInbox {
+  _JsonRpcInbox(this._session, {required this.deadline});
+
+  final CommandSession _session;
+  final DateTime deadline;
+  final Map<int, Map<String, Object?>> _pending = <int, Map<String, Object?>>{};
+  var _frames = 0;
+
+  Future<Map<String, Object?>> response(int id) async {
+    final pending = _pending.remove(id);
+    if (pending != null) return pending;
+    while (_frames < CodexAdapter._maximumFrames) {
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        throw TimeoutException('Protocol timeout.');
+      }
+      final line = await _session.readLine(
+        timeout: remaining,
+        maximumBytes: CodexAdapter._maximumFrameBytes,
+      );
+      if (line == null) throw const FormatException('Unexpected EOF.');
+      _frames++;
+      final decoded = jsonDecode(line);
+      if (decoded is! Map<String, Object?>) throw const FormatException();
+      final frameId = decoded['id'];
+      if (frameId == null) continue;
+      if (frameId is! int) throw const FormatException();
+      if (frameId == id) return decoded;
+      if (_pending.length >= 32) throw const FormatException();
+      _pending[frameId] = decoded;
+    }
+    throw const FormatException('Frame limit exceeded.');
+  }
 }

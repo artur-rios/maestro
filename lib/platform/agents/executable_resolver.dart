@@ -42,46 +42,52 @@ final class ExecutableResolver implements ExecutableLocator {
     if (command.isEmpty || p.basename(command) != command) {
       return const InaccessibleExecutable();
     }
-    var unsupportedWrapperFound = false;
+    var inaccessibleCandidateFound = false;
     for (final directory in _path.split(_isWindows ? ';' : ':')) {
       if (directory.trim().isEmpty) continue;
       if (_isWindows) {
         for (final extension in const <String>['.exe', '.com']) {
           final candidate = File(p.join(directory, '$command$extension'));
           if (await candidate.exists()) {
-            return await _canExecute(candidate)
-                ? ResolvedExecutable(executable: candidate.absolute.path)
-                : const InaccessibleExecutable();
+            if (await _canExecute(candidate)) {
+              return ResolvedExecutable(executable: candidate.absolute.path);
+            }
+            inaccessibleCandidateFound = true;
           }
         }
         final wrapper = File(p.join(directory, '$command.ps1'));
         if (await wrapper.exists()) {
-          final host = await _findPowerShell();
-          if (host == null) return const InaccessibleExecutable();
-          return ResolvedExecutable(
-            executable: host.absolute.path,
-            argumentPrefix: <String>[
-              '-NoProfile',
-              '-NonInteractive',
-              '-File',
-              wrapper.absolute.path,
-            ],
-          );
+          if (await _canExecute(wrapper)) {
+            final host = await _findPowerShell();
+            if (host != null) {
+              return ResolvedExecutable(
+                executable: host.absolute.path,
+                argumentPrefix: <String>[
+                  '-NoProfile',
+                  '-NonInteractive',
+                  '-File',
+                  wrapper.absolute.path,
+                ],
+              );
+            }
+          }
+          inaccessibleCandidateFound = true;
         }
         if (await File(p.join(directory, '$command.cmd')).exists() ||
             await File(p.join(directory, '$command.bat')).exists()) {
-          unsupportedWrapperFound = true;
+          inaccessibleCandidateFound = true;
         }
       } else {
         final candidate = File(p.join(directory, command));
         if (await candidate.exists()) {
-          return await _canExecute(candidate)
-              ? ResolvedExecutable(executable: candidate.absolute.path)
-              : const InaccessibleExecutable();
+          if (await _canExecute(candidate)) {
+            return ResolvedExecutable(executable: candidate.absolute.path);
+          }
+          inaccessibleCandidateFound = true;
         }
       }
     }
-    return unsupportedWrapperFound
+    return inaccessibleCandidateFound
         ? const InaccessibleExecutable()
         : const MissingExecutable();
   }
