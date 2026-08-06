@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_app.dart';
+import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/database_factory.dart';
@@ -17,6 +18,9 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/data/file_selector_project_folder_picker.dart';
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
+import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
@@ -34,6 +38,8 @@ final class ProductionAppComposition {
     required this.projectRepository,
     required this.projectService,
     required this.projectLifecycleService,
+    required this.workflowRepository,
+    required this.workflowDesignService,
     required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
@@ -45,6 +51,8 @@ final class ProductionAppComposition {
   final DriftProjectRepository projectRepository;
   final ProjectService projectService;
   final ProjectLifecycleService projectLifecycleService;
+  final DriftWorkflowRepository workflowRepository;
+  final WorkflowDesignService workflowDesignService;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -56,6 +64,7 @@ final class ProductionAppComposition {
     projectService: projectService,
     projectLifecycleService: projectLifecycleService,
     projectFolderPicker: projectFolderPicker,
+    workflowDesignService: workflowDesignService,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
   );
@@ -114,12 +123,24 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
   );
+  final workflowRepository = DriftWorkflowRepository(database);
+  final workflowDesignService = WorkflowDesignService(
+    repository: workflowRepository,
+    projectReadiness: ProductionProjectExecutionReadiness(
+      repository: projectRepository,
+      projectService: projectService,
+    ),
+    clock: now,
+    newId: newId,
+  );
   return ProductionAppComposition._(
     database: database,
     authenticationService: authenticationService,
     projectRepository: projectRepository,
     projectService: projectService,
     projectLifecycleService: projectLifecycleService,
+    workflowRepository: workflowRepository,
+    workflowDesignService: workflowDesignService,
     activeProjectRuns: activeProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: ProductionFoundation(
@@ -129,6 +150,47 @@ Future<ProductionAppComposition> composeProductionApp({
     ),
     closeDatabase: closeDatabase,
   );
+}
+
+/// Reads current project readiness without making workflow data project-owned.
+///
+/// Record lifecycle is checked before folder validation so soft-deleted projects
+/// remain editable metadata while being unavailable for execution.
+final class ProductionProjectExecutionReadiness
+    implements ProjectExecutionReadinessReader {
+  const ProductionProjectExecutionReadiness({
+    required ProjectRepository repository,
+    required ProjectService projectService,
+  }) : // Public constructor names describe ports; stored fields stay private.
+       // ignore: prefer_initializing_formals
+       _repository = repository,
+       // ignore: prefer_initializing_formals
+       _projectService = projectService;
+
+  final ProjectRepository _repository;
+  final ProjectService _projectService;
+
+  @override
+  Future<ProjectExecutionAvailability> availability(String projectId) async {
+    final record = await _repository.findById(projectId);
+    if (record == null) return ProjectExecutionAvailability.missing;
+    if (record.isDeleted) return ProjectExecutionAvailability.softDeleted;
+    final selected = await _projectService.select(projectId);
+    return switch (selected) {
+      Success<ProjectSelection>(:final value) => switch (value.availability) {
+        ProjectAvailability.available => ProjectExecutionAvailability.available,
+        ProjectAvailability.missing => ProjectExecutionAvailability.missing,
+        ProjectAvailability.inaccessible ||
+        ProjectAvailability.transientFailure =>
+          ProjectExecutionAvailability.inaccessible,
+        ProjectAvailability.notGitWorkingTree ||
+        ProjectAvailability.notGitRoot =>
+          ProjectExecutionAvailability.notGitRoot,
+      },
+      FailureResult<ProjectSelection>() =>
+        ProjectExecutionAvailability.inaccessible,
+    };
+  }
 }
 
 /// Interim production adapter while workflows cannot yet create run records.

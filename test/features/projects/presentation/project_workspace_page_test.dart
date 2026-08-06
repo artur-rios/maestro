@@ -9,8 +9,26 @@ import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
+  testWidgets(
+    'GivenAuthenticatedWorkspace_WhenWorkflowsSelected_ThenSharedEditorIsShown',
+    (tester) async {
+      await tester.pumpWidget(_app(workflowService: _workflowService()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create workflow'), findsOneWidget);
+      expect(find.text('Plan'), findsOneWidget);
+      expect(find.text('Execute'), findsOneWidget);
+      await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+      await tester.pump();
+      expect(find.text('Review'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'GivenEmptyWorkspace_WhenShown_ThenFoundationDiagnosticsRemainMainContent',
     (tester) async {
@@ -19,6 +37,161 @@ void main() {
       expect(find.text('Projects'), findsOneWidget);
       expect(find.text('Foundation diagnostics'), findsOneWidget);
       expect(find.bySemanticsLabel('Register project'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenOpenAssociatedWorkflow_WhenProjectPermanentlyDeleted_ThenRemountReconcilesBeforeEditSave',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final projects = _Repository()..records.add(_deletedRecord());
+      final workflows = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition(projectIds: const ['one']))
+        ..validProjectIds.add('one');
+      final lifecycleStore = _LifecycleStore(projects)
+        ..onPermanentDelete = workflows.cascadeProject;
+      await tester.pumpWidget(
+        _app(
+          repository: projects,
+          lifecycleStore: lifecycleStore,
+          workflowService: _workflowService(workflows),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-one')),
+            )
+            .value,
+        isTrue,
+      );
+
+      await tester.tap(find.text('Projects'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('source folder and files remain untouched'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Associated workflow links are removed'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Permanently delete metadata'));
+      await tester.pumpAndSettle();
+      expect(lifecycleStore.sourceMutationCalls, 0);
+
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Release after deletion',
+      );
+      final save = find.widgetWithText(FilledButton, 'Save workflow');
+      await tester.ensureVisible(save);
+      await tester.tap(save.hitTestable());
+      await tester.pumpAndSettle();
+
+      expect(workflows.definitions.single.revision, 4);
+      expect(workflows.definitions.single.projectIds, isEmpty);
+      expect(workflows.definitions.single.name, 'Release after deletion');
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Workflow success')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenWorkflowEditedWhileProjectCatalogLoads_WhenCatalogBecomesReady_ThenRetainedAssociationsArePreserved',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final catalogGate = Completer<void>();
+      final projects = _Repository()
+        ..records.addAll([_record(), _deletedRecord(id: 'two')])
+        ..nextListRetained = catalogGate;
+      final workflows = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition(projectIds: const ['one', 'two']))
+        ..validProjectIds.addAll(['one', 'two']);
+      await tester.pumpWidget(
+        _app(
+          repository: projects,
+          workflowService: _workflowService(workflows),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Workflows'));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Edited while loading',
+      );
+
+      catalogGate.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-one')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-two')),
+            )
+            .value,
+        isTrue,
+      );
+      await tester.tap(find.text('Save workflow'));
+      await tester.pumpAndSettle();
+
+      expect(workflows.definitions.single.revision, 4);
+      expect(workflows.definitions.single.name, 'Edited while loading');
+      expect(
+        workflows.definitions.single.projectIds,
+        unorderedEquals(['one', 'two']),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenReadyEmptyProjectCatalog_WhenWorkflowSaved_ThenAbsentAssociationsAreRemoved',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final workflows = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition(projectIds: const ['gone']));
+      await tester.pumpWidget(
+        _app(workflowService: _workflowService(workflows)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Saved against empty catalog',
+      );
+      await tester.tap(find.text('Save workflow'));
+      await tester.pumpAndSettle();
+
+      expect(workflows.definitions.single.revision, 4);
+      expect(workflows.definitions.single.projectIds, isEmpty);
     },
   );
 
@@ -290,6 +463,10 @@ void main() {
         find.textContaining('source folder and files remain untouched'),
         findsOneWidget,
       );
+      expect(
+        find.textContaining('Associated workflow links are removed'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
@@ -352,13 +529,15 @@ Widget _app({
   _Validator? validator,
   _ActiveRuns? activeRuns,
   ProjectFolderPicker picker = const _Picker(null),
+  WorkflowDesignService? workflowService,
+  _LifecycleStore? lifecycleStore,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
   final runs = activeRuns ?? _ActiveRuns();
   final lifecycle = ProjectLifecycleService(
     repository: repo,
-    store: _LifecycleStore(repo),
+    store: lifecycleStore ?? _LifecycleStore(repo),
     activeRuns: runs,
     clock: () => DateTime.utc(2026, 8, 6, 12),
     newId: () => 'audit-id',
@@ -379,10 +558,61 @@ Widget _app({
       home: ProjectWorkspacePage(
         actorId: 'actor-1',
         lifecycleService: lifecycle,
+        workflowService: workflowService,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
     ),
   );
+}
+
+WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
+    WorkflowDesignService(
+      repository: repository ?? _WorkflowRepository(),
+      projectReadiness: const _WorkflowReadiness(),
+      clock: () => DateTime.utc(2026, 8, 6),
+      newId: () => 'workflow-id',
+    );
+
+final class _WorkflowRepository implements WorkflowRepository {
+  final definitions = <WorkflowDefinition>[];
+  final validProjectIds = <String>{};
+  @override
+  Future<WorkflowDefinition?> findById(String id) async =>
+      definitions.where((value) => value.id == id).firstOrNull;
+  @override
+  Future<List<WorkflowDefinition>> list() async => List.of(definitions);
+  @override
+  Future<WorkflowRepositorySaveResult> save({
+    required WorkflowDefinition definition,
+    required int? expectedRevision,
+  }) async {
+    if (definition.projectIds.any((id) => !validProjectIds.contains(id))) {
+      throw StateError('Foreign key constraint failed.');
+    }
+    definitions
+      ..removeWhere((value) => value.id == definition.id)
+      ..add(definition);
+    return WorkflowRepositorySaved(definition);
+  }
+
+  void cascadeProject(String projectId) {
+    validProjectIds.remove(projectId);
+    for (var index = 0; index < definitions.length; index++) {
+      final value = definitions[index];
+      definitions[index] = _workflowDefinition(
+        revision: value.revision,
+        name: value.name,
+        projectIds: value.projectIds.where((id) => id != projectId).toList(),
+      );
+    }
+  }
+}
+
+final class _WorkflowReadiness implements ProjectExecutionReadinessReader {
+  const _WorkflowReadiness();
+  @override
+  Future<ProjectExecutionAvailability> availability(String projectId) async =>
+      ProjectExecutionAvailability.available;
 }
 
 Widget _host({
@@ -458,6 +688,8 @@ final class _ActiveRuns implements ActiveProjectRunReader {
 final class _LifecycleStore implements ProjectLifecycleStore {
   _LifecycleStore(this.repository);
   final _Repository repository;
+  void Function(String projectId)? onPermanentDelete;
+  int sourceMutationCalls = 0;
 
   @override
   Future<void> softDelete({
@@ -477,8 +709,10 @@ final class _LifecycleStore implements ProjectLifecycleStore {
   Future<void> permanentlyDelete({
     required ProjectRecord project,
     required ProjectLifecycleAuditEvent audit,
-  }) async =>
-      repository.records.removeWhere((record) => record.id == project.id);
+  }) async {
+    repository.records.removeWhere((record) => record.id == project.id);
+    onPermanentDelete?.call(project.id);
+  }
 }
 
 final class _Repository implements ProjectRepository {
@@ -486,6 +720,7 @@ final class _Repository implements ProjectRepository {
   Completer<Result<void>>? nextSave;
   Completer<void>? saveStarted;
   Completer<ProjectRecord?>? nextFind;
+  Completer<void>? nextListRetained;
 
   @override
   Future<ProjectRecord?> findById(String id) async {
@@ -501,7 +736,15 @@ final class _Repository implements ProjectRepository {
   Future<ProjectRecord?> findByNormalizedName(String name) async =>
       records.where((r) => r.normalizedName == name).firstOrNull;
   @override
-  Future<List<ProjectRecord>> listRetained() async => List.of(records);
+  Future<List<ProjectRecord>> listRetained() async {
+    final pending = nextListRetained;
+    if (pending != null) {
+      nextListRetained = null;
+      await pending.future;
+    }
+    return List.of(records);
+  }
+
   @override
   Future<Result<void>> save(ProjectRecord record) async {
     saveStarted?.complete();
@@ -529,12 +772,42 @@ ProjectRecord _record() => ProjectRecord(
   deletedAt: null,
 );
 
-ProjectRecord _deletedRecord() => ProjectRecord(
-  id: 'one',
+ProjectRecord _deletedRecord({String id = 'one'}) => ProjectRecord(
+  id: id,
   name: 'Demo',
-  normalizedName: 'demo',
+  normalizedName: 'demo-$id',
   folderPath: r'C:\missing\demo',
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6, 11),
   deletedAt: DateTime.utc(2026, 8, 6, 11),
+);
+
+WorkflowDefinition _workflowDefinition({
+  int revision = 3,
+  String? name = 'Release',
+  List<String> projectIds = const [],
+}) => WorkflowDefinition(
+  id: 'workflow-id',
+  revision: revision,
+  kind: WorkflowKind.reusable,
+  name: name,
+  unitType: WorkItemType.useCase,
+  supervisedDelivery: true,
+  createdAt: DateTime.utc(2026, 8, 1),
+  updatedAt: DateTime.utc(2026, 8, 6),
+  steps: const [
+    WorkflowStep(
+      id: 'plan',
+      position: 0,
+      kind: WorkflowStepKind.plan,
+      name: 'Plan',
+    ),
+    WorkflowStep(
+      id: 'execute',
+      position: 1,
+      kind: WorkflowStepKind.execute,
+      name: 'Execute',
+    ),
+  ],
+  projectIds: projectIds,
 );

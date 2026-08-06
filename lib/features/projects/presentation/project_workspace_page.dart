@@ -2,18 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
+import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
 
 final class ProjectWorkspacePage extends StatelessWidget {
   const ProjectWorkspacePage({
     required this.actorId,
     required this.lifecycleService,
     required this.emptyContent,
+    this.workflowService,
     super.key,
   });
 
   final String actorId;
   final ProjectLifecycleService lifecycleService;
   final Widget emptyContent;
+  final WorkflowDesignService? workflowService;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +27,10 @@ final class ProjectWorkspacePage extends StatelessWidget {
         projectControllerProvider.overrideWith(ProjectController.new),
         projectLifecycleActorIdProvider.overrideWithValue(actorId),
         projectLifecycleServiceProvider.overrideWithValue(lifecycleService),
+        if (workflowService != null)
+          workflowDesignServiceProvider.overrideWithValue(workflowService!),
+        if (workflowService != null)
+          workflowControllerProvider.overrideWith(WorkflowController.new),
       ],
       child: _ProjectWorkspaceView(emptyContent: emptyContent),
     );
@@ -40,6 +49,8 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
 
 final class _ProjectWorkspacePageState
     extends ConsumerState<_ProjectWorkspaceView> {
+  var _destination = 0;
+
   @override
   void initState() {
     super.initState();
@@ -57,17 +68,69 @@ final class _ProjectWorkspacePageState
       state: state,
       emptyContent: widget.emptyContent,
     );
+    final projectsBody = Row(
+      children: <Widget>[
+        if (!narrow)
+          SizedBox(
+            width: 280,
+            child: Material(elevation: 1, child: projectPanel),
+          ),
+        Expanded(child: content),
+      ],
+    );
     return Scaffold(
-      appBar: narrow ? AppBar(title: const Text('Projects')) : null,
-      drawer: narrow ? Drawer(child: SafeArea(child: projectPanel)) : null,
+      appBar: narrow
+          ? AppBar(title: Text(_destination == 0 ? 'Projects' : 'Workflows'))
+          : null,
+      drawer: narrow && _destination == 0
+          ? Drawer(child: SafeArea(child: projectPanel))
+          : null,
+      bottomNavigationBar: narrow
+          ? NavigationBar(
+              selectedIndex: _destination,
+              onDestinationSelected: (value) =>
+                  setState(() => _destination = value),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.folder_outlined),
+                  label: 'Projects',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.account_tree_outlined),
+                  label: 'Workflows',
+                ),
+              ],
+            )
+          : null,
       body: Row(
-        children: <Widget>[
+        children: [
           if (!narrow)
-            SizedBox(
-              width: 280,
-              child: Material(elevation: 1, child: projectPanel),
+            NavigationRail(
+              selectedIndex: _destination,
+              labelType: NavigationRailLabelType.all,
+              onDestinationSelected: (value) =>
+                  setState(() => _destination = value),
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.folder_outlined),
+                  label: Text('Projects'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.account_tree_outlined),
+                  label: Text('Workflows'),
+                ),
+              ],
             ),
-          Expanded(child: content),
+          Expanded(
+            child: _destination == 0
+                ? projectsBody
+                : WorkflowEditorPage(
+                    projects: state.projects,
+                    deletedProjects: state.deletedProjects,
+                    projectCatalogReady:
+                        state.status == ProjectWorkspaceStatus.ready,
+                  ),
+          ),
         ],
       ),
     );
@@ -90,7 +153,7 @@ final class _ProjectPanel extends ConsumerWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  'Projects',
+                  'Registered projects',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -209,7 +272,8 @@ final class _ProjectPanel extends ConsumerWidget {
         title: Text('Permanently delete $projectName metadata?'),
         content: const Text(
           'Affected Maestro records: the project metadata and its lifecycle '
-          'audit relationship. The source folder and files remain untouched. '
+          'audit relationship. Associated workflow links are removed, while '
+          'the workflows remain editable. The source folder and files remain untouched. '
           'This cannot be undone.',
         ),
         actions: <Widget>[
