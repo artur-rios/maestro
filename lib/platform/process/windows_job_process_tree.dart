@@ -66,7 +66,13 @@ final class WindowsJobProcessTree implements NativeProcessTree {
       } finally {
         processHandle.close();
       }
-      final owned = _WindowsOwnedProcess(process, job);
+      final owned = _WindowsOwnedProcess(
+        process,
+        WindowsJobTermination(
+          _NativeWindowsJobTerminationApi(job),
+          process.exitCode,
+        ),
+      );
       await launch.release();
       return owned;
     } catch (_) {
@@ -183,11 +189,10 @@ exit $LASTEXITCODE
 }
 
 final class _WindowsOwnedProcess implements OwnedNativeProcess {
-  _WindowsOwnedProcess(this._process, this._job);
+  _WindowsOwnedProcess(this._process, this._termination);
 
   final Process _process;
-  final HANDLE _job;
-  bool _jobClosed = false;
+  final WindowsJobTermination _termination;
 
   @override
   int get pid => _process.pid;
@@ -205,24 +210,53 @@ final class _WindowsOwnedProcess implements OwnedNativeProcess {
   Stream<List<int>> get stderr => _process.stderr;
 
   @override
-  Future<ProcessTerminalState> terminateTree() async {
-    final result = TerminateJobObject(_job, 1);
-    if (!result.value) {
-      return ProcessTerminalState.terminationFailed;
-    }
+  Future<ProcessTerminalState> terminateTree() => _termination.terminateTree();
+}
+
+abstract interface class WindowsJobTerminationApi {
+  bool terminate();
+  Future<bool> waitForEmpty(Duration timeout);
+  void close();
+}
+
+final class WindowsJobTermination {
+  WindowsJobTermination(this._api, this._exitCode);
+
+  final WindowsJobTerminationApi _api;
+  final Future<int> _exitCode;
+  Future<ProcessTerminalState>? _result;
+
+  Future<ProcessTerminalState> terminateTree() => _result ??= _terminateTree();
+
+  Future<ProcessTerminalState> _terminateTree() async {
     try {
-      await _process.exitCode.timeout(const Duration(seconds: 2));
-      return await _waitForJobExit(const Duration(seconds: 3))
+      if (!_api.terminate()) {
+        return ProcessTerminalState.terminationFailed;
+      }
+      await _exitCode.timeout(const Duration(seconds: 2));
+      return await _api.waitForEmpty(const Duration(seconds: 3))
           ? ProcessTerminalState.cancelled
           : ProcessTerminalState.terminationFailed;
     } on TimeoutException {
       return ProcessTerminalState.terminationFailed;
     } finally {
-      _closeJob();
+      _api.close();
     }
   }
+}
 
-  Future<bool> _waitForJobExit(Duration timeout) async {
+final class _NativeWindowsJobTerminationApi
+    implements WindowsJobTerminationApi {
+  _NativeWindowsJobTerminationApi(this._job);
+
+  final HANDLE _job;
+  var _closed = false;
+
+  @override
+  bool terminate() => TerminateJobObject(_job, 1).value;
+
+  @override
+  Future<bool> waitForEmpty(Duration timeout) async {
     final information = calloc<_JobObjectBasicAccountingInformation>();
     try {
       final deadline = DateTime.now().add(timeout);
@@ -244,9 +278,10 @@ final class _WindowsOwnedProcess implements OwnedNativeProcess {
     }
   }
 
-  void _closeJob() {
-    if (!_jobClosed) {
-      _jobClosed = true;
+  @override
+  void close() {
+    if (!_closed) {
+      _closed = true;
       _job.close();
     }
   }

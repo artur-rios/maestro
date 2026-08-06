@@ -25,10 +25,13 @@ final class AttemptResultProtocol {
   AttemptResultProtocol({
     String Function()? quarantineToken,
     this._afterQuarantine,
-  }) : _quarantineToken = quarantineToken ?? _randomToken;
+    Future<void> Function(String path)? deleteQuarantine,
+  }) : _quarantineToken = quarantineToken ?? _randomToken,
+       _deleteQuarantine = deleteQuarantine ?? _deleteQuarantinePath;
 
   final String Function() _quarantineToken;
   final Future<void> Function(String path)? _afterQuarantine;
+  final Future<void> Function(String path) _deleteQuarantine;
   static const int maximumBytes = 256 * 1024;
   static const Set<String> _fields = <String>{
     'schema',
@@ -43,6 +46,9 @@ final class AttemptResultProtocol {
     required String resultRoot,
     required String attemptId,
     required String nonce,
+    Future<void> Function(String root)? beforeQuarantine,
+    Future<void> Function(String root)? afterQuarantineMove,
+    Future<void> Function(String root)? afterQuarantineCleanup,
   }) async {
     final root = p.normalize(p.absolute(resultRoot));
     final candidate = p.normalize(p.absolute(path));
@@ -63,9 +69,11 @@ final class AttemptResultProtocol {
         return const AttemptResultRejected('result.not_regular');
       }
       quarantineRoot = p.join(root, '.quarantine-${_quarantineToken()}');
+      await beforeQuarantine?.call(quarantineRoot);
       await Directory(quarantineRoot).create(recursive: true);
       quarantined = p.join(quarantineRoot, 'result');
       await File(candidate).rename(quarantined);
+      await afterQuarantineMove?.call(quarantineRoot);
       await _afterQuarantine?.call(quarantined);
       final type = await FileSystemEntity.type(quarantined, followLinks: false);
       if (type != FileSystemEntityType.file) {
@@ -127,29 +135,34 @@ final class AttemptResultProtocol {
     } on FileSystemException {
       return const AttemptResultRejected('result.missing');
     } finally {
+      var cleanupSucceeded = false;
       try {
         final path = quarantined;
         if (path != null) {
-          final type = await FileSystemEntity.type(path, followLinks: false);
-          if (type == FileSystemEntityType.link) {
-            await Link(path).delete();
-          } else if (type == FileSystemEntityType.file) {
-            await File(path).delete();
-          }
+          await _deleteQuarantine(path);
+          cleanupSucceeded = true;
         }
       } on FileSystemException {
-        // Missing and hostile file replacements remain typed read failures.
+        // Durable quarantine ownership remains pending for reconciliation.
       }
-      try {
-        final directory = quarantineRoot;
-        if (directory != null && await Directory(directory).exists()) {
-          await Directory(directory).delete();
-        }
-      } on FileSystemException {
-        // Reconciliation can remove an unexpectedly non-empty quarantine.
+      final directory = quarantineRoot;
+      if (cleanupSucceeded && directory != null) {
+        await afterQuarantineCleanup?.call(directory);
       }
     }
   }
+}
+
+Future<void> _deleteQuarantinePath(String path) async {
+  final type = await FileSystemEntity.type(path, followLinks: false);
+  if (type == FileSystemEntityType.link) {
+    await Link(path).delete();
+  } else if (type == FileSystemEntityType.file) {
+    await File(path).delete();
+  } else if (type != FileSystemEntityType.notFound) {
+    throw FileSystemException('Unsafe quarantine entity type.', path);
+  }
+  await Directory(p.dirname(path)).delete();
 }
 
 String _randomToken() {

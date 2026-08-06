@@ -25,6 +25,8 @@ final class OwnedAttemptResultFiles implements AttemptResultFiles {
   final String Function() _newResourceId;
   final AttemptResultProtocol _protocol;
   final Map<String, String> _resourceIds = <String, String>{};
+  final Map<String, String> _resourceRunIds = <String, String>{};
+  final Map<String, String> _quarantineResourceIds = <String, String>{};
 
   @override
   Future<String> prepare({
@@ -46,6 +48,7 @@ final class OwnedAttemptResultFiles implements AttemptResultFiles {
     );
     await Directory(_resultRoot).create(recursive: true);
     _resourceIds[path] = id;
+    _resourceRunIds[path] = runId;
     await _ownership.markActive(id);
     return path;
   }
@@ -55,12 +58,49 @@ final class OwnedAttemptResultFiles implements AttemptResultFiles {
     required String path,
     required String attemptId,
     required String nonce,
-  }) => _protocol.consume(
-    path: path,
-    resultRoot: _resultRoot,
-    attemptId: attemptId,
-    nonce: nonce,
-  );
+  }) async {
+    final originalId = _resourceIds[path];
+    final runId = _resourceRunIds[path];
+    if (originalId == null || runId == null) {
+      throw StateError('Result ownership is missing.');
+    }
+    return _protocol.consume(
+      path: path,
+      resultRoot: _resultRoot,
+      attemptId: attemptId,
+      nonce: nonce,
+      beforeQuarantine: (root) async {
+        final quarantineId = _newResourceId();
+        await _ownership.registerPending(
+          OwnedResourceRecord(
+            id: quarantineId,
+            kind: OwnedResourceKind.resultFile,
+            path: root,
+            runId: runId,
+          ),
+        );
+        _quarantineResourceIds[root] = quarantineId;
+      },
+      afterQuarantineMove: (root) async {
+        final quarantineId = _quarantineResourceIds[root];
+        if (quarantineId == null) {
+          throw StateError('Quarantine ownership is missing.');
+        }
+        await _ownership.markActive(quarantineId);
+        await _ownership.markResolved(originalId);
+        _resourceIds.remove(path);
+        _resourceRunIds.remove(path);
+      },
+      afterQuarantineCleanup: (root) async {
+        final quarantineId = _quarantineResourceIds[root];
+        if (quarantineId == null) {
+          throw StateError('Quarantine ownership is missing.');
+        }
+        await _ownership.markResolved(quarantineId);
+        _quarantineResourceIds.remove(root);
+      },
+    );
+  }
 
   @override
   Future<void> resolve(String path) async {
@@ -77,7 +117,11 @@ final class OwnedAttemptResultFiles implements AttemptResultFiles {
       // Reconciliation retains the durable record if resolution cannot finish.
       return;
     }
-    final id = _resourceIds.remove(path);
-    if (id != null) await _ownership.markResolved(id);
+    final id = _resourceIds[path];
+    if (id != null) {
+      await _ownership.markResolved(id);
+      _resourceIds.remove(path);
+      _resourceRunIds.remove(path);
+    }
   }
 }
