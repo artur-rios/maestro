@@ -134,6 +134,68 @@ final class AgentConfigurationService {
   WorkflowDraft clearAssignment(WorkflowDraft draft, String rowKey) =>
       draft.clearStepAssignment(rowKey);
 
+  AgentRowState evaluatePendingCli({
+    required String rowKey,
+    required AgentCliKind kind,
+    required AgentCatalogSnapshot catalog,
+  }) {
+    final value = catalog.forKind(kind);
+    switch (value.installation) {
+      case AgentCliInstallation.missing:
+        return AgentRowState(
+          rowKey: rowKey,
+          kind: kind,
+          code: AgentRowStateCode.cliMissing,
+          guidance: 'Install this agent CLI, then refresh its model catalog.',
+        );
+      case AgentCliInstallation.inaccessible:
+        return AgentRowState(
+          rowKey: rowKey,
+          kind: kind,
+          code: AgentRowStateCode.cliInaccessible,
+          guidance: 'Make this agent CLI accessible on PATH, then refresh.',
+        );
+      case AgentCliInstallation.transientFailure:
+        return AgentRowState(
+          rowKey: rowKey,
+          kind: kind,
+          code: AgentRowStateCode.catalogUnverified,
+          guidance: 'This agent CLI could not be verified. Refresh and retry.',
+        );
+      case AgentCliInstallation.available:
+        break;
+    }
+    if (value.session == AgentCliSession.unauthenticated) {
+      return AgentRowState(
+        rowKey: rowKey,
+        kind: kind,
+        code: AgentRowStateCode.unauthenticated,
+        guidance:
+            'Authenticate with this CLI in the project terminal, then refresh.',
+      );
+    }
+    final usableVerification =
+        value.modelVerification == AgentModelVerification.accountVerified ||
+        (kind == AgentCliKind.claudeCode &&
+            value.modelVerification == AgentModelVerification.cliOnly);
+    if (value.session != AgentCliSession.authenticated ||
+        !usableVerification ||
+        value.models.isEmpty) {
+      return AgentRowState(
+        rowKey: rowKey,
+        kind: kind,
+        code: AgentRowStateCode.catalogUnverified,
+        guidance: 'This agent CLI could not be verified. Refresh and retry.',
+      );
+    }
+    return AgentRowState(
+      rowKey: rowKey,
+      kind: kind,
+      code: AgentRowStateCode.unassigned,
+      guidance: 'Select a model for this agent CLI.',
+    );
+  }
+
   Future<AgentConfigurationResult> completeConfiguration(
     WorkflowDraft draft,
   ) async {

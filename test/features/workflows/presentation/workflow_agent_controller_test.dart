@@ -187,6 +187,254 @@ void main() {
       );
     },
   );
+
+  test(
+    'GivenCatalogRefresh_WhenStructurallyInvalidSaveRequested_ThenRefreshStillCompletes',
+    () async {
+      final pending = Completer<AgentCliCatalog>();
+      final fixture = _Fixture(
+        codex: _Adapter(AgentCliKind.codex, pending.future),
+      );
+      addTearDown(fixture.dispose);
+
+      final refresh = fixture.controller.refreshAgents();
+      await Future<void>.delayed(Duration.zero);
+      await fixture.controller.save();
+      expect(fixture.state.catalogBusy, isTrue);
+      expect(fixture.repository.saveCalls, 0);
+
+      pending.complete(_catalog(AgentCliKind.codex));
+      await refresh;
+      expect(fixture.state.catalogBusy, isFalse);
+    },
+  );
+
+  test(
+    'GivenCatalogRefresh_WhenValidSaveRequested_ThenRefreshStillCompletesWithoutMutation',
+    () async {
+      final pending = Completer<AgentCliCatalog>();
+      final fixture = _Fixture(
+        codex: _Adapter(AgentCliKind.codex, pending.future),
+      );
+      addTearDown(fixture.dispose);
+      fixture.controller.setName('Release');
+      fixture.controller.setUnitType(WorkItemType.useCase);
+
+      final refresh = fixture.controller.refreshAgents();
+      await Future<void>.delayed(Duration.zero);
+      await fixture.controller.save();
+      expect(fixture.state.catalogBusy, isTrue);
+      expect(fixture.repository.saveCalls, 0);
+
+      pending.complete(_catalog(AgentCliKind.codex));
+      await refresh;
+      expect(fixture.state.catalogBusy, isFalse);
+    },
+  );
+
+  test(
+    'GivenMixedReadyAndUnverifiedPersistedRows_WhenMetadataSaved_ThenFallbackIsAllowed',
+    () async {
+      final fixture = _Fixture(
+        codex: _Adapter.value(
+          AgentCliCatalog(
+            kind: AgentCliKind.codex,
+            installation: AgentCliInstallation.transientFailure,
+            session: AgentCliSession.unverified,
+            modelVerification: AgentModelVerification.unverified,
+            models: const <String>[],
+            guidance: 'Try again.',
+          ),
+        ),
+      );
+      fixture.repository.last = _persistedDefinition(mixedClaude: true);
+      addTearDown(fixture.dispose);
+
+      await fixture.controller.select('saved');
+      fixture.controller.setName('Metadata edit');
+      await fixture.controller.save();
+
+      expect(fixture.repository.saveCalls, 1);
+      expect(fixture.repository.last!.steps.first.cli, 'claude-code');
+      expect(
+        fixture.repository.last!.steps.skip(1).map((step) => step.cli),
+        everyElement('codex'),
+      );
+    },
+  );
+
+  test(
+    'GivenPersistedWithdrawnOrChangedRow_WhenSaved_ThenFallbackIsRejected',
+    () async {
+      final withdrawn = _Fixture(
+        codex: _Adapter.value(
+          AgentCliCatalog(
+            kind: AgentCliKind.codex,
+            installation: AgentCliInstallation.available,
+            session: AgentCliSession.authenticated,
+            modelVerification: AgentModelVerification.accountVerified,
+            models: const <String>['replacement'],
+            guidance: 'Safe.',
+          ),
+        ),
+      )..repository.last = _persistedDefinition();
+      addTearDown(withdrawn.dispose);
+      await withdrawn.controller.select('saved');
+      withdrawn.controller.setName('Metadata edit');
+      await withdrawn.controller.save();
+      expect(withdrawn.repository.saveCalls, 0);
+
+      final changed = _Fixture(
+        codex: _Adapter.value(
+          AgentCliCatalog(
+            kind: AgentCliKind.codex,
+            installation: AgentCliInstallation.transientFailure,
+            session: AgentCliSession.unverified,
+            modelVerification: AgentModelVerification.unverified,
+            models: const <String>[],
+            guidance: 'Try again.',
+          ),
+        ),
+      );
+      changed.repository.last = _persistedDefinition();
+      addTearDown(changed.dispose);
+      await changed.controller.select('saved');
+      changed.controller.selectAgentCli('plan', AgentCliKind.claudeCode);
+      changed.controller.selectAgentModel('plan', 'sonnet');
+      await changed.controller.save();
+      expect(changed.repository.saveCalls, 0);
+    },
+  );
+
+  test(
+    'GivenPendingCli_WhenWorkflowReselectedWithOverlappingRowKey_ThenLoadedAssignmentWins',
+    () async {
+      final fixture = _Fixture();
+      fixture.repository.last = _persistedDefinition(overlappingRowKey: true);
+      addTearDown(fixture.dispose);
+      await fixture.controller.load();
+      fixture.controller.selectAgentCli(
+        'default-plan',
+        AgentCliKind.claudeCode,
+      );
+      expect(fixture.state.pendingCliKinds, contains('default-plan'));
+
+      await fixture.controller.select('saved');
+
+      expect(fixture.state.pendingCliKinds, isEmpty);
+      expect(
+        fixture.state.draft.steps.first.assignment?.kind,
+        AgentCliKind.codex,
+      );
+      expect(
+        fixture.state.agentRowStates['default-plan']?.code,
+        AgentRowStateCode.ready,
+      );
+    },
+  );
+
+  test(
+    'GivenPendingCliSelection_WhenCatalogVaries_ThenImmediateStatusUsesCatalog',
+    () async {
+      expect(
+        await _pendingCode(
+          installation: AgentCliInstallation.missing,
+          session: AgentCliSession.unverified,
+          verification: AgentModelVerification.unverified,
+        ),
+        AgentRowStateCode.cliMissing,
+      );
+      expect(
+        await _pendingCode(
+          installation: AgentCliInstallation.inaccessible,
+          session: AgentCliSession.unverified,
+          verification: AgentModelVerification.unverified,
+        ),
+        AgentRowStateCode.cliInaccessible,
+      );
+      expect(
+        await _pendingCode(
+          installation: AgentCliInstallation.available,
+          session: AgentCliSession.unauthenticated,
+          verification: AgentModelVerification.unverified,
+        ),
+        AgentRowStateCode.unauthenticated,
+      );
+      expect(
+        await _pendingCode(
+          installation: AgentCliInstallation.transientFailure,
+          session: AgentCliSession.unverified,
+          verification: AgentModelVerification.unverified,
+        ),
+        AgentRowStateCode.catalogUnverified,
+      );
+      expect(
+        await _pendingCode(
+          installation: AgentCliInstallation.available,
+          session: AgentCliSession.authenticated,
+          verification: AgentModelVerification.accountVerified,
+          models: const <String>['gpt-5.4'],
+        ),
+        AgentRowStateCode.unassigned,
+      );
+    },
+  );
+
+  test(
+    'GivenSaveInFlight_WhenRefreshRequested_ThenSaveGenerationIsNotSuperseded',
+    () async {
+      final fixture = _Fixture();
+      fixture.repository.pending = Completer<WorkflowRepositorySaveResult>();
+      addTearDown(fixture.dispose);
+      await fixture.controller.load();
+      fixture.controller.setName('Release');
+      fixture.controller.setUnitType(WorkItemType.useCase);
+      for (final step in fixture.state.draft.steps) {
+        fixture.controller.selectAgentCli(step.rowKey, AgentCliKind.codex);
+        fixture.controller.selectAgentModel(step.rowKey, 'gpt-5.4');
+      }
+
+      final save = fixture.controller.save();
+      await Future<void>.delayed(Duration.zero);
+      expect(fixture.state.busy, isTrue);
+      await fixture.controller.refreshAgents();
+      expect(fixture.state.catalogBusy, isFalse);
+
+      fixture.repository.pending!.complete(
+        WorkflowRepositorySaved(fixture.repository.last!),
+      );
+      await save;
+      expect(fixture.state.feedback?.isSuccess, isTrue);
+    },
+  );
+}
+
+Future<AgentRowStateCode> _pendingCode({
+  required AgentCliInstallation installation,
+  required AgentCliSession session,
+  required AgentModelVerification verification,
+  List<String> models = const <String>[],
+}) async {
+  final fixture = _Fixture(
+    codex: _Adapter.value(
+      AgentCliCatalog(
+        kind: AgentCliKind.codex,
+        installation: installation,
+        session: session,
+        modelVerification: verification,
+        models: models,
+        guidance: 'Safe guidance.',
+      ),
+    ),
+  );
+  try {
+    await fixture.controller.load();
+    fixture.controller.selectAgentCli('default-plan', AgentCliKind.codex);
+    expect(fixture.state.draft.steps.first.assignment, isNull);
+    return fixture.state.agentRowStates['default-plan']!.code;
+  } finally {
+    fixture.dispose();
+  }
 }
 
 Future<AgentRowStateCode> _loadedCode({
@@ -280,6 +528,7 @@ AgentCliCatalog _catalog(AgentCliKind kind, {bool cliOnly = false}) =>
 final class _Repository implements WorkflowRepository {
   int saveCalls = 0;
   WorkflowDefinition? last;
+  Completer<WorkflowRepositorySaveResult>? pending;
   @override
   Future<WorkflowDefinition?> findById(String id) async =>
       last?.id == id ? last : null;
@@ -292,11 +541,15 @@ final class _Repository implements WorkflowRepository {
   }) async {
     saveCalls++;
     last = definition;
+    if (pending case final completion?) return completion.future;
     return WorkflowRepositorySaved(definition);
   }
 }
 
-WorkflowDefinition _persistedDefinition() => WorkflowDefinition(
+WorkflowDefinition _persistedDefinition({
+  bool mixedClaude = false,
+  bool overlappingRowKey = false,
+}) => WorkflowDefinition(
   id: 'saved',
   revision: 1,
   kind: WorkflowKind.reusable,
@@ -305,14 +558,14 @@ WorkflowDefinition _persistedDefinition() => WorkflowDefinition(
   supervisedDelivery: true,
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6),
-  steps: const <WorkflowStep>[
+  steps: <WorkflowStep>[
     WorkflowStep(
-      id: 'plan',
+      id: overlappingRowKey ? 'default-plan' : 'plan',
       position: 0,
       kind: WorkflowStepKind.plan,
       name: 'Plan',
-      cli: 'codex',
-      model: 'gpt-5.4',
+      cli: mixedClaude ? 'claude-code' : 'codex',
+      model: mixedClaude ? 'sonnet' : 'gpt-5.4',
     ),
     WorkflowStep(
       id: 'execute',

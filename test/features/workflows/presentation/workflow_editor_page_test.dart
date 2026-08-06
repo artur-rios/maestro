@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +59,39 @@ void main() {
       );
       expect(find.textContaining('available to your account'), findsNothing);
       expect(find.textContaining('account verified'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenCatalogRefreshInFlight_WhenEditorShown_ThenSaveIsDisabledUntilCompletion',
+    (tester) async {
+      await _largeSurface(tester);
+      final pending = Completer<AgentCliCatalog>();
+      await tester.pumpWidget(
+        _app(codex: _FutureCatalogAdapter(AgentCliKind.codex, pending.future)),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save workflow'),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      pending.complete(_agentCatalog(AgentCliKind.codex));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save workflow'),
+            )
+            .onPressed,
+        isNotNull,
+      );
     },
   );
 
@@ -369,6 +404,7 @@ Widget _app({
   List<ProjectRecord> deletedProjects = const [],
   _Repository? repository,
   _Readiness? readiness,
+  AgentCliAdapter? codex,
 }) {
   final workflowRepository = repository ?? _Repository();
   final design = WorkflowDesignService(
@@ -384,7 +420,7 @@ Widget _app({
         AgentConfigurationService(
           adapters: <AgentCliAdapter>[
             _CatalogAdapter(_agentCatalog(AgentCliKind.claudeCode)),
-            _CatalogAdapter(_agentCatalog(AgentCliKind.codex)),
+            codex ?? _CatalogAdapter(_agentCatalog(AgentCliKind.codex)),
             _CatalogAdapter(_agentCatalog(AgentCliKind.openCode)),
           ],
           workflowDesignService: design,
@@ -409,6 +445,15 @@ final class _CatalogAdapter implements AgentCliAdapter {
   AgentCliKind get kind => catalog.kind;
   @override
   Future<AgentCliCatalog> discover() async => catalog;
+}
+
+final class _FutureCatalogAdapter implements AgentCliAdapter {
+  const _FutureCatalogAdapter(this.kind, this.catalog);
+  @override
+  final AgentCliKind kind;
+  final Future<AgentCliCatalog> catalog;
+  @override
+  Future<AgentCliCatalog> discover() => catalog;
 }
 
 AgentCliCatalog _agentCatalog(AgentCliKind kind) => AgentCliCatalog(

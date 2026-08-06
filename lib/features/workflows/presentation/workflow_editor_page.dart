@@ -348,7 +348,7 @@ final class _Editor extends ConsumerWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton(
-            onPressed: state.busy ? null : controller.save,
+            onPressed: state.busy || state.catalogBusy ? null : controller.save,
             child: Text(state.busy ? 'Saving…' : 'Save workflow'),
           ),
         ),

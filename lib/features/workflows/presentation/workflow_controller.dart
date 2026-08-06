@@ -147,7 +147,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   }
 
   Future<void> refreshAgents() async {
-    if (_disposed || state.catalogBusy) return;
+    if (_disposed || state.busy || state.catalogBusy) return;
     final generation = ++_generation;
     state = state.copyWith(catalogBusy: true, clearFeedback: true);
     await _refreshAgentsOwned(generation);
@@ -159,6 +159,8 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
       if (_owns(generation)) state = state.copyWith(catalogBusy: false);
       return;
     }
+    if (!_owns(generation)) return;
+    state = state.copyWith(catalogBusy: true);
     final catalogs = await agents.refreshAll();
     if (!_owns(generation)) return;
     final evaluation = agents.evaluateConfiguration(state.draft, catalogs);
@@ -207,6 +209,9 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
             draft: _reconcileDraft(WorkflowDraft.fromDefinition(value)),
             readiness: WorkflowReadinessStatus.unchecked,
             unavailableProjectIds: const {},
+            pendingCliKinds: const {},
+            agentRowStates: const {},
+            clearCatalogs: true,
           );
           await _refreshAgentsOwned(generation);
           if (!_owns(generation)) return;
@@ -273,13 +278,21 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     if (step.assignment?.kind == kind) return;
     final pending = Map<String, AgentCliKind>.of(state.pendingCliKinds)
       ..[rowKey] = kind;
+    final catalogs = state.catalogs;
+    final rowState = catalogs == null
+        ? AgentRowState(
+            rowKey: rowKey,
+            kind: kind,
+            code: AgentRowStateCode.catalogUnverified,
+            guidance: 'Refresh this agent CLI before selecting a model.',
+          )
+        : agents.evaluatePendingCli(
+            rowKey: rowKey,
+            kind: kind,
+            catalog: catalogs,
+          );
     final rows = Map<String, AgentRowState>.of(state.agentRowStates)
-      ..[rowKey] = AgentRowState(
-        rowKey: rowKey,
-        kind: kind,
-        code: AgentRowStateCode.unassigned,
-        guidance: 'Select a model for this agent CLI.',
-      );
+      ..[rowKey] = rowState;
     _change(
       agents.clearAssignment(state.draft, rowKey),
       pendingCliKinds: pending,
@@ -327,7 +340,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   }
 
   Future<void> save() async {
-    if (state.busy) return;
+    if (state.busy || state.catalogBusy) return;
     final generation = ++_generation;
     final reconciledDraft = _reconcileDraft(state.draft);
     final structureRejection = _service.validateStructure(reconciledDraft);
@@ -539,8 +552,8 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     )) {
       return false;
     }
-    return completion.states.every(
-      (value) => value.code == AgentRowStateCode.catalogUnverified,
-    );
+    return completion.states
+        .where((value) => !value.isConfigurationValid)
+        .every((value) => value.code == AgentRowStateCode.catalogUnverified);
   }
 }
