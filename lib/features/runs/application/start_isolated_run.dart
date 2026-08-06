@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/runs/application/run_git_port.dart';
+import 'package:maestro/features/runs/application/run_worktree_path_inspector.dart';
 import 'package:maestro/features/runs/application/work_item_resolver.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
@@ -94,6 +95,7 @@ final class StartIsolatedRun {
     required RunStartRepository repository,
     required RunOwnedResourceStore ownership,
     required RunGitPort git,
+    required RunWorktreePathInspector pathInspector,
     required String worktreesRoot,
     required String baseBranch,
     required DateTime Function() clock,
@@ -106,6 +108,7 @@ final class StartIsolatedRun {
        _repository = repository,
        _ownership = ownership,
        _git = git,
+       _pathInspector = pathInspector,
        _worktreesRoot = p.normalize(p.absolute(worktreesRoot)),
        _baseBranch = baseBranch,
        _clock = clock,
@@ -117,6 +120,7 @@ final class StartIsolatedRun {
   final RunStartRepository _repository;
   final RunOwnedResourceStore _ownership;
   final RunGitPort _git;
+  final RunWorktreePathInspector _pathInspector;
   final String _worktreesRoot;
   final String _baseBranch;
   final DateTime Function() _clock;
@@ -194,6 +198,14 @@ final class StartIsolatedRun {
         'Choose a valid application-data root.',
       );
     }
+    final initialPath = await _pathInspector.inspect(
+      worktreesRoot: _worktreesRoot,
+      destination: worktreePath,
+      sourcePath: request.project.folderPath,
+    );
+    if (initialPath.code != RunWorktreePathInspectionCode.safe) {
+      return _pathRejection(initialPath);
+    }
     final branchPresence = await _git.branchPresence(
       request.project.folderPath,
       branchName,
@@ -262,19 +274,36 @@ final class StartIsolatedRun {
       runId: runId,
     );
     await _ownership.registerPending(branchRecord);
+    final branchPathCheck = await _pathInspector.inspect(
+      worktreesRoot: _worktreesRoot,
+      destination: worktreePath,
+      sourcePath: request.project.folderPath,
+    );
+    if (branchPathCheck.code != RunWorktreePathInspectionCode.safe) {
+      await _ownership.markResolved(branchRecord.id);
+      await _markGitFailed(runId, now);
+      return _pathRejection(branchPathCheck);
+    }
     final branchResult = await _git.createBranch(
       sourcePath: request.project.folderPath,
       branchName: branchName,
       revision: source.localRevision!,
     );
     if (branchResult is RunGitMutationFailed) {
-      if (branchResult.resourceCreatedByInvocation) {
-        await _git.deleteBranch(
-          sourcePath: request.project.folderPath,
-          branchName: branchName,
-        );
+      switch (branchResult.effect) {
+        case RunGitMutationEffect.created:
+          await _git.deleteBranch(
+            sourcePath: request.project.folderPath,
+            branchName: branchName,
+          );
+          await _ownership.markResolved(branchRecord.id);
+          break;
+        case RunGitMutationEffect.absent:
+          await _ownership.markResolved(branchRecord.id);
+          break;
+        case RunGitMutationEffect.unknown:
+          break;
       }
-      await _ownership.markResolved(branchRecord.id);
       await _markGitFailed(runId, now);
       return _reject(
         'run.git.branch_create',
@@ -291,24 +320,51 @@ final class StartIsolatedRun {
       runId: runId,
     );
     await _ownership.registerPending(worktreeRecord);
-    final worktreeResult = await _git.addWorktree(
+    final worktreePathCheck = await _pathInspector.inspect(
+      worktreesRoot: _worktreesRoot,
+      destination: worktreePath,
       sourcePath: request.project.folderPath,
-      branchName: branchName,
-      worktreePath: worktreePath,
     );
-    if (worktreeResult is RunGitMutationFailed) {
-      if (worktreeResult.resourceCreatedByInvocation) {
-        await _git.removeWorktree(
-          sourcePath: request.project.folderPath,
-          worktreePath: worktreePath,
-        );
-      }
+    if (worktreePathCheck.code != RunWorktreePathInspectionCode.safe) {
       await _ownership.markResolved(worktreeRecord.id);
       await _git.deleteBranch(
         sourcePath: request.project.folderPath,
         branchName: branchName,
       );
       await _ownership.markResolved(branchRecord.id);
+      await _markGitFailed(runId, now);
+      return _pathRejection(worktreePathCheck);
+    }
+    final worktreeResult = await _git.addWorktree(
+      sourcePath: request.project.folderPath,
+      branchName: branchName,
+      worktreePath: worktreePath,
+    );
+    if (worktreeResult is RunGitMutationFailed) {
+      switch (worktreeResult.effect) {
+        case RunGitMutationEffect.created:
+          await _git.removeWorktree(
+            sourcePath: request.project.folderPath,
+            worktreePath: worktreePath,
+          );
+          await _ownership.markResolved(worktreeRecord.id);
+          await _git.deleteBranch(
+            sourcePath: request.project.folderPath,
+            branchName: branchName,
+          );
+          await _ownership.markResolved(branchRecord.id);
+          break;
+        case RunGitMutationEffect.absent:
+          await _ownership.markResolved(worktreeRecord.id);
+          await _git.deleteBranch(
+            sourcePath: request.project.folderPath,
+            branchName: branchName,
+          );
+          await _ownership.markResolved(branchRecord.id);
+          break;
+        case RunGitMutationEffect.unknown:
+          break;
+      }
       await _markGitFailed(runId, now);
       return _reject(
         'run.git.worktree_create',
@@ -470,6 +526,16 @@ final class StartIsolatedRun {
           'A ready source is not a rejection.',
         ),
       };
+
+  static RunStartRejected _pathRejection(
+    RunWorktreePathInspection inspection,
+  ) => _reject(
+    inspection.code == RunWorktreePathInspectionCode.inaccessible
+        ? 'run.worktree.path_inaccessible'
+        : 'run.worktree.unsafe_path',
+    'The isolated worktree destination could not be proven safe.',
+    'Repair the application-data path and retry.',
+  );
 
   static RunStartRejected _reject(
     String code,

@@ -49,14 +49,13 @@ final class RunGitMutationSucceeded extends RunGitMutationResult {
   const RunGitMutationSucceeded();
 }
 
+enum RunGitMutationEffect { absent, created, unknown }
+
 final class RunGitMutationFailed extends RunGitMutationResult {
-  const RunGitMutationFailed(
-    this.message, {
-    this.resourceCreatedByInvocation = false,
-  });
+  const RunGitMutationFailed(this.message, {required this.effect});
 
   final String message;
-  final bool resourceCreatedByInvocation;
+  final RunGitMutationEffect effect;
 }
 
 enum RunGitPresenceCode { present, absent, inaccessible }

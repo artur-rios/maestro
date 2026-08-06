@@ -127,7 +127,11 @@ final class CommandRunnerRunGitPort implements RunGitPort {
     required String sourcePath,
     required String branchName,
     required String revision,
-  }) => _mutation(sourcePath, <String>['branch', branchName, revision]);
+  }) => _mutation(sourcePath, <String>[
+    'branch',
+    branchName,
+    revision,
+  ], reportedFailureEffect: RunGitMutationEffect.absent);
 
   @override
   Future<RunGitMutationResult> addWorktree({
@@ -141,7 +145,7 @@ final class CommandRunnerRunGitPort implements RunGitPort {
       '--no-checkout',
       worktreePath,
       branchName,
-    ]);
+    ], reportedFailureEffect: RunGitMutationEffect.unknown);
     if (registration is RunGitMutationFailed) return registration;
 
     final materialization = await _run(worktreePath, <String>[
@@ -152,7 +156,7 @@ final class CommandRunnerRunGitPort implements RunGitPort {
     if (!materialization.succeeded) {
       return const RunGitMutationFailed(
         'Git registered the worktree but could not materialize it.',
-        resourceCreatedByInvocation: true,
+        effect: RunGitMutationEffect.created,
       );
     }
     return const RunGitMutationSucceeded();
@@ -183,12 +187,15 @@ final class CommandRunnerRunGitPort implements RunGitPort {
 
   Future<RunGitMutationResult> _mutation(
     String sourcePath,
-    List<String> arguments,
-  ) async {
+    List<String> arguments, {
+    required RunGitMutationEffect reportedFailureEffect,
+  }) async {
     final result = await _run(sourcePath, arguments);
-    return result.succeeded
-        ? const RunGitMutationSucceeded()
-        : RunGitMutationFailed(result.stderr.trim());
+    if (result.succeeded) return const RunGitMutationSucceeded();
+    final effect = result.failureKind == null && result.exitCode != null
+        ? reportedFailureEffect
+        : RunGitMutationEffect.unknown;
+    return RunGitMutationFailed('Git mutation failed.', effect: effect);
   }
 
   Future<CommandResult> _run(String sourcePath, List<String> arguments) =>

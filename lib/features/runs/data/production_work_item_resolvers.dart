@@ -195,15 +195,18 @@ final class GitHubIssueWorkItemResolver implements WorkItemResolver {
   }
 
   static ({String repository, int number})? _parse(String value) {
+    if (value.length > 512) return null;
     final compact = RegExp(
-      r'^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9]\d*)$',
+      r'^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9]\d{0,17})$',
     ).firstMatch(value);
     final url = RegExp(
-      r'^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/([1-9]\d*)/?$',
+      r'^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/([1-9]\d{0,17})/?$',
       caseSensitive: false,
     ).firstMatch(value);
     final match = compact ?? url;
     if (match == null) return null;
-    return (repository: match.group(1)!, number: int.parse(match.group(2)!));
+    final number = int.tryParse(match.group(2)!);
+    if (number == null) return null;
+    return (repository: match.group(1)!, number: number);
   }
 }

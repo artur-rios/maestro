@@ -9,6 +9,7 @@ import 'package:maestro/features/runs/application/work_item_resolver.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/platform/common/command_runner.dart';
+import 'package:maestro/platform/git/local_run_worktree_path_inspector.dart';
 import 'package:maestro/platform/git/run_git_port.dart';
 import 'package:path/path.dart' as p;
 
@@ -199,6 +200,7 @@ void main() {
         repository: repository,
         ownership: ownership,
         git: _FailAfterRealAdd(git),
+        pathInspector: const LocalRunWorktreePathInspector(),
         worktreesRoot: p.join(root.path, 'app-data', 'worktrees'),
         baseBranch: 'main',
         clock: () => DateTime.utc(2026, 8, 6),
@@ -362,6 +364,7 @@ StartIsolatedRun _service({
   repository: _Repository(),
   ownership: _Ownership(),
   git: git,
+  pathInspector: const LocalRunWorktreePathInspector(),
   worktreesRoot: p.join(root.path, 'app-data', 'worktrees'),
   baseBranch: 'main',
   clock: () => DateTime.utc(2026, 8, 6),
@@ -438,7 +441,7 @@ final class _FailAfterRealAdd implements RunGitPort {
     return result is RunGitMutationSucceeded
         ? const RunGitMutationFailed(
             'injected after mutation',
-            resourceCreatedByInvocation: true,
+            effect: RunGitMutationEffect.created,
           )
         : result;
   }
@@ -496,7 +499,10 @@ final class _BranchRaceGit extends _DelegatingRunGitPort {
       revision: revision,
     );
     if (competing is! RunGitMutationSucceeded) return competing;
-    return const RunGitMutationFailed('concurrent branch won');
+    return const RunGitMutationFailed(
+      'concurrent branch won',
+      effect: RunGitMutationEffect.absent,
+    );
   }
 }
 
@@ -524,7 +530,10 @@ final class _WorktreeRaceGit extends _DelegatingRunGitPort {
       worktreePath: worktreePath,
     );
     if (competing is! RunGitMutationSucceeded) return competing;
-    return const RunGitMutationFailed('concurrent worktree won');
+    return const RunGitMutationFailed(
+      'concurrent worktree won',
+      effect: RunGitMutationEffect.absent,
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/runs/application/run_git_port.dart';
+import 'package:maestro/features/runs/application/run_worktree_path_inspector.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/application/work_item_resolver.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
@@ -210,6 +211,57 @@ void main() {
         expect(fixture.gitMutations, isEmpty);
       },
     );
+
+    test(
+      'Given branch creation outcome is unknown_When starting_Then pending ownership is retained and nothing is deleted',
+      () async {
+        final fixture = _Fixture(branchMutationUnknown: true);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.branch_create');
+        expect(fixture.gitMutations, <String>['createBranch']);
+        expect(fixture.events, isNot(contains('resolved:branch')));
+      },
+    );
+
+    test(
+      'Given worktree creation outcome is unknown_When starting_Then pending worktree and proven branch are retained',
+      () async {
+        final fixture = _Fixture(worktreeMutationUnknown: true);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.worktree_create');
+        expect(fixture.gitMutations, <String>['createBranch', 'addWorktree']);
+        expect(fixture.events, isNot(contains('resolved:worktree')));
+        expect(fixture.events, isNot(contains('resolved:branch')));
+      },
+    );
+
+    test(
+      'Given path becomes unsafe immediately before branch mutation_When starting_Then it fails without Git mutation',
+      () async {
+        final fixture = _Fixture(unsafeOnPathInspection: 2);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.worktree.unsafe_path');
+        expect(fixture.gitMutations, isEmpty);
+      },
+    );
+
+    test(
+      'Given path becomes unsafe immediately before worktree mutation_When starting_Then proven branch is compensated',
+      () async {
+        final fixture = _Fixture(unsafeOnPathInspection: 3);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.worktree.unsafe_path');
+        expect(fixture.gitMutations, <String>['createBranch', 'deleteBranch']);
+      },
+    );
   });
 }
 
@@ -220,7 +272,8 @@ final class _Fixture
         RunAgentPreflight,
         RunStartRepository,
         RunOwnedResourceStore,
-        RunGitPort {
+        RunGitPort,
+        RunWorktreePathInspector {
   _Fixture({
     this.runId = 'run-12345678',
     this.sourceState = const RunGitSourceState.ready(
@@ -235,6 +288,9 @@ final class _Fixture
     this.concurrentWorktreeConflict = false,
     this.branchPresenceInaccessible = false,
     this.worktreePresenceInaccessible = false,
+    this.branchMutationUnknown = false,
+    this.worktreeMutationUnknown = false,
+    this.unsafeOnPathInspection = 0,
   }) : workflow = workflow ?? _workflow();
 
   final String runId;
@@ -247,6 +303,10 @@ final class _Fixture
   final bool concurrentWorktreeConflict;
   final bool branchPresenceInaccessible;
   final bool worktreePresenceInaccessible;
+  final bool branchMutationUnknown;
+  final bool worktreeMutationUnknown;
+  final int unsafeOnPathInspection;
+  var pathInspections = 0;
   final calls = <String>[];
   final events = <String>[];
   final gitMutations = <String>[];
@@ -264,6 +324,7 @@ final class _Fixture
     repository: this,
     ownership: this,
     git: this,
+    pathInspector: this,
     worktreesRoot: r'C:\app-data\maestro\worktrees',
     baseBranch: 'main',
     clock: () => DateTime.utc(2026, 8, 6, 12),
@@ -345,9 +406,18 @@ final class _Fixture
   }) async {
     events.add('git:createBranch');
     gitMutations.add('createBranch');
+    if (branchMutationUnknown) {
+      return const RunGitMutationFailed(
+        'ambiguous',
+        effect: RunGitMutationEffect.unknown,
+      );
+    }
     if (concurrentBranchConflict) {
       branches.add(branchName);
-      return const RunGitMutationFailed('conflict');
+      return const RunGitMutationFailed(
+        'conflict',
+        effect: RunGitMutationEffect.absent,
+      );
     }
     branches.add(branchName);
     return const RunGitMutationSucceeded();
@@ -361,15 +431,24 @@ final class _Fixture
   }) async {
     events.add('git:addWorktree');
     gitMutations.add('addWorktree');
+    if (worktreeMutationUnknown) {
+      return const RunGitMutationFailed(
+        'ambiguous',
+        effect: RunGitMutationEffect.unknown,
+      );
+    }
     if (concurrentWorktreeConflict) {
       worktrees.add(worktreePath);
-      return const RunGitMutationFailed('conflict');
+      return const RunGitMutationFailed(
+        'conflict',
+        effect: RunGitMutationEffect.absent,
+      );
     }
     worktrees.add(worktreePath);
     return failWorktreeAfterCreation
         ? const RunGitMutationFailed(
             'partial',
-            resourceCreatedByInvocation: true,
+            effect: RunGitMutationEffect.created,
           )
         : const RunGitMutationSucceeded();
   }
@@ -428,6 +507,18 @@ final class _Fixture
   Future<void> markResolved(String id) async {
     final record = ownership.singleWhere((value) => value.id == id);
     events.add('resolved:${record.kind.name}');
+  }
+
+  @override
+  Future<RunWorktreePathInspection> inspect({
+    required String worktreesRoot,
+    required String destination,
+    required String sourcePath,
+  }) async {
+    pathInspections++;
+    return pathInspections == unsafeOnPathInspection
+        ? const RunWorktreePathInspection.unsafe('redirected ancestor')
+        : const RunWorktreePathInspection.safe();
   }
 }
 

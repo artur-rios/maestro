@@ -119,6 +119,27 @@ void main() {
       expect(rejected.message, isNot(contains('secret')));
     },
   );
+
+  test(
+    'Given an oversized GitHub issue number_When resolving_Then typed validation rejects it without calling GitHub',
+    () async {
+      final runner = _Runner(
+        const CommandResult(exitCode: 0, stdout: '{}', stderr: ''),
+      );
+      final resolver = GitHubIssueWorkItemResolver(
+        reader: CommandRunnerGitHubIssueReader(runner),
+      );
+
+      final digits = List<String>.filled(10000, '9').join();
+      final result = await resolver.resolve('a/b#$digits');
+
+      expect(
+        (result as WorkItemResolutionRejected).code,
+        'run.work_item.invalid',
+      );
+      expect(runner.request, isNull);
+    },
+  );
 }
 
 final class _DocumentSource implements UseCaseDocumentSource {

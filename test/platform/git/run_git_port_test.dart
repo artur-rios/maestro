@@ -58,6 +58,81 @@ void main() {
       expect(presence.code, RunGitPresenceCode.inaccessible);
     },
   );
+
+  test(
+    'Given branch command cannot start_When mutated_Then resource effect is unknown',
+    () async {
+      final git = CommandRunnerRunGitPort(
+        _Runner(
+          const CommandResult(
+            exitCode: null,
+            stdout: '',
+            stderr: '',
+            failureKind: CommandFailureKind.startFailure,
+          ),
+        ),
+      );
+
+      final result = await git.createBranch(
+        sourcePath: '/repo',
+        branchName: 'feature/run',
+        revision: 'abc',
+      );
+
+      expect(
+        (result as RunGitMutationFailed).effect,
+        RunGitMutationEffect.unknown,
+      );
+    },
+  );
+
+  test(
+    'Given atomic branch command reports nonzero_When mutated_Then resource is definitely absent',
+    () async {
+      final git = CommandRunnerRunGitPort(
+        _Runner(
+          const CommandResult(exitCode: 1, stdout: '', stderr: 'conflict'),
+        ),
+      );
+
+      final result = await git.createBranch(
+        sourcePath: '/repo',
+        branchName: 'feature/run',
+        revision: 'abc',
+      );
+
+      expect(
+        (result as RunGitMutationFailed).effect,
+        RunGitMutationEffect.absent,
+      );
+    },
+  );
+
+  test(
+    'Given worktree registration reports nonzero_When mutated_Then partial resource effect remains unknown',
+    () async {
+      final git = CommandRunnerRunGitPort(
+        _Runner(
+          const CommandResult(
+            exitCode: 1,
+            stdout: '',
+            stderr: 'ambiguous registration failure',
+          ),
+        ),
+      );
+
+      final result = await git.addWorktree(
+        sourcePath: '/repo',
+        branchName: 'feature/run',
+        worktreePath: '/worktree',
+      );
+
+      expect(
+        (result as RunGitMutationFailed).effect,
+        RunGitMutationEffect.unknown,
+      );
+    },
+  );
 }
 
 final class _Runner implements CommandRunner {
