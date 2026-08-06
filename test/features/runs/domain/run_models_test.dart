@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 
@@ -165,9 +167,43 @@ void main() {
         262144,
       );
       expect(
-        () => DeclaredContext.parse(List<String>.filled(262145, 'x').join()),
-        throwsArgumentError,
+        () => DeclaredContext.parse(
+          '${List<String>.filled(262145, 'x').join()}SECRET-SENTINEL',
+        ),
+        throwsA(
+          isA<DeclaredContextTooLarge>()
+              .having((error) => error.actualBytes, 'actualBytes', 262160)
+              .having(
+                (error) => error.toString(),
+                'sanitized message',
+                allOf(contains('262160'), isNot(contains('SECRET-SENTINEL'))),
+              ),
+        ),
       );
+    },
+  );
+
+  test(
+    'GivenMutableLogBytes_WhenSegmentCreatedOrRead_ThenEvidenceCannotBeMutated',
+    () {
+      final source = Uint8List.fromList(<int>[1, 2, 3]);
+      final segment = RunLogSegment(
+        id: 'log-1',
+        runId: 'run-1',
+        attemptId: 'attempt-1',
+        snapshotStepId: 'step-1',
+        sequence: 0,
+        channel: RunLogChannel.stdout,
+        bytes: source,
+        compression: 'none',
+        originalByteLength: 3,
+        createdAt: DateTime.utc(2026, 8, 6),
+      );
+
+      source[0] = 9;
+      expect(segment.bytes, <int>[1, 2, 3]);
+      expect(() => segment.bytes[1] = 9, throwsUnsupportedError);
+      expect(segment.bytes, <int>[1, 2, 3]);
     },
   );
 }

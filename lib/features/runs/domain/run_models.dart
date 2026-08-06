@@ -148,10 +148,9 @@ final class DeclaredContext {
   factory DeclaredContext.parse(String value) {
     final byteLength = utf8.encode(value).length;
     if (byteLength > maximumBytes) {
-      throw ArgumentError.value(
-        value,
-        'value',
-        'Declared context is too large.',
+      throw DeclaredContextTooLarge(
+        actualBytes: byteLength,
+        maximumBytes: maximumBytes,
       );
     }
     return DeclaredContext._(value, byteLength);
@@ -159,6 +158,21 @@ final class DeclaredContext {
 
   final String value;
   final int bytes;
+}
+
+final class DeclaredContextTooLarge implements Exception {
+  const DeclaredContextTooLarge({
+    required this.actualBytes,
+    required this.maximumBytes,
+  });
+
+  final int actualBytes;
+  final int maximumBytes;
+
+  @override
+  String toString() =>
+      'DeclaredContextTooLarge(actualBytes: $actualBytes, '
+      'maximumBytes: $maximumBytes)';
 }
 
 final class RunSnapshotStep {
@@ -391,7 +405,7 @@ final class RunLogSegment {
     required this.compression,
     required this.originalByteLength,
     required this.createdAt,
-  }) : bytes = Uint8List.fromList(bytes);
+  }) : _bytes = Uint8List.fromList(bytes).asUnmodifiableView();
 
   final String id;
   final String runId;
@@ -399,7 +413,8 @@ final class RunLogSegment {
   final String snapshotStepId;
   final int sequence;
   final RunLogChannel channel;
-  final Uint8List bytes;
+  final Uint8List _bytes;
+  Uint8List get bytes => _bytes;
   final String compression;
   final int originalByteLength;
   final DateTime createdAt;

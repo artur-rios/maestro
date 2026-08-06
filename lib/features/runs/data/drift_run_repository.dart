@@ -10,10 +10,9 @@ final class StoredRunAggregate {
     required this.run,
     required this.snapshot,
     required Iterable<domain.RunAttempt> attempts,
-    required Iterable<domain.RunLogSegment> logs,
+    required this.logSegmentCount,
     required Iterable<domain.RunRecoveryRequest> recoveryRequests,
   }) : attempts = List<domain.RunAttempt>.unmodifiable(attempts),
-       logs = List<domain.RunLogSegment>.unmodifiable(logs),
        recoveryRequests = List<domain.RunRecoveryRequest>.unmodifiable(
          recoveryRequests,
        );
@@ -21,8 +20,18 @@ final class StoredRunAggregate {
   final domain.WorkflowRun run;
   final domain.RunSnapshot snapshot;
   final List<domain.RunAttempt> attempts;
-  final List<domain.RunLogSegment> logs;
+  final int logSegmentCount;
   final List<domain.RunRecoveryRequest> recoveryRequests;
+}
+
+final class RunLogPage {
+  RunLogPage({
+    required Iterable<domain.RunLogSegment> segments,
+    required this.hasMore,
+  }) : segments = List<domain.RunLogSegment>.unmodifiable(segments);
+
+  final List<domain.RunLogSegment> segments;
+  final bool hasMore;
 }
 
 final class DriftRunRepository implements ActiveProjectRunReader {
@@ -37,6 +46,13 @@ final class DriftRunRepository implements ActiveProjectRunReader {
     if (run.projectId != snapshot.projectId ||
         (run.workflowId != null && run.workflowId != snapshot.workflowId)) {
       throw StateError('Run references do not match its immutable snapshot.');
+    }
+    if (run.status != domain.RunStatus.queued ||
+        run.currentStepPosition != 0 ||
+        run.startedAt != null ||
+        run.completedAt != null ||
+        run.deletedAt != null) {
+      throw StateError('A new run must be a pristine queued intent.');
     }
     await _database.transaction(() async {
       await _database
@@ -104,14 +120,14 @@ final class DriftRunRepository implements ActiveProjectRunReader {
                 (table) => OrderingTerm.asc(table.id),
               ]))
             .get();
-    final logs =
-        await (_database.select(_database.runLogSegments)
-              ..where((table) => table.runId.equals(runId))
-              ..orderBy(<OrderingTerm Function(db.RunLogSegments)>[
-                (table) => OrderingTerm.asc(table.createdAt),
-                (table) => OrderingTerm.asc(table.sequence),
-              ]))
-            .get();
+    final logSegmentCount =
+        await (_database.selectOnly(_database.runLogSegments)
+              ..addColumns(<Expression<Object>>[
+                _database.runLogSegments.id.count(),
+              ])
+              ..where(_database.runLogSegments.runId.equals(runId)))
+            .map((row) => row.read(_database.runLogSegments.id.count())!)
+            .getSingle();
     final requests =
         await (_database.select(_database.runRecoveryRequests)
               ..where((table) => table.runId.equals(runId))
@@ -126,9 +142,47 @@ final class DriftRunRepository implements ActiveProjectRunReader {
         snapshotRow.canonicalPayload,
       ),
       attempts: attempts.map(_attemptFromRow),
-      logs: logs.map(_logFromRow),
+      logSegmentCount: logSegmentCount,
       recoveryRequests: requests.map(_recoveryFromRow),
     );
+  }
+
+  Future<void> transitionRun({
+    required String runId,
+    required domain.RunStatus expectedStatus,
+    required domain.RunStatus nextStatus,
+    required DateTime at,
+    String? branchName,
+    String? worktreePath,
+  }) async {
+    if (!expectedStatus.canTransitionTo(nextStatus)) {
+      throw StateError('Unsupported run lifecycle transition.');
+    }
+    final affected =
+        await (_database.update(_database.workflowRuns)..where(
+              (table) =>
+                  table.id.equals(runId) &
+                  table.status.equals(expectedStatus.name),
+            ))
+            .write(
+              db.WorkflowRunsCompanion(
+                status: Value<String>(nextStatus.name),
+                branchName: branchName == null
+                    ? const Value<String?>.absent()
+                    : Value<String?>(branchName),
+                worktreePath: worktreePath == null
+                    ? const Value<String?>.absent()
+                    : Value<String?>(worktreePath),
+                updatedAt: Value<DateTime>(at.toUtc()),
+                startedAt: nextStatus == domain.RunStatus.starting
+                    ? Value<DateTime?>(at.toUtc())
+                    : const Value<DateTime?>.absent(),
+                completedAt: nextStatus.isTerminal
+                    ? Value<DateTime?>(at.toUtc())
+                    : const Value<DateTime?>.absent(),
+              ),
+            );
+    _requireOne(affected);
   }
 
   Future<void> beginAttempt(domain.RunAttempt attempt) async {
@@ -202,9 +256,61 @@ final class DriftRunRepository implements ActiveProjectRunReader {
     });
   }
 
+  Future<RunLogPage> readLogPage({
+    required String runId,
+    required String attemptId,
+    int? afterSequenceExclusive,
+    int limit = 100,
+  }) async {
+    _validateLogLimit(limit);
+    await _requireAttemptOwnership(runId: runId, attemptId: attemptId);
+    final query = _database.select(_database.runLogSegments)
+      ..where(
+        (table) =>
+            table.runId.equals(runId) & table.attemptId.equals(attemptId),
+      )
+      ..orderBy(<OrderingTerm Function(db.RunLogSegments)>[
+        (table) => OrderingTerm.asc(table.sequence),
+      ])
+      ..limit(limit + 1);
+    if (afterSequenceExclusive != null) {
+      query.where(
+        (table) => table.sequence.isBiggerThanValue(afterSequenceExclusive),
+      );
+    }
+    final rows = await query.get();
+    return RunLogPage(
+      segments: rows.take(limit).map(_logFromRow),
+      hasMore: rows.length > limit,
+    );
+  }
+
+  Future<List<domain.RunLogSegment>> readLogTail({
+    required String runId,
+    required String attemptId,
+    int limit = 100,
+  }) async {
+    _validateLogLimit(limit);
+    await _requireAttemptOwnership(runId: runId, attemptId: attemptId);
+    final rows =
+        await (_database.select(_database.runLogSegments)
+              ..where(
+                (table) =>
+                    table.runId.equals(runId) &
+                    table.attemptId.equals(attemptId),
+              )
+              ..orderBy(<OrderingTerm Function(db.RunLogSegments)>[
+                (table) => OrderingTerm.desc(table.sequence),
+              ])
+              ..limit(limit))
+            .get();
+    return List<domain.RunLogSegment>.unmodifiable(
+      rows.reversed.map(_logFromRow),
+    );
+  }
+
   Future<void> completeAttemptAndAdvance({
     required String attemptId,
-    required domain.RunStatus expectedRunStatus,
     required DateTime completedAt,
     required int exitCode,
     required domain.DeclaredContext? declaredContext,
@@ -223,7 +329,7 @@ final class DriftRunRepository implements ActiveProjectRunReader {
       final step = await (_database.select(
         _database.runSnapshotSteps,
       )..where((table) => table.id.equals(attempt.snapshotStepId))).getSingle();
-      if (run.status != expectedRunStatus.name ||
+      if (run.status != domain.RunStatus.running.name ||
           run.currentStepPosition != step.position ||
           exitCode != 0) {
         throw StateError('Run state changed or success evidence is invalid.');
@@ -257,12 +363,12 @@ final class DriftRunRepository implements ActiveProjectRunReader {
       final nextPosition = step.position + 1;
       final nextStatus = nextPosition >= stepCount
           ? domain.RunStatus.succeeded
-          : expectedRunStatus;
+          : domain.RunStatus.running;
       final runAffected =
           await (_database.update(_database.workflowRuns)..where(
                 (table) =>
                     table.id.equals(run.id) &
-                    table.status.equals(expectedRunStatus.name) &
+                    table.status.equals(domain.RunStatus.running.name) &
                     table.currentStepPosition.equals(step.position),
               ))
               .write(
@@ -283,7 +389,6 @@ final class DriftRunRepository implements ActiveProjectRunReader {
 
   Future<void> failAttemptAndRun({
     required String attemptId,
-    required domain.RunStatus expectedRunStatus,
     required DateTime completedAt,
     required int? exitCode,
     required String failureCode,
@@ -307,7 +412,7 @@ final class DriftRunRepository implements ActiveProjectRunReader {
       )..where((table) => table.id.equals(attempt.runId))).getSingle();
       if (step.runId != run.id ||
           step.position != run.currentStepPosition ||
-          run.status != expectedRunStatus.name) {
+          run.status != domain.RunStatus.running.name) {
         throw StateError('The attempt is stale for the current run step.');
       }
       final attemptAffected =
@@ -332,7 +437,7 @@ final class DriftRunRepository implements ActiveProjectRunReader {
           await (_database.update(_database.workflowRuns)..where(
                 (table) =>
                     table.id.equals(run.id) &
-                    table.status.equals(expectedRunStatus.name) &
+                    table.status.equals(domain.RunStatus.running.name) &
                     table.currentStepPosition.equals(step.position),
               ))
               .write(
@@ -501,6 +606,26 @@ final class DriftRunRepository implements ActiveProjectRunReader {
           createdAt: segment.createdAt.toUtc(),
         ),
       );
+
+  static const int maximumLogPageSize = 200;
+
+  static void _validateLogLimit(int limit) {
+    if (limit < 1 || limit > maximumLogPageSize) {
+      throw RangeError.range(limit, 1, maximumLogPageSize, 'limit');
+    }
+  }
+
+  Future<void> _requireAttemptOwnership({
+    required String runId,
+    required String attemptId,
+  }) async {
+    final attempt = await (_database.select(
+      _database.runAttempts,
+    )..where((table) => table.id.equals(attemptId))).getSingle();
+    if (attempt.runId != runId) {
+      throw StateError('Attempt evidence does not belong to the run.');
+    }
+  }
 
   static domain.WorkflowRun _runFromRow(db.WorkflowRun row) =>
       domain.WorkflowRun(

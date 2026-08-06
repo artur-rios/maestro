@@ -24,7 +24,7 @@ void main() {
   test(
     'GivenRunAndSnapshot_WhenCreated_ThenAggregateAndOrderedStepsCommitAtomically',
     () async {
-      await repository.create(run: _run(), snapshot: _snapshot());
+      await _createRun(repository, run: _run(), snapshot: _snapshot());
 
       final stored = await repository.findById('run-1');
       expect(stored, isNotNull);
@@ -47,9 +47,83 @@ void main() {
   );
 
   test(
+    'GivenNonQueuedOrAdvancedRun_WhenCreated_ThenInvalidInitialLifecycleIsRejected',
+    () async {
+      await expectLater(
+        repository.create(
+          run: _run(status: domain.RunStatus.running),
+          snapshot: _snapshot(),
+        ),
+        throwsStateError,
+      );
+      await expectLater(
+        repository.create(
+          run: _run(id: 'advanced', currentStepPosition: 1),
+          snapshot: _snapshot(stepIdPrefix: 'advanced-step'),
+        ),
+        throwsStateError,
+      );
+      expect(await repository.findById('run-1'), isNull);
+      expect(await repository.findById('advanced'), isNull);
+    },
+  );
+
+  test(
+    'GivenQueuedRun_WhenTransitioned_ThenOnlyAllowedExpectedSourceTransitionSucceeds',
+    () async {
+      await _createRun(repository, run: _run(), snapshot: _snapshot());
+
+      await expectLater(
+        repository.transitionRun(
+          runId: 'run-1',
+          expectedStatus: domain.RunStatus.queued,
+          nextStatus: domain.RunStatus.running,
+          at: DateTime.utc(2026, 8, 6, 12, 1),
+        ),
+        throwsStateError,
+      );
+      await repository.transitionRun(
+        runId: 'run-1',
+        expectedStatus: domain.RunStatus.queued,
+        nextStatus: domain.RunStatus.starting,
+        at: DateTime.utc(2026, 8, 6, 12, 2),
+      );
+      await expectLater(
+        repository.transitionRun(
+          runId: 'run-1',
+          expectedStatus: domain.RunStatus.queued,
+          nextStatus: domain.RunStatus.starting,
+          at: DateTime.utc(2026, 8, 6, 12, 3),
+        ),
+        throwsStateError,
+      );
+      await repository.transitionRun(
+        runId: 'run-1',
+        expectedStatus: domain.RunStatus.starting,
+        nextStatus: domain.RunStatus.running,
+        at: DateTime.utc(2026, 8, 6, 12, 4),
+      );
+      await expectLater(
+        repository.transitionRun(
+          runId: 'run-1',
+          expectedStatus: domain.RunStatus.running,
+          nextStatus: domain.RunStatus.queued,
+          at: DateTime.utc(2026, 8, 6, 12, 5),
+        ),
+        throwsStateError,
+      );
+      expect(
+        (await repository.findById('run-1'))!.run.status,
+        domain.RunStatus.running,
+      );
+    },
+  );
+
+  test(
     'GivenRunningAttempt_WhenCompletedThenRunAdvancesAtomicallyAndEvidenceStaysAppendOnly',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
@@ -72,7 +146,6 @@ void main() {
 
       await repository.completeAttemptAndAdvance(
         attemptId: attempt.id,
-        expectedRunStatus: domain.RunStatus.running,
         completedAt: DateTime.utc(2026, 8, 6, 12, 2),
         exitCode: 0,
         declaredContext: domain.DeclaredContext.parse('plan-context'),
@@ -83,11 +156,14 @@ void main() {
       expect(stored.run.status, domain.RunStatus.running);
       expect(stored.attempts.single.status, domain.AttemptStatus.succeeded);
       expect(stored.attempts.single.declaredContext?.value, 'plan-context');
-      expect(utf8.decode(stored.logs.single.bytes), 'planned');
+      final logs = await repository.readLogTail(
+        runId: 'run-1',
+        attemptId: attempt.id,
+      );
+      expect(utf8.decode(logs.single.bytes), 'planned');
       await expectLater(
         repository.completeAttemptAndAdvance(
           attemptId: attempt.id,
-          expectedRunStatus: domain.RunStatus.running,
           completedAt: DateTime.utc(2026, 8, 6, 12, 3),
           exitCode: 0,
           declaredContext: null,
@@ -101,11 +177,13 @@ void main() {
   test(
     'GivenAttemptAndStepFromAnotherRun_WhenLogAppended_ThenCrossRunEvidenceIsRejected',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(id: 'run-2', status: domain.RunStatus.running),
         snapshot: _snapshot(stepIdPrefix: 'other-step'),
       );
@@ -134,19 +212,92 @@ void main() {
         ),
         throwsStateError,
       );
-      expect((await repository.findById('run-1'))!.logs, isEmpty);
-      expect((await repository.findById('run-2'))!.logs, isEmpty);
+      expect((await repository.findById('run-1'))!.logSegmentCount, 0);
+      expect((await repository.findById('run-2'))!.logSegmentCount, 0);
+    },
+  );
+
+  test(
+    'GivenLargeLogHistory_WhenAggregateAndPagesRead_ThenBlobRetrievalStaysExplicitAndBounded',
+    () async {
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.beginAttempt(_attempt());
+      for (var sequence = 0; sequence < 205; sequence++) {
+        await repository.appendLog(
+          domain.RunLogSegment(
+            id: 'log-$sequence',
+            runId: 'run-1',
+            attemptId: 'attempt-1',
+            snapshotStepId: 'snapshot-step-1',
+            sequence: sequence,
+            channel: domain.RunLogChannel.stdout,
+            bytes: Uint8List.fromList(List<int>.filled(4096, sequence % 251)),
+            compression: 'none',
+            originalByteLength: 4096,
+            createdAt: DateTime.utc(
+              2026,
+              8,
+              6,
+              12,
+            ).add(Duration(milliseconds: sequence)),
+          ),
+        );
+      }
+
+      final aggregate = (await repository.findById('run-1'))!;
+      expect(aggregate.logSegmentCount, 205);
+      final page = await repository.readLogPage(
+        runId: 'run-1',
+        attemptId: 'attempt-1',
+        afterSequenceExclusive: 49,
+        limit: 25,
+      );
+      expect(page.segments, hasLength(25));
+      expect(page.segments.first.sequence, 50);
+      expect(page.segments.last.sequence, 74);
+      expect(page.hasMore, isTrue);
+      final tail = await repository.readLogTail(
+        runId: 'run-1',
+        attemptId: 'attempt-1',
+        limit: 10,
+      );
+      expect(tail.map((segment) => segment.sequence), <int>[
+        195,
+        196,
+        197,
+        198,
+        199,
+        200,
+        201,
+        202,
+        203,
+        204,
+      ]);
+      await expectLater(
+        repository.readLogTail(
+          runId: 'run-1',
+          attemptId: 'attempt-1',
+          limit: 201,
+        ),
+        throwsRangeError,
+      );
     },
   );
 
   test(
     'GivenCrossRunReferencesOrDuplicateActiveAttempt_WhenInsertedDirectly_ThenSchemaRejectsThem',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.interrupted),
         snapshot: _snapshot(),
       );
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(id: 'run-2', status: domain.RunStatus.running),
         snapshot: _snapshot(stepIdPrefix: 'other-step'),
       );
@@ -216,9 +367,17 @@ void main() {
   test(
     'GivenFinalRunningAttempt_WhenCompletedThenRunBecomesSucceeded',
     () async {
-      await repository.create(
-        run: _run(status: domain.RunStatus.running, currentStepPosition: 1),
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
+      );
+      await repository.beginAttempt(_attempt());
+      await repository.completeAttemptAndAdvance(
+        attemptId: 'attempt-1',
+        completedAt: DateTime.utc(2026, 8, 6, 12, 1),
+        exitCode: 0,
+        declaredContext: null,
       );
       final attempt = _attempt(
         id: 'attempt-2',
@@ -228,7 +387,6 @@ void main() {
 
       await repository.completeAttemptAndAdvance(
         attemptId: attempt.id,
-        expectedRunStatus: domain.RunStatus.running,
         completedAt: DateTime.utc(2026, 8, 6, 12, 2),
         exitCode: 0,
         declaredContext: null,
@@ -244,11 +402,13 @@ void main() {
   test(
     'GivenSnapshotStepFromAnotherRun_WhenAttemptBegins_ThenCrossRunEvidenceIsRejected',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(id: 'run-2', status: domain.RunStatus.running),
         snapshot: _snapshot(stepIdPrefix: 'other-step'),
       );
@@ -273,7 +433,8 @@ void main() {
   test(
     'GivenTwoAttemptsForCurrentStep_WhenBegunConcurrently_ThenOnlyOneBecomesActive',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
@@ -300,7 +461,8 @@ void main() {
   test(
     'GivenRunningAttempt_WhenFailureCodeIsBlankThenEvidenceStaysActive_WhenValidThenRunFailsAtomically',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
@@ -309,7 +471,6 @@ void main() {
       await expectLater(
         repository.failAttemptAndRun(
           attemptId: 'attempt-1',
-          expectedRunStatus: domain.RunStatus.running,
           completedAt: DateTime.utc(2026, 8, 6, 12, 2),
           exitCode: 17,
           failureCode: ' ',
@@ -323,7 +484,6 @@ void main() {
 
       await repository.failAttemptAndRun(
         attemptId: 'attempt-1',
-        expectedRunStatus: domain.RunStatus.running,
         completedAt: DateTime.utc(2026, 8, 6, 12, 3),
         exitCode: 17,
         failureCode: 'agent.nonzero_exit',
@@ -337,16 +497,56 @@ void main() {
   );
 
   test(
+    'GivenPausedRunWithActiveAttempt_WhenAttemptCompletesOrFails_ThenNonRunningSourceIsRejected',
+    () async {
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.beginAttempt(_attempt());
+      await repository.transitionRun(
+        runId: 'run-1',
+        expectedStatus: domain.RunStatus.running,
+        nextStatus: domain.RunStatus.paused,
+        at: DateTime.utc(2026, 8, 6, 12, 2),
+      );
+
+      await expectLater(
+        repository.completeAttemptAndAdvance(
+          attemptId: 'attempt-1',
+          completedAt: DateTime.utc(2026, 8, 6, 12, 3),
+          exitCode: 0,
+          declaredContext: null,
+        ),
+        throwsStateError,
+      );
+      await expectLater(
+        repository.failAttemptAndRun(
+          attemptId: 'attempt-1',
+          completedAt: DateTime.utc(2026, 8, 6, 12, 4),
+          exitCode: 1,
+          failureCode: 'agent.nonzero_exit',
+        ),
+        throwsStateError,
+      );
+      final stored = (await repository.findById('run-1'))!;
+      expect(stored.run.status, domain.RunStatus.paused);
+      expect(stored.attempts.single.status, domain.AttemptStatus.running);
+    },
+  );
+
+  test(
     'GivenStaleAttemptAfterRunAdvanced_WhenItReportsFailure_ThenLaterStepStateIsUnchanged',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
       await repository.beginAttempt(_attempt(id: 'attempt-a'));
       await repository.completeAttemptAndAdvance(
         attemptId: 'attempt-a',
-        expectedRunStatus: domain.RunStatus.running,
         completedAt: DateTime.utc(2026, 8, 6, 12, 2),
         exitCode: 0,
         declaredContext: null,
@@ -368,7 +568,6 @@ void main() {
       await expectLater(
         repository.failAttemptAndRun(
           attemptId: 'stale-attempt',
-          expectedRunStatus: domain.RunStatus.running,
           completedAt: DateTime.utc(2026, 8, 6, 12, 4),
           exitCode: 1,
           failureCode: 'agent.nonzero_exit',
@@ -390,8 +589,9 @@ void main() {
   test(
     'GivenActiveAndTerminalRuns_WhenListedForProject_ThenOnlyActiveRunsAreReturned',
     () async {
-      await repository.create(run: _run(), snapshot: _snapshot());
-      await repository.create(
+      await _createRun(repository, run: _run(), snapshot: _snapshot());
+      await _createRun(
+        repository,
         run: _run(
           id: 'run-terminal',
           status: domain.RunStatus.failed,
@@ -410,7 +610,8 @@ void main() {
   test(
     'GivenRunningStateAfterRestart_WhenInterrupted_ThenRunAttemptAndSystemEvidenceArePreserved',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.running),
         snapshot: _snapshot(),
       );
@@ -425,9 +626,13 @@ void main() {
       final stored = (await repository.findById('run-1'))!;
       expect(stored.run.status, domain.RunStatus.interrupted);
       expect(stored.attempts.single.status, domain.AttemptStatus.interrupted);
-      expect(stored.logs.single.channel, domain.RunLogChannel.system);
+      final logs = await repository.readLogTail(
+        runId: 'run-1',
+        attemptId: 'attempt-1',
+      );
+      expect(logs.single.channel, domain.RunLogChannel.system);
       expect(
-        utf8.decode(stored.logs.single.bytes),
+        utf8.decode(logs.single.bytes),
         'Run interrupted during application restart.',
       );
       expect(
@@ -443,7 +648,8 @@ void main() {
   test(
     'GivenInterruptedRun_WhenRecoveryRequestedThenRequestIsDurable_WhenRunIsNotInterruptedThenRejected',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.interrupted),
         snapshot: _snapshot(),
       );
@@ -462,7 +668,8 @@ void main() {
         'recovery-1',
       );
 
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(id: 'run-active'),
         snapshot: _snapshot(stepIdPrefix: 'active'),
       );
@@ -485,11 +692,13 @@ void main() {
   test(
     'GivenAttemptFromAnotherInterruptedRun_WhenRecoveryRequested_ThenCrossRunReferenceIsRejected',
     () async {
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(status: domain.RunStatus.interrupted),
         snapshot: _snapshot(),
       );
-      await repository.create(
+      await _createRun(
+        repository,
         run: _run(id: 'run-2', status: domain.RunStatus.running),
         snapshot: _snapshot(stepIdPrefix: 'other-step'),
       );
@@ -601,3 +810,46 @@ domain.RunAttempt _attempt({
   status: domain.AttemptStatus.running,
   startedAt: DateTime.utc(2026, 8, 6, 12, 1),
 );
+
+Future<void> _createRun(
+  DriftRunRepository repository, {
+  required domain.WorkflowRun run,
+  required domain.RunSnapshot snapshot,
+}) async {
+  if (run.currentStepPosition != 0) {
+    throw StateError('Use executed attempts to advance a run fixture.');
+  }
+  final queued = domain.WorkflowRun(
+    id: run.id,
+    projectId: run.projectId,
+    workflowId: run.workflowId,
+    label: run.label,
+    status: domain.RunStatus.queued,
+    currentStepPosition: 0,
+    branchName: run.branchName,
+    worktreePath: run.worktreePath,
+    createdAt: run.createdAt,
+    updatedAt: run.createdAt,
+  );
+  await repository.create(run: queued, snapshot: snapshot);
+  if (run.status == domain.RunStatus.queued) return;
+  await repository.transitionRun(
+    runId: run.id,
+    expectedStatus: domain.RunStatus.queued,
+    nextStatus: domain.RunStatus.starting,
+    at: run.createdAt.add(const Duration(seconds: 1)),
+  );
+  if (run.status == domain.RunStatus.starting) return;
+  final next = switch (run.status) {
+    domain.RunStatus.running => domain.RunStatus.running,
+    domain.RunStatus.failed => domain.RunStatus.failed,
+    domain.RunStatus.interrupted => domain.RunStatus.interrupted,
+    _ => throw StateError('Unsupported run fixture target ${run.status.name}.'),
+  };
+  await repository.transitionRun(
+    runId: run.id,
+    expectedStatus: domain.RunStatus.starting,
+    nextStatus: next,
+    at: run.createdAt.add(const Duration(seconds: 2)),
+  );
+}
