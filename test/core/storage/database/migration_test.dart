@@ -155,4 +155,147 @@ void main() {
       },
     );
   }
+
+  for (final sourceVersion in <int>[1, 2, 3]) {
+    test(
+      'GivenVersion${sourceVersion}Database_WhenMigratedToVersionFour_ThenPriorDataAndWorkflowConstraintsRemainValid',
+      () async {
+        final verifier = SchemaVerifier(GeneratedHelper());
+        final schema = await verifier.schemaAt(sourceVersion);
+        final database = MaestroDatabase(schema.newConnection());
+        await database.customStatement(
+          'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)',
+          <Object?>['retentionDays', '30', 1785931200],
+        );
+        if (sourceVersion >= 2) {
+          await database.customStatement(
+            'INSERT INTO local_users '
+            '(id, email, auth_method, verifier_key, created_at) '
+            'VALUES (?, ?, ?, ?, ?)',
+            <Object?>[
+              'user-v$sourceVersion',
+              'v$sourceVersion@example.com',
+              'emailPassword',
+              'key',
+              1785931200,
+            ],
+          );
+          await database.customStatement(
+            'INSERT INTO audit_events '
+            '(id, actor_id, action, target, outcome, occurred_at, details) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?)',
+            <Object?>[
+              'audit-v$sourceVersion',
+              'user-v$sourceVersion',
+              'signIn',
+              'known',
+              'success',
+              1785931200,
+              '{}',
+            ],
+          );
+        }
+        if (sourceVersion >= 3) {
+          await database.customStatement(
+            'INSERT INTO projects (id, name, normalized_name, folder_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            <Object?>[
+              'project-1',
+              'Maestro',
+              'maestro',
+              r'C:\private\source',
+              1785931200,
+              1785931200,
+            ],
+          );
+        }
+
+        await verifier.migrateAndValidate(database, 4);
+
+        expect(
+          (await database
+                  .customSelect(
+                    "SELECT value FROM settings WHERE key = 'retentionDays'",
+                  )
+                  .getSingle())
+              .read<String>('value'),
+          '30',
+        );
+        if (sourceVersion >= 2) {
+          expect(
+            (await database
+                    .customSelect('SELECT id FROM local_users')
+                    .getSingle())
+                .read<String>('id'),
+            'user-v$sourceVersion',
+          );
+          expect(
+            (await database
+                    .customSelect('SELECT id FROM audit_events')
+                    .getSingle())
+                .read<String>('id'),
+            'audit-v$sourceVersion',
+          );
+        }
+        await database.customStatement(
+          'INSERT INTO workflows (id, revision, name, is_reusable, unit_type, supervised_delivery, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          <Object?>[
+            'workflow-1',
+            1,
+            'Release',
+            1,
+            'githubIssue',
+            1,
+            1785931200,
+            1785931200,
+          ],
+        );
+        await database.customStatement(
+          'INSERT INTO workflow_steps (id, workflow_id, position, kind, name, cli, model, configuration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          <Object?>[
+            'step-1',
+            'workflow-1',
+            0,
+            'execute',
+            'Execute',
+            null,
+            null,
+            '{}',
+          ],
+        );
+        await expectLater(
+          database.customStatement(
+            'INSERT INTO workflow_steps (id, workflow_id, position, kind, name, cli, model, configuration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            <Object?>[
+              'step-bad',
+              'workflow-1',
+              1,
+              'plan',
+              'Plan',
+              'codex',
+              null,
+              '{}',
+            ],
+          ),
+          throwsA(anything),
+        );
+        expect(
+          await database.customSelect('SELECT id FROM workflow_steps').get(),
+          hasLength(1),
+        );
+        if (sourceVersion >= 3) {
+          expect(
+            (await database
+                    .customSelect(
+                      "SELECT folder_path FROM projects WHERE id = 'project-1'",
+                    )
+                    .getSingle())
+                .read<String>('folder_path'),
+            r'C:\private\source',
+          );
+        }
+        await database.close();
+        schema.close();
+      },
+    );
+  }
 }

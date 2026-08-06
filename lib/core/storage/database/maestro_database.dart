@@ -82,6 +82,58 @@ class Projects extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
 
+class Workflows extends Table {
+  TextColumn get id => text()();
+  IntColumn get revision => integer().check(revision.isBiggerOrEqualValue(1))();
+  TextColumn get name => text().nullable()();
+  BoolColumn get isReusable => boolean()();
+  TextColumn get unitType => text()();
+  BoolColumn get supervisedDelivery =>
+      boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+@TableIndex(
+  name: 'workflow_steps_workflow_position',
+  columns: <Symbol>{#workflowId, #position},
+  unique: true,
+)
+class WorkflowSteps extends Table {
+  TextColumn get id => text()();
+  TextColumn get workflowId =>
+      text().references(Workflows, #id, onDelete: KeyAction.cascade)();
+  IntColumn get position => integer().check(position.isBiggerOrEqualValue(0))();
+  TextColumn get kind => text()();
+  TextColumn get name => text()();
+  TextColumn get cli => text().nullable().customConstraint(
+    'NULL CHECK ((cli IS NULL) = (model IS NULL))',
+  )();
+  TextColumn get model => text().nullable()();
+  TextColumn get configuration => text().withDefault(const Constant('{}'))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+@TableIndex(
+  name: 'workflow_project_refs_project',
+  columns: <Symbol>{#projectId},
+)
+class WorkflowProjectRefs extends Table {
+  TextColumn get workflowId =>
+      text().references(Workflows, #id, onDelete: KeyAction.cascade)();
+  TextColumn get projectId =>
+      text().references(Projects, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{workflowId, projectId};
+}
+
 @DriftDatabase(
   tables: <Type>[
     Settings,
@@ -90,6 +142,9 @@ class Projects extends Table {
     LocalUsers,
     AuditEvents,
     Projects,
+    Workflows,
+    WorkflowSteps,
+    WorkflowProjectRefs,
   ],
 )
 final class MaestroDatabase extends _$MaestroDatabase {
@@ -109,6 +164,13 @@ final class MaestroDatabase extends _$MaestroDatabase {
       }
       if (from < 3) {
         await migrator.createTable(projects);
+      }
+      if (from < 4) {
+        await migrator.createTable(workflows);
+        await migrator.createTable(workflowSteps);
+        await migrator.createTable(workflowProjectRefs);
+        await migrator.createIndex(workflowStepsWorkflowPosition);
+        await migrator.createIndex(workflowProjectRefsProject);
       }
     },
     beforeOpen: (_) async {

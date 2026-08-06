@@ -2681,6 +2681,1316 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   }
 }
 
+class $WorkflowsTable extends Workflows
+    with TableInfo<$WorkflowsTable, Workflow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkflowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(revision).isBiggerOrEqualValue(1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isReusableMeta = const VerificationMeta(
+    'isReusable',
+  );
+  @override
+  late final GeneratedColumn<bool> isReusable = GeneratedColumn<bool>(
+    'is_reusable',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_reusable" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _unitTypeMeta = const VerificationMeta(
+    'unitType',
+  );
+  @override
+  late final GeneratedColumn<String> unitType = GeneratedColumn<String>(
+    'unit_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _supervisedDeliveryMeta =
+      const VerificationMeta('supervisedDelivery');
+  @override
+  late final GeneratedColumn<bool> supervisedDelivery = GeneratedColumn<bool>(
+    'supervised_delivery',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("supervised_delivery" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    revision,
+    name,
+    isReusable,
+    unitType,
+    supervisedDelivery,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'workflows';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Workflow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    }
+    if (data.containsKey('is_reusable')) {
+      context.handle(
+        _isReusableMeta,
+        isReusable.isAcceptableOrUnknown(data['is_reusable']!, _isReusableMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_isReusableMeta);
+    }
+    if (data.containsKey('unit_type')) {
+      context.handle(
+        _unitTypeMeta,
+        unitType.isAcceptableOrUnknown(data['unit_type']!, _unitTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_unitTypeMeta);
+    }
+    if (data.containsKey('supervised_delivery')) {
+      context.handle(
+        _supervisedDeliveryMeta,
+        supervisedDelivery.isAcceptableOrUnknown(
+          data['supervised_delivery']!,
+          _supervisedDeliveryMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Workflow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Workflow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      ),
+      isReusable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_reusable'],
+      )!,
+      unitType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}unit_type'],
+      )!,
+      supervisedDelivery: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}supervised_delivery'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $WorkflowsTable createAlias(String alias) {
+    return $WorkflowsTable(attachedDatabase, alias);
+  }
+}
+
+class Workflow extends DataClass implements Insertable<Workflow> {
+  final String id;
+  final int revision;
+  final String? name;
+  final bool isReusable;
+  final String unitType;
+  final bool supervisedDelivery;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  const Workflow({
+    required this.id,
+    required this.revision,
+    this.name,
+    required this.isReusable,
+    required this.unitType,
+    required this.supervisedDelivery,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['revision'] = Variable<int>(revision);
+    if (!nullToAbsent || name != null) {
+      map['name'] = Variable<String>(name);
+    }
+    map['is_reusable'] = Variable<bool>(isReusable);
+    map['unit_type'] = Variable<String>(unitType);
+    map['supervised_delivery'] = Variable<bool>(supervisedDelivery);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  WorkflowsCompanion toCompanion(bool nullToAbsent) {
+    return WorkflowsCompanion(
+      id: Value(id),
+      revision: Value(revision),
+      name: name == null && nullToAbsent ? const Value.absent() : Value(name),
+      isReusable: Value(isReusable),
+      unitType: Value(unitType),
+      supervisedDelivery: Value(supervisedDelivery),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory Workflow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Workflow(
+      id: serializer.fromJson<String>(json['id']),
+      revision: serializer.fromJson<int>(json['revision']),
+      name: serializer.fromJson<String?>(json['name']),
+      isReusable: serializer.fromJson<bool>(json['isReusable']),
+      unitType: serializer.fromJson<String>(json['unitType']),
+      supervisedDelivery: serializer.fromJson<bool>(json['supervisedDelivery']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'revision': serializer.toJson<int>(revision),
+      'name': serializer.toJson<String?>(name),
+      'isReusable': serializer.toJson<bool>(isReusable),
+      'unitType': serializer.toJson<String>(unitType),
+      'supervisedDelivery': serializer.toJson<bool>(supervisedDelivery),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  Workflow copyWith({
+    String? id,
+    int? revision,
+    Value<String?> name = const Value.absent(),
+    bool? isReusable,
+    String? unitType,
+    bool? supervisedDelivery,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => Workflow(
+    id: id ?? this.id,
+    revision: revision ?? this.revision,
+    name: name.present ? name.value : this.name,
+    isReusable: isReusable ?? this.isReusable,
+    unitType: unitType ?? this.unitType,
+    supervisedDelivery: supervisedDelivery ?? this.supervisedDelivery,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  Workflow copyWithCompanion(WorkflowsCompanion data) {
+    return Workflow(
+      id: data.id.present ? data.id.value : this.id,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      name: data.name.present ? data.name.value : this.name,
+      isReusable: data.isReusable.present
+          ? data.isReusable.value
+          : this.isReusable,
+      unitType: data.unitType.present ? data.unitType.value : this.unitType,
+      supervisedDelivery: data.supervisedDelivery.present
+          ? data.supervisedDelivery.value
+          : this.supervisedDelivery,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Workflow(')
+          ..write('id: $id, ')
+          ..write('revision: $revision, ')
+          ..write('name: $name, ')
+          ..write('isReusable: $isReusable, ')
+          ..write('unitType: $unitType, ')
+          ..write('supervisedDelivery: $supervisedDelivery, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    revision,
+    name,
+    isReusable,
+    unitType,
+    supervisedDelivery,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Workflow &&
+          other.id == this.id &&
+          other.revision == this.revision &&
+          other.name == this.name &&
+          other.isReusable == this.isReusable &&
+          other.unitType == this.unitType &&
+          other.supervisedDelivery == this.supervisedDelivery &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class WorkflowsCompanion extends UpdateCompanion<Workflow> {
+  final Value<String> id;
+  final Value<int> revision;
+  final Value<String?> name;
+  final Value<bool> isReusable;
+  final Value<String> unitType;
+  final Value<bool> supervisedDelivery;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const WorkflowsCompanion({
+    this.id = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.name = const Value.absent(),
+    this.isReusable = const Value.absent(),
+    this.unitType = const Value.absent(),
+    this.supervisedDelivery = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkflowsCompanion.insert({
+    required String id,
+    required int revision,
+    this.name = const Value.absent(),
+    required bool isReusable,
+    required String unitType,
+    this.supervisedDelivery = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       revision = Value(revision),
+       isReusable = Value(isReusable),
+       unitType = Value(unitType),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Workflow> custom({
+    Expression<String>? id,
+    Expression<int>? revision,
+    Expression<String>? name,
+    Expression<bool>? isReusable,
+    Expression<String>? unitType,
+    Expression<bool>? supervisedDelivery,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (revision != null) 'revision': revision,
+      if (name != null) 'name': name,
+      if (isReusable != null) 'is_reusable': isReusable,
+      if (unitType != null) 'unit_type': unitType,
+      if (supervisedDelivery != null) 'supervised_delivery': supervisedDelivery,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkflowsCompanion copyWith({
+    Value<String>? id,
+    Value<int>? revision,
+    Value<String?>? name,
+    Value<bool>? isReusable,
+    Value<String>? unitType,
+    Value<bool>? supervisedDelivery,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return WorkflowsCompanion(
+      id: id ?? this.id,
+      revision: revision ?? this.revision,
+      name: name ?? this.name,
+      isReusable: isReusable ?? this.isReusable,
+      unitType: unitType ?? this.unitType,
+      supervisedDelivery: supervisedDelivery ?? this.supervisedDelivery,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (isReusable.present) {
+      map['is_reusable'] = Variable<bool>(isReusable.value);
+    }
+    if (unitType.present) {
+      map['unit_type'] = Variable<String>(unitType.value);
+    }
+    if (supervisedDelivery.present) {
+      map['supervised_delivery'] = Variable<bool>(supervisedDelivery.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowsCompanion(')
+          ..write('id: $id, ')
+          ..write('revision: $revision, ')
+          ..write('name: $name, ')
+          ..write('isReusable: $isReusable, ')
+          ..write('unitType: $unitType, ')
+          ..write('supervisedDelivery: $supervisedDelivery, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WorkflowStepsTable extends WorkflowSteps
+    with TableInfo<$WorkflowStepsTable, WorkflowStep> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkflowStepsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workflowIdMeta = const VerificationMeta(
+    'workflowId',
+  );
+  @override
+  late final GeneratedColumn<String> workflowId = GeneratedColumn<String>(
+    'workflow_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflows (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(position).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cliMeta = const VerificationMeta('cli');
+  @override
+  late final GeneratedColumn<String> cli = GeneratedColumn<String>(
+    'cli',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NULL CHECK ((cli IS NULL) = (model IS NULL))',
+  );
+  static const VerificationMeta _modelMeta = const VerificationMeta('model');
+  @override
+  late final GeneratedColumn<String> model = GeneratedColumn<String>(
+    'model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _configurationMeta = const VerificationMeta(
+    'configuration',
+  );
+  @override
+  late final GeneratedColumn<String> configuration = GeneratedColumn<String>(
+    'configuration',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    workflowId,
+    position,
+    kind,
+    name,
+    cli,
+    model,
+    configuration,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'workflow_steps';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WorkflowStep> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('workflow_id')) {
+      context.handle(
+        _workflowIdMeta,
+        workflowId.isAcceptableOrUnknown(data['workflow_id']!, _workflowIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_workflowIdMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('cli')) {
+      context.handle(
+        _cliMeta,
+        cli.isAcceptableOrUnknown(data['cli']!, _cliMeta),
+      );
+    }
+    if (data.containsKey('model')) {
+      context.handle(
+        _modelMeta,
+        model.isAcceptableOrUnknown(data['model']!, _modelMeta),
+      );
+    }
+    if (data.containsKey('configuration')) {
+      context.handle(
+        _configurationMeta,
+        configuration.isAcceptableOrUnknown(
+          data['configuration']!,
+          _configurationMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WorkflowStep map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WorkflowStep(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      workflowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workflow_id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      cli: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cli'],
+      ),
+      model: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}model'],
+      ),
+      configuration: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}configuration'],
+      )!,
+    );
+  }
+
+  @override
+  $WorkflowStepsTable createAlias(String alias) {
+    return $WorkflowStepsTable(attachedDatabase, alias);
+  }
+}
+
+class WorkflowStep extends DataClass implements Insertable<WorkflowStep> {
+  final String id;
+  final String workflowId;
+  final int position;
+  final String kind;
+  final String name;
+  final String? cli;
+  final String? model;
+  final String configuration;
+  const WorkflowStep({
+    required this.id,
+    required this.workflowId,
+    required this.position,
+    required this.kind,
+    required this.name,
+    this.cli,
+    this.model,
+    required this.configuration,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['workflow_id'] = Variable<String>(workflowId);
+    map['position'] = Variable<int>(position);
+    map['kind'] = Variable<String>(kind);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || cli != null) {
+      map['cli'] = Variable<String>(cli);
+    }
+    if (!nullToAbsent || model != null) {
+      map['model'] = Variable<String>(model);
+    }
+    map['configuration'] = Variable<String>(configuration);
+    return map;
+  }
+
+  WorkflowStepsCompanion toCompanion(bool nullToAbsent) {
+    return WorkflowStepsCompanion(
+      id: Value(id),
+      workflowId: Value(workflowId),
+      position: Value(position),
+      kind: Value(kind),
+      name: Value(name),
+      cli: cli == null && nullToAbsent ? const Value.absent() : Value(cli),
+      model: model == null && nullToAbsent
+          ? const Value.absent()
+          : Value(model),
+      configuration: Value(configuration),
+    );
+  }
+
+  factory WorkflowStep.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WorkflowStep(
+      id: serializer.fromJson<String>(json['id']),
+      workflowId: serializer.fromJson<String>(json['workflowId']),
+      position: serializer.fromJson<int>(json['position']),
+      kind: serializer.fromJson<String>(json['kind']),
+      name: serializer.fromJson<String>(json['name']),
+      cli: serializer.fromJson<String?>(json['cli']),
+      model: serializer.fromJson<String?>(json['model']),
+      configuration: serializer.fromJson<String>(json['configuration']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'workflowId': serializer.toJson<String>(workflowId),
+      'position': serializer.toJson<int>(position),
+      'kind': serializer.toJson<String>(kind),
+      'name': serializer.toJson<String>(name),
+      'cli': serializer.toJson<String?>(cli),
+      'model': serializer.toJson<String?>(model),
+      'configuration': serializer.toJson<String>(configuration),
+    };
+  }
+
+  WorkflowStep copyWith({
+    String? id,
+    String? workflowId,
+    int? position,
+    String? kind,
+    String? name,
+    Value<String?> cli = const Value.absent(),
+    Value<String?> model = const Value.absent(),
+    String? configuration,
+  }) => WorkflowStep(
+    id: id ?? this.id,
+    workflowId: workflowId ?? this.workflowId,
+    position: position ?? this.position,
+    kind: kind ?? this.kind,
+    name: name ?? this.name,
+    cli: cli.present ? cli.value : this.cli,
+    model: model.present ? model.value : this.model,
+    configuration: configuration ?? this.configuration,
+  );
+  WorkflowStep copyWithCompanion(WorkflowStepsCompanion data) {
+    return WorkflowStep(
+      id: data.id.present ? data.id.value : this.id,
+      workflowId: data.workflowId.present
+          ? data.workflowId.value
+          : this.workflowId,
+      position: data.position.present ? data.position.value : this.position,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      name: data.name.present ? data.name.value : this.name,
+      cli: data.cli.present ? data.cli.value : this.cli,
+      model: data.model.present ? data.model.value : this.model,
+      configuration: data.configuration.present
+          ? data.configuration.value
+          : this.configuration,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowStep(')
+          ..write('id: $id, ')
+          ..write('workflowId: $workflowId, ')
+          ..write('position: $position, ')
+          ..write('kind: $kind, ')
+          ..write('name: $name, ')
+          ..write('cli: $cli, ')
+          ..write('model: $model, ')
+          ..write('configuration: $configuration')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    workflowId,
+    position,
+    kind,
+    name,
+    cli,
+    model,
+    configuration,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkflowStep &&
+          other.id == this.id &&
+          other.workflowId == this.workflowId &&
+          other.position == this.position &&
+          other.kind == this.kind &&
+          other.name == this.name &&
+          other.cli == this.cli &&
+          other.model == this.model &&
+          other.configuration == this.configuration);
+}
+
+class WorkflowStepsCompanion extends UpdateCompanion<WorkflowStep> {
+  final Value<String> id;
+  final Value<String> workflowId;
+  final Value<int> position;
+  final Value<String> kind;
+  final Value<String> name;
+  final Value<String?> cli;
+  final Value<String?> model;
+  final Value<String> configuration;
+  final Value<int> rowid;
+  const WorkflowStepsCompanion({
+    this.id = const Value.absent(),
+    this.workflowId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.name = const Value.absent(),
+    this.cli = const Value.absent(),
+    this.model = const Value.absent(),
+    this.configuration = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkflowStepsCompanion.insert({
+    required String id,
+    required String workflowId,
+    required int position,
+    required String kind,
+    required String name,
+    this.cli = const Value.absent(),
+    this.model = const Value.absent(),
+    this.configuration = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       workflowId = Value(workflowId),
+       position = Value(position),
+       kind = Value(kind),
+       name = Value(name);
+  static Insertable<WorkflowStep> custom({
+    Expression<String>? id,
+    Expression<String>? workflowId,
+    Expression<int>? position,
+    Expression<String>? kind,
+    Expression<String>? name,
+    Expression<String>? cli,
+    Expression<String>? model,
+    Expression<String>? configuration,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (workflowId != null) 'workflow_id': workflowId,
+      if (position != null) 'position': position,
+      if (kind != null) 'kind': kind,
+      if (name != null) 'name': name,
+      if (cli != null) 'cli': cli,
+      if (model != null) 'model': model,
+      if (configuration != null) 'configuration': configuration,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkflowStepsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? workflowId,
+    Value<int>? position,
+    Value<String>? kind,
+    Value<String>? name,
+    Value<String?>? cli,
+    Value<String?>? model,
+    Value<String>? configuration,
+    Value<int>? rowid,
+  }) {
+    return WorkflowStepsCompanion(
+      id: id ?? this.id,
+      workflowId: workflowId ?? this.workflowId,
+      position: position ?? this.position,
+      kind: kind ?? this.kind,
+      name: name ?? this.name,
+      cli: cli ?? this.cli,
+      model: model ?? this.model,
+      configuration: configuration ?? this.configuration,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (workflowId.present) {
+      map['workflow_id'] = Variable<String>(workflowId.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (cli.present) {
+      map['cli'] = Variable<String>(cli.value);
+    }
+    if (model.present) {
+      map['model'] = Variable<String>(model.value);
+    }
+    if (configuration.present) {
+      map['configuration'] = Variable<String>(configuration.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowStepsCompanion(')
+          ..write('id: $id, ')
+          ..write('workflowId: $workflowId, ')
+          ..write('position: $position, ')
+          ..write('kind: $kind, ')
+          ..write('name: $name, ')
+          ..write('cli: $cli, ')
+          ..write('model: $model, ')
+          ..write('configuration: $configuration, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WorkflowProjectRefsTable extends WorkflowProjectRefs
+    with TableInfo<$WorkflowProjectRefsTable, WorkflowProjectRef> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkflowProjectRefsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _workflowIdMeta = const VerificationMeta(
+    'workflowId',
+  );
+  @override
+  late final GeneratedColumn<String> workflowId = GeneratedColumn<String>(
+    'workflow_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflows (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id) ON DELETE CASCADE',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [workflowId, projectId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'workflow_project_refs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WorkflowProjectRef> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('workflow_id')) {
+      context.handle(
+        _workflowIdMeta,
+        workflowId.isAcceptableOrUnknown(data['workflow_id']!, _workflowIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_workflowIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {workflowId, projectId};
+  @override
+  WorkflowProjectRef map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WorkflowProjectRef(
+      workflowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workflow_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+    );
+  }
+
+  @override
+  $WorkflowProjectRefsTable createAlias(String alias) {
+    return $WorkflowProjectRefsTable(attachedDatabase, alias);
+  }
+}
+
+class WorkflowProjectRef extends DataClass
+    implements Insertable<WorkflowProjectRef> {
+  final String workflowId;
+  final String projectId;
+  const WorkflowProjectRef({required this.workflowId, required this.projectId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['workflow_id'] = Variable<String>(workflowId);
+    map['project_id'] = Variable<String>(projectId);
+    return map;
+  }
+
+  WorkflowProjectRefsCompanion toCompanion(bool nullToAbsent) {
+    return WorkflowProjectRefsCompanion(
+      workflowId: Value(workflowId),
+      projectId: Value(projectId),
+    );
+  }
+
+  factory WorkflowProjectRef.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WorkflowProjectRef(
+      workflowId: serializer.fromJson<String>(json['workflowId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'workflowId': serializer.toJson<String>(workflowId),
+      'projectId': serializer.toJson<String>(projectId),
+    };
+  }
+
+  WorkflowProjectRef copyWith({String? workflowId, String? projectId}) =>
+      WorkflowProjectRef(
+        workflowId: workflowId ?? this.workflowId,
+        projectId: projectId ?? this.projectId,
+      );
+  WorkflowProjectRef copyWithCompanion(WorkflowProjectRefsCompanion data) {
+    return WorkflowProjectRef(
+      workflowId: data.workflowId.present
+          ? data.workflowId.value
+          : this.workflowId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowProjectRef(')
+          ..write('workflowId: $workflowId, ')
+          ..write('projectId: $projectId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(workflowId, projectId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkflowProjectRef &&
+          other.workflowId == this.workflowId &&
+          other.projectId == this.projectId);
+}
+
+class WorkflowProjectRefsCompanion extends UpdateCompanion<WorkflowProjectRef> {
+  final Value<String> workflowId;
+  final Value<String> projectId;
+  final Value<int> rowid;
+  const WorkflowProjectRefsCompanion({
+    this.workflowId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkflowProjectRefsCompanion.insert({
+    required String workflowId,
+    required String projectId,
+    this.rowid = const Value.absent(),
+  }) : workflowId = Value(workflowId),
+       projectId = Value(projectId);
+  static Insertable<WorkflowProjectRef> custom({
+    Expression<String>? workflowId,
+    Expression<String>? projectId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (workflowId != null) 'workflow_id': workflowId,
+      if (projectId != null) 'project_id': projectId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkflowProjectRefsCompanion copyWith({
+    Value<String>? workflowId,
+    Value<String>? projectId,
+    Value<int>? rowid,
+  }) {
+    return WorkflowProjectRefsCompanion(
+      workflowId: workflowId ?? this.workflowId,
+      projectId: projectId ?? this.projectId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (workflowId.present) {
+      map['workflow_id'] = Variable<String>(workflowId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowProjectRefsCompanion(')
+          ..write('workflowId: $workflowId, ')
+          ..write('projectId: $projectId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$MaestroDatabase extends GeneratedDatabase {
   _$MaestroDatabase(QueryExecutor e) : super(e);
   $MaestroDatabaseManager get managers => $MaestroDatabaseManager(this);
@@ -2691,9 +4001,21 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final $LocalUsersTable localUsers = $LocalUsersTable(this);
   late final $AuditEventsTable auditEvents = $AuditEventsTable(this);
   late final $ProjectsTable projects = $ProjectsTable(this);
+  late final $WorkflowsTable workflows = $WorkflowsTable(this);
+  late final $WorkflowStepsTable workflowSteps = $WorkflowStepsTable(this);
+  late final $WorkflowProjectRefsTable workflowProjectRefs =
+      $WorkflowProjectRefsTable(this);
   late final Index localUsersSingleOperatingSystem = Index(
     'local_users_single_operating_system',
     'CREATE UNIQUE INDEX local_users_single_operating_system ON local_users (auth_method) WHERE auth_method = \'operatingSystem\'',
+  );
+  late final Index workflowStepsWorkflowPosition = Index(
+    'workflow_steps_workflow_position',
+    'CREATE UNIQUE INDEX workflow_steps_workflow_position ON workflow_steps (workflow_id, position)',
+  );
+  late final Index workflowProjectRefsProject = Index(
+    'workflow_project_refs_project',
+    'CREATE INDEX workflow_project_refs_project ON workflow_project_refs (project_id)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -2706,8 +4028,37 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     localUsers,
     auditEvents,
     projects,
+    workflows,
+    workflowSteps,
+    workflowProjectRefs,
     localUsersSingleOperatingSystem,
+    workflowStepsWorkflowPosition,
+    workflowProjectRefsProject,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflows',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('workflow_steps', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflows',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('workflow_project_refs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'projects',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('workflow_project_refs', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$SettingsTableCreateCompanionBuilder =
@@ -3905,6 +5256,35 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$ProjectsTableReferences
+    extends BaseReferences<_$MaestroDatabase, $ProjectsTable, Project> {
+  $$ProjectsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<
+    $WorkflowProjectRefsTable,
+    List<WorkflowProjectRef>
+  >
+  _workflowProjectRefsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.workflowProjectRefs,
+        aliasName: 'projects__id__workflow_project_refs__project_id',
+      );
+
+  $$WorkflowProjectRefsTableProcessedTableManager get workflowProjectRefsRefs {
+    final manager = $$WorkflowProjectRefsTableTableManager(
+      $_db,
+      $_db.workflowProjectRefs,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _workflowProjectRefsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$ProjectsTableFilterComposer
     extends Composer<_$MaestroDatabase, $ProjectsTable> {
   $$ProjectsTableFilterComposer({
@@ -3948,6 +5328,31 @@ class $$ProjectsTableFilterComposer
     column: $table.deletedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> workflowProjectRefsRefs(
+    Expression<bool> Function($$WorkflowProjectRefsTableFilterComposer f) f,
+  ) {
+    final $$WorkflowProjectRefsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowProjectRefs,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowProjectRefsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowProjectRefs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableOrderingComposer
@@ -4028,6 +5433,32 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  Expression<T> workflowProjectRefsRefs<T extends Object>(
+    Expression<T> Function($$WorkflowProjectRefsTableAnnotationComposer a) f,
+  ) {
+    final $$WorkflowProjectRefsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.workflowProjectRefs,
+          getReferencedColumn: (t) => t.projectId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$WorkflowProjectRefsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.workflowProjectRefs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -4041,9 +5472,9 @@ class $$ProjectsTableTableManager
           $$ProjectsTableAnnotationComposer,
           $$ProjectsTableCreateCompanionBuilder,
           $$ProjectsTableUpdateCompanionBuilder,
-          (Project, BaseReferences<_$MaestroDatabase, $ProjectsTable, Project>),
+          (Project, $$ProjectsTableReferences),
           Project,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool workflowProjectRefsRefs})
         > {
   $$ProjectsTableTableManager(_$MaestroDatabase db, $ProjectsTable table)
     : super(
@@ -4097,9 +5528,44 @@ class $$ProjectsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ProjectsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({workflowProjectRefsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (workflowProjectRefsRefs) db.workflowProjectRefs,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (workflowProjectRefsRefs)
+                    await $_getPrefetchedData<
+                      Project,
+                      $ProjectsTable,
+                      WorkflowProjectRef
+                    >(
+                      currentTable: table,
+                      referencedTable: $$ProjectsTableReferences
+                          ._workflowProjectRefsRefsTable(db),
+                      managerFromTypedResult: (p0) => $$ProjectsTableReferences(
+                        db,
+                        table,
+                        p0,
+                      ).workflowProjectRefsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.projectId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -4114,9 +5580,1249 @@ typedef $$ProjectsTableProcessedTableManager =
       $$ProjectsTableAnnotationComposer,
       $$ProjectsTableCreateCompanionBuilder,
       $$ProjectsTableUpdateCompanionBuilder,
-      (Project, BaseReferences<_$MaestroDatabase, $ProjectsTable, Project>),
+      (Project, $$ProjectsTableReferences),
       Project,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool workflowProjectRefsRefs})
+    >;
+typedef $$WorkflowsTableCreateCompanionBuilder =
+    WorkflowsCompanion Function({
+      required String id,
+      required int revision,
+      Value<String?> name,
+      required bool isReusable,
+      required String unitType,
+      Value<bool> supervisedDelivery,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$WorkflowsTableUpdateCompanionBuilder =
+    WorkflowsCompanion Function({
+      Value<String> id,
+      Value<int> revision,
+      Value<String?> name,
+      Value<bool> isReusable,
+      Value<String> unitType,
+      Value<bool> supervisedDelivery,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+final class $$WorkflowsTableReferences
+    extends BaseReferences<_$MaestroDatabase, $WorkflowsTable, Workflow> {
+  $$WorkflowsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$WorkflowStepsTable, List<WorkflowStep>>
+  _workflowStepsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.workflowSteps,
+        aliasName: 'workflows__id__workflow_steps__workflow_id',
+      );
+
+  $$WorkflowStepsTableProcessedTableManager get workflowStepsRefs {
+    final manager = $$WorkflowStepsTableTableManager(
+      $_db,
+      $_db.workflowSteps,
+    ).filter((f) => f.workflowId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_workflowStepsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $WorkflowProjectRefsTable,
+    List<WorkflowProjectRef>
+  >
+  _workflowProjectRefsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.workflowProjectRefs,
+        aliasName: 'workflows__id__workflow_project_refs__workflow_id',
+      );
+
+  $$WorkflowProjectRefsTableProcessedTableManager get workflowProjectRefsRefs {
+    final manager = $$WorkflowProjectRefsTableTableManager(
+      $_db,
+      $_db.workflowProjectRefs,
+    ).filter((f) => f.workflowId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _workflowProjectRefsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$WorkflowsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $WorkflowsTable> {
+  $$WorkflowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isReusable => $composableBuilder(
+    column: $table.isReusable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get unitType => $composableBuilder(
+    column: $table.unitType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get supervisedDelivery => $composableBuilder(
+    column: $table.supervisedDelivery,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> workflowStepsRefs(
+    Expression<bool> Function($$WorkflowStepsTableFilterComposer f) f,
+  ) {
+    final $$WorkflowStepsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowSteps,
+      getReferencedColumn: (t) => t.workflowId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowStepsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> workflowProjectRefsRefs(
+    Expression<bool> Function($$WorkflowProjectRefsTableFilterComposer f) f,
+  ) {
+    final $$WorkflowProjectRefsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowProjectRefs,
+      getReferencedColumn: (t) => t.workflowId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowProjectRefsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowProjectRefs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$WorkflowsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $WorkflowsTable> {
+  $$WorkflowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isReusable => $composableBuilder(
+    column: $table.isReusable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get unitType => $composableBuilder(
+    column: $table.unitType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get supervisedDelivery => $composableBuilder(
+    column: $table.supervisedDelivery,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WorkflowsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $WorkflowsTable> {
+  $$WorkflowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get isReusable => $composableBuilder(
+    column: $table.isReusable,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get unitType =>
+      $composableBuilder(column: $table.unitType, builder: (column) => column);
+
+  GeneratedColumn<bool> get supervisedDelivery => $composableBuilder(
+    column: $table.supervisedDelivery,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  Expression<T> workflowStepsRefs<T extends Object>(
+    Expression<T> Function($$WorkflowStepsTableAnnotationComposer a) f,
+  ) {
+    final $$WorkflowStepsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowSteps,
+      getReferencedColumn: (t) => t.workflowId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowStepsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> workflowProjectRefsRefs<T extends Object>(
+    Expression<T> Function($$WorkflowProjectRefsTableAnnotationComposer a) f,
+  ) {
+    final $$WorkflowProjectRefsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.workflowProjectRefs,
+          getReferencedColumn: (t) => t.workflowId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$WorkflowProjectRefsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.workflowProjectRefs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$WorkflowsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $WorkflowsTable,
+          Workflow,
+          $$WorkflowsTableFilterComposer,
+          $$WorkflowsTableOrderingComposer,
+          $$WorkflowsTableAnnotationComposer,
+          $$WorkflowsTableCreateCompanionBuilder,
+          $$WorkflowsTableUpdateCompanionBuilder,
+          (Workflow, $$WorkflowsTableReferences),
+          Workflow,
+          PrefetchHooks Function({
+            bool workflowStepsRefs,
+            bool workflowProjectRefsRefs,
+          })
+        > {
+  $$WorkflowsTableTableManager(_$MaestroDatabase db, $WorkflowsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkflowsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkflowsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WorkflowsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<String?> name = const Value.absent(),
+                Value<bool> isReusable = const Value.absent(),
+                Value<String> unitType = const Value.absent(),
+                Value<bool> supervisedDelivery = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowsCompanion(
+                id: id,
+                revision: revision,
+                name: name,
+                isReusable: isReusable,
+                unitType: unitType,
+                supervisedDelivery: supervisedDelivery,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int revision,
+                Value<String?> name = const Value.absent(),
+                required bool isReusable,
+                required String unitType,
+                Value<bool> supervisedDelivery = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowsCompanion.insert(
+                id: id,
+                revision: revision,
+                name: name,
+                isReusable: isReusable,
+                unitType: unitType,
+                supervisedDelivery: supervisedDelivery,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$WorkflowsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({workflowStepsRefs = false, workflowProjectRefsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (workflowStepsRefs) db.workflowSteps,
+                    if (workflowProjectRefsRefs) db.workflowProjectRefs,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (workflowStepsRefs)
+                        await $_getPrefetchedData<
+                          Workflow,
+                          $WorkflowsTable,
+                          WorkflowStep
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowsTableReferences
+                              ._workflowStepsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).workflowStepsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.workflowId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (workflowProjectRefsRefs)
+                        await $_getPrefetchedData<
+                          Workflow,
+                          $WorkflowsTable,
+                          WorkflowProjectRef
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowsTableReferences
+                              ._workflowProjectRefsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).workflowProjectRefsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.workflowId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$WorkflowsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $WorkflowsTable,
+      Workflow,
+      $$WorkflowsTableFilterComposer,
+      $$WorkflowsTableOrderingComposer,
+      $$WorkflowsTableAnnotationComposer,
+      $$WorkflowsTableCreateCompanionBuilder,
+      $$WorkflowsTableUpdateCompanionBuilder,
+      (Workflow, $$WorkflowsTableReferences),
+      Workflow,
+      PrefetchHooks Function({
+        bool workflowStepsRefs,
+        bool workflowProjectRefsRefs,
+      })
+    >;
+typedef $$WorkflowStepsTableCreateCompanionBuilder =
+    WorkflowStepsCompanion Function({
+      required String id,
+      required String workflowId,
+      required int position,
+      required String kind,
+      required String name,
+      Value<String?> cli,
+      Value<String?> model,
+      Value<String> configuration,
+      Value<int> rowid,
+    });
+typedef $$WorkflowStepsTableUpdateCompanionBuilder =
+    WorkflowStepsCompanion Function({
+      Value<String> id,
+      Value<String> workflowId,
+      Value<int> position,
+      Value<String> kind,
+      Value<String> name,
+      Value<String?> cli,
+      Value<String?> model,
+      Value<String> configuration,
+      Value<int> rowid,
+    });
+
+final class $$WorkflowStepsTableReferences
+    extends
+        BaseReferences<_$MaestroDatabase, $WorkflowStepsTable, WorkflowStep> {
+  $$WorkflowStepsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $WorkflowsTable _workflowIdTable(_$MaestroDatabase db) =>
+      db.workflows.createAlias('workflow_steps__workflow_id__workflows__id');
+
+  $$WorkflowsTableProcessedTableManager get workflowId {
+    final $_column = $_itemColumn<String>('workflow_id')!;
+
+    final manager = $$WorkflowsTableTableManager(
+      $_db,
+      $_db.workflows,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_workflowIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$WorkflowStepsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $WorkflowStepsTable> {
+  $$WorkflowStepsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cli => $composableBuilder(
+    column: $table.cli,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get model => $composableBuilder(
+    column: $table.model,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowsTableFilterComposer get workflowId {
+    final $$WorkflowsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowStepsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $WorkflowStepsTable> {
+  $$WorkflowStepsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cli => $composableBuilder(
+    column: $table.cli,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get model => $composableBuilder(
+    column: $table.model,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowsTableOrderingComposer get workflowId {
+    final $$WorkflowsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowStepsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $WorkflowStepsTable> {
+  $$WorkflowStepsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get cli =>
+      $composableBuilder(column: $table.cli, builder: (column) => column);
+
+  GeneratedColumn<String> get model =>
+      $composableBuilder(column: $table.model, builder: (column) => column);
+
+  GeneratedColumn<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => column,
+  );
+
+  $$WorkflowsTableAnnotationComposer get workflowId {
+    final $$WorkflowsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowStepsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $WorkflowStepsTable,
+          WorkflowStep,
+          $$WorkflowStepsTableFilterComposer,
+          $$WorkflowStepsTableOrderingComposer,
+          $$WorkflowStepsTableAnnotationComposer,
+          $$WorkflowStepsTableCreateCompanionBuilder,
+          $$WorkflowStepsTableUpdateCompanionBuilder,
+          (WorkflowStep, $$WorkflowStepsTableReferences),
+          WorkflowStep,
+          PrefetchHooks Function({bool workflowId})
+        > {
+  $$WorkflowStepsTableTableManager(
+    _$MaestroDatabase db,
+    $WorkflowStepsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkflowStepsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkflowStepsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WorkflowStepsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> workflowId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> cli = const Value.absent(),
+                Value<String?> model = const Value.absent(),
+                Value<String> configuration = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowStepsCompanion(
+                id: id,
+                workflowId: workflowId,
+                position: position,
+                kind: kind,
+                name: name,
+                cli: cli,
+                model: model,
+                configuration: configuration,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String workflowId,
+                required int position,
+                required String kind,
+                required String name,
+                Value<String?> cli = const Value.absent(),
+                Value<String?> model = const Value.absent(),
+                Value<String> configuration = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowStepsCompanion.insert(
+                id: id,
+                workflowId: workflowId,
+                position: position,
+                kind: kind,
+                name: name,
+                cli: cli,
+                model: model,
+                configuration: configuration,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$WorkflowStepsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({workflowId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (workflowId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.workflowId,
+                                referencedTable: $$WorkflowStepsTableReferences
+                                    ._workflowIdTable(db),
+                                referencedColumn: $$WorkflowStepsTableReferences
+                                    ._workflowIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$WorkflowStepsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $WorkflowStepsTable,
+      WorkflowStep,
+      $$WorkflowStepsTableFilterComposer,
+      $$WorkflowStepsTableOrderingComposer,
+      $$WorkflowStepsTableAnnotationComposer,
+      $$WorkflowStepsTableCreateCompanionBuilder,
+      $$WorkflowStepsTableUpdateCompanionBuilder,
+      (WorkflowStep, $$WorkflowStepsTableReferences),
+      WorkflowStep,
+      PrefetchHooks Function({bool workflowId})
+    >;
+typedef $$WorkflowProjectRefsTableCreateCompanionBuilder =
+    WorkflowProjectRefsCompanion Function({
+      required String workflowId,
+      required String projectId,
+      Value<int> rowid,
+    });
+typedef $$WorkflowProjectRefsTableUpdateCompanionBuilder =
+    WorkflowProjectRefsCompanion Function({
+      Value<String> workflowId,
+      Value<String> projectId,
+      Value<int> rowid,
+    });
+
+final class $$WorkflowProjectRefsTableReferences
+    extends
+        BaseReferences<
+          _$MaestroDatabase,
+          $WorkflowProjectRefsTable,
+          WorkflowProjectRef
+        > {
+  $$WorkflowProjectRefsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $WorkflowsTable _workflowIdTable(_$MaestroDatabase db) => db.workflows
+      .createAlias('workflow_project_refs__workflow_id__workflows__id');
+
+  $$WorkflowsTableProcessedTableManager get workflowId {
+    final $_column = $_itemColumn<String>('workflow_id')!;
+
+    final manager = $$WorkflowsTableTableManager(
+      $_db,
+      $_db.workflows,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_workflowIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ProjectsTable _projectIdTable(_$MaestroDatabase db) => db.projects
+      .createAlias('workflow_project_refs__project_id__projects__id');
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<String>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$WorkflowProjectRefsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $WorkflowProjectRefsTable> {
+  $$WorkflowProjectRefsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$WorkflowsTableFilterComposer get workflowId {
+    final $$WorkflowsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowProjectRefsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $WorkflowProjectRefsTable> {
+  $$WorkflowProjectRefsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$WorkflowsTableOrderingComposer get workflowId {
+    final $$WorkflowsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowProjectRefsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $WorkflowProjectRefsTable> {
+  $$WorkflowProjectRefsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$WorkflowsTableAnnotationComposer get workflowId {
+    final $$WorkflowsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowProjectRefsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $WorkflowProjectRefsTable,
+          WorkflowProjectRef,
+          $$WorkflowProjectRefsTableFilterComposer,
+          $$WorkflowProjectRefsTableOrderingComposer,
+          $$WorkflowProjectRefsTableAnnotationComposer,
+          $$WorkflowProjectRefsTableCreateCompanionBuilder,
+          $$WorkflowProjectRefsTableUpdateCompanionBuilder,
+          (WorkflowProjectRef, $$WorkflowProjectRefsTableReferences),
+          WorkflowProjectRef,
+          PrefetchHooks Function({bool workflowId, bool projectId})
+        > {
+  $$WorkflowProjectRefsTableTableManager(
+    _$MaestroDatabase db,
+    $WorkflowProjectRefsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkflowProjectRefsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkflowProjectRefsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$WorkflowProjectRefsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> workflowId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowProjectRefsCompanion(
+                workflowId: workflowId,
+                projectId: projectId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String workflowId,
+                required String projectId,
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowProjectRefsCompanion.insert(
+                workflowId: workflowId,
+                projectId: projectId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$WorkflowProjectRefsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({workflowId = false, projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (workflowId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.workflowId,
+                                referencedTable:
+                                    $$WorkflowProjectRefsTableReferences
+                                        ._workflowIdTable(db),
+                                referencedColumn:
+                                    $$WorkflowProjectRefsTableReferences
+                                        ._workflowIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$WorkflowProjectRefsTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$WorkflowProjectRefsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$WorkflowProjectRefsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $WorkflowProjectRefsTable,
+      WorkflowProjectRef,
+      $$WorkflowProjectRefsTableFilterComposer,
+      $$WorkflowProjectRefsTableOrderingComposer,
+      $$WorkflowProjectRefsTableAnnotationComposer,
+      $$WorkflowProjectRefsTableCreateCompanionBuilder,
+      $$WorkflowProjectRefsTableUpdateCompanionBuilder,
+      (WorkflowProjectRef, $$WorkflowProjectRefsTableReferences),
+      WorkflowProjectRef,
+      PrefetchHooks Function({bool workflowId, bool projectId})
     >;
 
 class $MaestroDatabaseManager {
@@ -4134,4 +6840,10 @@ class $MaestroDatabaseManager {
       $$AuditEventsTableTableManager(_db, _db.auditEvents);
   $$ProjectsTableTableManager get projects =>
       $$ProjectsTableTableManager(_db, _db.projects);
+  $$WorkflowsTableTableManager get workflows =>
+      $$WorkflowsTableTableManager(_db, _db.workflows);
+  $$WorkflowStepsTableTableManager get workflowSteps =>
+      $$WorkflowStepsTableTableManager(_db, _db.workflowSteps);
+  $$WorkflowProjectRefsTableTableManager get workflowProjectRefs =>
+      $$WorkflowProjectRefsTableTableManager(_db, _db.workflowProjectRefs);
 }
