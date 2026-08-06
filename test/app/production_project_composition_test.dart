@@ -126,17 +126,22 @@ void main() {
   testWidgets(
     'GivenProductionComposition_WhenRootDisposes_ThenSharedDatabaseClosesOnce',
     (tester) async {
+      final fixtureRoot = Directory(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}'
+        'maestro-composition-test',
+      );
+      expect(fixtureRoot.isAbsolute, isTrue);
       final database = MaestroDatabase(NativeDatabase.memory());
       var closeCount = 0;
       final composition = (await tester.runAsync(
         () => app.composeProductionApp(
-          paths: ApplicationPaths.fromRoot(Directory(r'C:\maestro-test')),
+          paths: ApplicationPaths.fromRoot(fixtureRoot),
           database: database,
           passwordVerifiers: _MemoryVerifierStore(),
           passwordHasher: const _PasswordHasher(),
           operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-          commandRunner: _GitRootCommandRunner(r'C:\maestro-test'),
-          projectFolderPicker: const _ProjectFolderPicker(r'C:\maestro-test'),
+          commandRunner: _GitRootCommandRunner(fixtureRoot.path),
+          projectFolderPicker: _ProjectFolderPicker(fixtureRoot.path),
           closeDatabase: (sharedDatabase) async {
             closeCount++;
             await sharedDatabase.close();
