@@ -10,6 +10,9 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
+import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/main.dart' as app;
 import 'package:maestro/platform/common/command_runner.dart';
 
@@ -70,6 +73,14 @@ void main() {
         projectId: registeredProject.id,
         actorId: actorId,
       );
+      final workflowSave = await composition.workflowDesignService.save(
+        WorkflowDraft.initial(kind: WorkflowKind.reusable).copyWith(
+          name: 'Shared workflow',
+          unitType: WorkItemType.useCase,
+          projectIds: <String>[registeredProject.id],
+        ),
+      );
+      final workflow = (workflowSave as WorkflowSaved).definition;
       final project = await database.select(database.projects).getSingle();
       final user = await database.select(database.localUsers).getSingle();
       final audits = await database.select(database.auditEvents).get();
@@ -94,6 +105,18 @@ void main() {
       expect(audits.map((audit) => audit.actorId), everyElement(user.id));
       expect(composition.foundation.database, same(database));
       expect(composition.projectRepository, isA<ProjectLifecycleStore>());
+      expect(composition.workflowRepository, isA<DriftWorkflowRepository>());
+      expect(composition.workflowDesignService, isA<WorkflowDesignService>());
+      expect(workflow.revision, 1);
+      expect(workflow.projectIds, <String>[project.id]);
+      expect(
+        (await composition.workflowRepository.findById(workflow.id))!.id,
+        workflow.id,
+      );
+      expect(
+        (await database.select(database.workflows).getSingle()).name,
+        'Shared workflow',
+      );
       expect(composition.activeProjectRuns, isA<app.NoActiveProjectRuns>());
       expect(
         await composition.activeProjectRuns.listActiveForProject(project.id),

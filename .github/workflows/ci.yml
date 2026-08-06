@@ -44,6 +44,7 @@ jobs:
       - run: flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows
       - run: flutter test integration_test/projects/git_project_validation_integration_test.dart -d windows
       - run: flutter test integration_test/projects/project_lifecycle_non_ownership_integration_test.dart -d windows
+      - run: flutter test integration_test/workflows/workflow_design_persistence_integration_test.dart -d windows
       - run: flutter build windows --release
       - name: Package Windows artifacts
         shell: pwsh
@@ -84,6 +85,7 @@ jobs:
       - run: xvfb-run -a flutter test integration_test/performance/concurrent_streams_integration_test.dart -d linux
       - run: xvfb-run -a flutter test integration_test/projects/git_project_validation_integration_test.dart -d linux
       - run: xvfb-run -a flutter test integration_test/projects/project_lifecycle_non_ownership_integration_test.dart -d linux
+      - run: xvfb-run -a flutter test integration_test/workflows/workflow_design_persistence_integration_test.dart -d linux
       - run: flutter build linux --release
       - name: Install pinned appimagetool
         run: |
