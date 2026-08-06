@@ -335,6 +335,7 @@ void main() {
 
       expect(subscription.pendingCount, 1);
       subscription.resume();
+      await Future<void>.delayed(Duration.zero);
       expect(delivered!.lastSequence, fixture.repository.logs.length - 1);
       expect(
         fixture.repository.logs.map((segment) => segment.channel).take(4),
@@ -348,6 +349,48 @@ void main() {
       subscription.cancel();
     },
   );
+
+  test('summary listeners are asynchronous isolated and coalesced', () async {
+    final events = RunSummaryEvents();
+    final received = <int>[];
+    events.listen((summary) {
+      received.add(summary.lastSequence);
+      throw StateError('listener failure');
+    });
+    final survivor = <int>[];
+    events.listen((summary) => survivor.add(summary.lastSequence));
+
+    for (var sequence = 0; sequence < 1000; sequence += 1) {
+      events.add(
+        RunLogSummary(
+          runId: 'run-1',
+          attemptId: 'attempt-1',
+          lastSequence: sequence,
+          tailBytes: sequence,
+        ),
+      );
+    }
+
+    expect(received, isEmpty);
+    expect(survivor, isEmpty);
+    await Future<void>.delayed(Duration.zero);
+    expect(received, <int>[999]);
+    expect(survivor, <int>[999]);
+  });
+
+  test('waits for owned process settlement before reading a result', () async {
+    final settlement = Completer<void>();
+    final fixture = _Fixture(stepCount: 1)
+      ..launcher.results.add(_Script(settlement: settlement));
+
+    final execution = fixture.orchestrator.execute('run-1');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(fixture.results.consumeCount, 0);
+    settlement.complete();
+    await execution;
+    expect(fixture.results.consumeCount, 1);
+  });
 
   test('flushes a partial durable batch on the bounded time cadence', () async {
     final repository = _Repository()
@@ -511,6 +554,27 @@ void main() {
     );
   });
 
+  test('settles a surviving child before quarantining its result', () async {
+    final real = await _RealFixture.create(
+      mode: 'survivingChildSwap',
+      stepCount: 1,
+    );
+    addTearDown(real.dispose);
+    final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
+
+    await real.orchestrator.execute('run-1');
+    final childPid = int.parse(
+      (await File('$resultPath.child.pid').readAsString()).trim(),
+    );
+    await Future<void>.delayed(const Duration(seconds: 1));
+
+    expect(real.repository.failed, isEmpty);
+    expect(real.repository.completed, <String>['attempt-1']);
+    expect(await File('$resultPath.swap-marker').exists(), isFalse);
+    expect(await File(resultPath).exists(), isFalse);
+    expect(await _waitUntilProcessExits(childPid), isTrue);
+  });
+
   test(
     'two real owned processes overlap instead of serializing globally',
     () async {
@@ -643,6 +707,25 @@ String _dartExecutable() {
   );
 }
 
+Future<bool> _waitUntilProcessExits(int processId) async {
+  for (var attempt = 0; attempt < 100; attempt += 1) {
+    final result = Platform.isWindows
+        ? await Process.run('powershell.exe', <String>[
+            '-NoProfile',
+            '-Command',
+            'if (Get-Process -Id $processId -ErrorAction SilentlyContinue) '
+                '{ exit 1 }',
+          ])
+        : await Process.run('/bin/kill', <String>['-0', '$processId']);
+    final exited = Platform.isWindows
+        ? result.exitCode == 0
+        : result.exitCode != 0;
+    if (exited) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  return false;
+}
+
 final class _Fixture {
   _Fixture({
     required int stepCount,
@@ -768,6 +851,7 @@ final class _Script {
     this.spawnFailure,
     this.gate,
     this.streamError = false,
+    this.settlement,
   });
   final List<StepOutputFrame> frames;
   final int exitCode;
@@ -775,6 +859,7 @@ final class _Script {
   final String? spawnFailure;
   final Completer<void>? gate;
   final bool streamError;
+  final Completer<void>? settlement;
 }
 
 final class _Launcher implements StepProcessLauncher {
@@ -805,6 +890,9 @@ final class _Process implements StepProcess {
     await script.gate?.future;
     return script.exitCode;
   }
+
+  @override
+  Future<void> settle() async => script.settlement?.future;
 }
 
 final class _TimedLauncher implements StepProcessLauncher {
@@ -827,6 +915,9 @@ final class _TimedProcess implements StepProcess {
 
   @override
   Future<int> get exitCode => _exit.future;
+
+  @override
+  Future<void> settle() async {}
 }
 
 final class _BoundaryLauncher implements StepProcessLauncher {
@@ -858,6 +949,9 @@ final class _BoundaryProcess implements StepProcess {
 
   @override
   Future<int> get exitCode => _exit.future;
+
+  @override
+  Future<void> settle() async {}
 }
 
 final class _Results implements AttemptResultFiles {
@@ -865,6 +959,7 @@ final class _Results implements AttemptResultFiles {
   bool prepareError = false;
   bool consumeError = false;
   bool resolveError = false;
+  int consumeCount = 0;
   @override
   Future<String> prepare({
     required String runId,
@@ -880,6 +975,7 @@ final class _Results implements AttemptResultFiles {
     required String attemptId,
     required String nonce,
   }) async {
+    consumeCount += 1;
     if (consumeError) throw StateError('consume');
     return AttemptResultAccepted(
       DeclaredContext.parse('from-${attemptId.endsWith('1') ? 'one' : 'two'}'),

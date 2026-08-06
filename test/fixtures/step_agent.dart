@@ -4,9 +4,29 @@ import 'dart:io';
 
 Future<void> main(List<String> arguments) async {
   final mode = arguments.first;
+  if (mode == 'swapResultChild') {
+    try {
+      await stdout.close();
+      await stderr.close();
+    } on Object {
+      // The parent process may already have closed inherited pipes.
+    }
+    final path = arguments[1];
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+    await File(path).writeAsString('swapped-by-surviving-child');
+    await File('$path.swap-marker').writeAsString('swapped');
+    return;
+  }
   if (mode == 'startupFlood') {
-    stdout.add(List<int>.filled(1024 * 1024, 0x66));
-    await stdout.flush();
+    final progress = File(arguments[1]);
+    final chunk = List<int>.filled(64 * 1024, 0x66);
+    for (var count = 1; count <= 512; count += 1) {
+      stdout.add(chunk);
+      await stdout.flush();
+      if (count.isEven && count % 16 == 0) {
+        await progress.writeAsString('$count');
+      }
+    }
     await stdin.drain<void>();
     return;
   }
@@ -58,4 +78,22 @@ Future<void> main(List<String> arguments) async {
     }),
     flush: true,
   );
+  if (mode == 'survivingChildSwap') {
+    final script = Platform.script.toFilePath();
+    final child = Platform.isWindows
+        ? await Process.start(Platform.resolvedExecutable, <String>[
+            script,
+            'swapResultChild',
+            path,
+          ], mode: ProcessStartMode.detached)
+        : await Process.start('/bin/sh', <String>[
+            '-c',
+            'exec ${_shellQuote(Platform.resolvedExecutable)} '
+                '${_shellQuote(script)} swapResultChild ${_shellQuote(path)} '
+                '</dev/null >/dev/null 2>&1',
+          ]);
+    await File('$path.child.pid').writeAsString('${child.pid}', flush: true);
+  }
 }
+
+String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";

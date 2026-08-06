@@ -89,13 +89,14 @@ void main() {
           environment: <String, String>{'PATH': 'bin', 'LEAK': 'no'},
         ),
       );
+      final collected = started.process!.frames.toList();
       process.stdoutController.add(<int>[1]);
       process.stderrController.add(<int>[2]);
       await process.stdoutController.close();
       await process.stderrController.close();
       process.exit.complete(0);
 
-      final frames = await started.process!.frames.toList();
+      final frames = await collected;
       expect(
         frames.map((frame) => frame.channel),
         containsAll(<RunLogChannel>[
@@ -107,6 +108,38 @@ void main() {
       expect(tree.request!.environment['LEAK'], isNull);
       expect(tree.request!.arguments.first, 'exec');
       expect(await started.process!.exitCode, 0);
+    },
+  );
+
+  test(
+    'defers native pipe drains and stdin until frames are listened',
+    () async {
+      final temporary = await Directory.systemTemp.createTemp('maestro-lazy-');
+      addTearDown(() => temporary.delete(recursive: true));
+      final process = _Process(File(p.join(temporary.path, 'stdin')));
+      final started =
+          await OwnedStepProcessLauncher(processTree: _Tree(process)).start(
+            const StepLaunchRequest(
+              cli: 'codex',
+              model: 'm',
+              executable: 'fixture-codex',
+              prompt: 'prompt',
+              workingDirectory: '/isolated',
+              environment: <String, String>{},
+            ),
+          );
+
+      expect(process.stdoutController.hasListener, isFalse);
+      expect(process.stderrController.hasListener, isFalse);
+
+      final collected = started.process!.frames.toList();
+      await Future<void>.delayed(Duration.zero);
+      expect(process.stdoutController.hasListener, isTrue);
+      expect(process.stderrController.hasListener, isTrue);
+      await process.stdoutController.close();
+      await process.stderrController.close();
+      process.exit.complete(0);
+      await collected;
     },
   );
 
@@ -152,36 +185,49 @@ void main() {
     },
   );
 
-  test('drains startup flood before awaiting a large stdin write', () async {
-    final launcher = OwnedStepProcessLauncher(
-      commands: const _StartupFloodCommands(),
-    );
-    final started = await launcher
-        .start(
-          StepLaunchRequest(
-            cli: 'codex',
-            model: 'fixture',
-            executable: _dartExecutable(),
-            prompt: 'p' * (256 * 1024),
-            workingDirectory: Directory.current.path,
-            environment: Platform.environment,
-          ),
-        )
-        .timeout(const Duration(seconds: 8));
+  test(
+    'applies native backpressure before startup flood is listened',
+    () async {
+      final temporary = await Directory.systemTemp.createTemp(
+        'maestro-startup-flood-',
+      );
+      addTearDown(() => temporary.delete(recursive: true));
+      final progress = File(p.join(temporary.path, 'progress'));
+      final launcher = OwnedStepProcessLauncher(
+        commands: _StartupFloodCommands(progress.path),
+      );
+      final started = await launcher
+          .start(
+            StepLaunchRequest(
+              cli: 'codex',
+              model: 'fixture',
+              executable: _dartExecutable(),
+              prompt: 'prompt',
+              workingDirectory: Directory.current.path,
+              environment: Platform.environment,
+            ),
+          )
+          .timeout(const Duration(seconds: 8));
 
-    final frames = await started.process!.frames.toList();
-    expect(await started.process!.exitCode, 0);
-    expect(
-      frames
-          .where((frame) => frame.channel == RunLogChannel.stdout)
-          .fold<int>(0, (sum, frame) => sum + frame.bytes.length),
-      1024 * 1024,
-    );
-  });
+      await Future<void>.delayed(const Duration(seconds: 1));
+      final chunksBeforeListen = await _readProgress(progress);
+      expect(chunksBeforeListen, 0);
+
+      final outputBytes = await started.process!.frames.fold<int>(
+        0,
+        (sum, frame) => frame.channel == RunLogChannel.stdout
+            ? sum + frame.bytes.length
+            : sum,
+      );
+      expect(await started.process!.exitCode, 0);
+      expect(outputBytes, 32 * 1024 * 1024);
+    },
+  );
 }
 
 final class _StartupFloodCommands implements StepCommandFactory {
-  const _StartupFloodCommands();
+  const _StartupFloodCommands(this.progressPath);
+  final String progressPath;
   @override
   StepCommand create({
     required String cli,
@@ -193,9 +239,15 @@ final class _StartupFloodCommands implements StepCommandFactory {
     arguments: <String>[
       p.join(Directory.current.path, 'test', 'fixtures', 'step_agent.dart'),
       'startupFlood',
+      progressPath,
     ],
     stdinText: prompt,
   );
+}
+
+Future<int> _readProgress(File file) async {
+  if (!await file.exists()) return 0;
+  return int.parse((await file.readAsString()).trim());
 }
 
 String _dartExecutable() {

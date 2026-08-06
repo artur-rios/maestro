@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   late Directory root;
@@ -144,9 +145,11 @@ void main() {
       '{"schema":1,"attemptId":"a1","nonce":"n1",'
       '"outcome":"succeeded","context":"safe"}',
     );
+    String? quarantinePath;
     final protocol = AttemptResultProtocol(
       quarantineToken: () => 'unpredictable-test-token',
-      afterQuarantine: (_) async {
+      afterQuarantine: (path) async {
+        quarantinePath = path;
         await Link(candidate.path).create(outside.path);
       },
     );
@@ -159,6 +162,11 @@ void main() {
     );
 
     expect((result as AttemptResultAccepted).context.value, 'safe');
+    expect(
+      p.basename(p.dirname(quarantinePath!)),
+      '.quarantine-unpredictable-test-token',
+    );
+    expect(await Directory(p.dirname(quarantinePath!)).exists(), isFalse);
     expect(await outside.readAsString(), 'outside-secret');
     expect(
       await FileSystemEntity.type(candidate.path, followLinks: false),

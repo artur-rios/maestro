@@ -183,9 +183,7 @@ exit $LASTEXITCODE
 }
 
 final class _WindowsOwnedProcess implements OwnedNativeProcess {
-  _WindowsOwnedProcess(this._process, this._job) {
-    unawaited(_process.exitCode.whenComplete(_closeJob));
-  }
+  _WindowsOwnedProcess(this._process, this._job);
 
   final Process _process;
   final HANDLE _job;
@@ -213,12 +211,36 @@ final class _WindowsOwnedProcess implements OwnedNativeProcess {
       return ProcessTerminalState.terminationFailed;
     }
     try {
-      await _process.exitCode.timeout(const Duration(seconds: 5));
-      return ProcessTerminalState.cancelled;
+      await _process.exitCode.timeout(const Duration(seconds: 2));
+      return await _waitForJobExit(const Duration(seconds: 3))
+          ? ProcessTerminalState.cancelled
+          : ProcessTerminalState.terminationFailed;
     } on TimeoutException {
       return ProcessTerminalState.terminationFailed;
     } finally {
       _closeJob();
+    }
+  }
+
+  Future<bool> _waitForJobExit(Duration timeout) async {
+    final information = calloc<_JobObjectBasicAccountingInformation>();
+    try {
+      final deadline = DateTime.now().add(timeout);
+      while (true) {
+        final queried = QueryInformationJobObject(
+          _job,
+          JobObjectBasicAccountingInformation,
+          information.cast<Void>(),
+          sizeOf<_JobObjectBasicAccountingInformation>(),
+          nullptr,
+        );
+        if (!queried.value) return false;
+        if (information.ref.activeProcesses == 0) return true;
+        if (DateTime.now().isAfter(deadline)) return false;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    } finally {
+      calloc.free(information);
     }
   }
 
@@ -228,6 +250,32 @@ final class _WindowsOwnedProcess implements OwnedNativeProcess {
       _job.close();
     }
   }
+}
+
+final class _JobObjectBasicAccountingInformation extends Struct {
+  @Int64()
+  external int totalUserTime;
+
+  @Int64()
+  external int totalKernelTime;
+
+  @Int64()
+  external int thisPeriodTotalUserTime;
+
+  @Int64()
+  external int thisPeriodTotalKernelTime;
+
+  @Uint32()
+  external int totalPageFaultCount;
+
+  @Uint32()
+  external int totalProcesses;
+
+  @Uint32()
+  external int activeProcesses;
+
+  @Uint32()
+  external int totalTerminatedProcesses;
 }
 
 final class _JobObjectBasicLimitInformation extends Struct {

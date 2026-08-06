@@ -94,6 +94,7 @@ final class StepOutputFrame {
 abstract interface class StepProcess {
   Stream<StepOutputFrame> get frames;
   Future<int> get exitCode;
+  Future<void> settle();
 }
 
 final class StepProcessStart {
@@ -160,6 +161,7 @@ final class RunSummarySubscription {
   RunLogSummary? _pending;
   var _paused = false;
   var _cancelled = false;
+  var _scheduled = false;
 
   int get pendingCount => _pending == null ? 0 : 1;
 
@@ -168,9 +170,7 @@ final class RunSummarySubscription {
   void resume() {
     if (_cancelled) return;
     _paused = false;
-    final pending = _pending;
-    _pending = null;
-    if (pending != null) _onData(pending);
+    _schedule();
   }
 
   void cancel() {
@@ -182,11 +182,28 @@ final class RunSummarySubscription {
 
   void _add(RunLogSummary event) {
     if (_cancelled) return;
-    if (_paused) {
-      _pending = event;
-    } else {
-      _onData(event);
+    _pending = event;
+    _schedule();
+  }
+
+  void _schedule() {
+    if (_cancelled || _paused || _pending == null || _scheduled) return;
+    _scheduled = true;
+    scheduleMicrotask(_dispatch);
+  }
+
+  void _dispatch() {
+    _scheduled = false;
+    if (_cancelled || _paused) return;
+    final pending = _pending;
+    _pending = null;
+    if (pending == null) return;
+    try {
+      _onData(pending);
+    } on Object {
+      // A presentation listener must never fail durable log ingestion.
     }
+    _schedule();
   }
 }
 
@@ -393,6 +410,7 @@ final class RunOrchestrator {
           drain,
         ]);
         exitCode = completed.first! as int;
+        await process.settle();
       } on Object {
         await _resolveIgnoringErrors(resultPath);
         await _failAttempt(attemptId, 'run.step.stream_failed');

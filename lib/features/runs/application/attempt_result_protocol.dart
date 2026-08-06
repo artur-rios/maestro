@@ -49,6 +49,7 @@ final class AttemptResultProtocol {
     if (!p.isWithin(root, candidate)) {
       return const AttemptResultRejected('result.unsafe_path');
     }
+    String? quarantineRoot;
     String? quarantined;
     try {
       final initialType = await FileSystemEntity.type(
@@ -61,9 +62,9 @@ final class AttemptResultProtocol {
       if (initialType != FileSystemEntityType.file) {
         return const AttemptResultRejected('result.not_regular');
       }
-      final quarantineRoot = p.join(root, '.quarantine');
+      quarantineRoot = p.join(root, '.quarantine-${_quarantineToken()}');
       await Directory(quarantineRoot).create(recursive: true);
-      quarantined = p.join(quarantineRoot, '${_quarantineToken()}.result');
+      quarantined = p.join(quarantineRoot, 'result');
       await File(candidate).rename(quarantined);
       await _afterQuarantine?.call(quarantined);
       final type = await FileSystemEntity.type(quarantined, followLinks: false);
@@ -138,6 +139,14 @@ final class AttemptResultProtocol {
         }
       } on FileSystemException {
         // Missing and hostile file replacements remain typed read failures.
+      }
+      try {
+        final directory = quarantineRoot;
+        if (directory != null && await Directory(directory).exists()) {
+          await Directory(directory).delete();
+        }
+      } on FileSystemException {
+        // Reconciliation can remove an unexpectedly non-empty quarantine.
       }
     }
   }

@@ -119,15 +119,9 @@ final class OwnedStepProcessLauncher implements StepProcessLauncher {
         ),
       );
       final supervisor = ProcessSupervisor()..attach(process);
-      final streaming = _OwnedStreamingStepProcess(process, supervisor);
-      try {
-        process.stdin.add(utf8.encode(command.stdinText));
-        await process.stdin.close();
-        return StepProcessStart.started(streaming);
-      } on Object {
-        await supervisor.cancel();
-        return StepProcessStart.failure('stdin_failed');
-      }
+      return StepProcessStart.started(
+        _OwnedStreamingStepProcess(process, supervisor, command.stdinText),
+      );
     } on ProcessException catch (error) {
       await process?.terminateTree();
       return StepProcessStart.failure(switch (error.errorCode) {
@@ -143,11 +137,36 @@ final class OwnedStepProcessLauncher implements StepProcessLauncher {
 }
 
 final class _OwnedStreamingStepProcess implements StepProcess {
-  _OwnedStreamingStepProcess(this._process, this._supervisor) {
+  _OwnedStreamingStepProcess(this._process, this._supervisor, this._stdinText) {
+    _frames = StreamController<StepOutputFrame>(
+      sync: true,
+      onListen: _activate,
+      onPause: _pause,
+      onResume: _resume,
+      onCancel: _cancel,
+    );
+  }
+
+  final OwnedNativeProcess _process;
+  final ProcessSupervisor _supervisor;
+  final String _stdinText;
+  late final StreamController<StepOutputFrame> _frames;
+  StreamSubscription<List<int>>? _stdout;
+  StreamSubscription<List<int>>? _stderr;
+  final Completer<void> _stdinCompletion = Completer<void>();
+  var _activated = false;
+  var _nativeDone = false;
+
+  void _activate() {
+    if (_activated) return;
+    _activated = true;
     var openStreams = 2;
     void done() {
       openStreams--;
-      if (openStreams == 0 && !_frames.isClosed) unawaited(_frames.close());
+      if (openStreams == 0) {
+        _nativeDone = true;
+        unawaited(_closeFramesAfterStdin());
+      }
     }
 
     _stdout = _process.stdout.listen(
@@ -164,32 +183,57 @@ final class _OwnedStreamingStepProcess implements StepProcess {
       onError: _frames.addError,
       onDone: done,
     );
-    _frames
-      ..onPause = () {
-        _stdout.pause();
-        _stderr.pause();
-      }
-      ..onResume = () {
-        _stdout.resume();
-        _stderr.resume();
-      }
-      ..onCancel = () async {
-        await _supervisor.cancel();
-        await _stdout.cancel();
-        await _stderr.cancel();
-      };
+    unawaited(
+      _writeStdin().whenComplete(() {
+        if (!_stdinCompletion.isCompleted) _stdinCompletion.complete();
+      }),
+    );
   }
 
-  final OwnedNativeProcess _process;
-  final ProcessSupervisor _supervisor;
-  final StreamController<StepOutputFrame> _frames =
-      StreamController<StepOutputFrame>();
-  late final StreamSubscription<List<int>> _stdout;
-  late final StreamSubscription<List<int>> _stderr;
+  Future<void> _closeFramesAfterStdin() async {
+    await _stdinCompletion.future;
+    if (!_frames.isClosed) await _frames.close();
+  }
+
+  Future<void> _writeStdin() async {
+    try {
+      _process.stdin.add(utf8.encode(_stdinText));
+      await _process.stdin.close();
+    } on Object catch (error, stackTrace) {
+      if (!_frames.isClosed) _frames.addError(error, stackTrace);
+      await _supervisor.cancel();
+    }
+  }
+
+  void _pause() {
+    _stdout?.pause();
+    _stderr?.pause();
+  }
+
+  void _resume() {
+    _stdout?.resume();
+    _stderr?.resume();
+  }
+
+  Future<void> _cancel() async {
+    if (_nativeDone) return;
+    await _supervisor.cancel();
+    await _stdout?.cancel();
+    await _stderr?.cancel();
+  }
 
   @override
   Stream<StepOutputFrame> get frames => _frames.stream;
 
   @override
   Future<int> get exitCode => _process.exitCode;
+
+  @override
+  Future<void> settle() async {
+    final state = await _supervisor.cancel();
+    if (state == ProcessTerminalState.failed ||
+        state == ProcessTerminalState.terminationFailed) {
+      throw StateError('The owned process tree did not settle.');
+    }
+  }
 }

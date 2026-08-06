@@ -51,18 +51,22 @@ final class _LinuxOwnedProcess implements OwnedNativeProcess {
   @override
   Future<ProcessTerminalState> terminateTree() async {
     _bindings.signalGroup(pid, 15);
-    try {
-      await _process.exitCode.timeout(const Duration(seconds: 2));
+    if (await _waitForGroupExit(const Duration(seconds: 2))) {
       return ProcessTerminalState.cancelled;
-    } on TimeoutException {
-      _bindings.signalGroup(pid, 9);
-      try {
-        await _process.exitCode.timeout(const Duration(seconds: 3));
-        return ProcessTerminalState.cancelled;
-      } on TimeoutException {
-        return ProcessTerminalState.terminationFailed;
-      }
     }
+    _bindings.signalGroup(pid, 9);
+    return await _waitForGroupExit(const Duration(seconds: 3))
+        ? ProcessTerminalState.cancelled
+        : ProcessTerminalState.terminationFailed;
+  }
+
+  Future<bool> _waitForGroupExit(Duration timeout) async {
+    final deadline = DateTime.now().add(timeout);
+    while (_bindings.groupExists(pid)) {
+      if (DateTime.now().isAfter(deadline)) return false;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    return true;
   }
 }
 
@@ -75,6 +79,8 @@ final class _LinuxProcessBindings {
   final _KillDart _kill;
 
   int signalGroup(int groupId, int signal) => _kill(-groupId, signal);
+
+  bool groupExists(int groupId) => signalGroup(groupId, 0) == 0;
 }
 
 typedef _KillNative = Int32 Function(Int32 pid, Int32 signal);
