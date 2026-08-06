@@ -4,24 +4,98 @@ enum WorkItemType { useCase, githubIssue, freeFormTask }
 
 enum WorkflowStepKind { plan, execute, review, custom }
 
+enum AgentCliKind {
+  claudeCode('claude-code'),
+  codex('codex'),
+  openCode('opencode');
+
+  const AgentCliKind(this.persistedValue);
+
+  final String persistedValue;
+
+  static AgentCliKind fromPersistedValue(String value) {
+    for (final kind in values) {
+      if (kind.persistedValue == value) return kind;
+    }
+    throw ArgumentError.value(value, 'value', 'Unsupported agent CLI kind.');
+  }
+}
+
+final class AgentAssignment {
+  AgentAssignment({required this.kind, required String model})
+    : model = model.trim() {
+    if (this.model.isEmpty) {
+      throw ArgumentError.value(model, 'model', 'A model is required.');
+    }
+  }
+
+  final AgentCliKind kind;
+  final String model;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AgentAssignment && other.kind == kind && other.model == model;
+
+  @override
+  int get hashCode => Object.hash(kind, model);
+}
+
 final class WorkflowDraftStep {
   const WorkflowDraftStep({
     required this.rowKey,
     required this.kind,
     required this.name,
     this.id,
-  });
+    this.assignment,
+    this.assignmentValidated = false,
+    this.configuration = '{}',
+  }) : _persistedAssignment = null,
+       assert(!assignmentValidated || assignment != null);
+
+  const WorkflowDraftStep._({
+    required this.rowKey,
+    required this.kind,
+    required this.name,
+    required this.id,
+    required this.assignment,
+    required this._persistedAssignment,
+    required this.assignmentValidated,
+    required this.configuration,
+  }) : assert(!assignmentValidated || assignment != null);
 
   final String rowKey;
   final String? id;
   final WorkflowStepKind kind;
   final String name;
+  final AgentAssignment? assignment;
+  final AgentAssignment? _persistedAssignment;
+  final bool assignmentValidated;
+  final String configuration;
 
-  WorkflowDraftStep copyWith({String? name}) => WorkflowDraftStep(
+  bool get hasPersistedAssignment => _persistedAssignment != null;
+
+  bool get isUnchangedPersistedAssignment =>
+      assignment != null && assignment == _persistedAssignment;
+
+  WorkflowDraftStep copyWith({
+    String? name,
+    AgentAssignment? assignment,
+    bool clearAssignment = false,
+    bool? assignmentValidated,
+  }) => WorkflowDraftStep._(
     rowKey: rowKey,
     id: id,
     kind: kind,
     name: name ?? this.name,
+    assignment: clearAssignment ? null : (assignment ?? this.assignment),
+    persistedAssignment: _persistedAssignment,
+    assignmentValidated:
+        assignmentValidated ??
+        (assignment == null && !clearAssignment
+            ? this.assignmentValidated
+            : false),
+    configuration: configuration,
   );
 }
 
@@ -70,25 +144,36 @@ final class WorkflowDraft {
         projectIds: const <String>[],
       );
 
-  factory WorkflowDraft.fromDefinition(WorkflowDefinition definition) =>
-      WorkflowDraft._(
-        id: definition.id,
-        revision: definition.revision,
-        kind: definition.kind,
-        name: definition.name,
-        unitType: definition.unitType,
-        supervisedDelivery: definition.supervisedDelivery,
-        createdAt: definition.createdAt,
-        steps: definition.steps.map(
-          (step) => WorkflowDraftStep(
-            rowKey: step.id,
-            id: step.id,
-            kind: step.kind,
-            name: step.name,
-          ),
-        ),
-        projectIds: definition.projectIds,
-      );
+  factory WorkflowDraft.fromDefinition(WorkflowDefinition definition) {
+    return WorkflowDraft._(
+      id: definition.id,
+      revision: definition.revision,
+      kind: definition.kind,
+      name: definition.name,
+      unitType: definition.unitType,
+      supervisedDelivery: definition.supervisedDelivery,
+      createdAt: definition.createdAt,
+      steps: definition.steps.map((step) {
+        final assignment = step.cli == null
+            ? null
+            : AgentAssignment(
+                kind: AgentCliKind.fromPersistedValue(step.cli!),
+                model: step.model!,
+              );
+        return WorkflowDraftStep._(
+          rowKey: step.id,
+          id: step.id,
+          kind: step.kind,
+          name: step.name,
+          assignment: assignment,
+          persistedAssignment: assignment,
+          assignmentValidated: false,
+          configuration: step.configuration,
+        );
+      }),
+      projectIds: definition.projectIds,
+    );
+  }
 
   final String? id;
   final int? revision;
@@ -152,6 +237,19 @@ final class WorkflowDraft {
     ),
   );
 
+  WorkflowDraft assignStep(
+    String rowKey,
+    AgentAssignment assignment, {
+    bool validated = false,
+  }) => _replaceStep(
+    rowKey,
+    (step) =>
+        step.copyWith(assignment: assignment, assignmentValidated: validated),
+  );
+
+  WorkflowDraft clearStepAssignment(String rowKey) =>
+      _replaceStep(rowKey, (step) => step.copyWith(clearAssignment: true));
+
   WorkflowDraft moveStep(String rowKey, int newIndex) {
     final oldIndex = steps.indexWhere((step) => step.rowKey == rowKey);
     if (oldIndex < 0) {
@@ -178,6 +276,18 @@ final class WorkflowDraft {
         steps: value,
         projectIds: projectIds,
       );
+
+  WorkflowDraft _replaceStep(
+    String rowKey,
+    WorkflowDraftStep Function(WorkflowDraftStep step) replace,
+  ) {
+    if (!steps.any((step) => step.rowKey == rowKey)) {
+      throw ArgumentError.value(rowKey, 'rowKey', 'Unknown row.');
+    }
+    return _withSteps(
+      steps.map((step) => step.rowKey == rowKey ? replace(step) : step),
+    );
+  }
 }
 
 final class WorkflowStep {

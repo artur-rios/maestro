@@ -2,6 +2,47 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
+  group('AgentAssignment', () {
+    test('GivenSupportedCliKinds_WhenPersisted_ThenStableValuesRoundTrip', () {
+      const values = <AgentCliKind, String>{
+        AgentCliKind.claudeCode: 'claude-code',
+        AgentCliKind.codex: 'codex',
+        AgentCliKind.openCode: 'opencode',
+      };
+
+      for (final MapEntry(:key, :value) in values.entries) {
+        expect(key.persistedValue, value);
+        expect(AgentCliKind.fromPersistedValue(value), key);
+      }
+      expect(
+        () => AgentCliKind.fromPersistedValue('unsupported'),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'GivenAModelIdentifier_WhenAssigned_ThenItIsTrimmedAndComparedByValue',
+      () {
+        final first = AgentAssignment(
+          kind: AgentCliKind.codex,
+          model: '  gpt-5.2-codex  ',
+        );
+        final same = AgentAssignment(
+          kind: AgentCliKind.codex,
+          model: 'gpt-5.2-codex',
+        );
+
+        expect(first.model, 'gpt-5.2-codex');
+        expect(first, same);
+        expect(first.hashCode, same.hashCode);
+        expect(
+          () => AgentAssignment(kind: AgentCliKind.codex, model: '   '),
+          throwsArgumentError,
+        );
+      },
+    );
+  });
+
   group('WorkflowDraft', () {
     test(
       'GivenANewDraft_WhenCreated_ThenPlanExecuteReviewAreOrderedByDefault',
@@ -111,6 +152,83 @@ void main() {
         expect(oneOff.kind, WorkflowKind.oneOff);
         expect(oneOff.projectIds, isEmpty);
         expect(reusable.projectIds, ['project-a', 'project-b']);
+      },
+    );
+
+    test(
+      'GivenAssignedSteps_WhenDraftIsEdited_ThenAssignmentsMoveAndCopyImmutably',
+      () {
+        final assignment = AgentAssignment(
+          kind: AgentCliKind.claudeCode,
+          model: 'sonnet',
+        );
+        final original = WorkflowDraft.initial(kind: WorkflowKind.reusable)
+            .assignStep('default-plan', assignment, validated: true)
+            .assignStep('default-execute', assignment, validated: true)
+            .addStep(
+              WorkflowDraftStep(
+                rowKey: 'custom-1',
+                kind: WorkflowStepKind.custom,
+                name: 'Check',
+                assignment: assignment,
+                assignmentValidated: true,
+              ),
+              at: 1,
+            );
+
+        final edited = original
+            .renameStep('default-plan', 'Discover')
+            .moveStep('default-plan', 3)
+            .removeStep('default-review');
+
+        expect(
+          original.steps.where((step) => step.assignment == assignment),
+          hasLength(3),
+          reason: 'repeated CLI/model assignments are valid',
+        );
+        expect(edited.steps.last.assignment, assignment);
+        expect(edited.steps.last.assignmentValidated, isTrue);
+        expect(original.steps.first.name, 'Plan');
+        expect(original.steps.first.assignment, assignment);
+      },
+    );
+
+    test(
+      'GivenAPersistedAssignment_WhenDrafted_ThenAgentAndConfigurationArePreserved',
+      () {
+        final definition = WorkflowDefinition(
+          id: 'workflow-1',
+          revision: 3,
+          kind: WorkflowKind.reusable,
+          name: 'Delivery',
+          unitType: WorkItemType.githubIssue,
+          supervisedDelivery: true,
+          createdAt: DateTime.utc(2026),
+          updatedAt: DateTime.utc(2026),
+          steps: const [
+            WorkflowStep(
+              id: 'step-1',
+              position: 0,
+              kind: WorkflowStepKind.execute,
+              name: 'Execute',
+              cli: 'opencode',
+              model: 'openai/gpt-5',
+              configuration: '{"future":"value"}',
+            ),
+          ],
+          projectIds: const [],
+        );
+
+        final step = WorkflowDraft.fromDefinition(definition).steps.single;
+
+        expect(
+          step.assignment,
+          AgentAssignment(kind: AgentCliKind.openCode, model: 'openai/gpt-5'),
+        );
+        expect(step.hasPersistedAssignment, isTrue);
+        expect(step.isUnchangedPersistedAssignment, isTrue);
+        expect(step.assignmentValidated, isFalse);
+        expect(step.configuration, '{"future":"value"}');
       },
     );
   });

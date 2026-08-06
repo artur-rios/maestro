@@ -155,6 +155,151 @@ void main() {
   );
 
   test(
+    'GivenPersistedAssignments_WhenMetadataIsSaved_ThenAgentDataSurvivesUnverified',
+    () async {
+      final existing = _definition(
+        revision: 7,
+        assignment: AgentAssignment(
+          kind: AgentCliKind.codex,
+          model: 'gpt-5.2-codex',
+        ),
+        configuration: '{"future":"value"}',
+      );
+      repository.records[existing.id] = existing;
+
+      final result = await service.save(
+        WorkflowDraft.fromDefinition(existing).copyWith(name: 'Renamed'),
+      );
+
+      final saved = (result as WorkflowSaved).definition;
+      expect(saved.revision, 8);
+      expect(saved.name, 'Renamed');
+      expect(saved.steps, hasLength(3));
+      for (final step in saved.steps) {
+        expect(step.cli, 'codex');
+        expect(step.model, 'gpt-5.2-codex');
+        expect(step.configuration, '{"future":"value"}');
+      }
+    },
+  );
+
+  test(
+    'GivenChangedUnverifiedAssignment_WhenStructurallySaved_ThenChangeIsRejected',
+    () async {
+      final existing = _definition(
+        assignment: AgentAssignment(
+          kind: AgentCliKind.codex,
+          model: 'gpt-5.2-codex',
+        ),
+      );
+      repository.records[existing.id] = existing;
+      final changed = WorkflowDraft.fromDefinition(existing).assignStep(
+        'step-plan',
+        AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
+      );
+
+      final result = await service.save(changed);
+
+      final rejected = result as WorkflowSaveRejected;
+      expect(rejected.code, 'workflow.agent_assignment.unverified');
+      expect(rejected.issues.single.rowKey, 'step-plan');
+      expect(repository.saveCalls, 0);
+      expect(repository.records[existing.id]!.steps.first.cli, 'codex');
+    },
+  );
+
+  test(
+    'GivenPersistedAssignment_WhenClearedWithoutVerification_ThenChangeIsRejected',
+    () async {
+      final existing = _definition(
+        assignment: AgentAssignment(
+          kind: AgentCliKind.codex,
+          model: 'gpt-5.2-codex',
+        ),
+      );
+      repository.records[existing.id] = existing;
+      final cleared = WorkflowDraft.fromDefinition(
+        existing,
+      ).clearStepAssignment('step-plan');
+
+      final result = await service.save(cleared);
+
+      final rejected = result as WorkflowSaveRejected;
+      expect(rejected.code, 'workflow.agent_assignment.unverified');
+      expect(rejected.issues.single.rowKey, 'step-plan');
+      expect(repository.saveCalls, 0);
+    },
+  );
+
+  test(
+    'GivenIncompleteAssignments_WhenCompletingConfiguration_ThenAllRowsAreRejected',
+    () async {
+      final partiallyAssigned = _validDraftValue().assignStep(
+        'default-plan',
+        AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
+        validated: true,
+      );
+
+      final result = await service.save(
+        partiallyAssigned,
+        requireAgentConfiguration: true,
+      );
+
+      final rejected = result as WorkflowSaveRejected;
+      expect(rejected.code, 'workflow.agent_configuration.incomplete');
+      expect(rejected.issues.map((issue) => issue.rowKey), [
+        'default-execute',
+        'default-review',
+      ]);
+      expect(repository.saveCalls, 0);
+    },
+  );
+
+  test(
+    'GivenPersistedUnverifiedAssignments_WhenCompletingConfiguration_ThenFreshValidationIsRequired',
+    () async {
+      final existing = _definition(
+        assignment: AgentAssignment(
+          kind: AgentCliKind.openCode,
+          model: 'openai/gpt-5',
+        ),
+      );
+      repository.records[existing.id] = existing;
+
+      final result = await service.save(
+        WorkflowDraft.fromDefinition(existing),
+        requireAgentConfiguration: true,
+      );
+
+      final rejected = result as WorkflowSaveRejected;
+      expect(rejected.code, 'workflow.agent_assignment.unverified');
+      expect(rejected.issues, hasLength(3));
+      expect(repository.saveCalls, 0);
+    },
+  );
+
+  test(
+    'GivenRepeatedFreshAssignments_WhenCompletingConfiguration_ThenRevisionIsSaved',
+    () async {
+      final assignment = AgentAssignment(
+        kind: AgentCliKind.claudeCode,
+        model: 'sonnet',
+      );
+      var draft = _validDraftValue();
+      for (final step in draft.steps) {
+        draft = draft.assignStep(step.rowKey, assignment, validated: true);
+      }
+
+      final result = await service.save(draft, requireAgentConfiguration: true);
+
+      final saved = (result as WorkflowSaved).definition;
+      expect(saved.steps.map((step) => step.cli), everyElement('claude-code'));
+      expect(saved.steps.map((step) => step.model), everyElement('sonnet'));
+      expect(repository.saveCalls, 1);
+    },
+  );
+
+  test(
     'GivenEqualUpdateClocks_WhenAnEditIsStale_ThenIntegerRevisionRejectsIt',
     () async {
       final existing = _definition(revision: 1, updatedAt: now.toUtc());
@@ -305,6 +450,8 @@ WorkflowDefinition _definition({
   String? name = 'Delivery',
   int revision = 1,
   DateTime? updatedAt,
+  AgentAssignment? assignment,
+  String configuration = '{}',
 }) => WorkflowDefinition(
   id: id,
   revision: revision,
@@ -314,24 +461,33 @@ WorkflowDefinition _definition({
   supervisedDelivery: true,
   createdAt: DateTime.utc(2026, 1, 1),
   updatedAt: updatedAt ?? DateTime.utc(2026, 1, 1),
-  steps: const [
+  steps: [
     WorkflowStep(
       id: 'step-plan',
       position: 0,
       kind: WorkflowStepKind.plan,
       name: 'Plan',
+      cli: assignment?.kind.persistedValue,
+      model: assignment?.model,
+      configuration: configuration,
     ),
     WorkflowStep(
       id: 'step-execute',
       position: 1,
       kind: WorkflowStepKind.execute,
       name: 'Execute',
+      cli: assignment?.kind.persistedValue,
+      model: assignment?.model,
+      configuration: configuration,
     ),
     WorkflowStep(
       id: 'step-review',
       position: 2,
       kind: WorkflowStepKind.review,
       name: 'Review',
+      cli: assignment?.kind.persistedValue,
+      model: assignment?.model,
+      configuration: configuration,
     ),
   ],
   projectIds: const ['project-a'],
