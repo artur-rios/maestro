@@ -92,7 +92,7 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 | Milestone | Delivers | Depends on | Issues | Status |
 | --- | --- | --- | --- | --- |
 | [M-01 — Foundation](https://github.com/artur-rios/maestro/milestone/1) | Layered scaffold, persistence, adapters, configuration, tests, CI, packaging, and signed-release foundation covering IR-01 through IR-15 | — | 1 | 0 / 1 closed |
-| [M-02 — Secure Project Workspace](https://github.com/artur-rios/maestro/milestone/2) | Local authentication plus safe project registration, selection, restoration, and metadata deletion | M-01 | 3 | 0 / 3 closed |
+| [M-02 — Secure Project Workspace](https://github.com/artur-rios/maestro/milestone/2) | Local authentication plus safe project registration, selection, restoration, and metadata deletion | M-01 | 3 | 1 / 3 closed |
 | [M-03 — Workflow Authoring](https://github.com/artur-rios/maestro/milestone/3) | Reusable and one-off workflow design with validated CLI and model assignments | M-02 | 2 | 0 / 2 closed |
 | [M-04 — Execution and Control](https://github.com/artur-rios/maestro/milestone/4) | Isolated concurrent execution, live observation, run recovery, and embedded terminals | M-03 | 4 | 0 / 4 closed |
 | [M-05 — Governed Delivery](https://github.com/artur-rios/maestro/milestone/5) | Supervised human-controlled and autonomous model-reviewed GitHub delivery | M-04 | 2 | 0 / 2 closed |
@@ -110,7 +110,7 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#2](https://github.com/artur-rios/maestro/issues/2) | UC-01 — Authenticate locally | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| ✅ [#2](https://github.com/artur-rios/maestro/issues/2) | UC-01 — Authenticate locally | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | [#3](https://github.com/artur-rios/maestro/issues/3) | UC-02 — Register and select a project | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | [#4](https://github.com/artur-rios/maestro/issues/4) | UC-03 — Manage a project record's lifecycle | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
