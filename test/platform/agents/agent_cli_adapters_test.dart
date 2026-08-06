@@ -301,7 +301,7 @@ void main() {
             const CommandResult(
               exitCode: 0,
               stdout: 'Logged in using ChatGPT',
-              stderr: '#< CLIXML host progress only',
+              stderr: _benignPowerShellProgress,
             ),
           ]),
           resolver: _resolved(),
@@ -326,20 +326,12 @@ void main() {
     );
 
     test(
-      'GivenPagedOutOfOrderFrames_WhenDiscovered_ThenHandshakePrecedesEveryPage',
+      'GivenPagedNotifications_WhenDiscovered_ThenHandshakePrecedesEveryPage',
       () async {
         final sessionRunner = _ScriptedSessionRunner(<Object?>[
           jsonEncode(<String, Object>{
             'method': 'account/updated',
             'params': <String, Object>{'email': 'person@example.com'},
-          }),
-          jsonEncode(<String, Object>{
-            'id': 99,
-            'result': <String, Object>{
-              'data': <Object>[
-                <String, String>{'id': 'wrong'},
-              ],
-            },
           }),
           jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
           jsonEncode(<String, Object?>{
@@ -382,6 +374,74 @@ void main() {
         expect(writes[3]['method'], 'model/list');
         expect(writes[3]['params'], <String, Object?>{'cursor': 'page-2'});
         expect(sessionRunner.session.closed, isTrue);
+      },
+    );
+
+    test(
+      'GivenUntrustedCodexResponseIds_WhenDiscovered_ThenNoCatalogIsTrusted',
+      () async {
+        final cases = <String, List<Object?>>{
+          'null': <Object?>[
+            jsonEncode(<String, Object?>{
+              'id': null,
+              'result': <String, Object>{},
+            }),
+            ..._codexSuccessFrames,
+          ],
+          'zero': <Object?>[
+            jsonEncode(<String, Object>{'id': 0, 'result': <String, Object>{}}),
+            ..._codexSuccessFrames,
+          ],
+          'negative': <Object?>[
+            jsonEncode(<String, Object>{
+              'id': -1,
+              'result': <String, Object>{},
+            }),
+            ..._codexSuccessFrames,
+          ],
+          'future': <Object?>[
+            _codexModelFrame,
+            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+          ],
+          'conflicting': <Object?>[
+            jsonEncode(<String, Object>{
+              'id': 99,
+              'result': <String, Object>{},
+            }),
+            ..._codexSuccessFrames,
+          ],
+          'duplicate': <Object?>[
+            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+            jsonEncode(<String, Object?>{
+              'id': 2,
+              'result': <String, Object?>{
+                'data': <Object>[
+                  <String, String>{'id': 'must-not-be-trusted'},
+                ],
+                'nextCursor': null,
+              },
+            }),
+          ],
+        };
+
+        for (final entry in cases.entries) {
+          final catalog = await CodexAdapter(
+            _QueueRunner(<CommandResult>[
+              _ok('0.114.0'),
+              _ok('Logged in using ChatGPT'),
+            ]),
+            resolver: _resolved(),
+            sessionRunner: _ScriptedSessionRunner(entry.value),
+          ).discover();
+
+          expect(
+            catalog.session,
+            AgentCliSession.unverified,
+            reason: entry.key,
+          );
+          expect(catalog.models, isEmpty, reason: entry.key);
+        }
       },
     );
 
@@ -512,6 +572,89 @@ void main() {
     );
 
     test(
+      'GivenPositiveCodexStdoutAndNegativeStderr_WhenDiscovered_ThenAuthenticationIsRejected',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            const CommandResult(
+              exitCode: 0,
+              stdout: 'Logged in using ChatGPT',
+              stderr: 'Not logged in',
+            ),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+        ).discover();
+
+        expect(catalog.session, AgentCliSession.unauthenticated);
+        expect(catalog.models, isEmpty);
+      },
+    );
+
+    test(
+      'GivenPositiveCodexStdoutAndArbitraryStderr_WhenDiscovered_ThenAuthenticationIsRejected',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            const CommandResult(
+              exitCode: 0,
+              stdout: 'Logged in using ChatGPT',
+              stderr: 'host warning',
+            ),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+        ).discover();
+
+        expect(catalog.session, AgentCliSession.unauthenticated);
+        expect(catalog.guidance, isNot(contains('host warning')));
+      },
+    );
+
+    test(
+      'GivenPositiveCodexStdoutAndStatusBearingClixml_WhenDiscovered_ThenAuthenticationIsRejected',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            CommandResult(
+              exitCode: 0,
+              stdout: 'Logged in using ChatGPT',
+              stderr: _benignPowerShellProgress.replaceFirst(
+                'Preparing modules for first use.',
+                'Not logged in',
+              ),
+            ),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+        ).discover();
+
+        expect(catalog.session, AgentCliSession.unauthenticated);
+        expect(catalog.guidance, isNot(contains('Not logged in')));
+      },
+    );
+
+    test(
+      'GivenExactCodexLoginOnStderrAndEmptyStdout_WhenDiscovered_ThenAuthenticationIsAccepted',
+      () async {
+        final catalog = await CodexAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('0.114.0'),
+            _okStderr('Logged in using ChatGPT'),
+          ]),
+          resolver: _resolved(),
+          sessionRunner: _authenticatedCodexSession(),
+        ).discover();
+
+        expect(catalog.session, AgentCliSession.authenticated);
+        expect(catalog.models, <String>['gpt-5.2-codex']);
+      },
+    );
+
+    test(
       'GivenOversizedCodexFrame_WhenRead_ThenDiscoveryFailsClosed',
       () async {
         final catalog = await CodexAdapter(
@@ -542,6 +685,27 @@ CommandResult _timeout(String stderr) => CommandResult(
   stderr: stderr,
   failureKind: CommandFailureKind.timeout,
 );
+
+const _benignPowerShellProgress = '''#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>''';
+
+_ScriptedSessionRunner _authenticatedCodexSession() =>
+    _ScriptedSessionRunner(_codexSuccessFrames);
+
+final _codexSuccessFrames = <Object?>[
+  jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+  _codexModelFrame,
+];
+
+final _codexModelFrame = jsonEncode(<String, Object?>{
+  'id': 2,
+  'result': <String, Object?>{
+    'data': <Object>[
+      <String, String>{'id': 'gpt-5.2-codex'},
+    ],
+    'nextCursor': null,
+  },
+});
 
 _FixedLocator _resolved() =>
     _FixedLocator(const ResolvedExecutable(executable: '/safe/cli'));

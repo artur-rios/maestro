@@ -27,6 +27,18 @@ final class CodexAdapter implements AgentCliAdapter {
   static final RegExp _positiveLoginStatus = RegExp(
     r'^(?:Logged in using ChatGPT|Logged in using access token|Logged in using personal access token|Logged in using Amazon Bedrock API key|Logged in using an API key - [^\x00-\x1F\x7F]{1,200})$',
   );
+  static final RegExp _benignPowerShellProgress = RegExp(
+    r'^#< CLIXML\r?\n<Objs Version="1\.1\.0\.1" xmlns="http://schemas\.microsoft\.com/powershell/2004/04">'
+    r'(?:<Obj S="progress" RefId="\d+">'
+    r'(?:<TN RefId="\d+"><T>System\.Management\.Automation\.PSCustomObject</T><T>System\.Object</T></TN>|<TNRef RefId="\d+" />)'
+    r'<MS><I64 N="SourceId">\d+</I64><PR N="Record">'
+    r'<AV>[^<]{0,1000}</AV><AI>-?\d+</AI><Nil /><PI>-?\d+</PI><PC>-?\d+</PC><T>[^<]{0,1000}</T><SR>-?\d+</SR><SD>[^<]{0,1000}</SD>'
+    r'</PR></MS></Obj>)+</Objs>$',
+  );
+  static final RegExp _loginStatusMarker = RegExp(
+    r'(?:logged\s+in|logged\s+out|not\s+logged|access\s+token|api\s+key|chatgpt|bedrock)',
+    caseSensitive: false,
+  );
 
   final AgentAdapterSupport _support;
   final CommandSessionRunner _sessionRunner;
@@ -44,9 +56,12 @@ final class CodexAdapter implements AgentCliAdapter {
     ]);
     final stdoutStatus = login.stdout.trim();
     final stderrStatus = login.stderr.trim();
-    final hasPositiveStatus =
-        _positiveLoginStatus.hasMatch(stdoutStatus) ||
-        (stdoutStatus.isEmpty && _positiveLoginStatus.hasMatch(stderrStatus));
+    final stdoutIsPositive = _positiveLoginStatus.hasMatch(stdoutStatus);
+    final hasPositiveStatus = stdoutIsPositive
+        ? stderrStatus.isEmpty ||
+              (_benignPowerShellProgress.hasMatch(stderrStatus) &&
+                  !_loginStatusMarker.hasMatch(stderrStatus))
+        : stdoutStatus.isEmpty && _positiveLoginStatus.hasMatch(stderrStatus);
     if (!login.succeeded ||
         login.stdoutTruncated ||
         login.stderrTruncated ||
@@ -72,6 +87,7 @@ final class CodexAdapter implements AgentCliAdapter {
     try {
       final deadline = DateTime.now().add(const Duration(seconds: 8));
       final inbox = _JsonRpcInbox(session, deadline: deadline);
+      inbox.register(1);
       await session.writeLine(
         jsonEncode(<String, Object>{
           'id': 1,
@@ -98,6 +114,7 @@ final class CodexAdapter implements AgentCliAdapter {
       String? cursor;
       for (var page = 0; page < _maximumPages; page++) {
         final id = page + 2;
+        inbox.register(id);
         await session.writeLine(
           jsonEncode(<String, Object>{
             'id': id,
@@ -166,12 +183,15 @@ final class _JsonRpcInbox {
 
   final CommandSession _session;
   final DateTime deadline;
-  final Map<int, Map<String, Object?>> _pending = <int, Map<String, Object?>>{};
+  final Set<int> _outstanding = <int>{};
   var _frames = 0;
 
+  void register(int id) {
+    if (id <= 0 || !_outstanding.add(id)) throw const FormatException();
+  }
+
   Future<Map<String, Object?>> response(int id) async {
-    final pending = _pending.remove(id);
-    if (pending != null) return pending;
+    if (!_outstanding.contains(id)) throw const FormatException();
     while (_frames < CodexAdapter._maximumFrames) {
       final remaining = deadline.difference(DateTime.now());
       if (remaining <= Duration.zero) {
@@ -185,12 +205,15 @@ final class _JsonRpcInbox {
       _frames++;
       final decoded = jsonDecode(line);
       if (decoded is! Map<String, Object?>) throw const FormatException();
+      if (!decoded.containsKey('id')) continue;
       final frameId = decoded['id'];
-      if (frameId == null) continue;
-      if (frameId is! int) throw const FormatException();
-      if (frameId == id) return decoded;
-      if (_pending.length >= 32) throw const FormatException();
-      _pending[frameId] = decoded;
+      if (frameId is! int ||
+          frameId <= 0 ||
+          frameId != id ||
+          !_outstanding.remove(frameId)) {
+        throw const FormatException();
+      }
+      return decoded;
     }
     throw const FormatException('Frame limit exceeded.');
   }

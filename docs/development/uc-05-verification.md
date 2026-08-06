@@ -10,7 +10,7 @@ to implementation and review evidence.
 | --- | --- | --- |
 | FR-AG-01 / BR-03 | A step stores one paired `AgentAssignment`; complete configuration validates every row before `WorkflowDesignService` atomically saves the revision. | `GivenCompletedConfiguration_WhenDesignServiceSaves_ThenOneCompleteRevisionIsPersisted`; `GivenAssignmentPair_WhenStored_ThenBothOrNeitherAreAtomic`; `GivenFixtureAgentClis_WhenDiscoveringSavingAndPreflighting_ThenRealProcessBoundariesStayDeterministic` |
 | FR-AG-02 / BR-04 | `ClaudeCodeAdapter` verifies installation and authentication without prompting, then offers the versioned documented alias catalog. | `GivenAuthenticatedClaude_WhenDiscovered_ThenVersionedAliasesAreCliOnly`; `GivenClaudeCliOnlyAlias_WhenCompleting_ThenItIsValidWithoutAccountVerifiedClaim`; desktop fixture integration |
-| FR-AG-03 / BR-04 | `CodexAdapter` verifies login and performs bounded JSON-RPC initialize plus paged `model/list` over a managed child process. | `GivenPagedOutOfOrderFrames_WhenDiscovered_ThenHandshakePrecedesEveryPage`; `GivenExactCodexLoginOnStdoutWithHostNoise_WhenDiscovered_ThenAuthenticationIsAccepted`; desktop fixture integration |
+| FR-AG-03 / BR-04 | `CodexAdapter` verifies login and performs bounded JSON-RPC initialize plus paged `model/list` over a managed child process. | `GivenPagedNotifications_WhenDiscovered_ThenHandshakePrecedesEveryPage`; `GivenUntrustedCodexResponseIds_WhenDiscovered_ThenNoCatalogIsTrusted`; `GivenExactCodexLoginOnStdoutWithHostNoise_WhenDiscovered_ThenAuthenticationIsAccepted`; desktop fixture integration |
 | FR-AG-04 / BR-04 | `OpenCodeAdapter` intersects `models` output with providers from `auth list` and strips terminal decoration. | `GivenAuthenticatedProviders_WhenDiscovered_ThenOnlyTheirSafeModelsRemain`; desktop fixture integration |
 | FR-AG-05 / BR-05 | Assignment equality and configuration policy deliberately permit the same CLI/model pair on any number of rows. | `GivenRepeatedAssignments_WhenCompletingConfiguration_ThenEveryRowIsValidated`; `GivenRepeatedAssignments_WhenSaved_ThenEveryRowPersists`; desktop fixture integration persists and reloads two identical Codex assignments |
 | FR-AG-06 / BR-22 | Production uses installed launchers and read-only status/catalog commands. It never starts login, reads credential files, refreshes provider state, or sends an AI prompt. | Shared `GivenVersionTimeoutFor<CLI>_WhenDiscovered_ThenTransientFailureIsTyped` cases, command/session cleanup tests, `GivenCredentialPathTokens_WhenParsed_ThenTheyCannotAuthorizeModels`, and desktop fixture command-boundary evidence |
@@ -50,21 +50,28 @@ cannot be refreshed.
 disposable same-drive directory and deletes it in teardown. Windows resolves
 actual `.ps1` launchers as an explicit PowerShell executable plus argv; Linux
 creates equivalent executable shell scripts. Codex performs a bidirectional
-initialize handshake, ignores notifications, accepts an out-of-order matching
-response, follows a cursor, and closes the owned child. The test then saves and
-reloads repeated assignments through real Drift persistence, performs a fresh
-execution preflight, and covers missing, unauthenticated, and discovery-failure
-states without any live CLI, provider network, credential, prompt, or login.
+initialize handshake, registers each request before sending it, ignores ID-less
+notifications before the current matching response, follows a cursor, and
+closes the owned child. The test then saves and reloads repeated assignments
+through real Drift persistence, performs a fresh execution preflight, and
+covers missing, unauthenticated, and discovery-failure states without any live
+CLI, provider network, credential, prompt, or login.
 
-The Windows fixture exposed two real boundary defects before passing:
+The Windows fixture exposed three real boundary defects before passing:
 
 1. local `.ps1` wrappers were rejected by the machine execution policy; the
    resolver now supplies process-scoped `-ExecutionPolicy Bypass` as explicit
    argv, not a shell command string;
 2. Windows PowerShell can serialize harmless host progress to stderr as CLIXML
-   while Codex writes its exact positive login status to stdout; Codex now
-   accepts only an exact documented positive status on either stream and never
-   treats arbitrary host noise as authentication or user guidance.
+   while Codex writes its exact positive login status to stdout. Codex accepts
+   positive stdout only with empty stderr or the exact `PSCustomObject` progress
+   envelope (without embedded login-status markers), and accepts positive
+   stderr only with empty stdout. Conflicting statuses, arbitrary noise, and
+   raw CLIXML/status text are rejected without becoming user guidance;
+3. JSON-RPC responses are trusted only for a positive, currently outstanding
+   request ID registered before send. Null, zero, negative, future,
+   unsolicited/conflicting, and duplicate IDs fail closed instead of being
+   queued; frames without an `id` remain ignorable notifications.
 
 The existing `windows-platform` and `linux-platform` CI jobs run this one file
 on their native devices; Linux uses the repository's established `xvfb-run`
@@ -86,12 +93,13 @@ flutter test integration_test/workflows/step_agent_process_integration_test.dart
 # Exit 0; 1 desktop integration test passed using only disposable fixture CLIs.
 
 flutter test test/platform/agents test/platform/common/command_runner_test.dart test/platform/common/command_session_test.dart test/features/workflows
-# Exit 0; 128 focused adapter, transport, workflow domain, application,
+# Exit 0; 134 focused adapter, transport, workflow domain, application,
 # persistence, controller, and widget tests passed.
 
 flutter test test/platform/agents/agent_cli_adapters_test.dart
-# Exit 0; 30 adapter contracts passed, including positive stdout with benign
-# PowerShell host noise and negative stdout with positive-looking stderr.
+# Exit 0; 35 adapter contracts passed, including outstanding-ID enforcement,
+# both stream-polarity conflicts, exact stderr positive status, the exact benign
+# PowerShell progress envelope, arbitrary noise, and status-bearing CLIXML.
 
 flutter test test/features/projects/presentation/project_workspace_page_test.dart
 # Exit 0; 17 workspace composition tests passed with bounded lazy-list
@@ -104,11 +112,8 @@ dart run tooling/verify_architecture.dart
 dart run tooling/verify_workflows.dart
 # Exit 0; workflow-verification: passed.
 
-flutter test --concurrency=1
-# Exit 0; complete unfiltered suite passed 381/381 in 101 seconds.
-
 flutter test --reporter compact
-# Exit 0; clean default-concurrency suite passed 381/381 in 45 seconds.
+# Exit 0; clean default-concurrency suite passed 386/386 in 33 seconds.
 
 flutter analyze
 # Exit 0; No issues found. Generated listener files from an earlier timed-out
@@ -123,12 +128,10 @@ dart format --output=none --set-exit-if-changed lib test integration_test test_s
 
 - Windows: the fixture integration compiles and runs on the Windows desktop
   target. No manual UI result or live CLI session is claimed.
-- The first default-parallel full-suite rerun hit its 180-second outer watchdog
-  and left three orphan `flutter_tester` processes after its parent exited. The
-  exact task-owned PIDs were inspected and terminated. No individual test or
-  group stalled under serial isolation; the complete unfiltered suite passed
-  381/381 serially, and one clean bounded default-concurrency rerun then passed
-  381/381 in 45 seconds. CI remains the default-parallel gate.
+- An earlier default-parallel rerun hit its outer watchdog and left three
+  task-owned `flutter_tester` processes; those exact PIDs were inspected and
+  terminated. The final clean default-concurrency suite passed 386/386 in 33
+  seconds. CI remains the default-parallel gate.
 - Linux: equivalent executable fixtures and an `xvfb-run` CI invocation are
   committed; this Windows host cannot execute the Linux desktop target, so the
   Ubuntu job remains the platform gate.

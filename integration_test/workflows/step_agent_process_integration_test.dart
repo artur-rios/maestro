@@ -233,11 +233,13 @@ if ($args[0] -eq 'app-server') {
   [Console]::Out.Flush()
   $null = [Console]::In.ReadLine()
   $null = [Console]::In.ReadLine()
-  [Console]::Out.WriteLine('{"id":3,"result":{"data":[{"id":"gpt-5.2-codex"}],"nextCursor":null}}')
   [Console]::Out.WriteLine('{"method":"fixture/progress","params":{}}')
   [Console]::Out.WriteLine('{"id":2,"result":{"data":[{"id":"gpt-5.3-codex"}],"nextCursor":"fixture-page-2"}}')
   [Console]::Out.Flush()
   $null = [Console]::In.ReadLine()
+  [Console]::Out.WriteLine('{"method":"fixture/page-ready","params":{}}')
+  [Console]::Out.WriteLine('{"id":3,"result":{"data":[{"id":"gpt-5.2-codex"}],"nextCursor":null}}')
+  [Console]::Out.Flush()
   while ([Console]::In.ReadLine() -ne $null) {}
   exit 0
 }
@@ -279,10 +281,11 @@ if [ "$1" = "app-server" ]; then
   echo '{"id":1,"result":{"serverInfo":{"name":"fixture"}}}'
   IFS= read -r _
   IFS= read -r _
-  echo '{"id":3,"result":{"data":[{"id":"gpt-5.2-codex"}],"nextCursor":null}}'
   echo '{"method":"fixture/progress","params":{}}'
   echo '{"id":2,"result":{"data":[{"id":"gpt-5.3-codex"}],"nextCursor":"fixture-page-2"}}'
   IFS= read -r _
+  echo '{"method":"fixture/page-ready","params":{}}'
+  echo '{"id":3,"result":{"data":[{"id":"gpt-5.2-codex"}],"nextCursor":null}}'
   while IFS= read -r _; do :; done
   exit 0
 fi
