@@ -127,4 +127,3 @@ ownership and exactly-once database close remain unchanged.
 - Final quality gates include deterministic generation, formatting,
   architecture/workflow verification, analysis, full tests, Windows build, and
   PR CI on Windows/Linux.
-
