@@ -60,7 +60,7 @@ void main() {
         ProjectFolder.parse('/repo/packages/app'),
       );
 
-      expect(result.availability, ProjectAvailability.notGitWorkingTree);
+      expect(result.availability, ProjectAvailability.notGitRoot);
       expect(result.canonicalFolder, isNull);
     });
 
@@ -110,7 +110,7 @@ void main() {
         ProjectFolder.parse('/work/Repo'),
       );
 
-      expect(result.availability, ProjectAvailability.notGitWorkingTree);
+      expect(result.availability, ProjectAvailability.notGitRoot);
     });
 
     test('GivenWorktreeRoot_WhenGitReturnsSameRoot_ThenAvailable', () async {

@@ -122,7 +122,7 @@ void main() {
 
     final result = await validator.validate(ProjectFolder.parse(nested.path));
 
-    expect(result.availability, ProjectAvailability.notGitWorkingTree);
+    expect(result.availability, ProjectAvailability.notGitRoot);
   });
 
   test(

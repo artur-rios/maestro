@@ -202,6 +202,8 @@ final class ProjectService {
         'The project folder is not accessible.',
       ProjectAvailability.notGitWorkingTree =>
         'The selected folder is not a Git working tree.',
+      ProjectAvailability.notGitRoot =>
+        'The selected folder is not the Git working-tree root.',
       ProjectAvailability.transientFailure =>
         'Could not validate the project folder.',
     };
@@ -216,6 +218,8 @@ final class ProjectService {
         'Restore folder access, then refresh.',
       ProjectAvailability.notGitWorkingTree =>
         'Choose an existing Git working-tree root.',
+      ProjectAvailability.notGitRoot =>
+        'Choose the repository root and try again.',
       ProjectAvailability.transientFailure =>
         'Retry after checking the folder and Git installation.',
     };

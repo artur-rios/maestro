@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +18,99 @@ void main() {
       expect(find.text('Projects'), findsOneWidget);
       expect(find.text('Foundation diagnostics'), findsOneWidget);
       expect(find.bySemanticsLabel('Register project'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenPendingPicker_WhenWorkspaceIsRemoved_ThenCompletionNeverInvokesProjectService',
+    (tester) async {
+      final repository = _Repository();
+      final service = _service(repository: repository);
+      final picker = _CompletingPicker();
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: true),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Register project'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.bySemanticsLabel('Project name'), 'Demo');
+      await tester.tap(find.text('Choose folder and register'));
+      await tester.pump();
+
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: false),
+      );
+      picker.complete(r'C:\projects\demo');
+      await tester.pumpAndSettle();
+
+      expect(repository.records, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'GivenRegisterPastServiceBoundary_WhenWorkspaceIsRemoved_ThenRecordMayPersistWithoutStaleSelection',
+    (tester) async {
+      final saveCompletion = Completer<Result<void>>();
+      final repository = _Repository()
+        ..nextSave = saveCompletion
+        ..saveStarted = Completer<void>();
+      final service = _service(repository: repository);
+      const picker = _Picker(r'C:\projects\demo');
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: true),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Register project'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.bySemanticsLabel('Project name'), 'Demo');
+      await tester.tap(find.text('Choose folder and register'));
+      await tester.pump();
+      await repository.saveStarted!.future;
+
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: false),
+      );
+      saveCompletion.complete(const Success<void>(null));
+      await tester.pumpAndSettle();
+      expect(repository.records, hasLength(1));
+
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text(r'C:\projects\demo'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenPendingSelection_WhenWorkspaceIsRemoved_ThenLateCompletionCannotSelectFreshWorkspace',
+    (tester) async {
+      final record = _record();
+      final repository = _Repository()..records.add(record);
+      final service = _service(repository: repository);
+      const picker = _Picker(null);
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: true),
+      );
+      await tester.pumpAndSettle();
+      final selectionCompletion = Completer<ProjectRecord?>();
+      repository.nextFind = selectionCompletion;
+      await tester.tap(find.text('Demo'));
+      await tester.pump();
+
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: false),
+      );
+      selectionCompletion.complete(record);
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(
+        _host(service: service, picker: picker, showWorkspace: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text(record.folderPath), findsNothing);
     },
   );
 
@@ -76,7 +171,7 @@ void main() {
       await tester.pumpAndSettle();
       await _register(tester, 'Demo');
 
-      expect(find.textContaining('not a valid Git project'), findsOneWidget);
+      expect(find.textContaining('not a Git working tree'), findsOneWidget);
       expect(find.textContaining('token-123'), findsNothing);
     },
   );
@@ -134,11 +229,49 @@ Widget _app({
   );
 }
 
+Widget _host({
+  required ProjectService service,
+  required ProjectFolderPicker picker,
+  required bool showWorkspace,
+}) {
+  return ProviderScope(
+    overrides: [
+      projectServiceProvider.overrideWithValue(service),
+      projectFolderPickerProvider.overrideWithValue(picker),
+    ],
+    child: MaterialApp(
+      home: showWorkspace
+          ? const ProjectWorkspacePage(
+              emptyContent: Center(child: Text('Foundation diagnostics')),
+            )
+          : const SizedBox.shrink(),
+    ),
+  );
+}
+
+ProjectService _service({required _Repository repository}) {
+  return ProjectService(
+    repository: repository,
+    folderValidator: _Validator(),
+    clock: () => DateTime.utc(2026, 8, 6),
+    newId: () => 'new-id',
+  );
+}
+
 final class _Picker implements ProjectFolderPicker {
   const _Picker(this.path);
   final String? path;
   @override
   Future<String?> chooseFolder() async => path;
+}
+
+final class _CompletingPicker implements ProjectFolderPicker {
+  final Completer<String?> _completer = Completer<String?>();
+
+  void complete(String? path) => _completer.complete(path);
+
+  @override
+  Future<String?> chooseFolder() => _completer.future;
 }
 
 final class _Validator implements ProjectFolderValidator {
@@ -152,9 +285,20 @@ final class _Validator implements ProjectFolderValidator {
 
 final class _Repository implements ProjectRepository {
   final records = <ProjectRecord>[];
+  Completer<Result<void>>? nextSave;
+  Completer<void>? saveStarted;
+  Completer<ProjectRecord?>? nextFind;
+
   @override
-  Future<ProjectRecord?> findById(String id) async =>
-      records.where((r) => r.id == id).firstOrNull;
+  Future<ProjectRecord?> findById(String id) async {
+    final pending = nextFind;
+    if (pending != null) {
+      nextFind = null;
+      return pending.future;
+    }
+    return records.where((r) => r.id == id).firstOrNull;
+  }
+
   @override
   Future<ProjectRecord?> findByNormalizedName(String name) async =>
       records.where((r) => r.normalizedName == name).firstOrNull;
@@ -162,8 +306,13 @@ final class _Repository implements ProjectRepository {
   Future<List<ProjectRecord>> listRetained() async => List.of(records);
   @override
   Future<Result<void>> save(ProjectRecord record) async {
-    records.add(record);
-    return const Success<void>(null);
+    saveStarted?.complete();
+    final pending = nextSave;
+    final result = pending == null
+        ? const Success<void>(null)
+        : await pending.future;
+    if (result is Success<void>) records.add(record);
+    return result;
   }
 }
 

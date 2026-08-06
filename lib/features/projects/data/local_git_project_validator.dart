@@ -101,7 +101,7 @@ final class LocalGitProjectValidator implements ProjectFolderValidator {
 
     if (!_samePath(folder.path, gitRoot.path)) {
       return ProjectFolderValidation.unavailable(
-        ProjectAvailability.notGitWorkingTree,
+        ProjectAvailability.notGitRoot,
       );
     }
     return ProjectFolderValidation.available(folder);

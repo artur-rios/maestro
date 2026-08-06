@@ -2,18 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 
-final class ProjectWorkspacePage extends ConsumerStatefulWidget {
+final class ProjectWorkspacePage extends StatelessWidget {
   const ProjectWorkspacePage({required this.emptyContent, super.key});
 
   final Widget emptyContent;
 
   @override
-  ConsumerState<ProjectWorkspacePage> createState() =>
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: [
+        projectControllerProvider.overrideWith(ProjectController.new),
+      ],
+      child: _ProjectWorkspaceView(emptyContent: emptyContent),
+    );
+  }
+}
+
+final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
+  const _ProjectWorkspaceView({required this.emptyContent});
+
+  final Widget emptyContent;
+
+  @override
+  ConsumerState<_ProjectWorkspaceView> createState() =>
       _ProjectWorkspacePageState();
 }
 
 final class _ProjectWorkspacePageState
-    extends ConsumerState<ProjectWorkspacePage> {
+    extends ConsumerState<_ProjectWorkspaceView> {
   @override
   void initState() {
     super.initState();
@@ -229,8 +245,13 @@ final class _ProjectContent extends ConsumerWidget {
           ),
         ],
         if (state.failure case final failure?
-            when failure.category !=
-                ProjectFailureCategory.unavailable) ...<Widget>[
+            when !{
+              ProjectFailureCategory.folderMissing,
+              ProjectFailureCategory.folderInaccessible,
+              ProjectFailureCategory.notGitWorkingTree,
+              ProjectFailureCategory.notGitRoot,
+              ProjectFailureCategory.folderTransient,
+            }.contains(failure.category)) ...<Widget>[
           const SizedBox(height: 16),
           _ProjectFailureMessage(failure: failure),
         ],

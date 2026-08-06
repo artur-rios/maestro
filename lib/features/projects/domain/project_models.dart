@@ -112,6 +112,7 @@ enum ProjectAvailability {
   missing,
   inaccessible,
   notGitWorkingTree,
+  notGitRoot,
   transientFailure,
 }
 

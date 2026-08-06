@@ -63,7 +63,7 @@ void main() {
       await container.read(projectControllerProvider.notifier).register('Demo');
       expect(
         container.read(projectControllerProvider).failure?.category,
-        ProjectFailureCategory.invalidFolder,
+        ProjectFailureCategory.notGitWorkingTree,
       );
       expect(
         container.read(projectControllerProvider).failure?.message,
@@ -79,6 +79,67 @@ void main() {
       );
     },
   );
+
+  for (final testCase
+      in <
+        ({
+          ProjectAvailability availability,
+          ProjectFailureCategory category,
+          String message,
+          String remediation,
+        })
+      >[
+        (
+          availability: ProjectAvailability.missing,
+          category: ProjectFailureCategory.folderMissing,
+          message: 'could not be found',
+          remediation: 'Restore the folder',
+        ),
+        (
+          availability: ProjectAvailability.inaccessible,
+          category: ProjectFailureCategory.folderInaccessible,
+          message: 'not accessible',
+          remediation: 'Restore folder access',
+        ),
+        (
+          availability: ProjectAvailability.notGitWorkingTree,
+          category: ProjectFailureCategory.notGitWorkingTree,
+          message: 'not a Git working tree',
+          remediation: 'Choose an existing Git working-tree root',
+        ),
+        (
+          availability: ProjectAvailability.notGitRoot,
+          category: ProjectFailureCategory.notGitRoot,
+          message: 'not the Git working-tree root',
+          remediation: 'Choose the repository root',
+        ),
+        (
+          availability: ProjectAvailability.transientFailure,
+          category: ProjectFailureCategory.folderTransient,
+          message: 'Could not validate',
+          remediation: 'Retry after checking',
+        ),
+      ]) {
+    test(
+      'Given${testCase.availability.name}Folder_WhenRegistering_ThenTypedSafeFailureIsPreserved',
+      () async {
+        final harness = _Harness();
+        harness.validator.availability = testCase.availability;
+        final container = harness.container();
+        addTearDown(container.dispose);
+
+        await container
+            .read(projectControllerProvider.notifier)
+            .register('Demo');
+
+        final failure = container.read(projectControllerProvider).failure!;
+        expect(failure.category, testCase.category);
+        expect(failure.message, contains(testCase.message));
+        expect(failure.remediation, contains(testCase.remediation));
+        expect(failure.message, isNot(contains(r'C:\projects\demo')));
+      },
+    );
+  }
 
   test(
     'GivenSelectedFolderBecomesUnavailable_WhenRefreshed_ThenRecordRemainsAndActionsAreDisabled',
@@ -100,7 +161,7 @@ void main() {
       expect(state.projects, hasLength(1));
       expect(state.selected?.record.id, 'one');
       expect(state.selected?.folderActionsEnabled, isFalse);
-      expect(state.failure?.category, ProjectFailureCategory.unavailable);
+      expect(state.failure?.category, ProjectFailureCategory.folderMissing);
 
       harness.validator.availability = ProjectAvailability.available;
       await container

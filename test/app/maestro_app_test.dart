@@ -86,6 +86,38 @@ void main() {
       expect(find.text('Sign out'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'GivenSelectedProject_WhenSigningOutAndBackIn_ThenWorkspaceStartsWithFreshPresentationState',
+    (tester) async {
+      final projectRepository = _ProjectRepository()
+        ..records.add(_projectRecord());
+      await tester.pumpWidget(
+        MaestroApp(
+          authenticationService: _authenticationService(),
+          projectService: _projectService(repository: projectRepository),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo'));
+      await tester.pumpAndSettle();
+      expect(find.text(r'C:\projects\demo'), findsOneWidget);
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(r'C:\projects\demo'), findsNothing);
+      expect(find.text('Foundation ready'), findsOneWidget);
+    },
+  );
 }
 
 AuthenticationService _authenticationService({
@@ -105,9 +137,9 @@ AuthenticationService _authenticationService({
   );
 }
 
-ProjectService _projectService() {
+ProjectService _projectService({_ProjectRepository? repository}) {
   return ProjectService(
-    repository: _ProjectRepository(),
+    repository: repository ?? _ProjectRepository(),
     folderValidator: const _ProjectFolderValidator(),
     clock: () => DateTime.utc(2026, 8, 6),
     newId: () => 'project-id',
@@ -131,20 +163,37 @@ final class _ProjectFolderValidator implements ProjectFolderValidator {
 }
 
 final class _ProjectRepository implements ProjectRepository {
+  final records = <ProjectRecord>[];
+
   @override
-  Future<ProjectRecord?> findById(String id) async => null;
+  Future<ProjectRecord?> findById(String id) async =>
+      records.where((record) => record.id == id).firstOrNull;
 
   @override
   Future<ProjectRecord?> findByNormalizedName(String normalizedName) async =>
-      null;
+      records
+          .where((record) => record.normalizedName == normalizedName)
+          .firstOrNull;
 
   @override
-  Future<List<ProjectRecord>> listRetained() async => <ProjectRecord>[];
+  Future<List<ProjectRecord>> listRetained() async => List.of(records);
 
   @override
-  Future<Result<void>> save(ProjectRecord record) async =>
-      const Success<void>(null);
+  Future<Result<void>> save(ProjectRecord record) async {
+    records.add(record);
+    return const Success<void>(null);
+  }
 }
+
+ProjectRecord _projectRecord() => ProjectRecord(
+  id: 'project-id',
+  name: 'Demo',
+  normalizedName: 'demo',
+  folderPath: r'C:\projects\demo',
+  createdAt: DateTime.utc(2026, 8, 6),
+  updatedAt: DateTime.utc(2026, 8, 6),
+  deletedAt: null,
+);
 
 final class _AuthenticationRepository
     implements LocalUserRepository, AuditRepository {

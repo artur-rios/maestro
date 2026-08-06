@@ -23,7 +23,11 @@ enum ProjectFailureCategory {
   invalidName,
   invalidFolder,
   duplicateName,
-  unavailable,
+  folderMissing,
+  folderInaccessible,
+  notGitWorkingTree,
+  notGitRoot,
+  folderTransient,
   storage,
   picker,
 }
@@ -240,38 +244,76 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
   ) {
     return selection.folderActionsEnabled
         ? null
-        : ProjectPresentationFailure(
-            category: ProjectFailureCategory.unavailable,
-            message: 'This project folder is unavailable.',
-            remediation: selection.remediation,
-          );
+        : _folderFailure(selection.availability);
   }
 
   static ProjectPresentationFailure _presentFailure(MaestroFailure failure) {
-    final category = switch (failure.code) {
-      'project.name.invalid' => ProjectFailureCategory.invalidName,
-      'project.name.duplicate' => ProjectFailureCategory.duplicateName,
-      final code when code.startsWith('project.folder.') =>
-        ProjectFailureCategory.invalidFolder,
-      _ => ProjectFailureCategory.storage,
-    };
-    return switch (category) {
-      ProjectFailureCategory.invalidName => const ProjectPresentationFailure(
+    return switch (failure.code) {
+      'project.name.invalid' => const ProjectPresentationFailure(
         category: ProjectFailureCategory.invalidName,
         message: 'Enter a valid project name.',
         remediation: 'Use a non-empty name without control characters.',
       ),
-      ProjectFailureCategory.duplicateName => const ProjectPresentationFailure(
+      'project.name.duplicate' => const ProjectPresentationFailure(
         category: ProjectFailureCategory.duplicateName,
         message: 'A project already uses this name.',
         remediation: 'Choose a unique project name.',
       ),
-      ProjectFailureCategory.invalidFolder => const ProjectPresentationFailure(
+      'project.folder.invalid' => const ProjectPresentationFailure(
         category: ProjectFailureCategory.invalidFolder,
-        message: 'The selected folder is not a valid Git project.',
-        remediation: 'Choose an existing Git working-tree root.',
+        message: 'Choose an absolute project folder.',
+        remediation: 'Choose the project folder again.',
+      ),
+      'project.folder.missing' => _folderFailure(ProjectAvailability.missing),
+      'project.folder.inaccessible' => _folderFailure(
+        ProjectAvailability.inaccessible,
+      ),
+      'project.folder.notGitWorkingTree' => _folderFailure(
+        ProjectAvailability.notGitWorkingTree,
+      ),
+      'project.folder.notGitRoot' => _folderFailure(
+        ProjectAvailability.notGitRoot,
+      ),
+      'project.folder.transientFailure' => _folderFailure(
+        ProjectAvailability.transientFailure,
       ),
       _ => _storageFailure,
+    };
+  }
+
+  static ProjectPresentationFailure _folderFailure(
+    ProjectAvailability availability,
+  ) {
+    return switch (availability) {
+      ProjectAvailability.missing => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.folderMissing,
+        message: 'The project folder could not be found.',
+        remediation:
+            'Restore the folder at its registered location, then refresh.',
+      ),
+      ProjectAvailability.inaccessible => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.folderInaccessible,
+        message: 'The project folder is not accessible.',
+        remediation: 'Restore folder access, then refresh.',
+      ),
+      ProjectAvailability.notGitWorkingTree => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.notGitWorkingTree,
+        message: 'The selected folder is not a Git working tree.',
+        remediation: 'Choose an existing Git working-tree root.',
+      ),
+      ProjectAvailability.notGitRoot => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.notGitRoot,
+        message: 'The selected folder is not the Git working-tree root.',
+        remediation: 'Choose the repository root and try again.',
+      ),
+      ProjectAvailability.transientFailure => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.folderTransient,
+        message: 'Could not validate the project folder.',
+        remediation: 'Retry after checking the folder and Git installation.',
+      ),
+      ProjectAvailability.available => throw StateError(
+        'Available projects do not have folder failures.',
+      ),
     };
   }
 
