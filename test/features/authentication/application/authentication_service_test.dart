@@ -83,6 +83,55 @@ void main() {
     },
   );
 
+  test(
+    'GivenInvalidEmail_WhenCreating_ThenTypedFailurePrecedesEveryMutation',
+    () async {
+      for (final email in <String>[
+        '',
+        '   ',
+        'invalid',
+        'person@@example.com',
+      ]) {
+        final result = await service.createAccount(email, 'strong-password');
+
+        expect(
+          result,
+          isA<FailureResult<AuthenticatedSession>>(),
+          reason: email,
+        );
+        final failure = (result as FailureResult<AuthenticatedSession>).failure;
+        expect(failure, isA<ValidationFailure>(), reason: email);
+        expect(failure.code, 'authentication.email.invalid', reason: email);
+      }
+      expect(users.findEmailInputs, isEmpty);
+      expect(hasher.createInputs, isEmpty);
+      expect(verifiers.writes, isEmpty);
+      expect(users.saved, isEmpty);
+      expect(audits.events, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenMalformedEmail_WhenSigningIn_ThenStorageAndAuditAreNotAccessed',
+    () async {
+      final result = await service.signInWithEmail(
+        'person@example..com',
+        'strong-password',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure, isA<ValidationFailure>());
+      expect(failure.code, 'authentication.email.invalid');
+      expect(users.findEmailInputs, isEmpty);
+      expect(verifiers.readKeys, isEmpty);
+      expect(users.lastAuthenticatedUserIds, isEmpty);
+      expect(audits.events, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
   // FR-AU-05: persistence failure compensates the newly stored verifier.
   test('GivenUserSaveFailure_WhenCreating_ThenNewVerifierIsRemoved', () async {
     users.failWhenSaving = true;
@@ -568,11 +617,13 @@ final class _FakeLocalUserRepository implements LocalUserRepository {
   LocalUser? _operatingSystemUser;
   Future<LocalUser?> Function(NormalizedEmail email)? findEmail;
   Future<void> Function(LocalUser user)? afterSave;
+  final List<String> findEmailInputs = <String>[];
 
   set operatingSystemUser(LocalUser? value) => _operatingSystemUser = value;
 
   @override
   Future<LocalUser?> findByEmail(NormalizedEmail email) async {
+    findEmailInputs.add(email.value);
     if (findEmail case final callback?) {
       return callback(email);
     }
@@ -671,8 +722,13 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
 }
 
 final class _FakePasswordHasher implements PasswordHasher {
+  final List<String> createInputs = <String>[];
+
   @override
-  Future<String> create(String password) async => 'hashed:$password';
+  Future<String> create(String password) async {
+    createInputs.add(password);
+    return 'hashed:$password';
+  }
 
   @override
   Future<bool> verify(String verifier, String password) async {

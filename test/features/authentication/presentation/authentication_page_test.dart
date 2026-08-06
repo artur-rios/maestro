@@ -137,6 +137,56 @@ void main() {
   );
 
   testWidgets(
+    'GivenMalformedEmail_WhenCreatingAccount_ThenEmailGuidanceIsVisibleAndContentStaysProtected',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.tap(find.bySemanticsLabel('Create a local account'));
+      await tester.pump();
+      await tester.enterText(
+        find.bySemanticsLabel('Email address'),
+        'person@@example.com',
+      );
+      await tester.enterText(
+        find.bySemanticsLabel('Password'),
+        'strong-password',
+      );
+
+      await tester.tap(find.bySemanticsLabel('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter a valid email address.'), findsOneWidget);
+      expect(find.text('Foundation ready'), findsNothing);
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText).last)
+            .controller
+            .text,
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenBlankEmail_WhenSigningIn_ThenEmailGuidanceIsVisibleAndContentStaysProtected',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.enterText(find.bySemanticsLabel('Email address'), '   ');
+      await tester.enterText(
+        find.bySemanticsLabel('Password'),
+        'strong-password',
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with email and password'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter a valid email address.'), findsOneWidget);
+      expect(find.text('Foundation ready'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'GivenExistingEmail_WhenAccountCreated_ThenCredentialNeutralErrorIsVisible',
     (tester) async {
       final users = _MemoryAuthenticationRepository()

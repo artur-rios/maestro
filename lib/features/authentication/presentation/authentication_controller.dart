@@ -47,6 +47,7 @@ final class AuthenticationError extends AuthenticationPresentationState {
 }
 
 enum AuthenticationFailureCategory {
+  emailInput,
   passwordPolicy,
   accountCreation,
   operatingSystem,
@@ -140,6 +141,13 @@ final class AuthenticationController
     MaestroFailure failure,
     _AuthenticationOperation operation,
   ) {
+    if (failure.code == 'authentication.email.invalid') {
+      return const AuthenticationError(
+        category: AuthenticationFailureCategory.emailInput,
+        message: 'Enter a valid email address.',
+        remediation: 'Use an address such as person@example.com.',
+      );
+    }
     if (failure.code == 'authentication.password.too_short') {
       return const AuthenticationError(
         category: AuthenticationFailureCategory.passwordPolicy,

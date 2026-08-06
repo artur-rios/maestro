@@ -84,7 +84,10 @@ final class AuthenticationService {
     String password,
   ) async {
     final operationGeneration = _beginAuthenticationOperation();
-    final normalizedEmail = NormalizedEmail.parse(email);
+    final normalizedEmail = _validatedEmail(email);
+    if (normalizedEmail == null) {
+      return _invalidEmail();
+    }
     final localPassword = _validatedPassword(password);
     if (localPassword == null) {
       return const FailureResult<AuthenticatedSession>(
@@ -208,8 +211,12 @@ final class AuthenticationService {
     String password,
   ) async {
     final operationGeneration = _beginAuthenticationOperation();
+    final normalizedEmail = _validatedEmail(email);
+    if (normalizedEmail == null) {
+      return _invalidEmail();
+    }
     try {
-      final user = await _users.findByEmail(NormalizedEmail.parse(email));
+      final user = await _users.findByEmail(normalizedEmail);
       if (!_ownsAuthenticationOperation(operationGeneration)) {
         return _staleOperation();
       }
@@ -311,6 +318,14 @@ final class AuthenticationService {
     try {
       return LocalPassword.validate(password);
     } on PasswordTooShort {
+      return null;
+    }
+  }
+
+  NormalizedEmail? _validatedEmail(String email) {
+    try {
+      return NormalizedEmail.parse(email);
+    } on InvalidEmailAddress {
       return null;
     }
   }
@@ -484,6 +499,16 @@ final class AuthenticationService {
       SecurityFailure(
         code: 'authentication.credentials.invalid',
         message: 'The email address or password is invalid.',
+      ),
+    );
+  }
+
+  FailureResult<AuthenticatedSession> _invalidEmail() {
+    return const FailureResult<AuthenticatedSession>(
+      ValidationFailure(
+        code: 'authentication.email.invalid',
+        message: 'Enter a valid email address.',
+        remediation: 'Use an address such as person@example.com.',
       ),
     );
   }

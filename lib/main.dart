@@ -15,6 +15,8 @@ import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+String newProductionId() => const Uuid().v7();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MaestroDatabase? database;
@@ -33,7 +35,7 @@ Future<void> main() async {
       audits: repository,
       operatingSystemAuthentication: const MethodChannelAuthentication(),
       clock: () => DateTime.now().toUtc(),
-      newId: const Uuid().v4,
+      newId: newProductionId,
     );
     final foundation = ProductionFoundation(
       paths: paths,

@@ -10,6 +10,38 @@ void main() {
     );
   });
 
+  test('GivenInvalidEmailForms_WhenParsed_ThenTypedValidationIsThrown', () {
+    final invalidEmails = <String>[
+      '',
+      '   ',
+      'not-an-email',
+      '@example.com',
+      'person@',
+      'person@@example.com',
+      'person..name@example.com',
+      'person@example..com',
+      'person@-example.com',
+      'person@example-.com',
+      '${List<String>.filled(65, 'a').join()}@example.com',
+      'person@${List<String>.filled(64, 'a').join()}.com',
+    ];
+
+    for (final input in invalidEmails) {
+      expect(
+        () => NormalizedEmail.parse(input),
+        throwsA(isA<InvalidEmailAddress>()),
+        reason: input,
+      );
+    }
+  });
+
+  test('GivenSupportedDotAtomEmail_WhenParsed_ThenAliasesArePreserved', () {
+    expect(
+      NormalizedEmail.parse(' PERSON+local_tag@Sub.Example-Domain.com ').value,
+      'person+local_tag@sub.example-domain.com',
+    );
+  });
+
   // FR-AU-03 and FR-AU-04: reject underlength passwords with guidance.
   test(
     'GivenShortPassword_WhenValidated_ThenMinimumAndGuidanceAreReturned',

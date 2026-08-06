@@ -7,10 +7,32 @@
 #include <winrt/Windows.Security.Credentials.UI.h>
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "flutter/generated_plugin_registrant.h"
+
+class AuthenticationReplyGate {
+ public:
+  template <typename Reply>
+  void ReplyIfActive(Reply&& reply) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (active_) {
+      std::forward<Reply>(reply)();
+    }
+  }
+
+  void Deactivate() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    active_ = false;
+  }
+
+ private:
+  std::mutex mutex_;
+  bool active_ = true;
+};
 
 namespace {
 
@@ -134,6 +156,7 @@ bool FlutterWindow::OnCreate() {
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
+  authentication_reply_gate_ = std::make_shared<AuthenticationReplyGate>();
   RegisterPlugins(flutter_controller_->engine());
 
   flutter::MethodChannel<EncodableValue> authentication_channel(
@@ -144,25 +167,34 @@ bool FlutterWindow::OnCreate() {
              std::unique_ptr<MethodResult<EncodableValue>> result) {
         auto shared_result =
             std::shared_ptr<MethodResult<EncodableValue>>(std::move(result));
+        auto reply_gate = authentication_reply_gate_;
         if (call.method_name() == "probe") {
           try {
             auto operation = UserConsentVerifier::CheckAvailabilityAsync();
             operation.Completed(
-                [shared_result](
+                [shared_result, reply_gate](
                     const IAsyncOperation<UserConsentVerifierAvailability>&
                         completed,
                     WinrtAsyncStatus status) {
                   try {
-                    shared_result->Success(
-                        status == WinrtAsyncStatus::Completed
-                            ? AvailabilityResponse(completed.GetResults())
-                            : WindowsHelloFailure());
+                    auto response = status == WinrtAsyncStatus::Completed
+                                        ? AvailabilityResponse(
+                                              completed.GetResults())
+                                        : WindowsHelloFailure();
+                    reply_gate->ReplyIfActive(
+                        [shared_result, response = std::move(response)]() {
+                          shared_result->Success(response);
+                        });
                   } catch (...) {
-                    shared_result->Success(WindowsHelloFailure());
+                    reply_gate->ReplyIfActive([shared_result]() {
+                      shared_result->Success(WindowsHelloFailure());
+                    });
                   }
                 });
           } catch (...) {
-            shared_result->Success(WindowsHelloFailure());
+            reply_gate->ReplyIfActive([shared_result]() {
+              shared_result->Success(WindowsHelloFailure());
+            });
           }
           return;
         }
@@ -182,19 +214,28 @@ bool FlutterWindow::OnCreate() {
                 winrt::guid_of<VerificationOperation>(),
                 winrt::put_abi(operation)));
             operation.Completed(
-                [shared_result](const VerificationOperation& completed,
-                                WinrtAsyncStatus status) {
+                [shared_result, reply_gate](
+                    const VerificationOperation& completed,
+                    WinrtAsyncStatus status) {
                   try {
-                    shared_result->Success(
-                        status == WinrtAsyncStatus::Completed
-                            ? VerificationResponse(completed.GetResults())
-                            : WindowsHelloFailure());
+                    auto response = status == WinrtAsyncStatus::Completed
+                                        ? VerificationResponse(
+                                              completed.GetResults())
+                                        : WindowsHelloFailure();
+                    reply_gate->ReplyIfActive(
+                        [shared_result, response = std::move(response)]() {
+                          shared_result->Success(response);
+                        });
                   } catch (...) {
-                    shared_result->Success(WindowsHelloFailure());
+                    reply_gate->ReplyIfActive([shared_result]() {
+                      shared_result->Success(WindowsHelloFailure());
+                    });
                   }
                 });
           } catch (...) {
-            shared_result->Success(WindowsHelloFailure());
+            reply_gate->ReplyIfActive([shared_result]() {
+              shared_result->Success(WindowsHelloFailure());
+            });
           }
           return;
         }
@@ -216,6 +257,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (authentication_reply_gate_) {
+    authentication_reply_gate_->Deactivate();
+  }
   if (flutter_controller_) {
     flutter::MethodChannel<EncodableValue> authentication_channel(
         flutter_controller_->engine()->messenger(), kAuthenticationChannel,
@@ -223,6 +267,7 @@ void FlutterWindow::OnDestroy() {
     authentication_channel.SetMethodCallHandler(nullptr);
     flutter_controller_ = nullptr;
   }
+  authentication_reply_gate_ = nullptr;
 
   Win32Window::OnDestroy();
 }
