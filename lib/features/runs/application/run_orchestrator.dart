@@ -407,15 +407,22 @@ Do not add fields and do not write this protocol to stdout.
 }
 
 final class _StreamingFrameRedactor {
-  _StreamingFrameRedactor(this.environment)
-    : _overlapBytes = environment.values.fold<int>(
+  factory _StreamingFrameRedactor(Map<String, String> environment) {
+    final secrets = environment.values
+        .where((value) => value.isNotEmpty)
+        .map(utf8.encode)
+        .toList(growable: false);
+    return _StreamingFrameRedactor._(environment, secrets);
+  }
+
+  _StreamingFrameRedactor._(this.environment, this._secretBytes)
+    : _overlapBytes = _secretBytes.fold<int>(
         512,
-        (largest, value) => largest > utf8.encode(value).length
-            ? largest
-            : utf8.encode(value).length,
+        (largest, value) => largest > value.length ? largest : value.length,
       );
   static const int maximumPendingBytes = 64 * 1024;
   final Map<String, String> environment;
+  final List<List<int>> _secretBytes;
   final int _overlapBytes;
   final List<int> _pending = <int>[];
   final SecretRedactor _redactor = SecretRedactor();
@@ -427,7 +434,9 @@ final class _StreamingFrameRedactor {
       if (newline >= 0) {
         yield _redact(_take(newline + 1));
       } else if (_pending.length >= maximumPendingBytes + _overlapBytes) {
-        yield _redact(_take(_pending.length - _overlapBytes));
+        final count = _safeFlushCount(_pending.length - _overlapBytes);
+        if (count == 0) break;
+        yield _redact(_take(count));
       } else {
         break;
       }
@@ -444,6 +453,29 @@ final class _StreamingFrameRedactor {
     return value;
   }
 
+  int _safeFlushCount(int proposed) {
+    var safe = proposed;
+    for (final secret in _secretBytes) {
+      if (secret.isEmpty) continue;
+      final firstCandidate = (proposed - secret.length + 1).clamp(0, proposed);
+      final lastCandidate = (proposed - 1).clamp(0, proposed);
+      for (var start = firstCandidate; start <= lastCandidate; start++) {
+        if (start + secret.length > proposed &&
+            start + secret.length <= _pending.length &&
+            _matchesAt(_pending, secret, start)) {
+          if (start < safe) safe = start;
+          break;
+        }
+      }
+    }
+    while (safe > 0 &&
+        safe < _pending.length &&
+        (_pending[safe] & 0xc0) == 0x80) {
+      safe--;
+    }
+    return safe;
+  }
+
   Uint8List _redact(List<int> bytes) => Uint8List.fromList(
     utf8.encode(
       _redactor.redact(
@@ -452,6 +484,13 @@ final class _StreamingFrameRedactor {
       ),
     ),
   );
+}
+
+bool _matchesAt(List<int> source, List<int> pattern, int start) {
+  for (var index = 0; index < pattern.length; index++) {
+    if (source[start + index] != pattern[index]) return false;
+  }
+  return true;
 }
 
 final class _LogBatcher {
