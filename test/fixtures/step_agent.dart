@@ -4,6 +4,12 @@ import 'dart:io';
 
 Future<void> main(List<String> arguments) async {
   final mode = arguments.first;
+  if (mode == 'startupFlood') {
+    stdout.add(List<int>.filled(1024 * 1024, 0x66));
+    await stdout.flush();
+    await stdin.drain<void>();
+    return;
+  }
   final prompt = await stdin.transform(utf8.decoder).join();
   final attemptId = RegExp(
     r'"attemptId":"([^"]+)"',

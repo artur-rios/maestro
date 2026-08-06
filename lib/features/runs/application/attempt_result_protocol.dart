@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:path/path.dart' as p;
@@ -21,6 +22,13 @@ final class AttemptResultRejected extends AttemptResultRead {
 }
 
 final class AttemptResultProtocol {
+  AttemptResultProtocol({
+    String Function()? quarantineToken,
+    this._afterQuarantine,
+  }) : _quarantineToken = quarantineToken ?? _randomToken;
+
+  final String Function() _quarantineToken;
+  final Future<void> Function(String path)? _afterQuarantine;
   static const int maximumBytes = 256 * 1024;
   static const Set<String> _fields = <String>{
     'schema',
@@ -41,15 +49,28 @@ final class AttemptResultProtocol {
     if (!p.isWithin(root, candidate)) {
       return const AttemptResultRejected('result.unsafe_path');
     }
+    String? quarantined;
     try {
-      final type = await FileSystemEntity.type(candidate, followLinks: false);
-      if (type == FileSystemEntityType.notFound) {
+      final initialType = await FileSystemEntity.type(
+        candidate,
+        followLinks: false,
+      );
+      if (initialType == FileSystemEntityType.notFound) {
         return const AttemptResultRejected('result.missing');
       }
+      if (initialType != FileSystemEntityType.file) {
+        return const AttemptResultRejected('result.not_regular');
+      }
+      final quarantineRoot = p.join(root, '.quarantine');
+      await Directory(quarantineRoot).create(recursive: true);
+      quarantined = p.join(quarantineRoot, '${_quarantineToken()}.result');
+      await File(candidate).rename(quarantined);
+      await _afterQuarantine?.call(quarantined);
+      final type = await FileSystemEntity.type(quarantined, followLinks: false);
       if (type != FileSystemEntityType.file) {
         return const AttemptResultRejected('result.not_regular');
       }
-      final file = File(candidate);
+      final file = File(quarantined);
       final length = await file.length();
       if (length > maximumBytes) {
         return const AttemptResultRejected('result.oversized');
@@ -83,7 +104,7 @@ final class AttemptResultProtocol {
           decoded['context'] is! String) {
         return const AttemptResultRejected('result.malformed');
       }
-      if (await FileSystemEntity.type(candidate, followLinks: false) !=
+      if (await FileSystemEntity.type(quarantined, followLinks: false) !=
           FileSystemEntityType.file) {
         return const AttemptResultRejected('result.not_regular');
       }
@@ -106,12 +127,28 @@ final class AttemptResultProtocol {
       return const AttemptResultRejected('result.missing');
     } finally {
       try {
-        await File(candidate).delete();
+        final path = quarantined;
+        if (path != null) {
+          final type = await FileSystemEntity.type(path, followLinks: false);
+          if (type == FileSystemEntityType.link) {
+            await Link(path).delete();
+          } else if (type == FileSystemEntityType.file) {
+            await File(path).delete();
+          }
+        }
       } on FileSystemException {
         // Missing and hostile file replacements remain typed read failures.
       }
     }
   }
+}
+
+String _randomToken() {
+  final random = Random.secure();
+  return List<String>.generate(
+    4,
+    (_) => random.nextInt(0x100000000).toRadixString(16).padLeft(8, '0'),
+  ).join();
 }
 
 List<String>? _topLevelKeys(String source) {

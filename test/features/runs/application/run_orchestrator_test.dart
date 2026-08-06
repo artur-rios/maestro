@@ -48,7 +48,7 @@ void main() {
     () async {
       final fixture = _Fixture(
         stepCount: 1,
-        environment: const <String, String>{'TOKEN': 'split-secret'},
+        environment: const <String, String>{'OPENAI_API_KEY': 'split-secret'},
       );
       fixture.launcher.results.add(
         _Script(
@@ -87,7 +87,7 @@ void main() {
     () async {
       final fixture = _Fixture(
         stepCount: 1,
-        environment: const <String, String>{'TOKEN': 'split-secret'},
+        environment: const <String, String>{'OPENAI_API_KEY': 'split-secret'},
       );
       final prefix = List<int>.filled(64 * 1024 - 'split-'.length, 0x78);
       fixture.launcher.results.add(
@@ -133,7 +133,7 @@ void main() {
         launcher: launcher,
         resultFiles: _Results(),
         executableFor: (cli) => cli,
-        environment: const <String, String>{'TOKEN': secret},
+        environment: const <String, String>{'OPENAI_API_KEY': secret},
         newAttemptId: () => 'attempt-${++attempt}',
         newLogId: () => 'log-${++log}',
         newNonce: () => 'nonce',
@@ -190,8 +190,8 @@ void main() {
         resultFiles: _Results(),
         executableFor: (cli) => cli,
         environment: const <String, String>{
-          'LEFT_TOKEN': leftSecret,
-          'RIGHT_TOKEN': rightSecret,
+          'OPENAI_API_KEY': leftSecret,
+          'ANTHROPIC_API_KEY': rightSecret,
         },
         newAttemptId: () => 'attempt-${++attempt}',
         newLogId: () => 'log-${++log}',
@@ -229,6 +229,59 @@ void main() {
     },
   );
 
+  test(
+    'redacts an authorization value longer than the forced boundary',
+    () async {
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(
+                utf8.encode('prefix Authorization: Bearer ${'s' * 70000}\nend'),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      await fixture.orchestrator.execute('run-1');
+      final output = utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(output, 'prefix Authorization: Bearer [REDACTED]\nend');
+    },
+  );
+
+  test(
+    'does not treat ordinary ambient PATH values as exact secrets',
+    () async {
+      final fixture = _Fixture(
+        stepCount: 1,
+        environment: const <String, String>{'PATH': 'x', 'CI': '1'},
+      );
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('x path 1 stays\n')),
+            ),
+          ],
+        ),
+      );
+
+      await fixture.orchestrator.execute('run-1');
+      expect(
+        utf8.decode(
+          fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+        ),
+        'x path 1 stays\n',
+      );
+    },
+  );
+
   test('coalesces newline floods and releases completed-run tails', () async {
     final fixture = _Fixture(stepCount: 1);
     fixture.launcher.results.add(
@@ -257,6 +310,44 @@ void main() {
     expect(summaries, lessThan(10));
     expect(fixture.orchestrator.retainedTailRunCount, 0);
   });
+
+  test(
+    'paused subscriber retains only latest alternating-channel summary',
+    () async {
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: List<StepOutputFrame>.generate(
+            1000,
+            (index) => StepOutputFrame(
+              index.isEven ? RunLogChannel.stdout : RunLogChannel.stderr,
+              Uint8List.fromList(<int>[index & 0xff]),
+            ),
+          ),
+        ),
+      );
+      RunLogSummary? delivered;
+      final subscription = fixture.orchestrator.events.listen(
+        (summary) => delivered = summary,
+      )..pause();
+
+      await fixture.orchestrator.execute('run-1');
+
+      expect(subscription.pendingCount, 1);
+      subscription.resume();
+      expect(delivered!.lastSequence, fixture.repository.logs.length - 1);
+      expect(
+        fixture.repository.logs.map((segment) => segment.channel).take(4),
+        <RunLogChannel>[
+          RunLogChannel.stdout,
+          RunLogChannel.stderr,
+          RunLogChannel.stdout,
+          RunLogChannel.stderr,
+        ],
+      );
+      subscription.cancel();
+    },
+  );
 
   test('flushes a partial durable batch on the bounded time cadence', () async {
     final repository = _Repository()
@@ -301,6 +392,56 @@ void main() {
       expect(spawn.repository.failed.single.$2, 'run.step.spawn_notFound');
     },
   );
+
+  test('maps post-attempt exception boundaries to typed failures', () async {
+    Future<void> verify(
+      String code,
+      void Function(_Fixture fixture) arrange,
+    ) async {
+      final fixture = _Fixture(stepCount: 1);
+      arrange(fixture);
+      await fixture.orchestrator.execute('run-1');
+      expect(fixture.repository.failed.single.$2, code);
+    }
+
+    await verify('run.step.result_prepare', (fixture) {
+      fixture.results.prepareError = true;
+    });
+    await verify('run.step.executor_lookup', (fixture) {
+      fixture.lookupError = true;
+    });
+    await verify('run.step.spawn_exception', (fixture) {
+      fixture.launcher.throwOnStart = true;
+    });
+    await verify('run.step.stream_failed', (fixture) {
+      fixture.launcher.results.add(const _Script(streamError: true));
+    });
+    await verify('run.step.stream_failed', (fixture) {
+      fixture.results.resolveError = true;
+      fixture.launcher.results.add(const _Script(streamError: true));
+    });
+    await verify('run.step.stream_failed', (fixture) {
+      fixture.repository.appendError = true;
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('evidence\n')),
+            ),
+          ],
+        ),
+      );
+    });
+    await verify('run.step.result_read', (fixture) {
+      fixture.results.consumeError = true;
+      fixture.launcher.results.add(const _Script());
+    });
+    await verify('run.step.result_cleanup', (fixture) {
+      fixture.results.resolveError = true;
+      fixture.launcher.results.add(const _Script());
+    });
+  });
 
   test('two run IDs can overlap while each run remains serial', () async {
     final fixture = _Fixture(stepCount: 1);
@@ -366,7 +507,7 @@ void main() {
       real.repository.logs
           .where((segment) => segment.channel == RunLogChannel.stdout)
           .length,
-      lessThanOrEqualTo(13),
+      lessThanOrEqualTo(16),
     );
   });
 
@@ -514,7 +655,10 @@ final class _Fixture {
       repository: repository,
       launcher: launcher,
       resultFiles: results,
-      executableFor: (cli) => cli,
+      executableFor: (cli) {
+        if (lookupError) throw StateError('lookup');
+        return cli;
+      },
       environment: environment,
       newAttemptId: () => 'attempt-${++_attempt}',
       newLogId: () => 'log-${++_log}',
@@ -528,6 +672,7 @@ final class _Fixture {
   late final RunOrchestrator orchestrator;
   int _attempt = 0;
   int _log = 0;
+  bool lookupError = false;
 
   RunExecutionAggregate aggregate(String id, {int count = 1}) =>
       _aggregate(id, count: count, worktreePath: '/tmp/$id');
@@ -586,6 +731,7 @@ final class _Repository implements RunExecutionRepository {
   final List<RunLogSegment> logs = <RunLogSegment>[];
   final List<String> completed = <String>[];
   final List<(String, String)> failed = <(String, String)>[];
+  bool appendError = false;
   @override
   Future<RunExecutionAggregate?> load(String id) async => aggregates[id];
   @override
@@ -593,7 +739,11 @@ final class _Repository implements RunExecutionRepository {
   @override
   Future<void> beginAttempt(RunAttempt value) async => begun.add(value);
   @override
-  Future<void> appendLog(RunLogSegment value) async => logs.add(value);
+  Future<void> appendLog(RunLogSegment value) async {
+    if (appendError) throw StateError('append');
+    logs.add(value);
+  }
+
   @override
   Future<void> completeAttemptAndAdvance({
     required String attemptId,
@@ -617,19 +767,23 @@ final class _Script {
     this.context = 'ok',
     this.spawnFailure,
     this.gate,
+    this.streamError = false,
   });
   final List<StepOutputFrame> frames;
   final int exitCode;
   final String context;
   final String? spawnFailure;
   final Completer<void>? gate;
+  final bool streamError;
 }
 
 final class _Launcher implements StepProcessLauncher {
   final List<_Script> results = <_Script>[];
   final List<StepLaunchRequest> requests = <StepLaunchRequest>[];
+  bool throwOnStart = false;
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async {
+    if (throwOnStart) throw StateError('start');
     requests.add(request);
     final script = results.removeAt(0);
     if (script.spawnFailure case final code?) {
@@ -643,8 +797,9 @@ final class _Process implements StepProcess {
   _Process(this.script);
   final _Script script;
   @override
-  Stream<StepOutputFrame> get frames =>
-      Stream<StepOutputFrame>.fromIterable(script.frames);
+  Stream<StepOutputFrame> get frames => script.streamError
+      ? Stream<StepOutputFrame>.error(StateError('stream'))
+      : Stream<StepOutputFrame>.fromIterable(script.frames);
   @override
   Future<int> get exitCode async {
     await script.gate?.future;
@@ -707,19 +862,32 @@ final class _BoundaryProcess implements StepProcess {
 
 final class _Results implements AttemptResultFiles {
   _Script? current;
+  bool prepareError = false;
+  bool consumeError = false;
+  bool resolveError = false;
   @override
   Future<String> prepare({
     required String runId,
     required String attemptId,
-  }) async => '/results/$attemptId.json';
+  }) async {
+    if (prepareError) throw StateError('prepare');
+    return '/results/$attemptId.json';
+  }
+
   @override
   Future<AttemptResultRead> consume({
     required String path,
     required String attemptId,
     required String nonce,
-  }) async => AttemptResultAccepted(
-    DeclaredContext.parse('from-${attemptId.endsWith('1') ? 'one' : 'two'}'),
-  );
+  }) async {
+    if (consumeError) throw StateError('consume');
+    return AttemptResultAccepted(
+      DeclaredContext.parse('from-${attemptId.endsWith('1') ? 'one' : 'two'}'),
+    );
+  }
+
   @override
-  Future<void> resolve(String path) async {}
+  Future<void> resolve(String path) async {
+    if (resolveError) throw StateError('resolve');
+  }
 }

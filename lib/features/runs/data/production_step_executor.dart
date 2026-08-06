@@ -119,11 +119,15 @@ final class OwnedStepProcessLauncher implements StepProcessLauncher {
         ),
       );
       final supervisor = ProcessSupervisor()..attach(process);
-      process.stdin.add(utf8.encode(command.stdinText));
-      await process.stdin.close();
-      return StepProcessStart.started(
-        _OwnedStreamingStepProcess(process, supervisor),
-      );
+      final streaming = _OwnedStreamingStepProcess(process, supervisor);
+      try {
+        process.stdin.add(utf8.encode(command.stdinText));
+        await process.stdin.close();
+        return StepProcessStart.started(streaming);
+      } on Object {
+        await supervisor.cancel();
+        return StepProcessStart.failure('stdin_failed');
+      }
     } on ProcessException catch (error) {
       await process?.terminateTree();
       return StepProcessStart.failure(switch (error.errorCode) {

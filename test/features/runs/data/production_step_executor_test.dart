@@ -7,6 +7,7 @@ import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/platform/process/native_process_tree.dart';
 import 'package:maestro/platform/process/process_supervisor.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   test('builds noninteractive argument arrays for every supported CLI', () {
@@ -149,6 +150,63 @@ void main() {
         containsAllInOrder('fixture-err'.codeUnits),
       );
     },
+  );
+
+  test('drains startup flood before awaiting a large stdin write', () async {
+    final launcher = OwnedStepProcessLauncher(
+      commands: const _StartupFloodCommands(),
+    );
+    final started = await launcher
+        .start(
+          StepLaunchRequest(
+            cli: 'codex',
+            model: 'fixture',
+            executable: _dartExecutable(),
+            prompt: 'p' * (256 * 1024),
+            workingDirectory: Directory.current.path,
+            environment: Platform.environment,
+          ),
+        )
+        .timeout(const Duration(seconds: 8));
+
+    final frames = await started.process!.frames.toList();
+    expect(await started.process!.exitCode, 0);
+    expect(
+      frames
+          .where((frame) => frame.channel == RunLogChannel.stdout)
+          .fold<int>(0, (sum, frame) => sum + frame.bytes.length),
+      1024 * 1024,
+    );
+  });
+}
+
+final class _StartupFloodCommands implements StepCommandFactory {
+  const _StartupFloodCommands();
+  @override
+  StepCommand create({
+    required String cli,
+    required String model,
+    required String prompt,
+    required String executable,
+  }) => StepCommand(
+    executable: executable,
+    arguments: <String>[
+      p.join(Directory.current.path, 'test', 'fixtures', 'step_agent.dart'),
+      'startupFlood',
+    ],
+    stdinText: prompt,
+  );
+}
+
+String _dartExecutable() {
+  final root = Platform.environment['FLUTTER_ROOT']!;
+  return p.join(
+    root,
+    'bin',
+    'cache',
+    'dart-sdk',
+    'bin',
+    Platform.isWindows ? 'dart.exe' : 'dart',
   );
 }
 

@@ -123,6 +123,73 @@ final class RunLogSummary {
   final int tailBytes;
 }
 
+final class RunSummaryEvents {
+  final Set<RunSummarySubscription> _subscriptions = <RunSummarySubscription>{};
+
+  RunSummarySubscription listen(void Function(RunLogSummary event) onData) {
+    late final RunSummarySubscription subscription;
+    subscription = RunSummarySubscription._(
+      onData,
+      () => _subscriptions.remove(subscription),
+    );
+    _subscriptions.add(subscription);
+    return subscription;
+  }
+
+  Future<RunLogSummary> get first {
+    final completer = Completer<RunLogSummary>();
+    late final RunSummarySubscription subscription;
+    subscription = listen((event) {
+      if (!completer.isCompleted) completer.complete(event);
+      subscription.cancel();
+    });
+    return completer.future;
+  }
+
+  void add(RunLogSummary event) {
+    for (final subscription in _subscriptions.toList(growable: false)) {
+      subscription._add(event);
+    }
+  }
+}
+
+final class RunSummarySubscription {
+  RunSummarySubscription._(this._onData, this._onCancel);
+  final void Function(RunLogSummary event) _onData;
+  final void Function() _onCancel;
+  RunLogSummary? _pending;
+  var _paused = false;
+  var _cancelled = false;
+
+  int get pendingCount => _pending == null ? 0 : 1;
+
+  void pause() => _paused = true;
+
+  void resume() {
+    if (_cancelled) return;
+    _paused = false;
+    final pending = _pending;
+    _pending = null;
+    if (pending != null) _onData(pending);
+  }
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _pending = null;
+    _onCancel();
+  }
+
+  void _add(RunLogSummary event) {
+    if (_cancelled) return;
+    if (_paused) {
+      _pending = event;
+    } else {
+      _onData(event);
+    }
+  }
+}
+
 final class RunOrchestrator {
   RunOrchestrator({
     required RunExecutionRepository repository,
@@ -156,13 +223,12 @@ final class RunOrchestrator {
   final String Function() _newLogId;
   final String Function() _newNonce;
   final DateTime Function() _now;
-  final StreamController<RunLogSummary> _events =
-      StreamController<RunLogSummary>.broadcast();
+  final RunSummaryEvents _events = RunSummaryEvents();
   final Map<String, Queue<Uint8List>> _tails = <String, Queue<Uint8List>>{};
   final Map<String, int> _tailSizes = <String, int>{};
   final Map<String, Future<void>> _active = <String, Future<void>>{};
 
-  Stream<RunLogSummary> get events => _events.stream;
+  RunSummaryEvents get events => _events;
   int get retainedTailRunCount => _tails.length;
 
   Uint8List tailFor(String runId) => Uint8List.fromList(
@@ -215,32 +281,55 @@ final class RunOrchestrator {
           startedAt: startedAt,
         ),
       );
-      final nonce = _newNonce();
-      final resultPath = await _resultFiles.prepare(
-        runId: runId,
-        attemptId: attemptId,
-      );
-      final prompt = _prompt(
-        aggregate.snapshot,
-        step,
-        priorContext,
-        attemptId,
-        nonce,
-        resultPath,
-      );
-      final launch = await _launcher.start(
-        StepLaunchRequest(
-          cli: step.cli!,
-          model: step.model!,
-          executable: _executableFor(step.cli!),
-          prompt: prompt,
-          workingDirectory: aggregate.run.worktreePath!,
-          environment: _environment,
-        ),
-      );
+      String? resultPath;
+      try {
+        resultPath = await _resultFiles.prepare(
+          runId: runId,
+          attemptId: attemptId,
+        );
+      } on Object {
+        await _failAttempt(attemptId, 'run.step.result_prepare');
+        return;
+      }
+      late final String nonce;
+      late final String prompt;
+      late final String executable;
+      try {
+        nonce = _newNonce();
+        prompt = _prompt(
+          aggregate.snapshot,
+          step,
+          priorContext,
+          attemptId,
+          nonce,
+          resultPath,
+        );
+        executable = _executableFor(step.cli!);
+      } on Object {
+        await _resolveIgnoringErrors(resultPath);
+        await _failAttempt(attemptId, 'run.step.executor_lookup');
+        return;
+      }
+      late final StepProcessStart launch;
+      try {
+        launch = await _launcher.start(
+          StepLaunchRequest(
+            cli: step.cli!,
+            model: step.model!,
+            executable: executable,
+            prompt: prompt,
+            workingDirectory: aggregate.run.worktreePath!,
+            environment: _environment,
+          ),
+        );
+      } on Object {
+        await _resolveIgnoringErrors(resultPath);
+        await _failAttempt(attemptId, 'run.step.spawn_exception');
+        return;
+      }
       final process = launch.process;
       if (process == null) {
-        await _resultFiles.resolve(resultPath);
+        await _resolveIgnoringErrors(resultPath);
         await _repository.failAttemptAndRun(
           attemptId: attemptId,
           completedAt: _now(),
@@ -250,42 +339,67 @@ final class RunOrchestrator {
         return;
       }
       var sequence = 0;
-      final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
+      _StreamingFrameRedactor? redactor;
+      RunLogChannel? redactorChannel;
       final batcher = _LogBatcher(
         maximumBytes: maximumPersistedFrameBytes,
         maximumDelay: const Duration(milliseconds: 25),
-        persist: (channel, bytes) async {
-          sequence = await _persist(
-            runId,
-            attemptId,
-            step.id,
-            channel,
-            sequence,
-            bytes,
+        persist: (parts) async {
+          for (final part in parts) {
+            sequence = await _persist(
+              runId,
+              attemptId,
+              step.id,
+              part.channel,
+              sequence,
+              part.bytes,
+            );
+          }
+          _events.add(
+            RunLogSummary(
+              runId: runId,
+              attemptId: attemptId,
+              lastSequence: sequence - 1,
+              tailBytes: _tailSizes[runId]!,
+            ),
           );
         },
       );
       final drain = () async {
         await for (final frame in process.frames) {
-          final redactor = redactors.putIfAbsent(
-            frame.channel,
-            () => _StreamingFrameRedactor(_environment),
-          );
-          for (final bytes in redactor.add(frame.bytes)) {
+          if (redactorChannel != null && redactorChannel != frame.channel) {
+            for (final bytes in redactor!.close()) {
+              await batcher.add(redactorChannel!, bytes);
+            }
+            redactor = null;
+          }
+          redactorChannel = frame.channel;
+          redactor ??= _StreamingFrameRedactor(_environment);
+          for (final bytes in redactor!.add(frame.bytes)) {
             await batcher.add(frame.channel, bytes);
           }
         }
-        for (final entry in redactors.entries) {
-          for (final bytes in entry.value.close()) {
-            await batcher.add(entry.key, bytes);
+        if (redactorChannel != null) {
+          for (final bytes in redactor!.close()) {
+            await batcher.add(redactorChannel!, bytes);
           }
         }
         await batcher.close();
       }();
-      final exitCode = await process.exitCode;
-      await drain;
+      late final int exitCode;
+      try {
+        final completed = await Future.wait<Object?>(<Future<Object?>>[
+          process.exitCode,
+          drain,
+        ]);
+        exitCode = completed.first! as int;
+      } on Object {
+        await _resolveIgnoringErrors(resultPath);
+        await _failAttempt(attemptId, 'run.step.stream_failed');
+        return;
+      }
       if (exitCode != 0) {
-        await _resultFiles.resolve(resultPath);
+        await _resolveIgnoringErrors(resultPath);
         await _repository.failAttemptAndRun(
           attemptId: attemptId,
           completedAt: _now(),
@@ -294,12 +408,32 @@ final class RunOrchestrator {
         );
         return;
       }
-      final result = await _resultFiles.consume(
-        path: resultPath,
-        attemptId: attemptId,
-        nonce: nonce,
-      );
-      await _resultFiles.resolve(resultPath);
+      late final AttemptResultRead result;
+      try {
+        result = await _resultFiles.consume(
+          path: resultPath,
+          attemptId: attemptId,
+          nonce: nonce,
+        );
+      } on Object {
+        await _resolveIgnoringErrors(resultPath);
+        await _failAttempt(
+          attemptId,
+          'run.step.result_read',
+          exitCode: exitCode,
+        );
+        return;
+      }
+      try {
+        await _resultFiles.resolve(resultPath);
+      } on Object {
+        await _failAttempt(
+          attemptId,
+          'run.step.result_cleanup',
+          exitCode: exitCode,
+        );
+        return;
+      }
       if (result is AttemptResultRejected) {
         await _repository.failAttemptAndRun(
           attemptId: attemptId,
@@ -318,6 +452,25 @@ final class RunOrchestrator {
       );
     }
   }
+
+  Future<void> _resolveIgnoringErrors(String path) async {
+    try {
+      await _resultFiles.resolve(path);
+    } on Object {
+      // The durable ownership record remains available for reconciliation.
+    }
+  }
+
+  Future<void> _failAttempt(
+    String attemptId,
+    String failureCode, {
+    int? exitCode,
+  }) => _repository.failAttemptAndRun(
+    attemptId: attemptId,
+    completedAt: _now(),
+    exitCode: exitCode,
+    failureCode: failureCode,
+  );
 
   Future<int> _persist(
     String runId,
@@ -349,14 +502,6 @@ final class RunOrchestrator {
         ),
       );
       _appendTail(runId, part);
-      _events.add(
-        RunLogSummary(
-          runId: runId,
-          attemptId: attemptId,
-          lastSequence: sequence,
-          tailBytes: _tailSizes[runId]!,
-        ),
-      );
       sequence++;
     }
     return sequence;
@@ -408,8 +553,14 @@ Do not add fields and do not write this protocol to stdout.
 
 final class _StreamingFrameRedactor {
   factory _StreamingFrameRedactor(Map<String, String> environment) {
-    final secretValues = environment.values
-        .where((value) => value.isNotEmpty)
+    const secretKeys = <String>{'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'};
+    final secretValues = environment.entries
+        .where(
+          (entry) =>
+              secretKeys.contains(entry.key.toUpperCase()) &&
+              entry.value.isNotEmpty,
+        )
+        .map((entry) => entry.value)
         .toList(growable: false);
     return _StreamingFrameRedactor._(
       secretValues,
@@ -428,17 +579,36 @@ final class _StreamingFrameRedactor {
   final int _overlapBytes;
   final List<int> _pending = <int>[];
   final SecretRedactor _redactor = SecretRedactor();
+  var _discardPatternValue = false;
 
   Iterable<Uint8List> add(Uint8List bytes) sync* {
-    _pending.addAll(bytes);
+    var input = bytes;
+    if (_discardPatternValue) {
+      final delimiter = input.indexWhere(_isPatternDelimiter);
+      if (delimiter < 0) return;
+      _discardPatternValue = false;
+      input = Uint8List.sublistView(input, delimiter);
+    }
+    _pending.addAll(input);
     while (true) {
       final newline = _pending.indexOf(0x0a);
-      if (newline >= 0) {
+      if (newline >= 0 && newline + 1 <= maximumPendingBytes + _overlapBytes) {
         yield _redact(_take(newline + 1));
       } else if (_pending.length >= maximumPendingBytes + _overlapBytes) {
         final count = _safeFlushCount(_pending.length - _overlapBytes);
         if (count == 0) break;
-        yield _redact(_take(count));
+        final raw = _take(count);
+        if (_endsInsidePatternSecret(raw)) {
+          _discardPatternValue = true;
+          final delimiter = _pending.indexWhere(_isPatternDelimiter);
+          if (delimiter < 0) {
+            _pending.clear();
+          } else {
+            _pending.removeRange(0, delimiter);
+            _discardPatternValue = false;
+          }
+        }
+        yield _redact(raw);
       } else {
         break;
       }
@@ -487,7 +657,25 @@ final class _StreamingFrameRedactor {
     final exactRedacted = _redactExactSecrets(text, _environmentSecrets);
     return Uint8List.fromList(utf8.encode(_redactor.redact(exactRedacted)));
   }
+
+  bool _endsInsidePatternSecret(List<int> bytes) {
+    final text = utf8.decode(bytes, allowMalformed: true);
+    return RegExp(
+      r'''(?:authorization\s*:\s*(?:bearer|basic)\s+|\b(?:password|passwd|pwd|token|secret|api[_-]?key)\s*[=:]\s*)(?:"[^"]*|'[^']*'|[^\s,;]*)$''',
+      caseSensitive: false,
+    ).hasMatch(text);
+  }
 }
+
+bool _isPatternDelimiter(int byte) =>
+    byte == 0x20 ||
+    byte == 0x09 ||
+    byte == 0x0a ||
+    byte == 0x0d ||
+    byte == 0x2c ||
+    byte == 0x3b ||
+    byte == 0x22 ||
+    byte == 0x27;
 
 bool _matchesAt(List<int> source, List<int> pattern, int start) {
   for (var index = 0; index < pattern.length; index++) {
@@ -539,28 +727,31 @@ final class _LogBatcher {
 
   final int maximumBytes;
   final Duration maximumDelay;
-  final Future<void> Function(RunLogChannel channel, Uint8List bytes) persist;
-  final BytesBuilder _pending = BytesBuilder(copy: false);
-  RunLogChannel? _channel;
+  final Future<void> Function(List<_PendingLogPart> parts) persist;
+  final List<_PendingLogPartBuilder> _pending = <_PendingLogPartBuilder>[];
+  int _pendingBytes = 0;
   Timer? _timer;
   Future<void> _serial = Future<void>.value();
   bool _closed = false;
 
   Future<void> add(RunLogChannel channel, Uint8List bytes) async {
     if (_closed) throw StateError('The log batcher is closed.');
-    if (_channel != null && _channel != channel) await _flush();
-    _channel = channel;
     var offset = 0;
     while (offset < bytes.length) {
-      final count = (maximumBytes - _pending.length).clamp(
+      final count = (maximumBytes - _pendingBytes).clamp(
         0,
         bytes.length - offset,
       );
-      _pending.add(Uint8List.sublistView(bytes, offset, offset + count));
+      if (_pending.isEmpty || _pending.last.channel != channel) {
+        _pending.add(_PendingLogPartBuilder(channel));
+      }
+      _pending.last.bytes.add(
+        Uint8List.sublistView(bytes, offset, offset + count),
+      );
+      _pendingBytes += count;
       offset += count;
-      if (_pending.length == maximumBytes) {
+      if (_pendingBytes == maximumBytes) {
         await _flush();
-        _channel = channel;
       } else {
         _scheduleTimer();
       }
@@ -570,18 +761,21 @@ final class _LogBatcher {
   void _scheduleTimer() {
     _timer ??= Timer(maximumDelay, () {
       _timer = null;
-      unawaited(_flush());
+      unawaited(_flush().catchError((_) {}));
     });
   }
 
   Future<void> _flush() async {
     _timer?.cancel();
     _timer = null;
-    if (_pending.isEmpty || _channel == null) return _serial;
-    final channel = _channel!;
-    final bytes = _pending.takeBytes();
-    _channel = null;
-    _serial = _serial.then((_) => persist(channel, bytes));
+    if (_pendingBytes == 0) return _serial;
+    final parts = <_PendingLogPart>[
+      for (final part in _pending)
+        _PendingLogPart(part.channel, part.bytes.takeBytes()),
+    ];
+    _pending.clear();
+    _pendingBytes = 0;
+    _serial = _serial.then((_) => persist(parts));
     await _serial;
   }
 
@@ -589,4 +783,16 @@ final class _LogBatcher {
     _closed = true;
     await _flush();
   }
+}
+
+final class _PendingLogPartBuilder {
+  _PendingLogPartBuilder(this.channel);
+  final RunLogChannel channel;
+  final BytesBuilder bytes = BytesBuilder(copy: false);
+}
+
+final class _PendingLogPart {
+  const _PendingLogPart(this.channel, this.bytes);
+  final RunLogChannel channel;
+  final Uint8List bytes;
 }

@@ -130,4 +130,39 @@ void main() {
     );
     expect((result as AttemptResultRejected).code, 'result.not_regular');
   });
+
+  test('quarantines atomically before a candidate symlink swap', () async {
+    final candidate = File('${root.path}${Platform.pathSeparator}race.json');
+    final outside = File(
+      '${root.parent.path}${Platform.pathSeparator}outside-secret.json',
+    );
+    await outside.writeAsString('outside-secret');
+    addTearDown(() async {
+      if (await outside.exists()) await outside.delete();
+    });
+    await candidate.writeAsString(
+      '{"schema":1,"attemptId":"a1","nonce":"n1",'
+      '"outcome":"succeeded","context":"safe"}',
+    );
+    final protocol = AttemptResultProtocol(
+      quarantineToken: () => 'unpredictable-test-token',
+      afterQuarantine: (_) async {
+        await Link(candidate.path).create(outside.path);
+      },
+    );
+
+    final result = await protocol.consume(
+      path: candidate.path,
+      resultRoot: root.path,
+      attemptId: 'a1',
+      nonce: 'n1',
+    );
+
+    expect((result as AttemptResultAccepted).context.value, 'safe');
+    expect(await outside.readAsString(), 'outside-secret');
+    expect(
+      await FileSystemEntity.type(candidate.path, followLinks: false),
+      FileSystemEntityType.link,
+    );
+  });
 }
