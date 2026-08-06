@@ -17,6 +17,10 @@ void main() {
 
   tearDown(() => database.close());
 
+  test('GivenDriftRepository_WhenComposed_ThenItProvidesLifecycleStorage', () {
+    expect(repository, isA<ProjectLifecycleStore>());
+  });
+
   test(
     'GivenProjects_WhenSavedAndListed_ThenMetadataAndStableOrderAreRestored',
     () async {

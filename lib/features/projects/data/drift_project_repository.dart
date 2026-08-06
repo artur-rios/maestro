@@ -6,7 +6,8 @@ import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-final class DriftProjectRepository implements ProjectRepository {
+final class DriftProjectRepository
+    implements ProjectRepository, ProjectLifecycleStore {
   const DriftProjectRepository(this._database);
 
   final db.MaestroDatabase _database;
@@ -68,6 +69,151 @@ final class DriftProjectRepository implements ProjectRepository {
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<void> softDelete({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  }) async {
+    _validateUpdate(
+      project: project,
+      updated: updated,
+      action: ProjectLifecycleAction.softDelete,
+      expectedDeleted: false,
+      updatedDeleted: true,
+      audit: audit,
+    );
+    await _database.transaction(() async {
+      final affected =
+          await (_database.update(_database.projects)..where(
+                (table) =>
+                    table.id.equals(project.id) & table.deletedAt.isNull(),
+              ))
+              .write(
+                db.ProjectsCompanion(
+                  updatedAt: Value<DateTime>(updated.updatedAt.toUtc()),
+                  deletedAt: Value<DateTime?>(updated.deletedAt!.toUtc()),
+                ),
+              );
+      _requireOneAffected(affected);
+      await _insertAudit(audit);
+    });
+  }
+
+  @override
+  Future<void> restore({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAuditEvent audit,
+  }) async {
+    _validateUpdate(
+      project: project,
+      updated: updated,
+      action: ProjectLifecycleAction.restore,
+      expectedDeleted: true,
+      updatedDeleted: false,
+      audit: audit,
+    );
+    await _database.transaction(() async {
+      final affected =
+          await (_database.update(_database.projects)..where(
+                (table) =>
+                    table.id.equals(project.id) &
+                    table.deletedAt.equals(project.deletedAt!.toUtc()),
+              ))
+              .write(
+                db.ProjectsCompanion(
+                  updatedAt: Value<DateTime>(updated.updatedAt.toUtc()),
+                  deletedAt: const Value<DateTime?>(null),
+                ),
+              );
+      _requireOneAffected(affected);
+      await _insertAudit(audit);
+    });
+  }
+
+  @override
+  Future<void> permanentlyDelete({
+    required ProjectRecord project,
+    required ProjectLifecycleAuditEvent audit,
+  }) async {
+    _validateAudit(
+      audit,
+      expectedAction: ProjectLifecycleAction.permanentDelete,
+      projectId: project.id,
+    );
+    if (!project.isDeleted) {
+      throw StateError('Permanent deletion requires a deleted project.');
+    }
+    await _database.transaction(() async {
+      final affected =
+          await (_database.delete(_database.projects)..where(
+                (table) =>
+                    table.id.equals(project.id) &
+                    table.deletedAt.equals(project.deletedAt!.toUtc()),
+              ))
+              .go();
+      _requireOneAffected(affected);
+      await _insertAudit(audit);
+    });
+  }
+
+  void _validateUpdate({
+    required ProjectRecord project,
+    required ProjectRecord updated,
+    required ProjectLifecycleAction action,
+    required bool expectedDeleted,
+    required bool updatedDeleted,
+    required ProjectLifecycleAuditEvent audit,
+  }) {
+    _validateAudit(audit, expectedAction: action, projectId: project.id);
+    if (project.isDeleted != expectedDeleted ||
+        updated.isDeleted != updatedDeleted ||
+        updated.id != project.id ||
+        updated.name != project.name ||
+        updated.normalizedName != project.normalizedName ||
+        updated.folderPath != project.folderPath ||
+        updated.createdAt != project.createdAt) {
+      throw StateError('Invalid project lifecycle transition.');
+    }
+  }
+
+  void _validateAudit(
+    ProjectLifecycleAuditEvent audit, {
+    required ProjectLifecycleAction expectedAction,
+    required String projectId,
+  }) {
+    if (audit.action != expectedAction ||
+        audit.targetId != projectId ||
+        audit.outcome != ProjectLifecycleAuditOutcome.success ||
+        audit.actorId.trim().isEmpty ||
+        audit.details != ProjectLifecycleAuditEvent.fixedDetails) {
+      throw StateError('Invalid project lifecycle audit.');
+    }
+  }
+
+  void _requireOneAffected(int affected) {
+    if (affected != 1) {
+      throw StateError('Project lifecycle state changed concurrently.');
+    }
+  }
+
+  Future<void> _insertAudit(ProjectLifecycleAuditEvent audit) {
+    return _database
+        .into(_database.auditEvents)
+        .insert(
+          db.AuditEventsCompanion.insert(
+            id: audit.id,
+            actorId: audit.actorId,
+            action: audit.action.auditName,
+            target: audit.targetId,
+            outcome: audit.outcome.name,
+            occurredAt: audit.occurredAt.toUtc(),
+            details: audit.details,
+          ),
+        );
   }
 
   static ProjectRecord _toDomain(db.Project row) {
