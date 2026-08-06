@@ -150,6 +150,20 @@ final class DriftRunRepository implements ActiveProjectRunReader {
           'Attempt does not target the current step of its run.',
         );
       }
+      final activeAttempt =
+          await (_database.select(_database.runAttempts)..where(
+                (table) =>
+                    table.runId.equals(run.id) &
+                    table.snapshotStepId.equals(step.id) &
+                    table.status.isIn(<String>[
+                      domain.AttemptStatus.starting.name,
+                      domain.AttemptStatus.running.name,
+                    ]),
+              ))
+              .getSingleOrNull();
+      if (activeAttempt != null) {
+        throw StateError('The current run step already has an active attempt.');
+      }
       await _database
           .into(_database.runAttempts)
           .insert(
@@ -176,7 +190,16 @@ final class DriftRunRepository implements ActiveProjectRunReader {
             segment.originalByteLength != segment.bytes.length)) {
       throw StateError('Invalid run-log segment metadata.');
     }
-    await _insertLog(segment);
+    await _database.transaction(() async {
+      final attempt = await (_database.select(
+        _database.runAttempts,
+      )..where((table) => table.id.equals(segment.attemptId))).getSingle();
+      if (attempt.runId != segment.runId ||
+          attempt.snapshotStepId != segment.snapshotStepId) {
+        throw StateError('Log evidence does not belong to the referenced run.');
+      }
+      await _insertLog(segment);
+    });
   }
 
   Future<void> completeAttemptAndAdvance({
@@ -276,6 +299,17 @@ final class DriftRunRepository implements ActiveProjectRunReader {
       final attempt = await (_database.select(
         _database.runAttempts,
       )..where((table) => table.id.equals(attemptId))).getSingle();
+      final step = await (_database.select(
+        _database.runSnapshotSteps,
+      )..where((table) => table.id.equals(attempt.snapshotStepId))).getSingle();
+      final run = await (_database.select(
+        _database.workflowRuns,
+      )..where((table) => table.id.equals(attempt.runId))).getSingle();
+      if (step.runId != run.id ||
+          step.position != run.currentStepPosition ||
+          run.status != expectedRunStatus.name) {
+        throw StateError('The attempt is stale for the current run step.');
+      }
       final attemptAffected =
           await (_database.update(_database.runAttempts)..where(
                 (table) =>
@@ -297,8 +331,9 @@ final class DriftRunRepository implements ActiveProjectRunReader {
       final runAffected =
           await (_database.update(_database.workflowRuns)..where(
                 (table) =>
-                    table.id.equals(attempt.runId) &
-                    table.status.equals(expectedRunStatus.name),
+                    table.id.equals(run.id) &
+                    table.status.equals(expectedRunStatus.name) &
+                    table.currentStepPosition.equals(step.position),
               ))
               .write(
                 db.WorkflowRunsCompanion(
@@ -399,6 +434,16 @@ final class DriftRunRepository implements ActiveProjectRunReader {
       if (run.status != domain.RunStatus.interrupted.name ||
           request.status != domain.RecoveryRequestStatus.pending) {
         throw StateError('Recovery is only available for interrupted runs.');
+      }
+      if (request.attemptId case final attemptId?) {
+        final attempt = await (_database.select(
+          _database.runAttempts,
+        )..where((table) => table.id.equals(attemptId))).getSingle();
+        if (attempt.runId != request.runId) {
+          throw StateError(
+            'Recovery evidence does not belong to the interrupted run.',
+          );
+        }
       }
       await _database
           .into(_database.runRecoveryRequests)

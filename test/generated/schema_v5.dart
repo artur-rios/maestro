@@ -1265,7 +1265,10 @@ class RunAttempts extends Table with TableInfo {
   }
 
   @override
-  List<String> get customConstraints => const ['PRIMARY KEY(id)'];
+  List<String> get customConstraints => const [
+    'PRIMARY KEY(id)',
+    'FOREIGN KEY(run_id, snapshot_step_id)REFERENCES run_snapshot_steps(run_id, id)ON DELETE RESTRICT',
+  ];
   @override
   bool get dontWriteConstraints => true;
 }
@@ -1390,7 +1393,10 @@ class RunLogSegments extends Table with TableInfo {
   }
 
   @override
-  List<String> get customConstraints => const ['PRIMARY KEY(id)'];
+  List<String> get customConstraints => const [
+    'PRIMARY KEY(id)',
+    'FOREIGN KEY(run_id, attempt_id, snapshot_step_id)REFERENCES run_attempts(run_id, id, snapshot_step_id)ON DELETE CASCADE',
+  ];
   @override
   bool get dontWriteConstraints => true;
 }
@@ -1476,7 +1482,10 @@ class RunRecoveryRequests extends Table with TableInfo {
   }
 
   @override
-  List<String> get customConstraints => const ['PRIMARY KEY(id)'];
+  List<String> get customConstraints => const [
+    'PRIMARY KEY(id)',
+    'FOREIGN KEY(run_id, attempt_id)REFERENCES run_attempts(run_id, id)ON DELETE RESTRICT',
+  ];
   @override
   bool get dontWriteConstraints => true;
 }
@@ -1527,6 +1536,10 @@ class DatabaseAtV5 extends GeneratedDatabase {
     'run_snapshot_steps_run_position',
     'CREATE UNIQUE INDEX run_snapshot_steps_run_position ON run_snapshot_steps (run_id, position)',
   );
+  late final Index runSnapshotStepsRunIdentity = Index(
+    'run_snapshot_steps_run_identity',
+    'CREATE UNIQUE INDEX run_snapshot_steps_run_identity ON run_snapshot_steps (run_id, id)',
+  );
   late final Index runAttemptsStepNumber = Index(
     'run_attempts_step_number',
     'CREATE UNIQUE INDEX run_attempts_step_number ON run_attempts (run_id, snapshot_step_id, attempt_number)',
@@ -1534,6 +1547,18 @@ class DatabaseAtV5 extends GeneratedDatabase {
   late final Index runAttemptsRunStatus = Index(
     'run_attempts_run_status',
     'CREATE INDEX run_attempts_run_status ON run_attempts (run_id, status)',
+  );
+  late final Index runAttemptsRunIdentity = Index(
+    'run_attempts_run_identity',
+    'CREATE UNIQUE INDEX run_attempts_run_identity ON run_attempts (run_id, id)',
+  );
+  late final Index runAttemptsRunIdentityStep = Index(
+    'run_attempts_run_identity_step',
+    'CREATE UNIQUE INDEX run_attempts_run_identity_step ON run_attempts (run_id, id, snapshot_step_id)',
+  );
+  late final Index runAttemptsOneActiveStep = Index(
+    'run_attempts_one_active_step',
+    'CREATE UNIQUE INDEX run_attempts_one_active_step ON run_attempts (run_id, snapshot_step_id) WHERE status IN (\'starting\', \'running\')',
   );
   late final Index runLogSegmentsAttemptSequence = Index(
     'run_log_segments_attempt_sequence',
@@ -1573,8 +1598,12 @@ class DatabaseAtV5 extends GeneratedDatabase {
     workflowRunsProjectStatus,
     workflowRunsStatus,
     runSnapshotStepsRunPosition,
+    runSnapshotStepsRunIdentity,
     runAttemptsStepNumber,
     runAttemptsRunStatus,
+    runAttemptsRunIdentity,
+    runAttemptsRunIdentityStep,
+    runAttemptsOneActiveStep,
     runLogSegmentsAttemptSequence,
     runLogSegmentsRun,
     runRecoveryRequestsRunStatus,
@@ -1640,6 +1669,13 @@ class DatabaseAtV5 extends GeneratedDatabase {
     WritePropagation(
       on: TableUpdateQuery.onTableName(
         'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_log_segments', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'run_attempts',
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('run_log_segments', kind: UpdateKind.delete)],

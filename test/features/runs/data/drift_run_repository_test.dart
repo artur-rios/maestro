@@ -99,6 +99,121 @@ void main() {
   );
 
   test(
+    'GivenAttemptAndStepFromAnotherRun_WhenLogAppended_ThenCrossRunEvidenceIsRejected',
+    () async {
+      await repository.create(
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.create(
+        run: _run(id: 'run-2', status: domain.RunStatus.running),
+        snapshot: _snapshot(stepIdPrefix: 'other-step'),
+      );
+      await repository.beginAttempt(
+        _attempt(
+          id: 'attempt-2',
+          runId: 'run-2',
+          snapshotStepId: 'other-step-1',
+        ),
+      );
+
+      await expectLater(
+        repository.appendLog(
+          domain.RunLogSegment(
+            id: 'cross-run-log',
+            runId: 'run-1',
+            attemptId: 'attempt-2',
+            snapshotStepId: 'other-step-1',
+            sequence: 0,
+            channel: domain.RunLogChannel.stdout,
+            bytes: Uint8List.fromList(utf8.encode('wrong run')),
+            compression: 'none',
+            originalByteLength: 9,
+            createdAt: DateTime.utc(2026, 8, 6, 12, 1),
+          ),
+        ),
+        throwsStateError,
+      );
+      expect((await repository.findById('run-1'))!.logs, isEmpty);
+      expect((await repository.findById('run-2'))!.logs, isEmpty);
+    },
+  );
+
+  test(
+    'GivenCrossRunReferencesOrDuplicateActiveAttempt_WhenInsertedDirectly_ThenSchemaRejectsThem',
+    () async {
+      await repository.create(
+        run: _run(status: domain.RunStatus.interrupted),
+        snapshot: _snapshot(),
+      );
+      await repository.create(
+        run: _run(id: 'run-2', status: domain.RunStatus.running),
+        snapshot: _snapshot(stepIdPrefix: 'other-step'),
+      );
+      await repository.beginAttempt(
+        _attempt(
+          id: 'attempt-2',
+          runId: 'run-2',
+          snapshotStepId: 'other-step-1',
+        ),
+      );
+
+      await expectLater(
+        database.customStatement(
+          'INSERT INTO run_log_segments '
+          '(id, run_id, attempt_id, snapshot_step_id, sequence, channel, bytes, compression, original_byte_length, created_at) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          <Object?>[
+            'cross-run-log',
+            'run-1',
+            'attempt-2',
+            'other-step-1',
+            0,
+            'stdout',
+            Uint8List(0),
+            'none',
+            0,
+            DateTime.utc(2026, 8, 6, 12).millisecondsSinceEpoch ~/ 1000,
+          ],
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        database.customStatement(
+          'INSERT INTO run_recovery_requests '
+          '(id, run_id, attempt_id, action, status, requested_at) '
+          'VALUES (?, ?, ?, ?, ?, ?)',
+          <Object?>[
+            'cross-run-recovery',
+            'run-1',
+            'attempt-2',
+            'retryWithPreservedContext',
+            'pending',
+            DateTime.utc(2026, 8, 6, 12).millisecondsSinceEpoch ~/ 1000,
+          ],
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        database.customStatement(
+          'INSERT INTO run_attempts '
+          '(id, run_id, snapshot_step_id, attempt_number, status, started_at) '
+          'VALUES (?, ?, ?, ?, ?, ?)',
+          <Object?>[
+            'attempt-duplicate',
+            'run-2',
+            'other-step-1',
+            2,
+            'starting',
+            DateTime.utc(2026, 8, 6, 12).millisecondsSinceEpoch ~/ 1000,
+          ],
+        ),
+        throwsA(anything),
+      );
+    },
+  );
+
+  test(
     'GivenFinalRunningAttempt_WhenCompletedThenRunBecomesSucceeded',
     () async {
       await repository.create(
@@ -156,6 +271,33 @@ void main() {
   );
 
   test(
+    'GivenTwoAttemptsForCurrentStep_WhenBegunConcurrently_ThenOnlyOneBecomesActive',
+    () async {
+      await repository.create(
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      final outcomes = await Future.wait(
+        <domain.RunAttempt>[
+          _attempt(id: 'attempt-a'),
+          _attempt(id: 'attempt-b', attemptNumber: 2),
+        ].map((attempt) async {
+          try {
+            await repository.beginAttempt(attempt);
+            return 'accepted';
+          } on Object {
+            return 'rejected';
+          }
+        }),
+      );
+
+      expect(outcomes.where((value) => value == 'accepted'), hasLength(1));
+      expect(outcomes.where((value) => value == 'rejected'), hasLength(1));
+      expect((await repository.findById('run-1'))!.attempts, hasLength(1));
+    },
+  );
+
+  test(
     'GivenRunningAttempt_WhenFailureCodeIsBlankThenEvidenceStaysActive_WhenValidThenRunFailsAtomically',
     () async {
       await repository.create(
@@ -191,6 +333,57 @@ void main() {
       expect(stored.attempts.single.status, domain.AttemptStatus.failed);
       expect(stored.attempts.single.exitCode, 17);
       expect(stored.attempts.single.failureCode, 'agent.nonzero_exit');
+    },
+  );
+
+  test(
+    'GivenStaleAttemptAfterRunAdvanced_WhenItReportsFailure_ThenLaterStepStateIsUnchanged',
+    () async {
+      await repository.create(
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.beginAttempt(_attempt(id: 'attempt-a'));
+      await repository.completeAttemptAndAdvance(
+        attemptId: 'attempt-a',
+        expectedRunStatus: domain.RunStatus.running,
+        completedAt: DateTime.utc(2026, 8, 6, 12, 2),
+        exitCode: 0,
+        declaredContext: null,
+      );
+      await database.customStatement(
+        'INSERT INTO run_attempts '
+        '(id, run_id, snapshot_step_id, attempt_number, status, started_at) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        <Object?>[
+          'stale-attempt',
+          'run-1',
+          'snapshot-step-1',
+          2,
+          'running',
+          DateTime.utc(2026, 8, 6, 12, 3).millisecondsSinceEpoch ~/ 1000,
+        ],
+      );
+
+      await expectLater(
+        repository.failAttemptAndRun(
+          attemptId: 'stale-attempt',
+          expectedRunStatus: domain.RunStatus.running,
+          completedAt: DateTime.utc(2026, 8, 6, 12, 4),
+          exitCode: 1,
+          failureCode: 'agent.nonzero_exit',
+        ),
+        throwsStateError,
+      );
+      final stored = (await repository.findById('run-1'))!;
+      expect(stored.run.status, domain.RunStatus.running);
+      expect(stored.run.currentStepPosition, 1);
+      expect(
+        stored.attempts
+            .singleWhere((item) => item.id == 'stale-attempt')
+            .status,
+        domain.AttemptStatus.running,
+      );
     },
   );
 
@@ -288,6 +481,46 @@ void main() {
       );
     },
   );
+
+  test(
+    'GivenAttemptFromAnotherInterruptedRun_WhenRecoveryRequested_ThenCrossRunReferenceIsRejected',
+    () async {
+      await repository.create(
+        run: _run(status: domain.RunStatus.interrupted),
+        snapshot: _snapshot(),
+      );
+      await repository.create(
+        run: _run(id: 'run-2', status: domain.RunStatus.running),
+        snapshot: _snapshot(stepIdPrefix: 'other-step'),
+      );
+      await repository.beginAttempt(
+        _attempt(
+          id: 'attempt-2',
+          runId: 'run-2',
+          snapshotStepId: 'other-step-1',
+        ),
+      );
+      await repository.interruptActive(
+        at: DateTime.utc(2026, 8, 6, 13),
+        newLogId: () => 'interruption-log-2',
+      );
+
+      await expectLater(
+        repository.recordRecoveryRequest(
+          domain.RunRecoveryRequest(
+            id: 'cross-run-recovery',
+            runId: 'run-1',
+            attemptId: 'attempt-2',
+            action: domain.RecoveryAction.retryWithPreservedContext,
+            status: domain.RecoveryRequestStatus.pending,
+            requestedAt: DateTime.utc(2026, 8, 6, 14),
+          ),
+        ),
+        throwsStateError,
+      );
+      expect((await repository.findById('run-1'))!.recoveryRequests, isEmpty);
+    },
+  );
 }
 
 ProjectRecord _project() => ProjectRecord(
@@ -357,12 +590,14 @@ domain.RunSnapshot _snapshot({
 
 domain.RunAttempt _attempt({
   String id = 'attempt-1',
+  String runId = 'run-1',
   String snapshotStepId = 'snapshot-step-1',
+  int attemptNumber = 1,
 }) => domain.RunAttempt(
   id: id,
-  runId: 'run-1',
+  runId: runId,
   snapshotStepId: snapshotStepId,
-  attemptNumber: 1,
+  attemptNumber: attemptNumber,
   status: domain.AttemptStatus.running,
   startedAt: DateTime.utc(2026, 8, 6, 12, 1),
 );

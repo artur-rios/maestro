@@ -1464,7 +1464,9 @@
         ],
         "is_virtual": false,
         "without_rowid": false,
-        "constraints": [],
+        "constraints": [
+          "FOREIGN KEY (run_id, snapshot_step_id) REFERENCES run_snapshot_steps (run_id, id) ON DELETE RESTRICT"
+        ],
         "explicit_pk": [
           "id"
         ]
@@ -1671,7 +1673,9 @@
         ],
         "is_virtual": false,
         "without_rowid": false,
-        "constraints": [],
+        "constraints": [
+          "FOREIGN KEY (run_id, attempt_id, snapshot_step_id) REFERENCES run_attempts (run_id, id, snapshot_step_id) ON DELETE CASCADE"
+        ],
         "explicit_pk": [
           "id"
         ]
@@ -1783,7 +1787,9 @@
         ],
         "is_virtual": false,
         "without_rowid": false,
-        "constraints": [],
+        "constraints": [
+          "FOREIGN KEY (run_id, attempt_id) REFERENCES run_attempts (run_id, id) ON DELETE RESTRICT"
+        ],
         "explicit_pk": [
           "id"
         ]
@@ -1913,6 +1919,29 @@
     {
       "id": 21,
       "references": [
+        11
+      ],
+      "type": "index",
+      "data": {
+        "on": 11,
+        "name": "run_snapshot_steps_run_identity",
+        "sql": null,
+        "unique": true,
+        "columns": [
+          {
+            "column": "run_id",
+            "order_by": null
+          },
+          {
+            "column": "id",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 22,
+      "references": [
         12
       ],
       "type": "index",
@@ -1938,7 +1967,7 @@
       }
     },
     {
-      "id": 22,
+      "id": 23,
       "references": [
         12
       ],
@@ -1961,7 +1990,71 @@
       }
     },
     {
-      "id": 23,
+      "id": 24,
+      "references": [
+        12
+      ],
+      "type": "index",
+      "data": {
+        "on": 12,
+        "name": "run_attempts_run_identity",
+        "sql": null,
+        "unique": true,
+        "columns": [
+          {
+            "column": "run_id",
+            "order_by": null
+          },
+          {
+            "column": "id",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 25,
+      "references": [
+        12
+      ],
+      "type": "index",
+      "data": {
+        "on": 12,
+        "name": "run_attempts_run_identity_step",
+        "sql": null,
+        "unique": true,
+        "columns": [
+          {
+            "column": "run_id",
+            "order_by": null
+          },
+          {
+            "column": "id",
+            "order_by": null
+          },
+          {
+            "column": "snapshot_step_id",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 26,
+      "references": [
+        12
+      ],
+      "type": "index",
+      "data": {
+        "on": 12,
+        "name": "run_attempts_one_active_step",
+        "sql": "CREATE UNIQUE INDEX run_attempts_one_active_step ON run_attempts (run_id, snapshot_step_id) WHERE status IN ('starting', 'running')",
+        "unique": true,
+        "columns": []
+      }
+    },
+    {
+      "id": 27,
       "references": [
         13
       ],
@@ -1984,7 +2077,7 @@
       }
     },
     {
-      "id": 24,
+      "id": 28,
       "references": [
         13
       ],
@@ -2003,7 +2096,7 @@
       }
     },
     {
-      "id": 25,
+      "id": 29,
       "references": [
         14
       ],
@@ -2140,7 +2233,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"run_attempts\" (\"id\" TEXT NOT NULL, \"run_id\" TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE, \"snapshot_step_id\" TEXT NOT NULL REFERENCES run_snapshot_steps (id) ON DELETE RESTRICT, \"attempt_number\" INTEGER NOT NULL CHECK(\"attempt_number\" > 0), \"status\" TEXT NOT NULL, \"started_at\" INTEGER NOT NULL, \"completed_at\" INTEGER NULL, \"exit_code\" INTEGER NULL, \"failure_code\" TEXT NULL, \"declared_context\" TEXT NULL, PRIMARY KEY (\"id\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"run_attempts\" (\"id\" TEXT NOT NULL, \"run_id\" TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE, \"snapshot_step_id\" TEXT NOT NULL REFERENCES run_snapshot_steps (id) ON DELETE RESTRICT, \"attempt_number\" INTEGER NOT NULL CHECK(\"attempt_number\" > 0), \"status\" TEXT NOT NULL, \"started_at\" INTEGER NOT NULL, \"completed_at\" INTEGER NULL, \"exit_code\" INTEGER NULL, \"failure_code\" TEXT NULL, \"declared_context\" TEXT NULL, PRIMARY KEY (\"id\"), FOREIGN KEY (run_id, snapshot_step_id) REFERENCES run_snapshot_steps (run_id, id) ON DELETE RESTRICT);"
         }
       ]
     },
@@ -2149,7 +2242,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"run_log_segments\" (\"id\" TEXT NOT NULL, \"run_id\" TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE, \"attempt_id\" TEXT NOT NULL REFERENCES run_attempts (id) ON DELETE CASCADE, \"snapshot_step_id\" TEXT NOT NULL REFERENCES run_snapshot_steps (id) ON DELETE RESTRICT, \"sequence\" INTEGER NOT NULL CHECK(\"sequence\" >= 0), \"channel\" TEXT NOT NULL, \"bytes\" BLOB NOT NULL, \"compression\" TEXT NOT NULL DEFAULT 'none', \"original_byte_length\" INTEGER NOT NULL CHECK(\"original_byte_length\" >= 0), \"created_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"run_log_segments\" (\"id\" TEXT NOT NULL, \"run_id\" TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE, \"attempt_id\" TEXT NOT NULL REFERENCES run_attempts (id) ON DELETE CASCADE, \"snapshot_step_id\" TEXT NOT NULL REFERENCES run_snapshot_steps (id) ON DELETE RESTRICT, \"sequence\" INTEGER NOT NULL CHECK(\"sequence\" >= 0), \"channel\" TEXT NOT NULL, \"bytes\" BLOB NOT NULL, \"compression\" TEXT NOT NULL DEFAULT 'none', \"original_byte_length\" INTEGER NOT NULL CHECK(\"original_byte_length\" >= 0), \"created_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"), FOREIGN KEY (run_id, attempt_id, snapshot_step_id) REFERENCES run_attempts (run_id, id, snapshot_step_id) ON DELETE CASCADE);"
         }
       ]
     },
@@ -2158,7 +2251,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"run_recovery_requests\" (\"id\" TEXT NOT NULL, \"run_id\" TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE, \"attempt_id\" TEXT NULL REFERENCES run_attempts (id) ON DELETE RESTRICT, \"action\" TEXT NOT NULL, \"status\" TEXT NOT NULL, \"requested_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"run_recovery_requests\" (\"id\" TEXT NOT NULL, \"run_id\" TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE, \"attempt_id\" TEXT NULL REFERENCES run_attempts (id) ON DELETE RESTRICT, \"action\" TEXT NOT NULL, \"status\" TEXT NOT NULL, \"requested_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"), FOREIGN KEY (run_id, attempt_id) REFERENCES run_attempts (run_id, id) ON DELETE RESTRICT);"
         }
       ]
     },
@@ -2217,6 +2310,15 @@
       ]
     },
     {
+      "name": "run_snapshot_steps_run_identity",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE UNIQUE INDEX run_snapshot_steps_run_identity ON run_snapshot_steps (run_id, id)"
+        }
+      ]
+    },
+    {
       "name": "run_attempts_step_number",
       "sql": [
         {
@@ -2231,6 +2333,33 @@
         {
           "dialect": "sqlite",
           "sql": "CREATE INDEX run_attempts_run_status ON run_attempts (run_id, status)"
+        }
+      ]
+    },
+    {
+      "name": "run_attempts_run_identity",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE UNIQUE INDEX run_attempts_run_identity ON run_attempts (run_id, id)"
+        }
+      ]
+    },
+    {
+      "name": "run_attempts_run_identity_step",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE UNIQUE INDEX run_attempts_run_identity_step ON run_attempts (run_id, id, snapshot_step_id)"
+        }
+      ]
+    },
+    {
+      "name": "run_attempts_one_active_step",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE UNIQUE INDEX run_attempts_one_active_step ON run_attempts (run_id, snapshot_step_id) WHERE status IN ('starting', 'running')"
         }
       ]
     },

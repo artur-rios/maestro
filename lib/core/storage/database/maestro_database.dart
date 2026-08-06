@@ -191,6 +191,11 @@ class RunSnapshots extends Table {
   columns: <Symbol>{#runId, #position},
   unique: true,
 )
+@TableIndex(
+  name: 'run_snapshot_steps_run_identity',
+  columns: <Symbol>{#runId, #id},
+  unique: true,
+)
 class RunSnapshotSteps extends Table {
   TextColumn get id => text()();
   TextColumn get runId =>
@@ -216,6 +221,21 @@ class RunSnapshotSteps extends Table {
   unique: true,
 )
 @TableIndex(name: 'run_attempts_run_status', columns: <Symbol>{#runId, #status})
+@TableIndex(
+  name: 'run_attempts_run_identity',
+  columns: <Symbol>{#runId, #id},
+  unique: true,
+)
+@TableIndex(
+  name: 'run_attempts_run_identity_step',
+  columns: <Symbol>{#runId, #id, #snapshotStepId},
+  unique: true,
+)
+@TableIndex.sql(
+  'CREATE UNIQUE INDEX run_attempts_one_active_step '
+  'ON run_attempts (run_id, snapshot_step_id) '
+  "WHERE status IN ('starting', 'running')",
+)
 class RunAttempts extends Table {
   TextColumn get id => text()();
   TextColumn get runId =>
@@ -231,6 +251,12 @@ class RunAttempts extends Table {
   IntColumn get exitCode => integer().nullable()();
   TextColumn get failureCode => text().nullable()();
   TextColumn get declaredContext => text().nullable()();
+
+  @override
+  List<String> get customConstraints => <String>[
+    'FOREIGN KEY (run_id, snapshot_step_id) '
+        'REFERENCES run_snapshot_steps (run_id, id) ON DELETE RESTRICT',
+  ];
 
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
@@ -261,6 +287,13 @@ class RunLogSegments extends Table {
   DateTimeColumn get createdAt => dateTime()();
 
   @override
+  List<String> get customConstraints => <String>[
+    'FOREIGN KEY (run_id, attempt_id, snapshot_step_id) '
+        'REFERENCES run_attempts (run_id, id, snapshot_step_id) '
+        'ON DELETE CASCADE',
+  ];
+
+  @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
 
@@ -280,6 +313,12 @@ class RunRecoveryRequests extends Table {
   TextColumn get action => text()();
   TextColumn get status => text()();
   DateTimeColumn get requestedAt => dateTime()();
+
+  @override
+  List<String> get customConstraints => <String>[
+    'FOREIGN KEY (run_id, attempt_id) '
+        'REFERENCES run_attempts (run_id, id) ON DELETE RESTRICT',
+  ];
 
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
@@ -339,8 +378,12 @@ final class MaestroDatabase extends _$MaestroDatabase {
         await migrator.createIndex(workflowRunsProjectStatus);
         await migrator.createIndex(workflowRunsStatus);
         await migrator.createIndex(runSnapshotStepsRunPosition);
+        await migrator.createIndex(runSnapshotStepsRunIdentity);
         await migrator.createIndex(runAttemptsStepNumber);
         await migrator.createIndex(runAttemptsRunStatus);
+        await migrator.createIndex(runAttemptsRunIdentity);
+        await migrator.createIndex(runAttemptsRunIdentityStep);
+        await migrator.createIndex(runAttemptsOneActiveStep);
         await migrator.createIndex(runLogSegmentsAttemptSequence);
         await migrator.createIndex(runLogSegmentsRun);
         await migrator.createIndex(runRecoveryRequestsRunStatus);

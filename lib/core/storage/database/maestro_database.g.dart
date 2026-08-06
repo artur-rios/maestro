@@ -7413,6 +7413,10 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     'run_snapshot_steps_run_position',
     'CREATE UNIQUE INDEX run_snapshot_steps_run_position ON run_snapshot_steps (run_id, position)',
   );
+  late final Index runSnapshotStepsRunIdentity = Index(
+    'run_snapshot_steps_run_identity',
+    'CREATE UNIQUE INDEX run_snapshot_steps_run_identity ON run_snapshot_steps (run_id, id)',
+  );
   late final Index runAttemptsStepNumber = Index(
     'run_attempts_step_number',
     'CREATE UNIQUE INDEX run_attempts_step_number ON run_attempts (run_id, snapshot_step_id, attempt_number)',
@@ -7420,6 +7424,18 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final Index runAttemptsRunStatus = Index(
     'run_attempts_run_status',
     'CREATE INDEX run_attempts_run_status ON run_attempts (run_id, status)',
+  );
+  late final Index runAttemptsRunIdentity = Index(
+    'run_attempts_run_identity',
+    'CREATE UNIQUE INDEX run_attempts_run_identity ON run_attempts (run_id, id)',
+  );
+  late final Index runAttemptsRunIdentityStep = Index(
+    'run_attempts_run_identity_step',
+    'CREATE UNIQUE INDEX run_attempts_run_identity_step ON run_attempts (run_id, id, snapshot_step_id)',
+  );
+  late final Index runAttemptsOneActiveStep = Index(
+    'run_attempts_one_active_step',
+    'CREATE UNIQUE INDEX run_attempts_one_active_step ON run_attempts (run_id, snapshot_step_id) WHERE status IN (\'starting\', \'running\')',
   );
   late final Index runLogSegmentsAttemptSequence = Index(
     'run_log_segments_attempt_sequence',
@@ -7459,8 +7475,12 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     workflowRunsProjectStatus,
     workflowRunsStatus,
     runSnapshotStepsRunPosition,
+    runSnapshotStepsRunIdentity,
     runAttemptsStepNumber,
     runAttemptsRunStatus,
+    runAttemptsRunIdentity,
+    runAttemptsRunIdentityStep,
+    runAttemptsOneActiveStep,
     runLogSegmentsAttemptSequence,
     runLogSegmentsRun,
     runRecoveryRequestsRunStatus,
