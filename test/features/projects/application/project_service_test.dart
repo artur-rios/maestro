@@ -10,8 +10,9 @@ void main() {
   late ProjectService service;
 
   setUp(() {
-    repository = _Repository();
-    validator = _Validator();
+    final events = <String>[];
+    repository = _Repository(events);
+    validator = _Validator(events);
     service = ProjectService(
       repository: repository,
       folderValidator: validator,
@@ -38,7 +39,11 @@ void main() {
       expect(selection.record.normalizedName, 'maestro');
       expect(selection.record.folderPath, r'C:\canonical\project');
       expect(selection.folderActionsEnabled, isTrue);
-      expect(repository.events, ['find:maestro', 'save:maestro']);
+      expect(repository.events, [
+        r'validate:C:\chosen\project',
+        'find:maestro',
+        'save:maestro',
+      ]);
       expect(validator.paths, [r'C:\chosen\project']);
     },
   );
@@ -154,7 +159,7 @@ void main() {
     'GivenUnavailableRetainedRecord_WhenListed_ThenRecordIsPreservedAndActionsBlocked',
     () async {
       repository.records.add(_record(name: 'Offline'));
-      validator.result = const ProjectFolderValidation.unavailable(
+      validator.result = ProjectFolderValidation.unavailable(
         ProjectAvailability.missing,
       );
 
@@ -174,7 +179,7 @@ void main() {
     () async {
       final record = _record(name: 'Selected');
       repository.records.add(record);
-      validator.result = const ProjectFolderValidation.unavailable(
+      validator.result = ProjectFolderValidation.unavailable(
         ProjectAvailability.notGitWorkingTree,
       );
 
@@ -223,6 +228,51 @@ void main() {
       expect(failure.cause, isNull);
     },
   );
+
+  test(
+    'GivenValidatorThrows_WhenRegistered_ThenSanitizedTransientFolderFailureIsReturned',
+    () async {
+      validator.error = StateError('secret adapter detail');
+
+      final result = await service.register(
+        name: 'Project',
+        folderPath: r'C:\project',
+      );
+
+      expect(result, isA<FailureResult<ProjectSelection>>());
+      final failure = (result as FailureResult<ProjectSelection>).failure;
+      expect(failure.code, 'project.folder.transientFailure');
+      expect(failure.message, isNot(contains('secret')));
+      expect(failure.cause, isNull);
+      expect(repository.events, [r'validate:C:\project']);
+      expect(repository.saved, isEmpty);
+    },
+  );
+
+  test(
+    'GivenValidatorThrows_WhenListingSelectingOrRefreshing_ThenRecordIsPreservedAsTransient',
+    () async {
+      final record = _record(name: 'Transient');
+      repository.records.add(record);
+      validator.error = StateError('secret adapter detail');
+
+      final listed = await service.listWithAvailability();
+      final selected = await service.select(record.id);
+      final refreshed = await service.refresh(record.id);
+
+      final selections = <ProjectSelection>[
+        (listed as Success<List<ProjectSelection>>).value.single,
+        (selected as Success<ProjectSelection>).value,
+        (refreshed as Success<ProjectSelection>).value,
+      ];
+      for (final selection in selections) {
+        expect(selection.record, same(record));
+        expect(selection.availability, ProjectAvailability.transientFailure);
+        expect(selection.folderActionsEnabled, isFalse);
+        expect(selection.remediation, isNot(contains('secret')));
+      }
+    },
+  );
 }
 
 ProjectRecord _record({required String name, bool deleted = false}) {
@@ -238,8 +288,10 @@ ProjectRecord _record({required String name, bool deleted = false}) {
 }
 
 final class _Repository implements ProjectRepository {
+  _Repository(this.events);
+
   final records = <ProjectRecord>[];
-  final events = <String>[];
+  final List<String> events;
   final saved = <ProjectRecord>[];
   Result<void> saveResult = const Success<void>(null);
   Object? error;
@@ -275,14 +327,20 @@ final class _Repository implements ProjectRepository {
 }
 
 final class _Validator implements ProjectFolderValidator {
+  _Validator(this.events);
+
   ProjectFolderValidation result = ProjectFolderValidation.available(
     ProjectFolder.parse(r'C:\project'),
   );
   final paths = <String>[];
+  final List<String> events;
+  Object? error;
 
   @override
   Future<ProjectFolderValidation> validate(ProjectFolder folder) async {
     paths.add(folder.path);
+    events.add('validate:${folder.path}');
+    if (error != null) throw error!;
     return result;
   }
 }

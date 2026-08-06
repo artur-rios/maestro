@@ -43,19 +43,18 @@ final class ProjectFolder {
   const ProjectFolder._(this.path);
 
   factory ProjectFolder.parse(String input) {
-    final path = input.trim();
-    if (path.isEmpty) {
+    if (input.trim().isEmpty) {
       throw const InvalidProjectFolder(InvalidProjectFolderReason.empty);
     }
-    if (path.codeUnits.any(ProjectName._isControlCharacter)) {
+    if (input.codeUnits.any(ProjectName._isControlCharacter)) {
       throw const InvalidProjectFolder(
         InvalidProjectFolderReason.controlCharacter,
       );
     }
-    if (!_isAbsolute(path)) {
+    if (!_isAbsolute(input)) {
       throw const InvalidProjectFolder(InvalidProjectFolderReason.notAbsolute);
     }
-    return ProjectFolder._(path);
+    return ProjectFolder._(input);
   }
 
   final String path;
@@ -117,13 +116,24 @@ enum ProjectAvailability {
 }
 
 final class ProjectFolderValidation {
-  const ProjectFolderValidation.available(ProjectFolder folder)
-    : availability = ProjectAvailability.available,
-      canonicalFolder = folder;
+  const ProjectFolderValidation._(this.availability, this.canonicalFolder);
 
-  const ProjectFolderValidation.unavailable(this.availability)
-    : canonicalFolder = null,
-      assert(availability != ProjectAvailability.available);
+  factory ProjectFolderValidation.available(ProjectFolder folder) {
+    return ProjectFolderValidation._(ProjectAvailability.available, folder);
+  }
+
+  factory ProjectFolderValidation.unavailable(
+    ProjectAvailability availability,
+  ) {
+    if (availability == ProjectAvailability.available) {
+      throw ArgumentError.value(
+        availability,
+        'availability',
+        'An available validation requires a canonical folder.',
+      );
+    }
+    return ProjectFolderValidation._(availability, null);
+  }
 
   final ProjectAvailability availability;
   final ProjectFolder? canonicalFolder;

@@ -60,24 +60,27 @@ final class ProjectService {
       );
     }
 
+    final ProjectFolderValidation folderValidation;
     try {
-      final folderValidation = await _folderValidator.validate(chosenFolder);
-      if (folderValidation.availability != ProjectAvailability.available) {
-        return FailureResult<ProjectSelection>(
-          _folderFailure(folderValidation.availability),
-        );
-      }
-      final canonicalFolder = folderValidation.canonicalFolder;
-      if (canonicalFolder == null) {
-        return const FailureResult<ProjectSelection>(
-          PlatformFailure(
-            code: 'project.folder.transientFailure',
-            message: 'Could not validate the project folder.',
-            remediation: 'Choose the folder again or retry later.',
-          ),
-        );
-      }
+      folderValidation = await _folderValidator.validate(chosenFolder);
+    } catch (_) {
+      return FailureResult<ProjectSelection>(
+        _folderFailure(ProjectAvailability.transientFailure),
+      );
+    }
+    if (folderValidation.availability != ProjectAvailability.available) {
+      return FailureResult<ProjectSelection>(
+        _folderFailure(folderValidation.availability),
+      );
+    }
+    final canonicalFolder = folderValidation.canonicalFolder;
+    if (canonicalFolder == null) {
+      return FailureResult<ProjectSelection>(
+        _folderFailure(ProjectAvailability.transientFailure),
+      );
+    }
 
+    try {
       final duplicate = await _repository.findByNormalizedName(
         projectName.normalizedKey,
       );

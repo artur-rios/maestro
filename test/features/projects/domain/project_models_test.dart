@@ -57,6 +57,15 @@ void main() {
       );
     });
 
+    test(
+      'GivenLinuxFolderContainingSpaces_WhenParsed_ThenExactPathIsRetained',
+      () {
+        const path = '/ leading folder/project ';
+
+        expect(ProjectFolder.parse(path).path, path);
+      },
+    );
+
     test('GivenRelativeOrUnsafePath_WhenParsed_ThenTypedReasonIsThrown', () {
       final cases = <String>[
         '',
@@ -73,5 +82,31 @@ void main() {
         );
       }
     });
+  });
+
+  group('ProjectFolderValidation', () {
+    test(
+      'GivenAvailableUnavailableFactory_WhenCalled_ThenRuntimeRejectsIt',
+      () {
+        expect(
+          () => ProjectFolderValidation.unavailable(
+            ProjectAvailability.available,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
+      'GivenAvailableValidation_WhenCreated_ThenCanonicalFolderIsRequired',
+      () {
+        final folder = ProjectFolder.parse('/project');
+
+        final validation = ProjectFolderValidation.available(folder);
+
+        expect(validation.availability, ProjectAvailability.available);
+        expect(validation.canonicalFolder, same(folder));
+      },
+    );
   });
 }
