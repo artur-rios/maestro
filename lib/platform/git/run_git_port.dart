@@ -75,32 +75,51 @@ final class CommandRunnerRunGitPort implements RunGitPort {
   }
 
   @override
-  Future<bool> branchExists(String sourcePath, String branchName) async {
+  Future<RunGitPresence> branchPresence(
+    String sourcePath,
+    String branchName,
+  ) async {
     final result = await _run(sourcePath, <String>[
       'show-ref',
       '--verify',
       '--quiet',
       'refs/heads/$branchName',
     ]);
-    return result.succeeded;
+    if (result.succeeded) return const RunGitPresence.present();
+    if (result.failureKind == null && result.exitCode == 1) {
+      return const RunGitPresence.absent();
+    }
+    return const RunGitPresence.inaccessible(
+      'Git could not inspect the branch reference.',
+    );
   }
 
   @override
-  Future<bool> worktreeExists(String sourcePath, String worktreePath) async {
+  Future<RunGitPresence> worktreePresence(
+    String sourcePath,
+    String worktreePath,
+  ) async {
     final result = await _run(sourcePath, const <String>[
       'worktree',
       'list',
       '--porcelain',
     ]);
-    if (!result.succeeded) return false;
+    if (!result.succeeded) {
+      return const RunGitPresence.inaccessible(
+        'Git could not inspect registered worktrees.',
+      );
+    }
     final wanted = _normalizedPath(worktreePath);
-    return result.stdout
+    final present = result.stdout
         .split('\n')
         .where((line) => line.startsWith('worktree '))
         .map(
           (line) => _normalizedPath(line.substring('worktree '.length).trim()),
         )
         .contains(wanted);
+    return present
+        ? const RunGitPresence.present()
+        : const RunGitPresence.absent();
   }
 
   @override

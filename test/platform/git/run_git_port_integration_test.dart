@@ -128,10 +128,16 @@ void main() {
       );
 
       expect(
-        await git.branchExists(source.path, 'feature/existing-aaaaaaaa'),
-        isTrue,
+        (await git.branchPresence(
+          source.path,
+          'feature/existing-aaaaaaaa',
+        )).code,
+        RunGitPresenceCode.present,
       );
-      expect(await git.worktreeExists(source.path, worktree), isTrue);
+      expect(
+        (await git.worktreePresence(source.path, worktree)).code,
+        RunGitPresenceCode.present,
+      );
     },
   );
 
@@ -168,8 +174,14 @@ void main() {
       ]);
 
       expect(results, everyElement(isA<RunGitMutationSucceeded>()));
-      expect(await git.worktreeExists(source.path, first), isTrue);
-      expect(await git.worktreeExists(source.path, second), isTrue);
+      expect(
+        (await git.worktreePresence(source.path, first)).code,
+        RunGitPresenceCode.present,
+      );
+      expect(
+        (await git.worktreePresence(source.path, second)).code,
+        RunGitPresenceCode.present,
+      );
     },
   );
 
@@ -214,14 +226,14 @@ void main() {
 
       expect((result as RunStartRejected).code, 'run.git.worktree_create');
       expect(
-        await git.branchExists(
+        (await git.branchPresence(
           source.path,
           'feature/uc-06-start-runs-runcccccccc',
-        ),
-        isFalse,
+        )).code,
+        RunGitPresenceCode.absent,
       );
       expect(
-        await git.worktreeExists(
+        (await git.worktreePresence(
           source.path,
           p.join(
             root.path,
@@ -230,8 +242,8 @@ void main() {
             'project-1',
             'run-cccccccc',
           ),
-        ),
-        isFalse,
+        )).code,
+        RunGitPresenceCode.absent,
       );
       expect(ownership.resolved, <String>[
         'run-cccccccc:worktree',
@@ -240,7 +252,102 @@ void main() {
       expect(repository.lastStatus, RunStatus.failed);
     },
   );
+
+  test(
+    'Given another actor wins the real branch race_When Maestro create fails_Then the competing branch remains',
+    () async {
+      final service = _service(
+        root: root,
+        source: source,
+        git: _BranchRaceGit(git),
+        runId: 'run-dddddddd',
+      );
+
+      final result = await service(_request(source, _workflow));
+
+      expect((result as RunStartRejected).code, 'run.git.branch_create');
+      expect(
+        (await git.branchPresence(
+          source.path,
+          'feature/uc-06-start-runs-rundddddddd',
+        )).code,
+        RunGitPresenceCode.present,
+      );
+    },
+  );
+
+  test(
+    'Given another actor wins the real worktree race_When Maestro add fails_Then the competing worktree remains',
+    () async {
+      final service = _service(
+        root: root,
+        source: source,
+        git: _WorktreeRaceGit(git, revision),
+        runId: 'run-eeeeeeee',
+      );
+
+      final result = await service(_request(source, _workflow));
+      final path = p.join(
+        root.path,
+        'app-data',
+        'worktrees',
+        'project-1',
+        'run-eeeeeeee',
+      );
+
+      expect((result as RunStartRejected).code, 'run.git.worktree_create');
+      expect(
+        (await git.worktreePresence(source.path, path)).code,
+        RunGitPresenceCode.present,
+      );
+      expect(
+        (await git.branchPresence(
+          source.path,
+          'feature/uc-06-start-runs-runeeeeeeee',
+        )).code,
+        RunGitPresenceCode.absent,
+      );
+    },
+  );
 }
+
+StartIsolatedRun _service({
+  required Directory root,
+  required Directory source,
+  required RunGitPort git,
+  required String runId,
+}) => StartIsolatedRun(
+  projectPreflight: const _ProjectPreflight(),
+  workItemResolvers: <WorkItemType, WorkItemResolver>{
+    WorkItemType.useCase: const _UseCaseResolver(),
+  },
+  agentPreflight: const _AgentPreflight(),
+  repository: _Repository(),
+  ownership: _Ownership(),
+  git: git,
+  worktreesRoot: p.join(root.path, 'app-data', 'worktrees'),
+  baseBranch: 'main',
+  clock: () => DateTime.utc(2026, 8, 6),
+  newId: () => runId,
+);
+
+StartRunRequest _request(Directory source, WorkflowDefinition workflow) =>
+    StartRunRequest(
+      actorId: 'actor',
+      project: ProjectRecord(
+        id: 'project-1',
+        name: 'Fixture',
+        normalizedName: 'fixture',
+        folderPath: source.path,
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+        deletedAt: null,
+      ),
+      workflow: workflow,
+      rawWorkItem: 'UC-06',
+      deliveryMode: DeliveryMode.supervised,
+      branchWorkType: BranchWorkType.feature,
+    );
 
 Future<String> _git(String workingDirectory, List<String> arguments) async {
   final result = await Process.run(
@@ -292,13 +399,16 @@ final class _FailAfterRealAdd implements RunGitPort {
       worktreePath: worktreePath,
     );
     return result is RunGitMutationSucceeded
-        ? const RunGitMutationFailed('injected after mutation')
+        ? const RunGitMutationFailed(
+            'injected after mutation',
+            resourceCreatedByInvocation: true,
+          )
         : result;
   }
 
   @override
-  Future<bool> branchExists(String sourcePath, String branchName) =>
-      delegate.branchExists(sourcePath, branchName);
+  Future<RunGitPresence> branchPresence(String sourcePath, String branchName) =>
+      delegate.branchPresence(sourcePath, branchName);
   @override
   Future<RunGitMutationResult> createBranch({
     required String sourcePath,
@@ -328,8 +438,110 @@ final class _FailAfterRealAdd implements RunGitPort {
     worktreePath: worktreePath,
   );
   @override
-  Future<bool> worktreeExists(String sourcePath, String worktreePath) =>
-      delegate.worktreeExists(sourcePath, worktreePath);
+  Future<RunGitPresence> worktreePresence(
+    String sourcePath,
+    String worktreePath,
+  ) => delegate.worktreePresence(sourcePath, worktreePath);
+}
+
+final class _BranchRaceGit extends _DelegatingRunGitPort {
+  const _BranchRaceGit(super.delegate);
+
+  @override
+  Future<RunGitMutationResult> createBranch({
+    required String sourcePath,
+    required String branchName,
+    required String revision,
+  }) async {
+    final competing = await delegate.createBranch(
+      sourcePath: sourcePath,
+      branchName: branchName,
+      revision: revision,
+    );
+    if (competing is! RunGitMutationSucceeded) return competing;
+    return const RunGitMutationFailed('concurrent branch won');
+  }
+}
+
+final class _WorktreeRaceGit extends _DelegatingRunGitPort {
+  const _WorktreeRaceGit(super.delegate, this.revision);
+
+  final String revision;
+
+  @override
+  Future<RunGitMutationResult> addWorktree({
+    required String sourcePath,
+    required String branchName,
+    required String worktreePath,
+  }) async {
+    const competingBranch = 'feature/concurrent-worktree';
+    final branch = await delegate.createBranch(
+      sourcePath: sourcePath,
+      branchName: competingBranch,
+      revision: revision,
+    );
+    if (branch is! RunGitMutationSucceeded) return branch;
+    final competing = await delegate.addWorktree(
+      sourcePath: sourcePath,
+      branchName: competingBranch,
+      worktreePath: worktreePath,
+    );
+    if (competing is! RunGitMutationSucceeded) return competing;
+    return const RunGitMutationFailed('concurrent worktree won');
+  }
+}
+
+abstract base class _DelegatingRunGitPort implements RunGitPort {
+  const _DelegatingRunGitPort(this.delegate);
+
+  final RunGitPort delegate;
+
+  @override
+  Future<RunGitMutationResult> addWorktree({
+    required String sourcePath,
+    required String branchName,
+    required String worktreePath,
+  }) => delegate.addWorktree(
+    sourcePath: sourcePath,
+    branchName: branchName,
+    worktreePath: worktreePath,
+  );
+  @override
+  Future<RunGitPresence> branchPresence(String sourcePath, String branchName) =>
+      delegate.branchPresence(sourcePath, branchName);
+  @override
+  Future<RunGitMutationResult> createBranch({
+    required String sourcePath,
+    required String branchName,
+    required String revision,
+  }) => delegate.createBranch(
+    sourcePath: sourcePath,
+    branchName: branchName,
+    revision: revision,
+  );
+  @override
+  Future<void> deleteBranch({
+    required String sourcePath,
+    required String branchName,
+  }) => delegate.deleteBranch(sourcePath: sourcePath, branchName: branchName);
+  @override
+  Future<RunGitSourceState> inspectSource(
+    String sourcePath, {
+    required String baseBranch,
+  }) => delegate.inspectSource(sourcePath, baseBranch: baseBranch);
+  @override
+  Future<void> removeWorktree({
+    required String sourcePath,
+    required String worktreePath,
+  }) => delegate.removeWorktree(
+    sourcePath: sourcePath,
+    worktreePath: worktreePath,
+  );
+  @override
+  Future<RunGitPresence> worktreePresence(
+    String sourcePath,
+    String worktreePath,
+  ) => delegate.worktreePresence(sourcePath, worktreePath);
 }
 
 final class _Repository implements RunStartRepository {

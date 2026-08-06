@@ -154,6 +154,62 @@ void main() {
         expect(fixture.events.last, 'transition:starting-failed');
       },
     );
+
+    test(
+      'Given a concurrent actor creates the branch after precheck_When Maestro creation fails_Then that branch is never deleted',
+      () async {
+        final fixture = _Fixture(concurrentBranchConflict: true);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.branch_create');
+        expect(fixture.gitMutations, <String>['createBranch']);
+        expect(fixture.branches, isNotEmpty);
+      },
+    );
+
+    test(
+      'Given a concurrent actor creates the worktree after precheck_When Maestro creation fails_Then only the proven Maestro branch is deleted',
+      () async {
+        final fixture = _Fixture(concurrentWorktreeConflict: true);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.worktree_create');
+        expect(fixture.gitMutations, <String>[
+          'createBranch',
+          'addWorktree',
+          'deleteBranch',
+        ]);
+        expect(fixture.worktrees, isNotEmpty);
+      },
+    );
+
+    test(
+      'Given branch presence cannot be inspected_When starting_Then it fails closed before persistence',
+      () async {
+        final fixture = _Fixture(branchPresenceInaccessible: true);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.inaccessible');
+        expect(fixture.createdRuns, isEmpty);
+        expect(fixture.gitMutations, isEmpty);
+      },
+    );
+
+    test(
+      'Given worktree presence cannot be inspected_When starting_Then it fails closed before persistence',
+      () async {
+        final fixture = _Fixture(worktreePresenceInaccessible: true);
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.inaccessible');
+        expect(fixture.createdRuns, isEmpty);
+        expect(fixture.gitMutations, isEmpty);
+      },
+    );
   });
 }
 
@@ -175,6 +231,10 @@ final class _Fixture
     this.agentsReady = true,
     WorkflowDefinition? workflow,
     this.failWorktreeAfterCreation = false,
+    this.concurrentBranchConflict = false,
+    this.concurrentWorktreeConflict = false,
+    this.branchPresenceInaccessible = false,
+    this.worktreePresenceInaccessible = false,
   }) : workflow = workflow ?? _workflow();
 
   final String runId;
@@ -183,6 +243,10 @@ final class _Fixture
   final bool agentsReady;
   final WorkflowDefinition workflow;
   final bool failWorktreeAfterCreation;
+  final bool concurrentBranchConflict;
+  final bool concurrentWorktreeConflict;
+  final bool branchPresenceInaccessible;
+  final bool worktreePresenceInaccessible;
   final calls = <String>[];
   final events = <String>[];
   final gitMutations = <String>[];
@@ -254,12 +318,24 @@ final class _Fixture
   }
 
   @override
-  Future<bool> branchExists(String sourcePath, String branchName) async =>
-      branches.contains(branchName);
+  Future<RunGitPresence> branchPresence(
+    String sourcePath,
+    String branchName,
+  ) async => branchPresenceInaccessible
+      ? const RunGitPresence.inaccessible('branch inspection failed')
+      : branches.contains(branchName)
+      ? const RunGitPresence.present()
+      : const RunGitPresence.absent();
 
   @override
-  Future<bool> worktreeExists(String sourcePath, String worktreePath) async =>
-      worktrees.contains(worktreePath);
+  Future<RunGitPresence> worktreePresence(
+    String sourcePath,
+    String worktreePath,
+  ) async => worktreePresenceInaccessible
+      ? const RunGitPresence.inaccessible('worktree inspection failed')
+      : worktrees.contains(worktreePath)
+      ? const RunGitPresence.present()
+      : const RunGitPresence.absent();
 
   @override
   Future<RunGitMutationResult> createBranch({
@@ -269,6 +345,10 @@ final class _Fixture
   }) async {
     events.add('git:createBranch');
     gitMutations.add('createBranch');
+    if (concurrentBranchConflict) {
+      branches.add(branchName);
+      return const RunGitMutationFailed('conflict');
+    }
     branches.add(branchName);
     return const RunGitMutationSucceeded();
   }
@@ -281,9 +361,16 @@ final class _Fixture
   }) async {
     events.add('git:addWorktree');
     gitMutations.add('addWorktree');
+    if (concurrentWorktreeConflict) {
+      worktrees.add(worktreePath);
+      return const RunGitMutationFailed('conflict');
+    }
     worktrees.add(worktreePath);
     return failWorktreeAfterCreation
-        ? const RunGitMutationFailed('partial')
+        ? const RunGitMutationFailed(
+            'partial',
+            resourceCreatedByInvocation: true,
+          )
         : const RunGitMutationSucceeded();
   }
 

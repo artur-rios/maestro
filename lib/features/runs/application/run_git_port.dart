@@ -50,9 +50,29 @@ final class RunGitMutationSucceeded extends RunGitMutationResult {
 }
 
 final class RunGitMutationFailed extends RunGitMutationResult {
-  const RunGitMutationFailed(this.message);
+  const RunGitMutationFailed(
+    this.message, {
+    this.resourceCreatedByInvocation = false,
+  });
 
   final String message;
+  final bool resourceCreatedByInvocation;
+}
+
+enum RunGitPresenceCode { present, absent, inaccessible }
+
+final class RunGitPresence {
+  const RunGitPresence.present()
+    : code = RunGitPresenceCode.present,
+      message = null;
+  const RunGitPresence.absent()
+    : code = RunGitPresenceCode.absent,
+      message = null;
+  const RunGitPresence.inaccessible(this.message)
+    : code = RunGitPresenceCode.inaccessible;
+
+  final RunGitPresenceCode code;
+  final String? message;
 }
 
 abstract interface class RunGitPort {
@@ -60,8 +80,11 @@ abstract interface class RunGitPort {
     String sourcePath, {
     required String baseBranch,
   });
-  Future<bool> branchExists(String sourcePath, String branchName);
-  Future<bool> worktreeExists(String sourcePath, String worktreePath);
+  Future<RunGitPresence> branchPresence(String sourcePath, String branchName);
+  Future<RunGitPresence> worktreePresence(
+    String sourcePath,
+    String worktreePath,
+  );
   Future<RunGitMutationResult> createBranch({
     required String sourcePath,
     required String branchName,

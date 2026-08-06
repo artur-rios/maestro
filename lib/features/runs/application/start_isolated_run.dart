@@ -194,14 +194,36 @@ final class StartIsolatedRun {
         'Choose a valid application-data root.',
       );
     }
-    if (await _git.branchExists(request.project.folderPath, branchName)) {
+    final branchPresence = await _git.branchPresence(
+      request.project.folderPath,
+      branchName,
+    );
+    if (branchPresence.code == RunGitPresenceCode.inaccessible) {
+      return _reject(
+        'run.git.inaccessible',
+        'Git could not verify the run branch destination.',
+        'Check repository access and retry.',
+      );
+    }
+    if (branchPresence.code == RunGitPresenceCode.present) {
       return _reject(
         'run.git.branch_conflict',
         'The run branch already exists.',
         'Retry with a new run identity.',
       );
     }
-    if (await _git.worktreeExists(request.project.folderPath, worktreePath)) {
+    final worktreePresence = await _git.worktreePresence(
+      request.project.folderPath,
+      worktreePath,
+    );
+    if (worktreePresence.code == RunGitPresenceCode.inaccessible) {
+      return _reject(
+        'run.git.inaccessible',
+        'Git could not verify the run worktree destination.',
+        'Check repository access and retry.',
+      );
+    }
+    if (worktreePresence.code == RunGitPresenceCode.present) {
       return _reject(
         'run.git.worktree_conflict',
         'The run worktree already exists.',
@@ -246,7 +268,7 @@ final class StartIsolatedRun {
       revision: source.localRevision!,
     );
     if (branchResult is RunGitMutationFailed) {
-      if (await _git.branchExists(request.project.folderPath, branchName)) {
+      if (branchResult.resourceCreatedByInvocation) {
         await _git.deleteBranch(
           sourcePath: request.project.folderPath,
           branchName: branchName,
@@ -275,19 +297,17 @@ final class StartIsolatedRun {
       worktreePath: worktreePath,
     );
     if (worktreeResult is RunGitMutationFailed) {
-      if (await _git.worktreeExists(request.project.folderPath, worktreePath)) {
+      if (worktreeResult.resourceCreatedByInvocation) {
         await _git.removeWorktree(
           sourcePath: request.project.folderPath,
           worktreePath: worktreePath,
         );
       }
       await _ownership.markResolved(worktreeRecord.id);
-      if (await _git.branchExists(request.project.folderPath, branchName)) {
-        await _git.deleteBranch(
-          sourcePath: request.project.folderPath,
-          branchName: branchName,
-        );
-      }
+      await _git.deleteBranch(
+        sourcePath: request.project.folderPath,
+        branchName: branchName,
+      );
       await _ownership.markResolved(branchRecord.id);
       await _markGitFailed(runId, now);
       return _reject(
