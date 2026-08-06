@@ -27,7 +27,8 @@ final class AgentRowState {
   final String guidance;
 
   bool get isConfigurationValid =>
-      code == AgentRowStateCode.ready || code == AgentRowStateCode.cliOnly;
+      code == AgentRowStateCode.ready ||
+      (code == AgentRowStateCode.cliOnly && kind == AgentCliKind.claudeCode);
 }
 
 abstract final class AgentRowBlockers {
@@ -127,16 +128,20 @@ final class AgentConfigurationService {
     if (!state.isConfigurationValid) {
       return AgentAssignmentRejected(draft, state);
     }
-    return AgentAssignmentApplied(
-      candidate.assignStep(rowKey, assignment, validated: true),
-      state,
-    );
+    return AgentAssignmentApplied(candidate, state);
   }
 
   WorkflowDraft clearAssignment(WorkflowDraft draft, String rowKey) =>
       draft.clearStepAssignment(rowKey);
 
-  AgentConfigurationResult completeConfiguration(
+  Future<AgentConfigurationResult> completeConfiguration(
+    WorkflowDraft draft,
+  ) async {
+    final catalog = await _refreshKinds(_selectedKinds(draft));
+    return _evaluateConfiguration(draft, catalog);
+  }
+
+  AgentConfigurationResult _evaluateConfiguration(
     WorkflowDraft draft,
     AgentCatalogSnapshot catalog,
   ) {
@@ -163,12 +168,8 @@ final class AgentConfigurationService {
   Future<AgentExecutionPreflight> executionPreflight(
     WorkflowDraft draft,
   ) async {
-    final selectedKinds = draft.steps
-        .map((step) => step.assignment?.kind)
-        .whereType<AgentCliKind>()
-        .toSet();
-    final catalog = await _refreshKinds(selectedKinds);
-    final configuration = completeConfiguration(draft, catalog);
+    final catalog = await _refreshKinds(_selectedKinds(draft));
+    final configuration = _evaluateConfiguration(draft, catalog);
     final blockers = configuration.states
         .where((state) => !state.isConfigurationValid)
         .toList(growable: false);
@@ -181,6 +182,11 @@ final class AgentConfigurationService {
       projectReadiness: projectReadiness,
     );
   }
+
+  Set<AgentCliKind> _selectedKinds(WorkflowDraft draft) => draft.steps
+      .map((step) => step.assignment?.kind)
+      .whereType<AgentCliKind>()
+      .toSet();
 
   Future<AgentCatalogSnapshot> _refreshKinds(
     Iterable<AgentCliKind> selectedKinds,
@@ -262,6 +268,16 @@ final class AgentConfigurationService {
         code: AgentRowStateCode.catalogUnverified,
         guidance:
             'The saved selection is retained but unverified. Refresh before execution.',
+      );
+    }
+    if (catalog.modelVerification == AgentModelVerification.cliOnly &&
+        assignment.kind != AgentCliKind.claudeCode) {
+      return AgentRowState(
+        rowKey: step.rowKey,
+        kind: assignment.kind,
+        code: AgentRowStateCode.catalogUnverified,
+        guidance:
+            'This CLI catalog is not account-verified. Refresh with an account-verified catalog before execution.',
       );
     }
     if (!catalog.models.contains(assignment.model)) {
