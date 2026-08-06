@@ -52,31 +52,28 @@ final class MethodChannelAuthentication implements AuthenticationPort {
         'authenticateCurrentUser',
       );
       return _parseAuthentication(response);
-    } on MissingPluginException catch (error) {
+    } on MissingPluginException {
       return FailureResult<void>(
-        PlatformFailure(
+        const PlatformFailure(
           code: 'authentication.operating_system.unavailable',
           message: 'Operating-system authentication is unavailable.',
           remediation: 'Use email and password authentication.',
-          cause: error,
         ),
       );
-    } on PlatformException catch (error) {
+    } on PlatformException {
       return FailureResult<void>(
-        PlatformFailure(
+        const PlatformFailure(
           code: 'authentication.operating_system.transient_failure',
           message: 'Operating-system authentication could not be completed.',
           remediation: 'Retry or use email and password authentication.',
-          cause: error,
         ),
       );
-    } on Object catch (error) {
+    } on Object {
       return FailureResult<void>(
-        PlatformFailure(
+        const PlatformFailure(
           code: 'authentication.operating_system.invalid_response',
           message: 'The operating-system authentication response was invalid.',
           remediation: 'Use email and password authentication.',
-          cause: error,
         ),
       );
     }

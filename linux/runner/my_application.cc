@@ -5,9 +5,12 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#include <pwd.h>
+#include <unistd.h>
 
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -71,6 +74,186 @@ constexpr int kPamTextInfo = 4;
 constexpr int kPamMaximumMessageCount = 32;
 constexpr int kPamDisallowNullAuthenticationToken = 0x0001;
 
+void SecureZeroBytes(void* memory, gsize byte_count) {
+  auto* cursor = static_cast<volatile unsigned char*>(memory);
+  while (byte_count-- > 0) {
+    *cursor++ = 0;
+  }
+}
+
+// GtkEntryBuffer is intentionally subclassable for sensitive text. This
+// implementation owns every byte backing an entry and overwrites deleted,
+// replaced, and finalized storage. GTK-owned const text is only ever read.
+typedef struct _SecureEntryBuffer SecureEntryBuffer;
+typedef struct _SecureEntryBufferClass SecureEntryBufferClass;
+
+struct _SecureEntryBuffer {
+  GtkEntryBuffer parent_instance;
+  gchar* text;
+  gsize allocated_bytes;
+  gsize used_bytes;
+  guint character_count;
+};
+
+struct _SecureEntryBufferClass {
+  GtkEntryBufferClass parent_class;
+};
+
+#define SECURE_TYPE_ENTRY_BUFFER (secure_entry_buffer_get_type())
+#define SECURE_ENTRY_BUFFER(object)                                      \
+  (G_TYPE_CHECK_INSTANCE_CAST((object), SECURE_TYPE_ENTRY_BUFFER,        \
+                              SecureEntryBuffer))
+
+G_DEFINE_TYPE(SecureEntryBuffer,
+              secure_entry_buffer,
+              GTK_TYPE_ENTRY_BUFFER)
+
+const gchar* SecureEntryBufferGetText(GtkEntryBuffer* buffer,
+                                      gsize* byte_count) {
+  const auto* secure = SECURE_ENTRY_BUFFER(buffer);
+  if (byte_count != nullptr) {
+    *byte_count = secure->used_bytes;
+  }
+  return secure->text == nullptr ? "" : secure->text;
+}
+
+guint SecureEntryBufferGetLength(GtkEntryBuffer* buffer) {
+  return SECURE_ENTRY_BUFFER(buffer)->character_count;
+}
+
+guint SecureEntryBufferInsertText(GtkEntryBuffer* buffer,
+                                  guint position,
+                                  const gchar* characters,
+                                  guint character_count) {
+  auto* secure = SECURE_ENTRY_BUFFER(buffer);
+  if (character_count == 0) {
+    return 0;
+  }
+
+  if (position > secure->character_count) {
+    position = secure->character_count;
+  }
+  gsize inserted_bytes = static_cast<gsize>(
+      g_utf8_offset_to_pointer(characters, character_count) - characters);
+  // gtk_entry_buffer_insert_text already clamps character_count against the
+  // public max-length property before invoking this virtual method. Preserve
+  // GtkEntryBuffer's separate absolute byte limit, truncating only at a UTF-8
+  // character boundary just like GTK's built-in backing store.
+  const gsize available_bytes =
+      GTK_ENTRY_BUFFER_MAX_SIZE - secure->used_bytes - 1;
+  if (inserted_bytes > available_bytes) {
+    const gchar* truncated_end =
+        g_utf8_find_prev_char(characters, characters + available_bytes + 1);
+    inserted_bytes = static_cast<gsize>(truncated_end - characters);
+    character_count = static_cast<guint>(
+        g_utf8_strlen(characters, static_cast<gssize>(inserted_bytes)));
+  }
+  if (character_count == 0) {
+    return 0;
+  }
+
+  const gsize required_bytes = secure->used_bytes + inserted_bytes + 1;
+  if (required_bytes > secure->allocated_bytes) {
+    auto* replacement = static_cast<gchar*>(g_try_malloc(required_bytes));
+    if (replacement == nullptr) {
+      return 0;
+    }
+    if (secure->text == nullptr) {
+      replacement[0] = '\0';
+    } else {
+      memcpy(replacement, secure->text, secure->used_bytes + 1);
+      SecureZeroBytes(secure->text, secure->allocated_bytes);
+      g_free(secure->text);
+    }
+    secure->text = replacement;
+    secure->allocated_bytes = required_bytes;
+  }
+
+  const gsize insertion_offset = static_cast<gsize>(
+      g_utf8_offset_to_pointer(secure->text, position) - secure->text);
+  memmove(secure->text + insertion_offset + inserted_bytes,
+          secure->text + insertion_offset,
+          secure->used_bytes + 1 - insertion_offset);
+  memcpy(secure->text + insertion_offset, characters, inserted_bytes);
+  secure->used_bytes += inserted_bytes;
+  secure->character_count += character_count;
+  gtk_entry_buffer_emit_inserted_text(buffer, position, characters,
+                                      character_count);
+  return character_count;
+}
+
+guint SecureEntryBufferDeleteText(GtkEntryBuffer* buffer,
+                                  guint position,
+                                  guint character_count) {
+  auto* secure = SECURE_ENTRY_BUFFER(buffer);
+  if (position > secure->character_count) {
+    position = secure->character_count;
+  }
+  if (character_count > secure->character_count - position) {
+    character_count = secure->character_count - position;
+  }
+  if (character_count == 0) {
+    return 0;
+  }
+
+  const gsize start = static_cast<gsize>(
+      g_utf8_offset_to_pointer(secure->text, position) - secure->text);
+  const gsize end = static_cast<gsize>(
+      g_utf8_offset_to_pointer(secure->text, position + character_count) -
+      secure->text);
+  const gsize removed_bytes = end - start;
+  memmove(secure->text + start, secure->text + end,
+          secure->used_bytes + 1 - end);
+  secure->used_bytes -= removed_bytes;
+  secure->character_count -= character_count;
+  SecureZeroBytes(secure->text + secure->used_bytes + 1, removed_bytes);
+  gtk_entry_buffer_emit_deleted_text(buffer, position, character_count);
+  return character_count;
+}
+
+void SecureEntryBufferFinalize(GObject* object) {
+  auto* secure = SECURE_ENTRY_BUFFER(object);
+  if (secure->text != nullptr) {
+    SecureZeroBytes(secure->text, secure->allocated_bytes);
+    g_free(secure->text);
+    secure->text = nullptr;
+  }
+  secure->allocated_bytes = 0;
+  secure->used_bytes = 0;
+  secure->character_count = 0;
+  G_OBJECT_CLASS(secure_entry_buffer_parent_class)->finalize(object);
+}
+
+void secure_entry_buffer_class_init(SecureEntryBufferClass* klass) {
+  GObjectClass* object_class = G_OBJECT_CLASS(klass);
+  object_class->finalize = SecureEntryBufferFinalize;
+  GtkEntryBufferClass* buffer_class = GTK_ENTRY_BUFFER_CLASS(klass);
+  buffer_class->get_text = SecureEntryBufferGetText;
+  buffer_class->get_length = SecureEntryBufferGetLength;
+  buffer_class->insert_text = SecureEntryBufferInsertText;
+  buffer_class->delete_text = SecureEntryBufferDeleteText;
+}
+
+void secure_entry_buffer_init(SecureEntryBuffer* secure) {
+  secure->text = nullptr;
+  secure->allocated_bytes = 0;
+  secure->used_bytes = 0;
+  secure->character_count = 0;
+}
+
+GtkEntryBuffer* NewSecureEntryBuffer() {
+  return GTK_ENTRY_BUFFER(
+      g_object_new(SECURE_TYPE_ENTRY_BUFFER, nullptr));
+}
+
+std::string CurrentUserName() {
+  const passwd* user = getpwuid(geteuid());
+  if (user == nullptr || user->pw_name == nullptr || user->pw_name[0] == '\0') {
+    return {};
+  }
+  return user->pw_name;
+}
+
 class PamApi {
  public:
   PamApi() : library_(dlopen(kPamLibrary, RTLD_NOW | RTLD_LOCAL)) {
@@ -132,10 +315,7 @@ void ClearString(char* value) {
   if (value == nullptr) {
     return;
   }
-  volatile char* cursor = value;
-  while (*cursor != '\0') {
-    *cursor++ = '\0';
-  }
+  SecureZeroBytes(value, strlen(value));
 }
 
 void FreeResponses(PamResponse* responses, int response_count) {
@@ -149,11 +329,21 @@ void FreeResponses(PamResponse* responses, int response_count) {
   free(responses);
 }
 
+void ClearEntry(GtkWidget* entry) {
+  if (entry == nullptr) {
+    return;
+  }
+  GtkEntryBuffer* buffer = gtk_entry_get_buffer(GTK_ENTRY(entry));
+  gtk_entry_buffer_delete_text(buffer, 0, -1);
+}
+
+void ClearEntryOnDestroy(GtkWidget* entry, gpointer) {
+  ClearEntry(entry);
+}
+
 void ClearEntries(const std::vector<GtkWidget*>& entries) {
   for (GtkWidget* entry : entries) {
-    if (entry != nullptr) {
-      gtk_entry_set_text(GTK_ENTRY(entry), "");
-    }
+    ClearEntry(entry);
   }
 }
 
@@ -194,11 +384,19 @@ int ShowPamConversation(int message_count,
     switch (messages[index]->msg_style) {
       case kPamPromptEchoOff:
       case kPamPromptEchoOn: {
-        GtkWidget* entry = gtk_entry_new();
+        GtkEntryBuffer* buffer = NewSecureEntryBuffer();
+        GtkWidget* entry = gtk_entry_new_with_buffer(buffer);
+        g_object_unref(buffer);
         gtk_entry_set_visibility(
             GTK_ENTRY(entry),
             messages[index]->msg_style == kPamPromptEchoOn);
+        if (messages[index]->msg_style == kPamPromptEchoOff) {
+          gtk_entry_set_input_purpose(GTK_ENTRY(entry),
+                                      GTK_INPUT_PURPOSE_PASSWORD);
+        }
         gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
+        g_signal_connect(entry, "destroy", G_CALLBACK(ClearEntryOnDestroy),
+                         nullptr);
         gtk_box_pack_start(GTK_BOX(content), entry, FALSE, FALSE, 4);
         entries[index] = entry;
         break;
@@ -233,6 +431,8 @@ int ShowPamConversation(int message_count,
     if (entries[index] == nullptr) {
       continue;
     }
+    // The pointer is GTK-owned and const. Copy it into PAM-owned storage;
+    // never modify or retain it beyond this iteration.
     const char* text = gtk_entry_get_text(GTK_ENTRY(entries[index]));
     pam_responses[index].resp = strdup(text);
     if (pam_responses[index].resp == nullptr) {
@@ -244,7 +444,7 @@ int ShowPamConversation(int message_count,
   }
 
   // Linux-PAM owns and frees successful pam_response buffers after this
-  // callback. Clear GTK's separate credential copy before transferring them.
+  // callback. Every GTK-owned copy is zeroed before ownership is transferred.
   ClearEntries(entries);
   gtk_widget_destroy(dialog);
   *responses = pam_responses;
@@ -278,16 +478,62 @@ void Respond(FlMethodCall* method_call,
   }
 }
 
+int RejectProbeConversation(int,
+                            const PamMessage**,
+                            PamResponse**,
+                            void*) {
+  // pam_start must only load and validate the selected service. If a module
+  // unexpectedly asks for credentials during a probe, fail closed.
+  return kPamConversationError;
+}
+
 void ProbeAuthentication(FlMethodCall* method_call) {
   PamApi pam;
-  if (pam.is_available()) {
-    Respond(method_call, "available",
-            "Operating-system authentication is available.");
+  if (!pam.is_available()) {
+    Respond(method_call, "missing", "The Linux PAM service is unavailable.",
+            "Install the operating-system PAM runtime or use email and "
+            "password authentication.");
     return;
   }
-  Respond(method_call, "missing", "The Linux PAM service is unavailable.",
-          "Install the operating-system PAM runtime or use email and password "
-          "authentication.");
+
+  const std::string user = CurrentUserName();
+  if (user.empty()) {
+    Respond(method_call, "missing",
+            "The current Linux user could not be determined.",
+            "Use email and password authentication.");
+    return;
+  }
+
+  const PamConversation conversation{RejectProbeConversation, nullptr};
+  PamHandle* handle = nullptr;
+  const int start_status =
+      pam.Start(kPamService, user.c_str(), &conversation, &handle);
+  if (start_status != kPamSuccess || handle == nullptr) {
+    if (start_status == kPamOpenError || start_status == kPamSymbolError ||
+        start_status == kPamServiceError ||
+        start_status == kPamAuthenticationInfoUnavailable) {
+      Respond(method_call, "missing",
+              "The Linux PAM login service is unavailable.",
+              "Repair the system authentication configuration or use email "
+              "and password authentication.");
+    } else {
+      Respond(method_call, "transientFailure",
+              "The Linux PAM login service could not be inspected.",
+              "Retry or use email and password authentication.");
+    }
+    return;
+  }
+
+  const int end_status = pam.End(handle, kPamSuccess);
+  if (end_status != kPamSuccess) {
+    Respond(method_call, "transientFailure",
+            "The Linux PAM login service could not be inspected.",
+            "Retry or use email and password authentication.");
+    return;
+  }
+
+  Respond(method_call, "available",
+          "Operating-system authentication is available.");
 }
 
 void AuthenticateCurrentUser(GtkWindow* parent, FlMethodCall* method_call) {
@@ -299,8 +545,8 @@ void AuthenticateCurrentUser(GtkWindow* parent, FlMethodCall* method_call) {
     return;
   }
 
-  const char* user = g_get_user_name();
-  if (user == nullptr || user[0] == '\0') {
+  const std::string user = CurrentUserName();
+  if (user.empty()) {
     Respond(method_call, "unavailable",
             "The current Linux user could not be determined.",
             "Use email and password authentication.");
@@ -310,7 +556,7 @@ void AuthenticateCurrentUser(GtkWindow* parent, FlMethodCall* method_call) {
   PamConversationContext context{parent, false};
   const PamConversation conversation{ShowPamConversation, &context};
   PamHandle* handle = nullptr;
-  int status = pam.Start(kPamService, user, &conversation, &handle);
+  int status = pam.Start(kPamService, user.c_str(), &conversation, &handle);
   if (status == kPamSuccess) {
     status = pam.Authenticate(handle, kPamDisallowNullAuthenticationToken);
     pam.End(handle, status);

@@ -89,6 +89,38 @@ void main() {
   );
 
   test(
+    'GivenMalformedNativeProbePayloads_WhenProbing_ThenEveryResponseFailsClosed',
+    () async {
+      const malformedPayloads = <Object?>[
+        null,
+        42,
+        <String, Object?>{},
+        <String, Object?>{'status': 7, 'message': 'Available.'},
+        <String, Object?>{'status': 'available'},
+        <String, Object?>{'status': 'available', 'message': 7},
+        <String, Object?>{
+          'status': 'available',
+          'message': 'Available.',
+          'remediation': 7,
+        },
+      ];
+      const adapter = MethodChannelAuthentication();
+
+      for (final payload in malformedPayloads) {
+        replies['probe'] = payload;
+
+        final capability = await adapter.probe();
+
+        expect(
+          capability.state,
+          CapabilityState.malformed,
+          reason: 'Payload should fail closed: $payload',
+        );
+      }
+    },
+  );
+
+  test(
     'GivenNativeAuthentication_WhenAuthenticating_ThenSuccessIsReturned',
     () async {
       replies['authenticateCurrentUser'] = <String, Object?>{
@@ -158,6 +190,35 @@ void main() {
   );
 
   test(
+    'GivenMalformedNativeAuthenticationPayloads_WhenAuthenticating_ThenEveryResponseFailsClosed',
+    () async {
+      const malformedPayloads = <Object?>[
+        null,
+        42,
+        <String, Object?>{},
+        <String, Object?>{'status': 7},
+        <String, Object?>{'status': 'denied', 'message': 7},
+        <String, Object?>{'status': 'unavailable', 'remediation': 7},
+      ];
+      const adapter = MethodChannelAuthentication();
+
+      for (final payload in malformedPayloads) {
+        replies['authenticateCurrentUser'] = payload;
+
+        final result = await adapter.authenticateCurrentUser();
+
+        expect(result, isA<FailureResult<void>>(), reason: '$payload');
+        final failure = (result as FailureResult<void>).failure;
+        expect(
+          failure.code,
+          'authentication.operating_system.invalid_response',
+          reason: 'Payload should fail closed: $payload',
+        );
+      }
+    },
+  );
+
+  test(
     'GivenMissingNativeChannel_WhenAuthenticating_ThenUnavailableFailureIsReturned',
     () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -170,6 +231,42 @@ void main() {
       final failure = (result as FailureResult<void>).failure;
       expect(failure, isA<PlatformFailure>());
       expect(failure.code, 'authentication.operating_system.unavailable');
+    },
+  );
+
+  test(
+    'GivenSensitiveNativeExceptions_WhenAuthenticating_ThenNoExceptionDataCrossesTheBoundary',
+    () async {
+      const sentinel = 'sentinel-native-secret';
+      final nativeErrors = <Object>[
+        PlatformException(
+          code: sentinel,
+          message: sentinel,
+          details: <String, Object?>{'payload': sentinel},
+        ),
+        StateError(sentinel),
+      ];
+      const adapter = MethodChannelAuthentication();
+
+      for (final nativeError in nativeErrors) {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              throw nativeError;
+            });
+
+        final result = await adapter.authenticateCurrentUser();
+
+        expect(result, isA<FailureResult<void>>());
+        final failure = (result as FailureResult<void>).failure;
+        expect(failure.cause, isNull);
+        final exposedFields = <Object?>[
+          failure.code,
+          failure.message,
+          failure.remediation,
+          failure.cause,
+        ].join(' ');
+        expect(exposedFields, isNot(contains(sentinel)));
+      }
     },
   );
 }
