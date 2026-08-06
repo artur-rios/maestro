@@ -68,6 +68,20 @@ class AuditEvents extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
 
+class Projects extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get normalizedName =>
+      text().customConstraint('NOT NULL COLLATE NOCASE UNIQUE')();
+  TextColumn get folderPath => text()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
 @DriftDatabase(
   tables: <Type>[
     Settings,
@@ -75,6 +89,7 @@ class AuditEvents extends Table {
     OwnedResources,
     LocalUsers,
     AuditEvents,
+    Projects,
   ],
 )
 final class MaestroDatabase extends _$MaestroDatabase {
@@ -91,6 +106,9 @@ final class MaestroDatabase extends _$MaestroDatabase {
         await migrator.createTable(localUsers);
         await migrator.createTable(auditEvents);
         await migrator.createIndex(localUsersSingleOperatingSystem);
+      }
+      if (from < 3) {
+        await migrator.createTable(projects);
       }
     },
     beforeOpen: (_) async {
