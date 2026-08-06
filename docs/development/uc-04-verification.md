@@ -4,9 +4,9 @@ This record traces [issue #5](https://github.com/artur-rios/maestro/issues/5)
 and [UC-04](../requirements/Use%20Case%20Specification%20Document.md#uc-04-design-a-workflow)
 to the implementation and local verification evidence prepared for review.
 
-- Verified implementation: branch revision `3045b35`
+- Verified implementation: branch revision `26fdaed`
 - Toolchain: Flutter 3.44.8 and Dart 3.12.2
-- Local full-suite result: 289 tests passed
+- Local full-suite result: 294 tests passed
 - Windows workflow persistence integration: 1 test passed
 - Native build evidence: the Windows debug runner built successfully
 - Pending delivery evidence: pull-request CI, Ubuntu Linux compilation and
@@ -81,10 +81,14 @@ to the implementation and local verification evidence prepared for review.
 - Permanent deletion removes the project association while preserving the
   workflow, its revision, and continued editability. A soft-deleted project
   remains associated and editable but blocks execution readiness.
+- A mounted editor reconciles associations only from an authoritative ready
+  project catalog. Permanent deletion removes the absent identifier without
+  discarding unsaved structural edits; idle/loading catalogs cannot silently
+  remove valid active or soft-deleted associations.
 
 ## Local verification commands
 
-The final gates ran from the clean UC-04 feature worktree at `3045b35`, using
+The final gates ran from the clean UC-04 feature worktree through `26fdaed`, using
 the pinned toolchain and `build/native-temp` for native hooks:
 
 ```text
@@ -119,14 +123,15 @@ flutter analyze
 # Exit 0; No issues found
 
 flutter test
-# Exit 0; 289 tests passed
+# Exit 0; 294 tests passed after the final independently reviewed project-
+# association reconciliation and delayed-catalog regressions.
 
 flutter build windows --debug
 # Exit 0; produced build/windows/x64/runner/Debug/maestro.exe
 ```
 
 Task-level evidence also includes 14 focused domain/application tests, 22
-focused persistence/migration tests, 43 focused presentation tests, 2
+focused persistence/migration tests, 48 focused presentation tests, 2
 production-composition tests, and 1 Windows workflow persistence integration
 test. The integration test passed before this final default-suite gate; Flutter
 does not include `integration_test/` in a bare `flutter test` invocation.
