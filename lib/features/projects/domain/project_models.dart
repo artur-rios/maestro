@@ -105,6 +105,109 @@ final class ProjectRecord {
   final DateTime? deletedAt;
 
   bool get isDeleted => deletedAt != null;
+
+  ProjectRecord copyWith({
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    bool clearDeletedAt = false,
+  }) {
+    return ProjectRecord(
+      id: id,
+      name: name,
+      normalizedName: normalizedName,
+      folderPath: folderPath,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+    );
+  }
+}
+
+enum ProjectLifecycleAction { softDelete, restore, permanentDelete }
+
+extension ProjectLifecycleActionAuditName on ProjectLifecycleAction {
+  String get auditName => switch (this) {
+    ProjectLifecycleAction.softDelete => 'project.soft_delete',
+    ProjectLifecycleAction.restore => 'project.restore',
+    ProjectLifecycleAction.permanentDelete => 'project.permanent_delete',
+  };
+}
+
+enum ProjectLifecycleAuditOutcome { success }
+
+final class ProjectLifecycleAuditEvent {
+  const ProjectLifecycleAuditEvent({
+    required this.id,
+    required this.actorId,
+    required this.action,
+    required this.targetId,
+    required this.outcome,
+    required this.occurredAt,
+    required this.details,
+  });
+
+  static const fixedDetails = '{"scope":"project_metadata"}';
+
+  final String id;
+  final String actorId;
+  final ProjectLifecycleAction action;
+  final String targetId;
+  final ProjectLifecycleAuditOutcome outcome;
+  final DateTime occurredAt;
+  final String details;
+}
+
+final class ActiveProjectRun {
+  const ActiveProjectRun({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+final class ActiveProjectRuns {
+  ActiveProjectRuns._(this.values, this.hasMore);
+
+  static const maximumVisible = 20;
+  static final none = ActiveProjectRuns._(
+    List<ActiveProjectRun>.unmodifiable(const <ActiveProjectRun>[]),
+    false,
+  );
+
+  factory ActiveProjectRuns.bounded(Iterable<ActiveProjectRun> runs) {
+    final values = runs.take(maximumVisible + 1).toList(growable: false);
+    return ActiveProjectRuns._(
+      List<ActiveProjectRun>.unmodifiable(values.take(maximumVisible)),
+      values.length > maximumVisible,
+    );
+  }
+
+  final List<ActiveProjectRun> values;
+  final bool hasMore;
+}
+
+sealed class ProjectLifecycleResult {
+  const ProjectLifecycleResult();
+}
+
+final class ProjectLifecycleSucceeded extends ProjectLifecycleResult {
+  const ProjectLifecycleSucceeded({required this.action, required this.record});
+
+  final ProjectLifecycleAction action;
+  final ProjectRecord? record;
+}
+
+final class ProjectLifecycleRejected extends ProjectLifecycleResult {
+  ProjectLifecycleRejected({
+    required this.code,
+    required this.message,
+    this.remediation,
+    ActiveProjectRuns? activeRuns,
+  }) : activeRuns = activeRuns ?? ActiveProjectRuns.none;
+
+  final String code;
+  final String message;
+  final String? remediation;
+  final ActiveProjectRuns activeRuns;
 }
 
 enum ProjectAvailability {
