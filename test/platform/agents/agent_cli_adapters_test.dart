@@ -304,7 +304,7 @@ void main() {
         final catalog = await CodexAdapter(
           _QueueRunner(<CommandResult>[
             _ok('codex-cli 0.114.0'),
-            _ok('Logged in using ChatGPT'),
+            _okStderr('Logged in using ChatGPT'),
           ]),
           resolver: _resolved(),
           sessionRunner: sessionRunner,
@@ -450,6 +450,8 @@ void main() {
 
 CommandResult _ok(String stdout) =>
     CommandResult(exitCode: 0, stdout: stdout, stderr: '');
+CommandResult _okStderr(String stderr) =>
+    CommandResult(exitCode: 0, stdout: '', stderr: stderr);
 CommandResult _failed(String stderr) =>
     CommandResult(exitCode: 1, stdout: '', stderr: stderr);
 CommandResult _timeout(String stderr) => CommandResult(

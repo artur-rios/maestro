@@ -25,7 +25,7 @@ final class CodexAdapter implements AgentCliAdapter {
   static const int _maximumFrames = 512;
   static const int _maximumFrameBytes = 64 * 1024;
   static final RegExp _positiveLoginStatus = RegExp(
-    r'^Logged in using (?:ChatGPT|an API key)$',
+    r'^(?:Logged in using ChatGPT|Logged in using access token|Logged in using personal access token|Logged in using Amazon Bedrock API key|Logged in using an API key - [^\x00-\x1F\x7F]{1,200})$',
   );
 
   final AgentAdapterSupport _support;
@@ -42,7 +42,13 @@ final class CodexAdapter implements AgentCliAdapter {
       'login',
       'status',
     ]);
-    final status = login.stdout.trim();
+    final stdoutStatus = login.stdout.trim();
+    final stderrStatus = login.stderr.trim();
+    final status = stdoutStatus.isNotEmpty && stderrStatus.isEmpty
+        ? stdoutStatus
+        : stderrStatus.isNotEmpty && stdoutStatus.isEmpty
+        ? stderrStatus
+        : '';
     if (!login.succeeded ||
         login.stdoutTruncated ||
         login.stderrTruncated ||
