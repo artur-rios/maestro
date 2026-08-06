@@ -80,7 +80,9 @@ final class LocalGitProjectValidator implements ProjectFolderValidator {
     }
     if (result.exitCode != 0) {
       return ProjectFolderValidation.unavailable(
-        ProjectAvailability.notGitWorkingTree,
+        _isKnownNotGitDiagnostic(result.stderr)
+            ? ProjectAvailability.notGitWorkingTree
+            : ProjectAvailability.transientFailure,
       );
     }
 
@@ -104,21 +106,24 @@ final class LocalGitProjectValidator implements ProjectFolderValidator {
         ProjectAvailability.notGitRoot,
       );
     }
-    return ProjectFolderValidation.available(folder);
+    return ProjectFolderValidation.available(gitRoot);
   }
 
   String? _singleOutputPath(String output) {
-    var value = output;
-    if (value.endsWith('\n')) {
-      value = value.substring(0, value.length - 1);
-      if (value.endsWith('\r')) {
-        value = value.substring(0, value.length - 1);
-      }
-    }
+    final value = _withoutTerminalLineEndings(output);
     if (value.isEmpty || value.contains('\n') || value.contains('\r')) {
       return null;
     }
     return value;
+  }
+
+  bool _isKnownNotGitDiagnostic(String stderr) {
+    return _withoutTerminalLineEndings(stderr) ==
+        'fatal: not a git repository (or any of the parent directories): .git';
+  }
+
+  String _withoutTerminalLineEndings(String value) {
+    return value.replaceFirst(RegExp(r'(?:\r?\n)+$'), '');
   }
 
   bool _samePath(String selected, String reported) {

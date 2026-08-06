@@ -6,14 +6,13 @@ import 'package:maestro/features/projects/data/local_git_project_validator.dart'
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   test(
     'GivenActuallyMissingDirectory_WhenValidated_ThenMissingWithoutMutation',
     () async {
-      final sandbox = await Directory.systemTemp.createTemp(
-        'maestro-git-missing-',
-      );
+      final sandbox = await _createExternalSandbox('maestro-git-missing-');
       addTearDown(() => sandbox.delete(recursive: true));
       final marker = File('${sandbox.path}${Platform.pathSeparator}marker.txt');
       await marker.writeAsString('unchanged\n');
@@ -37,7 +36,7 @@ void main() {
   test(
     'GivenActualNonGitDirectory_WhenValidated_ThenNotGitWithoutMutation',
     () async {
-      final sandbox = await Directory.systemTemp.createTemp(
+      final sandbox = await _createExternalSandbox(
         'maestro-git-non-repository-',
       );
       addTearDown(() => sandbox.delete(recursive: true));
@@ -69,9 +68,7 @@ void main() {
   test(
     'GivenRealGitRepository_WhenValidated_ThenRepositoryIsUnchanged',
     () async {
-      final sandbox = await Directory.systemTemp.createTemp(
-        'maestro-git-validation-',
-      );
+      final sandbox = await _createExternalSandbox('maestro-git-validation-');
       addTearDown(() => sandbox.delete(recursive: true));
       final repository = Directory(
         '${sandbox.path}${Platform.pathSeparator}repo',
@@ -94,12 +91,14 @@ void main() {
         git: CommandRunnerGitPort(const ProcessCommandRunner()),
       );
 
+      final lexicalSelection =
+          '${repository.path}${Platform.pathSeparator}.${Platform.pathSeparator}';
       final result = await validator.validate(
-        ProjectFolder.parse(repository.path),
+        ProjectFolder.parse(lexicalSelection),
       );
 
       expect(result.availability, ProjectAvailability.available);
-      expect(result.canonicalFolder?.path, repository.path);
+      expect(result.canonicalFolder?.path, _gitReportedPath(repository.path));
       expect(
         await _git(<String>['-C', repository.path, 'status', '--porcelain=v1']),
         statusBefore,
@@ -109,9 +108,7 @@ void main() {
   );
 
   test('GivenRealNestedFolder_WhenValidated_ThenFolderIsRejected', () async {
-    final sandbox = await Directory.systemTemp.createTemp(
-      'maestro-git-nested-',
-    );
+    final sandbox = await _createExternalSandbox('maestro-git-nested-');
     addTearDown(() => sandbox.delete(recursive: true));
     await _git(<String>['init', sandbox.path]);
     final nested = Directory('${sandbox.path}${Platform.pathSeparator}nested');
@@ -128,9 +125,7 @@ void main() {
   test(
     'GivenLinkedGitWorktree_WhenValidated_ThenWorktreeRootIsAccepted',
     () async {
-      final sandbox = await Directory.systemTemp.createTemp(
-        'maestro-git-worktree-',
-      );
+      final sandbox = await _createExternalSandbox('maestro-git-worktree-');
       addTearDown(() => sandbox.delete(recursive: true));
       final repository = Directory(
         '${sandbox.path}${Platform.pathSeparator}primary',
@@ -169,9 +164,27 @@ void main() {
       );
 
       expect(result.availability, ProjectAvailability.available);
-      expect(result.canonicalFolder?.path, worktree.path);
+      expect(result.canonicalFolder?.path, _gitReportedPath(worktree.path));
     },
   );
+}
+
+var _sandboxSequence = 0;
+
+Future<Directory> _createExternalSandbox(String prefix) async {
+  if (!Platform.isWindows) {
+    return Directory.systemTemp.createTemp(prefix);
+  }
+  final volumeRoot = p.rootPrefix(Directory.current.absolute.path);
+  final sequence = _sandboxSequence++;
+  final sandbox = Directory(
+    '$volumeRoot$prefix$pid-${DateTime.now().microsecondsSinceEpoch}-$sequence',
+  );
+  return sandbox.create();
+}
+
+String _gitReportedPath(String path) {
+  return Platform.isWindows ? path.replaceAll('\\', '/') : path;
 }
 
 Future<String> _git(List<String> arguments) async {

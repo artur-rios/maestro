@@ -34,9 +34,12 @@ behavior deterministic in tests.
 Use option 2. `git -C <folder> rev-parse --show-toplevel` validates Git's own
 working-tree semantics, including worktrees. The adapter first requires an
 absolute accessible directory, then requires Git success and a canonical
-top-level result matching the selected directory. Failures are typed as missing,
-inaccessible, not a working tree, or transient Git failure; raw command output
-does not cross into the UI.
+top-level result matching the selected directory. Windows identity comparison
+is separator-normalized and case-insensitive; POSIX comparison is
+separator-normalized and case-sensitive. Success persists Git's reported
+top-level spelling rather than the picker's lexical spelling. Failures are typed
+as missing, inaccessible, not a working tree, or transient Git failure; raw
+command output does not cross into the UI.
 
 ### Availability and selection
 
@@ -132,4 +135,3 @@ existing UUIDv7 generator. Root disposal still closes the database exactly once.
   blocked folder actions.
 - Production composition, architecture, analysis, full Flutter tests, Windows
   build, and Ubuntu CI provide delivery evidence.
-

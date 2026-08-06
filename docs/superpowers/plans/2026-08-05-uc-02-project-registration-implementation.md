@@ -223,4 +223,3 @@ Change M-02 to `2 / 3 closed` and mark only issue #3's row complete with `✅`.
 - [ ] **Step 3: Commit**
 
 Commit as `docs: record uc-02 verification`.
-

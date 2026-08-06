@@ -112,7 +112,11 @@ void main() {
         '--show-toplevel',
       ]);
       expect(request.workingDirectory, isNull);
-      expect(request.environment, isEmpty);
+      expect(request.environment, const <String, String>{
+        'LC_ALL': 'C',
+        'LANG': 'C',
+        'GIT_TERMINAL_PROMPT': '0',
+      });
 
       verifiers.clear();
       expect(verifiers.values, isEmpty);

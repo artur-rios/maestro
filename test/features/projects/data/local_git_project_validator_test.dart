@@ -36,21 +36,25 @@ void main() {
       expect(runner.requests, isEmpty);
     });
 
-    test('GivenNonGitDirectory_WhenValidated_ThenNotGitWorkingTree', () async {
-      final runner = _RecordingRunner(
-        const CommandResult(
-          exitCode: 128,
-          stdout: '',
-          stderr: 'fatal: secret repository detail',
-        ),
-      );
-      final validator = _validator(runner, ProjectDirectoryState.accessible);
+    test(
+      'GivenKnownNonGitDiagnostic_WhenValidated_ThenNotGitWorkingTree',
+      () async {
+        final runner = _RecordingRunner(
+          const CommandResult(
+            exitCode: 128,
+            stdout: '',
+            stderr:
+                'fatal: not a git repository (or any of the parent directories): .git\n',
+          ),
+        );
+        final validator = _validator(runner, ProjectDirectoryState.accessible);
 
-      final result = await validator.validate(ProjectFolder.parse('/repo'));
+        final result = await validator.validate(ProjectFolder.parse('/repo'));
 
-      expect(result.availability, ProjectAvailability.notGitWorkingTree);
-      expect(result.canonicalFolder, isNull);
-    });
+        expect(result.availability, ProjectAvailability.notGitWorkingTree);
+        expect(result.canonicalFolder, isNull);
+      },
+    );
 
     test('GivenNestedSelection_WhenValidated_ThenNotRoot', () async {
       final runner = _RecordingRunner(_success('/repo'));
@@ -65,16 +69,17 @@ void main() {
     });
 
     test(
-      'GivenCanonicalRoot_WhenValidated_ThenExactSelectionIsReturned',
+      'GivenPosixLexicalRoot_WhenValidated_ThenGitCanonicalRootIsReturned',
       () async {
-        const selected = '/repo/./project';
-        final runner = _RecordingRunner(_success('/repo/project'));
+        const selected = '/repo/./project/';
+        const reported = '/repo/project';
+        final runner = _RecordingRunner(_success('$reported\n\n'));
         final validator = _validator(runner, ProjectDirectoryState.accessible);
 
         final result = await validator.validate(ProjectFolder.parse(selected));
 
         expect(result.availability, ProjectAvailability.available);
-        expect(result.canonicalFolder?.path, selected);
+        expect(result.canonicalFolder?.path, reported);
         expect(runner.requests, hasLength(1));
         expect(runner.requests.single.executable, 'git');
         expect(runner.requests.single.arguments, const <String>[
@@ -84,6 +89,26 @@ void main() {
           '--show-toplevel',
         ]);
         expect(runner.requests.single.workingDirectory, isNull);
+        expect(runner.requests.single.environment, const <String, String>{
+          'LC_ALL': 'C',
+          'LANG': 'C',
+          'GIT_TERMINAL_PROMPT': '0',
+        });
+      },
+    );
+
+    test(
+      'GivenPosixSpacedRootWithTrailingSeparator_WhenValidated_ThenGitSpellingIsReturned',
+      () async {
+        const selected = '/work trees/maestro demo/';
+        const reported = '/work trees/maestro demo';
+        final runner = _RecordingRunner(_success('$reported\n'));
+        final validator = _validator(runner, ProjectDirectoryState.accessible);
+
+        final result = await validator.validate(ProjectFolder.parse(selected));
+
+        expect(result.availability, ProjectAvailability.available);
+        expect(result.canonicalFolder?.path, reported);
       },
     );
 
@@ -98,7 +123,7 @@ void main() {
         );
 
         expect(result.availability, ProjectAvailability.available);
-        expect(result.canonicalFolder?.path, r'C:\work\repo\.');
+        expect(result.canonicalFolder?.path, r'c:/WORK/Repo');
       },
     );
 
@@ -132,6 +157,33 @@ void main() {
             stderr: 'sensitive stderr',
             failureKind: failure,
           ),
+        );
+        final validator = _validator(runner, ProjectDirectoryState.accessible);
+
+        final result = await validator.validate(ProjectFolder.parse('/repo'));
+
+        expect(result.availability, ProjectAvailability.transientFailure);
+        expect(result.canonicalFolder, isNull);
+      });
+    }
+
+    for (final failure in <({String name, String stderr})>[
+      (
+        name: 'dubiousOwnership',
+        stderr: "fatal: detected dubious ownership in repository at '/repo'",
+      ),
+      (name: 'permissionDenied', stderr: 'fatal: Permission denied'),
+      (name: 'corruptRepository', stderr: 'fatal: bad object HEAD'),
+      (name: 'arbitrary', stderr: 'fatal: sensitive repository detail'),
+      (
+        name: 'embeddedKnownDiagnostic',
+        stderr:
+            'prefix fatal: not a git repository (or any of the parent directories): .git',
+      ),
+    ]) {
+      test('Given${failure.name}Nonzero_WhenValidated_ThenTransient', () async {
+        final runner = _RecordingRunner(
+          CommandResult(exitCode: 128, stdout: '', stderr: failure.stderr),
         );
         final validator = _validator(runner, ProjectDirectoryState.accessible);
 

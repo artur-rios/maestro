@@ -6,7 +6,7 @@ to the implementation and local verification evidence prepared for review.
 
 - Verified implementation: the Task 5 handoff at branch revision `eb5e9a1`
 - Toolchain: Flutter 3.44.8 and Dart 3.12.2
-- Local full-suite result: 193 tests passed
+- Local full-suite result: 199 tests passed
 - Native build evidence: the Windows debug runner built successfully for the
   verified implementation
 - Pending delivery evidence: pull-request CI, Ubuntu Linux compilation, and
@@ -17,7 +17,7 @@ to the implementation and local verification evidence prepared for review.
 
 | Requirement | Implementation | Automated evidence | Verified outcome |
 | --- | --- | --- | --- |
-| FR-PR-01 | `LocalGitProjectValidator` checks an absolute accessible directory with `git -C <folder> rev-parse --show-toplevel` and accepts only the selected canonical Git root. | `project_models_test.dart`; `local_git_project_validator_test.dart`; `git_project_validation_integration_test.dart` | Missing paths, files, inaccessible paths, non-Git directories, nested folders, malformed/sensitive failures, canonical roots, and linked worktree roots produce typed, sanitized results. |
+| FR-PR-01 | `LocalGitProjectValidator` checks an absolute accessible directory with `git -C <folder> rev-parse --show-toplevel` and accepts only the selected canonical Git root. | `project_models_test.dart`; `local_git_project_validator_test.dart`; `git_project_validation_integration_test.dart` | Missing paths, files, inaccessible paths, non-Git directories, nested folders, malformed/sensitive failures, canonical roots, and linked worktree roots produce typed, sanitized results. Successful registration persists Git's reported top-level spelling after Windows-insensitive or POSIX-sensitive identity comparison. |
 | FR-PR-02 | `ProjectName` creates a trimmed display value and case-insensitive normalized key; `ProjectService` checks all retained records and Drift's unique normalized-name index remains the concurrency authority. | `project_models_test.dart`; `project_service_test.dart`; `drift_project_repository_test.dart` | Blank, control-character, overlong, case-variant, soft-deleted-name, preflight, and raced-write conflicts are rejected without a partial record. |
 | FR-PR-03 | The authenticated `ProjectWorkspacePage` renders active records in a left project panel, selects a successful registration, and keeps foundation diagnostics visible when no project is selected. | `project_workspace_page_test.dart`; `project_controller_test.dart`; `maestro_app_test.dart` | Empty, registration, selection, stable ordering, sign-out/re-entry, and authenticated-shell states pass. |
 | FR-PR-04 | Listing, selection, and refresh revalidate current folder availability; unavailable records remain visible while `folderActionsEnabled` is false. | `project_service_test.dart`; `project_controller_test.dart`; `project_workspace_page_test.dart` | Missing, inaccessible, non-Git, and transient states preserve metadata, expose fixed remediation, and block folder-dependent actions. |
@@ -86,7 +86,7 @@ flutter analyze
 # Exit 0; No issues found
 
 flutter test
-# Exit 0; 193 tests passed
+# Exit 0; 199 tests passed
 
 flutter build windows --debug
 # Exit 0; produced build/windows/x64/runner/Debug/maestro.exe

@@ -9,6 +9,12 @@ abstract interface class GitPort implements CapabilityProbe {
 final class CommandRunnerGitPort implements GitPort {
   const CommandRunnerGitPort(this._runner);
 
+  static const _environment = <String, String>{
+    'LC_ALL': 'C',
+    'LANG': 'C',
+    'GIT_TERMINAL_PROMPT': '0',
+  };
+
   final CommandRunner _runner;
 
   @override
@@ -37,6 +43,7 @@ final class CommandRunnerGitPort implements GitPort {
       CommandRequest(
         executable: 'git',
         arguments: <String>['-C', repositoryPath, 'status', '--porcelain=v1'],
+        environment: _environment,
       ),
     );
   }
@@ -52,6 +59,7 @@ final class CommandRunnerGitPort implements GitPort {
           'rev-parse',
           '--show-toplevel',
         ],
+        environment: _environment,
       ),
     );
   }
