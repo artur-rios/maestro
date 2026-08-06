@@ -9,6 +9,64 @@ import 'package:maestro/platform/git/git_port.dart';
 
 void main() {
   test(
+    'GivenActuallyMissingDirectory_WhenValidated_ThenMissingWithoutMutation',
+    () async {
+      final sandbox = await Directory.systemTemp.createTemp(
+        'maestro-git-missing-',
+      );
+      addTearDown(() => sandbox.delete(recursive: true));
+      final marker = File('${sandbox.path}${Platform.pathSeparator}marker.txt');
+      await marker.writeAsString('unchanged\n');
+      final missingPath = '${sandbox.path}${Platform.pathSeparator}absent';
+      final treeBefore = await _snapshot(sandbox);
+      final runner = _RecordingCommandRunner(const ProcessCommandRunner());
+      final validator = LocalGitProjectValidator(
+        git: CommandRunnerGitPort(runner),
+      );
+
+      final result = await validator.validate(ProjectFolder.parse(missingPath));
+
+      expect(result.availability, ProjectAvailability.missing);
+      expect(result.canonicalFolder, isNull);
+      expect(runner.requests, isEmpty);
+      expect(await Directory(missingPath).exists(), isFalse);
+      expect(await _snapshot(sandbox), treeBefore);
+    },
+  );
+
+  test(
+    'GivenActualNonGitDirectory_WhenValidated_ThenNotGitWithoutMutation',
+    () async {
+      final sandbox = await Directory.systemTemp.createTemp(
+        'maestro-git-non-repository-',
+      );
+      addTearDown(() => sandbox.delete(recursive: true));
+      final source = File('${sandbox.path}${Platform.pathSeparator}source.txt');
+      await source.writeAsString('unchanged\n');
+      final treeBefore = await _snapshot(sandbox);
+      final runner = _RecordingCommandRunner(const ProcessCommandRunner());
+      final validator = LocalGitProjectValidator(
+        git: CommandRunnerGitPort(runner),
+      );
+
+      final result = await validator.validate(
+        ProjectFolder.parse(sandbox.path),
+      );
+
+      expect(result.availability, ProjectAvailability.notGitWorkingTree);
+      expect(result.canonicalFolder, isNull);
+      expect(runner.requests, hasLength(1));
+      expect(runner.requests.single.arguments, <String>[
+        '-C',
+        sandbox.path,
+        'rev-parse',
+        '--show-toplevel',
+      ]);
+      expect(await _snapshot(sandbox), treeBefore);
+    },
+  );
+
+  test(
     'GivenRealGitRepository_WhenValidated_ThenRepositoryIsUnchanged',
     () async {
       final sandbox = await Directory.systemTemp.createTemp(
@@ -137,4 +195,17 @@ Future<Map<String, String>> _snapshot(Directory root) async {
     }
   }
   return entries;
+}
+
+final class _RecordingCommandRunner implements CommandRunner {
+  _RecordingCommandRunner(this.delegate);
+
+  final CommandRunner delegate;
+  final List<CommandRequest> requests = <CommandRequest>[];
+
+  @override
+  Future<CommandResult> run(CommandRequest request) {
+    requests.add(request);
+    return delegate.run(request);
+  }
 }
