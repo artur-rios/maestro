@@ -13,13 +13,15 @@ import 'package:maestro/platform/common/command_runner.dart';
 
 void main() {
   test(
-    'GivenProductionComposition_WhenProjectRegisters_ThenSharedDatabaseStoresOnlyMetadata',
+    'GivenProductionComposition_WhenAuthenticationAndProjectPersist_ThenSharedDatabaseContainsOnlySafeMetadata',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'maestro-production-project-',
       );
       addTearDown(() => root.delete(recursive: true));
-      final source = Directory('${root.path}${Platform.pathSeparator}source');
+      final source = Directory(
+        '${root.path}${Platform.pathSeparator}source with spaces',
+      );
       await source.create();
       final sourceFile = File(
         '${source.path}${Platform.pathSeparator}keep.txt',
@@ -27,35 +29,93 @@ void main() {
       await sourceFile.writeAsString('owned by the user');
       final before = await _snapshot(source);
       final database = MaestroDatabase(NativeDatabase.memory());
+      final verifiers = _MemoryVerifierStore();
+      addTearDown(verifiers.clear);
+      final commandRunner = _GitRootCommandRunner(source.path);
       final composition = await app.composeProductionApp(
         paths: ApplicationPaths.fromRoot(root),
         database: database,
-        passwordVerifiers: _MemoryVerifierStore(),
+        passwordVerifiers: verifiers,
         passwordHasher: const _PasswordHasher(),
         operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-        commandRunner: _GitRootCommandRunner(source.path),
+        commandRunner: commandRunner,
         projectFolderPicker: _ProjectFolderPicker(source.path),
         clock: () => DateTime.utc(2026, 8, 6, 12, 34, 56),
       );
       addTearDown(composition.close);
 
       final selectedPath = await composition.projectFolderPicker.chooseFolder();
-      final result = await composition.projectService.register(
+      final registration = await composition.projectService.register(
         name: '  Maestro Source  ',
         folderPath: selectedPath!,
       );
-      final row = await database.select(database.projects).getSingle();
+      const password = 'correct horse battery staple';
+      final account = await composition.authenticationService.createAccount(
+        'person@example.com',
+        password,
+      );
+      composition.authenticationService.signOut();
+      final authentication = await composition.authenticationService
+          .signInWithEmail('person@example.com', password);
+      final project = await database.select(database.projects).getSingle();
+      final user = await database.select(database.localUsers).getSingle();
+      final audits = await database.select(database.auditEvents).get();
 
-      expect(result, isA<Success<Object>>());
-      expect(row.id, _isCanonicalUuidV7);
-      expect(row.name, 'Maestro Source');
-      expect(row.normalizedName, 'maestro source');
-      expect(row.folderPath, source.path);
-      expect(row.createdAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
-      expect(row.updatedAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
-      expect(row.deletedAt, isNull);
+      expect(registration, isA<Success<Object>>());
+      expect(account, isA<Success<Object>>());
+      expect(authentication, isA<Success<Object>>());
+      expect(project.id, _isCanonicalUuidV7);
+      expect(project.name, 'Maestro Source');
+      expect(project.normalizedName, 'maestro source');
+      expect(project.folderPath, source.path);
+      expect(project.createdAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
+      expect(project.updatedAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
+      expect(project.deletedAt, isNull);
+      expect(user.id, _isCanonicalUuidV7);
+      expect(user.email, 'person@example.com');
+      expect(user.verifierKey, 'maestro.auth.verifier.${user.id}');
+      expect(audits, hasLength(2));
+      expect(audits.map((audit) => audit.id), everyElement(_isCanonicalUuidV7));
+      expect(audits.map((audit) => audit.actorId), everyElement(user.id));
       expect(composition.foundation.database, same(database));
       expect(await _snapshot(source), before);
+
+      final persistedText = <String>[
+        project.id,
+        project.name,
+        project.normalizedName,
+        project.folderPath,
+        user.id,
+        user.email!,
+        user.authMethod,
+        user.verifierKey!,
+        for (final audit in audits) ...<String>[
+          audit.id,
+          audit.actorId,
+          audit.action,
+          audit.target,
+          audit.outcome,
+          audit.details,
+        ],
+      ].join('\n');
+      expect(persistedText, isNot(contains(password)));
+      expect(persistedText, isNot(contains(_PasswordHasher.verifier)));
+      expect(verifiers.values.values, <String>[_PasswordHasher.verifier]);
+
+      expect(commandRunner.requests, hasLength(1));
+      final request = commandRunner.requests.single;
+      expect(request.executable, 'git');
+      expect(request.arguments, <String>[
+        '-C',
+        source.path,
+        'rev-parse',
+        '--show-toplevel',
+      ]);
+      expect(request.workingDirectory, isNull);
+      expect(request.environment, isEmpty);
+
+      verifiers.clear();
+      expect(verifiers.values, isEmpty);
     },
   );
 
@@ -71,7 +131,7 @@ void main() {
           passwordVerifiers: _MemoryVerifierStore(),
           passwordHasher: const _PasswordHasher(),
           operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-          commandRunner: const _GitRootCommandRunner(r'C:\maestro-test'),
+          commandRunner: _GitRootCommandRunner(r'C:\maestro-test'),
           projectFolderPicker: const _ProjectFolderPicker(r'C:\maestro-test'),
           closeDatabase: (sharedDatabase) async {
             closeCount++;
@@ -109,12 +169,14 @@ final Matcher _isCanonicalUuidV7 = predicate<String>(
 );
 
 final class _GitRootCommandRunner implements CommandRunner {
-  const _GitRootCommandRunner(this.root);
+  _GitRootCommandRunner(this.root);
 
   final String root;
+  final List<CommandRequest> requests = <CommandRequest>[];
 
   @override
   Future<CommandResult> run(CommandRequest request) async {
+    requests.add(request);
     return CommandResult(exitCode: 0, stdout: '$root\n', stderr: '');
   }
 }
@@ -131,6 +193,8 @@ final class _ProjectFolderPicker implements ProjectFolderPicker {
 final class _MemoryVerifierStore implements PasswordVerifierStore {
   final Map<String, String> values = <String, String>{};
 
+  void clear() => values.clear();
+
   @override
   Future<void> delete(String key) async => values.remove(key);
 
@@ -146,11 +210,16 @@ final class _MemoryVerifierStore implements PasswordVerifierStore {
 final class _PasswordHasher implements PasswordHasher {
   const _PasswordHasher();
 
-  @override
-  Future<String> create(String password) async => 'hashed:$password';
+  static const verifier = 'deterministic-verifier';
 
   @override
-  Future<bool> verify(String verifier, String password) async => false;
+  Future<String> create(String password) async => verifier;
+
+  @override
+  Future<bool> verify(String verifier, String password) async {
+    return verifier == _PasswordHasher.verifier &&
+        password == 'correct horse battery staple';
+  }
 }
 
 final class _OperatingSystemAuthenticator
