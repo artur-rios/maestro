@@ -1,3 +1,6 @@
+// Drift constraint expressions intentionally refer to their generated columns.
+// ignore_for_file: recursive_getters
+
 import 'package:drift/drift.dart';
 import 'package:maestro/core/storage/database/schema_versions.dart';
 
@@ -85,7 +88,6 @@ class Projects extends Table {
 class Workflows extends Table {
   TextColumn get id => text()();
   // Drift's generated SQL resolves this getter reference to its column.
-  // ignore: recursive_getters
   IntColumn get revision => integer().check(revision.isBiggerOrEqualValue(1))();
   TextColumn get name => text().nullable()();
   BoolColumn get isReusable => boolean()();
@@ -110,7 +112,6 @@ class WorkflowSteps extends Table {
   TextColumn get workflowId =>
       text().references(Workflows, #id, onDelete: KeyAction.cascade)();
   // Drift's generated SQL resolves this getter reference to its column.
-  // ignore: recursive_getters
   IntColumn get position => integer().check(position.isBiggerOrEqualValue(0))();
   TextColumn get kind => text()();
   TextColumn get name => text()();
@@ -138,6 +139,152 @@ class WorkflowProjectRefs extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{workflowId, projectId};
 }
 
+@TableIndex(
+  name: 'workflow_runs_project_status',
+  columns: <Symbol>{#projectId, #status},
+)
+@TableIndex(name: 'workflow_runs_status', columns: <Symbol>{#status})
+class WorkflowRuns extends Table {
+  TextColumn get id => text()();
+  TextColumn get projectId => text().nullable().references(
+    Projects,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+  TextColumn get workflowId => text().nullable().references(
+    Workflows,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+  TextColumn get label => text()();
+  TextColumn get status => text()();
+  // Drift resolves this getter reference to the generated column.
+  IntColumn get currentStepPosition =>
+      integer().check(currentStepPosition.isBiggerOrEqualValue(0))();
+  TextColumn get branchName => text().nullable().unique()();
+  TextColumn get worktreePath => text().nullable().unique()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get startedAt => dateTime().nullable()();
+  DateTimeColumn get completedAt => dateTime().nullable()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+class RunSnapshots extends Table {
+  TextColumn get runId =>
+      text().references(WorkflowRuns, #id, onDelete: KeyAction.cascade)();
+  // Drift resolves this getter reference to the generated column.
+  IntColumn get schemaVersion =>
+      integer().check(schemaVersion.isBiggerOrEqualValue(1))();
+  TextColumn get canonicalPayload => text()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{runId};
+}
+
+@TableIndex(
+  name: 'run_snapshot_steps_run_position',
+  columns: <Symbol>{#runId, #position},
+  unique: true,
+)
+class RunSnapshotSteps extends Table {
+  TextColumn get id => text()();
+  TextColumn get runId =>
+      text().references(WorkflowRuns, #id, onDelete: KeyAction.cascade)();
+  TextColumn get sourceWorkflowStepId => text()();
+  // Drift resolves this getter reference to the generated column.
+  IntColumn get position => integer().check(position.isBiggerOrEqualValue(0))();
+  TextColumn get kind => text()();
+  TextColumn get name => text()();
+  TextColumn get cli => text().nullable().customConstraint(
+    'NULL CHECK ((cli IS NULL) = (model IS NULL))',
+  )();
+  TextColumn get model => text().nullable()();
+  TextColumn get configuration => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+@TableIndex(
+  name: 'run_attempts_step_number',
+  columns: <Symbol>{#runId, #snapshotStepId, #attemptNumber},
+  unique: true,
+)
+@TableIndex(name: 'run_attempts_run_status', columns: <Symbol>{#runId, #status})
+class RunAttempts extends Table {
+  TextColumn get id => text()();
+  TextColumn get runId =>
+      text().references(WorkflowRuns, #id, onDelete: KeyAction.cascade)();
+  TextColumn get snapshotStepId =>
+      text().references(RunSnapshotSteps, #id, onDelete: KeyAction.restrict)();
+  // Drift resolves this getter reference to the generated column.
+  IntColumn get attemptNumber =>
+      integer().check(attemptNumber.isBiggerThanValue(0))();
+  TextColumn get status => text()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get completedAt => dateTime().nullable()();
+  IntColumn get exitCode => integer().nullable()();
+  TextColumn get failureCode => text().nullable()();
+  TextColumn get declaredContext => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+@TableIndex(
+  name: 'run_log_segments_attempt_sequence',
+  columns: <Symbol>{#attemptId, #sequence},
+  unique: true,
+)
+@TableIndex(name: 'run_log_segments_run', columns: <Symbol>{#runId})
+class RunLogSegments extends Table {
+  TextColumn get id => text()();
+  TextColumn get runId =>
+      text().references(WorkflowRuns, #id, onDelete: KeyAction.cascade)();
+  TextColumn get attemptId =>
+      text().references(RunAttempts, #id, onDelete: KeyAction.cascade)();
+  TextColumn get snapshotStepId =>
+      text().references(RunSnapshotSteps, #id, onDelete: KeyAction.restrict)();
+  // Drift resolves this getter reference to the generated column.
+  IntColumn get sequence => integer().check(sequence.isBiggerOrEqualValue(0))();
+  TextColumn get channel => text()();
+  BlobColumn get bytes => blob()();
+  TextColumn get compression => text().withDefault(const Constant('none'))();
+  // Drift resolves this getter reference to the generated column.
+  IntColumn get originalByteLength =>
+      integer().check(originalByteLength.isBiggerOrEqualValue(0))();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+@TableIndex(
+  name: 'run_recovery_requests_run_status',
+  columns: <Symbol>{#runId, #status},
+)
+class RunRecoveryRequests extends Table {
+  TextColumn get id => text()();
+  TextColumn get runId =>
+      text().references(WorkflowRuns, #id, onDelete: KeyAction.cascade)();
+  TextColumn get attemptId => text().nullable().references(
+    RunAttempts,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
+  TextColumn get action => text()();
+  TextColumn get status => text()();
+  DateTimeColumn get requestedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
 @DriftDatabase(
   tables: <Type>[
     Settings,
@@ -149,6 +296,12 @@ class WorkflowProjectRefs extends Table {
     Workflows,
     WorkflowSteps,
     WorkflowProjectRefs,
+    WorkflowRuns,
+    RunSnapshots,
+    RunSnapshotSteps,
+    RunAttempts,
+    RunLogSegments,
+    RunRecoveryRequests,
   ],
 )
 final class MaestroDatabase extends _$MaestroDatabase {
@@ -175,6 +328,22 @@ final class MaestroDatabase extends _$MaestroDatabase {
         await migrator.createTable(workflowProjectRefs);
         await migrator.createIndex(workflowStepsWorkflowPosition);
         await migrator.createIndex(workflowProjectRefsProject);
+      }
+      if (from < 5) {
+        await migrator.createTable(workflowRuns);
+        await migrator.createTable(runSnapshots);
+        await migrator.createTable(runSnapshotSteps);
+        await migrator.createTable(runAttempts);
+        await migrator.createTable(runLogSegments);
+        await migrator.createTable(runRecoveryRequests);
+        await migrator.createIndex(workflowRunsProjectStatus);
+        await migrator.createIndex(workflowRunsStatus);
+        await migrator.createIndex(runSnapshotStepsRunPosition);
+        await migrator.createIndex(runAttemptsStepNumber);
+        await migrator.createIndex(runAttemptsRunStatus);
+        await migrator.createIndex(runLogSegmentsAttemptSequence);
+        await migrator.createIndex(runLogSegmentsRun);
+        await migrator.createIndex(runRecoveryRequestsRunStatus);
       }
     },
     beforeOpen: (_) async {

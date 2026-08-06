@@ -10,6 +10,7 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/data/drift_run_repository.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
@@ -122,7 +123,7 @@ void main() {
         (await database.select(database.workflows).getSingle()).name,
         'Shared workflow',
       );
-      expect(composition.activeProjectRuns, isA<app.NoActiveProjectRuns>());
+      expect(composition.activeProjectRuns, isA<DriftRunRepository>());
       expect(
         await composition.activeProjectRuns.listActiveForProject(project.id),
         isEmpty,

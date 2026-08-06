@@ -298,4 +298,62 @@ void main() {
       },
     );
   }
+
+  test(
+    'GivenVersionFourDatabase_WhenMigratedToVersionFive_ThenPriorDataAndRunConstraintsRemainValid',
+    () async {
+      final verifier = SchemaVerifier(GeneratedHelper());
+      final schema = await verifier.schemaAt(4);
+      final database = MaestroDatabase(schema.newConnection());
+      await database.customStatement(
+        'INSERT INTO projects (id, name, normalized_name, folder_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        <Object?>[
+          'project-1',
+          'Maestro',
+          'maestro',
+          r'C:\source\maestro',
+          1785931200,
+          1785931200,
+        ],
+      );
+
+      await verifier.migrateAndValidate(database, 5);
+
+      expect(
+        (await database
+                .customSelect(
+                  "SELECT folder_path FROM projects WHERE id = 'project-1'",
+                )
+                .getSingle())
+            .read<String>('folder_path'),
+        r'C:\source\maestro',
+      );
+      await database.customStatement(
+        'INSERT INTO workflow_runs (id, project_id, label, status, current_step_position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        <Object?>[
+          'run-1',
+          'project-1',
+          'UC-06',
+          'queued',
+          0,
+          1785931200,
+          1785931200,
+        ],
+      );
+      await database.customStatement(
+        'INSERT INTO run_snapshots (run_id, schema_version, canonical_payload, created_at) VALUES (?, ?, ?, ?)',
+        <Object?>['run-1', 1, '{}', 1785931200],
+      );
+      await expectLater(
+        database.customStatement(
+          'INSERT INTO run_snapshots (run_id, schema_version, canonical_payload, created_at) VALUES (?, ?, ?, ?)',
+          <Object?>['run-1', 1, '{}', 1785931200],
+        ),
+        throwsA(anything),
+      );
+
+      await database.close();
+      schema.close();
+    },
+  );
 }

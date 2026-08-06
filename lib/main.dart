@@ -18,6 +18,7 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/data/file_selector_project_folder_picker.dart';
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/data/drift_run_repository.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
@@ -95,7 +96,7 @@ Future<ProductionAppComposition> composeProductionApp({
       const FileSelectorProjectFolderPicker(),
   DateTime Function()? clock,
   String Function() newId = newProductionId,
-  ActiveProjectRunReader activeProjectRuns = const NoActiveProjectRuns(),
+  ActiveProjectRunReader? activeProjectRuns,
   DatabaseCloser closeDatabase = _closeDatabase,
 }) async {
   final authenticationRepository = DriftAuthenticationRepository(database);
@@ -114,6 +115,8 @@ Future<ProductionAppComposition> composeProductionApp({
     newId: newId,
   );
   final projectRepository = DriftProjectRepository(database);
+  final effectiveActiveProjectRuns =
+      activeProjectRuns ?? DriftRunRepository(database);
   final projectService = ProjectService(
     repository: projectRepository,
     folderValidator: LocalGitProjectValidator(
@@ -126,7 +129,7 @@ Future<ProductionAppComposition> composeProductionApp({
   final projectLifecycleService = ProjectLifecycleService(
     repository: projectRepository,
     store: projectRepository,
-    activeRuns: activeProjectRuns,
+    activeRuns: effectiveActiveProjectRuns,
     clock: now,
     newId: newId,
   );
@@ -157,7 +160,7 @@ Future<ProductionAppComposition> composeProductionApp({
     workflowRepository: workflowRepository,
     workflowDesignService: workflowDesignService,
     agentConfigurationService: agentConfigurationService,
-    activeProjectRuns: activeProjectRuns,
+    activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: ProductionFoundation(
       paths: paths,
@@ -206,19 +209,6 @@ final class ProductionProjectExecutionReadiness
       FailureResult<ProjectSelection>() =>
         ProjectExecutionAvailability.inaccessible,
     };
-  }
-}
-
-/// Interim production adapter while workflows cannot yet create run records.
-///
-/// UC-06 must replace this with the shared run-store reader when run
-/// persistence enters production composition.
-final class NoActiveProjectRuns implements ActiveProjectRunReader {
-  const NoActiveProjectRuns();
-
-  @override
-  Future<List<ActiveProjectRun>> listActiveForProject(String projectId) async {
-    return const <ActiveProjectRun>[];
   }
 }
 

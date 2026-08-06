@@ -3991,6 +3991,3381 @@ class WorkflowProjectRefsCompanion extends UpdateCompanion<WorkflowProjectRef> {
   }
 }
 
+class $WorkflowRunsTable extends WorkflowRuns
+    with TableInfo<$WorkflowRunsTable, WorkflowRun> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkflowRunsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _workflowIdMeta = const VerificationMeta(
+    'workflowId',
+  );
+  @override
+  late final GeneratedColumn<String> workflowId = GeneratedColumn<String>(
+    'workflow_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflows (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentStepPositionMeta =
+      const VerificationMeta('currentStepPosition');
+  @override
+  late final GeneratedColumn<int> currentStepPosition = GeneratedColumn<int>(
+    'current_step_position',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(currentStepPosition).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchNameMeta = const VerificationMeta(
+    'branchName',
+  );
+  @override
+  late final GeneratedColumn<String> branchName = GeneratedColumn<String>(
+    'branch_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _worktreePathMeta = const VerificationMeta(
+    'worktreePath',
+  );
+  @override
+  late final GeneratedColumn<String> worktreePath = GeneratedColumn<String>(
+    'worktree_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    workflowId,
+    label,
+    status,
+    currentStepPosition,
+    branchName,
+    worktreePath,
+    createdAt,
+    updatedAt,
+    startedAt,
+    completedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'workflow_runs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WorkflowRun> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    }
+    if (data.containsKey('workflow_id')) {
+      context.handle(
+        _workflowIdMeta,
+        workflowId.isAcceptableOrUnknown(data['workflow_id']!, _workflowIdMeta),
+      );
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('current_step_position')) {
+      context.handle(
+        _currentStepPositionMeta,
+        currentStepPosition.isAcceptableOrUnknown(
+          data['current_step_position']!,
+          _currentStepPositionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentStepPositionMeta);
+    }
+    if (data.containsKey('branch_name')) {
+      context.handle(
+        _branchNameMeta,
+        branchName.isAcceptableOrUnknown(data['branch_name']!, _branchNameMeta),
+      );
+    }
+    if (data.containsKey('worktree_path')) {
+      context.handle(
+        _worktreePathMeta,
+        worktreePath.isAcceptableOrUnknown(
+          data['worktree_path']!,
+          _worktreePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WorkflowRun map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WorkflowRun(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      ),
+      workflowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workflow_id'],
+      ),
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      currentStepPosition: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}current_step_position'],
+      )!,
+      branchName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_name'],
+      ),
+      worktreePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}worktree_path'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      ),
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $WorkflowRunsTable createAlias(String alias) {
+    return $WorkflowRunsTable(attachedDatabase, alias);
+  }
+}
+
+class WorkflowRun extends DataClass implements Insertable<WorkflowRun> {
+  final String id;
+  final String? projectId;
+  final String? workflowId;
+  final String label;
+  final String status;
+  final int currentStepPosition;
+  final String? branchName;
+  final String? worktreePath;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final DateTime? deletedAt;
+  const WorkflowRun({
+    required this.id,
+    this.projectId,
+    this.workflowId,
+    required this.label,
+    required this.status,
+    required this.currentStepPosition,
+    this.branchName,
+    this.worktreePath,
+    required this.createdAt,
+    required this.updatedAt,
+    this.startedAt,
+    this.completedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || projectId != null) {
+      map['project_id'] = Variable<String>(projectId);
+    }
+    if (!nullToAbsent || workflowId != null) {
+      map['workflow_id'] = Variable<String>(workflowId);
+    }
+    map['label'] = Variable<String>(label);
+    map['status'] = Variable<String>(status);
+    map['current_step_position'] = Variable<int>(currentStepPosition);
+    if (!nullToAbsent || branchName != null) {
+      map['branch_name'] = Variable<String>(branchName);
+    }
+    if (!nullToAbsent || worktreePath != null) {
+      map['worktree_path'] = Variable<String>(worktreePath);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || startedAt != null) {
+      map['started_at'] = Variable<DateTime>(startedAt);
+    }
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  WorkflowRunsCompanion toCompanion(bool nullToAbsent) {
+    return WorkflowRunsCompanion(
+      id: Value(id),
+      projectId: projectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectId),
+      workflowId: workflowId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(workflowId),
+      label: Value(label),
+      status: Value(status),
+      currentStepPosition: Value(currentStepPosition),
+      branchName: branchName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchName),
+      worktreePath: worktreePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(worktreePath),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      startedAt: startedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startedAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory WorkflowRun.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WorkflowRun(
+      id: serializer.fromJson<String>(json['id']),
+      projectId: serializer.fromJson<String?>(json['projectId']),
+      workflowId: serializer.fromJson<String?>(json['workflowId']),
+      label: serializer.fromJson<String>(json['label']),
+      status: serializer.fromJson<String>(json['status']),
+      currentStepPosition: serializer.fromJson<int>(
+        json['currentStepPosition'],
+      ),
+      branchName: serializer.fromJson<String?>(json['branchName']),
+      worktreePath: serializer.fromJson<String?>(json['worktreePath']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      startedAt: serializer.fromJson<DateTime?>(json['startedAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'projectId': serializer.toJson<String?>(projectId),
+      'workflowId': serializer.toJson<String?>(workflowId),
+      'label': serializer.toJson<String>(label),
+      'status': serializer.toJson<String>(status),
+      'currentStepPosition': serializer.toJson<int>(currentStepPosition),
+      'branchName': serializer.toJson<String?>(branchName),
+      'worktreePath': serializer.toJson<String?>(worktreePath),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'startedAt': serializer.toJson<DateTime?>(startedAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  WorkflowRun copyWith({
+    String? id,
+    Value<String?> projectId = const Value.absent(),
+    Value<String?> workflowId = const Value.absent(),
+    String? label,
+    String? status,
+    int? currentStepPosition,
+    Value<String?> branchName = const Value.absent(),
+    Value<String?> worktreePath = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> startedAt = const Value.absent(),
+    Value<DateTime?> completedAt = const Value.absent(),
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => WorkflowRun(
+    id: id ?? this.id,
+    projectId: projectId.present ? projectId.value : this.projectId,
+    workflowId: workflowId.present ? workflowId.value : this.workflowId,
+    label: label ?? this.label,
+    status: status ?? this.status,
+    currentStepPosition: currentStepPosition ?? this.currentStepPosition,
+    branchName: branchName.present ? branchName.value : this.branchName,
+    worktreePath: worktreePath.present ? worktreePath.value : this.worktreePath,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    startedAt: startedAt.present ? startedAt.value : this.startedAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  WorkflowRun copyWithCompanion(WorkflowRunsCompanion data) {
+    return WorkflowRun(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      workflowId: data.workflowId.present
+          ? data.workflowId.value
+          : this.workflowId,
+      label: data.label.present ? data.label.value : this.label,
+      status: data.status.present ? data.status.value : this.status,
+      currentStepPosition: data.currentStepPosition.present
+          ? data.currentStepPosition.value
+          : this.currentStepPosition,
+      branchName: data.branchName.present
+          ? data.branchName.value
+          : this.branchName,
+      worktreePath: data.worktreePath.present
+          ? data.worktreePath.value
+          : this.worktreePath,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowRun(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('workflowId: $workflowId, ')
+          ..write('label: $label, ')
+          ..write('status: $status, ')
+          ..write('currentStepPosition: $currentStepPosition, ')
+          ..write('branchName: $branchName, ')
+          ..write('worktreePath: $worktreePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    projectId,
+    workflowId,
+    label,
+    status,
+    currentStepPosition,
+    branchName,
+    worktreePath,
+    createdAt,
+    updatedAt,
+    startedAt,
+    completedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkflowRun &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.workflowId == this.workflowId &&
+          other.label == this.label &&
+          other.status == this.status &&
+          other.currentStepPosition == this.currentStepPosition &&
+          other.branchName == this.branchName &&
+          other.worktreePath == this.worktreePath &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.startedAt == this.startedAt &&
+          other.completedAt == this.completedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class WorkflowRunsCompanion extends UpdateCompanion<WorkflowRun> {
+  final Value<String> id;
+  final Value<String?> projectId;
+  final Value<String?> workflowId;
+  final Value<String> label;
+  final Value<String> status;
+  final Value<int> currentStepPosition;
+  final Value<String?> branchName;
+  final Value<String?> worktreePath;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> startedAt;
+  final Value<DateTime?> completedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const WorkflowRunsCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.workflowId = const Value.absent(),
+    this.label = const Value.absent(),
+    this.status = const Value.absent(),
+    this.currentStepPosition = const Value.absent(),
+    this.branchName = const Value.absent(),
+    this.worktreePath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkflowRunsCompanion.insert({
+    required String id,
+    this.projectId = const Value.absent(),
+    this.workflowId = const Value.absent(),
+    required String label,
+    required String status,
+    required int currentStepPosition,
+    this.branchName = const Value.absent(),
+    this.worktreePath = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       label = Value(label),
+       status = Value(status),
+       currentStepPosition = Value(currentStepPosition),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<WorkflowRun> custom({
+    Expression<String>? id,
+    Expression<String>? projectId,
+    Expression<String>? workflowId,
+    Expression<String>? label,
+    Expression<String>? status,
+    Expression<int>? currentStepPosition,
+    Expression<String>? branchName,
+    Expression<String>? worktreePath,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? completedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (workflowId != null) 'workflow_id': workflowId,
+      if (label != null) 'label': label,
+      if (status != null) 'status': status,
+      if (currentStepPosition != null)
+        'current_step_position': currentStepPosition,
+      if (branchName != null) 'branch_name': branchName,
+      if (worktreePath != null) 'worktree_path': worktreePath,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (startedAt != null) 'started_at': startedAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkflowRunsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? projectId,
+    Value<String?>? workflowId,
+    Value<String>? label,
+    Value<String>? status,
+    Value<int>? currentStepPosition,
+    Value<String?>? branchName,
+    Value<String?>? worktreePath,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? startedAt,
+    Value<DateTime?>? completedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return WorkflowRunsCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      workflowId: workflowId ?? this.workflowId,
+      label: label ?? this.label,
+      status: status ?? this.status,
+      currentStepPosition: currentStepPosition ?? this.currentStepPosition,
+      branchName: branchName ?? this.branchName,
+      worktreePath: worktreePath ?? this.worktreePath,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (workflowId.present) {
+      map['workflow_id'] = Variable<String>(workflowId.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (currentStepPosition.present) {
+      map['current_step_position'] = Variable<int>(currentStepPosition.value);
+    }
+    if (branchName.present) {
+      map['branch_name'] = Variable<String>(branchName.value);
+    }
+    if (worktreePath.present) {
+      map['worktree_path'] = Variable<String>(worktreePath.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkflowRunsCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('workflowId: $workflowId, ')
+          ..write('label: $label, ')
+          ..write('status: $status, ')
+          ..write('currentStepPosition: $currentStepPosition, ')
+          ..write('branchName: $branchName, ')
+          ..write('worktreePath: $worktreePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RunSnapshotsTable extends RunSnapshots
+    with TableInfo<$RunSnapshotsTable, RunSnapshot> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RunSnapshotsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflow_runs (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _schemaVersionMeta = const VerificationMeta(
+    'schemaVersion',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVersion = GeneratedColumn<int>(
+    'schema_version',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(schemaVersion).isBiggerOrEqualValue(1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _canonicalPayloadMeta = const VerificationMeta(
+    'canonicalPayload',
+  );
+  @override
+  late final GeneratedColumn<String> canonicalPayload = GeneratedColumn<String>(
+    'canonical_payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    runId,
+    schemaVersion,
+    canonicalPayload,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'run_snapshots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RunSnapshot> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('schema_version')) {
+      context.handle(
+        _schemaVersionMeta,
+        schemaVersion.isAcceptableOrUnknown(
+          data['schema_version']!,
+          _schemaVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_schemaVersionMeta);
+    }
+    if (data.containsKey('canonical_payload')) {
+      context.handle(
+        _canonicalPayloadMeta,
+        canonicalPayload.isAcceptableOrUnknown(
+          data['canonical_payload']!,
+          _canonicalPayloadMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_canonicalPayloadMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {runId};
+  @override
+  RunSnapshot map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RunSnapshot(
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      schemaVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_version'],
+      )!,
+      canonicalPayload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}canonical_payload'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RunSnapshotsTable createAlias(String alias) {
+    return $RunSnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class RunSnapshot extends DataClass implements Insertable<RunSnapshot> {
+  final String runId;
+  final int schemaVersion;
+  final String canonicalPayload;
+  final DateTime createdAt;
+  const RunSnapshot({
+    required this.runId,
+    required this.schemaVersion,
+    required this.canonicalPayload,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['run_id'] = Variable<String>(runId);
+    map['schema_version'] = Variable<int>(schemaVersion);
+    map['canonical_payload'] = Variable<String>(canonicalPayload);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  RunSnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return RunSnapshotsCompanion(
+      runId: Value(runId),
+      schemaVersion: Value(schemaVersion),
+      canonicalPayload: Value(canonicalPayload),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory RunSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RunSnapshot(
+      runId: serializer.fromJson<String>(json['runId']),
+      schemaVersion: serializer.fromJson<int>(json['schemaVersion']),
+      canonicalPayload: serializer.fromJson<String>(json['canonicalPayload']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'runId': serializer.toJson<String>(runId),
+      'schemaVersion': serializer.toJson<int>(schemaVersion),
+      'canonicalPayload': serializer.toJson<String>(canonicalPayload),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  RunSnapshot copyWith({
+    String? runId,
+    int? schemaVersion,
+    String? canonicalPayload,
+    DateTime? createdAt,
+  }) => RunSnapshot(
+    runId: runId ?? this.runId,
+    schemaVersion: schemaVersion ?? this.schemaVersion,
+    canonicalPayload: canonicalPayload ?? this.canonicalPayload,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  RunSnapshot copyWithCompanion(RunSnapshotsCompanion data) {
+    return RunSnapshot(
+      runId: data.runId.present ? data.runId.value : this.runId,
+      schemaVersion: data.schemaVersion.present
+          ? data.schemaVersion.value
+          : this.schemaVersion,
+      canonicalPayload: data.canonicalPayload.present
+          ? data.canonicalPayload.value
+          : this.canonicalPayload,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunSnapshot(')
+          ..write('runId: $runId, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('canonicalPayload: $canonicalPayload, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runId, schemaVersion, canonicalPayload, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RunSnapshot &&
+          other.runId == this.runId &&
+          other.schemaVersion == this.schemaVersion &&
+          other.canonicalPayload == this.canonicalPayload &&
+          other.createdAt == this.createdAt);
+}
+
+class RunSnapshotsCompanion extends UpdateCompanion<RunSnapshot> {
+  final Value<String> runId;
+  final Value<int> schemaVersion;
+  final Value<String> canonicalPayload;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const RunSnapshotsCompanion({
+    this.runId = const Value.absent(),
+    this.schemaVersion = const Value.absent(),
+    this.canonicalPayload = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RunSnapshotsCompanion.insert({
+    required String runId,
+    required int schemaVersion,
+    required String canonicalPayload,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : runId = Value(runId),
+       schemaVersion = Value(schemaVersion),
+       canonicalPayload = Value(canonicalPayload),
+       createdAt = Value(createdAt);
+  static Insertable<RunSnapshot> custom({
+    Expression<String>? runId,
+    Expression<int>? schemaVersion,
+    Expression<String>? canonicalPayload,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (runId != null) 'run_id': runId,
+      if (schemaVersion != null) 'schema_version': schemaVersion,
+      if (canonicalPayload != null) 'canonical_payload': canonicalPayload,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RunSnapshotsCompanion copyWith({
+    Value<String>? runId,
+    Value<int>? schemaVersion,
+    Value<String>? canonicalPayload,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return RunSnapshotsCompanion(
+      runId: runId ?? this.runId,
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+      canonicalPayload: canonicalPayload ?? this.canonicalPayload,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (schemaVersion.present) {
+      map['schema_version'] = Variable<int>(schemaVersion.value);
+    }
+    if (canonicalPayload.present) {
+      map['canonical_payload'] = Variable<String>(canonicalPayload.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunSnapshotsCompanion(')
+          ..write('runId: $runId, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('canonicalPayload: $canonicalPayload, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RunSnapshotStepsTable extends RunSnapshotSteps
+    with TableInfo<$RunSnapshotStepsTable, RunSnapshotStep> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RunSnapshotStepsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflow_runs (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _sourceWorkflowStepIdMeta =
+      const VerificationMeta('sourceWorkflowStepId');
+  @override
+  late final GeneratedColumn<String> sourceWorkflowStepId =
+      GeneratedColumn<String>(
+        'source_workflow_step_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(position).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cliMeta = const VerificationMeta('cli');
+  @override
+  late final GeneratedColumn<String> cli = GeneratedColumn<String>(
+    'cli',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NULL CHECK ((cli IS NULL) = (model IS NULL))',
+  );
+  static const VerificationMeta _modelMeta = const VerificationMeta('model');
+  @override
+  late final GeneratedColumn<String> model = GeneratedColumn<String>(
+    'model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _configurationMeta = const VerificationMeta(
+    'configuration',
+  );
+  @override
+  late final GeneratedColumn<String> configuration = GeneratedColumn<String>(
+    'configuration',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    runId,
+    sourceWorkflowStepId,
+    position,
+    kind,
+    name,
+    cli,
+    model,
+    configuration,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'run_snapshot_steps';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RunSnapshotStep> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('source_workflow_step_id')) {
+      context.handle(
+        _sourceWorkflowStepIdMeta,
+        sourceWorkflowStepId.isAcceptableOrUnknown(
+          data['source_workflow_step_id']!,
+          _sourceWorkflowStepIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceWorkflowStepIdMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('cli')) {
+      context.handle(
+        _cliMeta,
+        cli.isAcceptableOrUnknown(data['cli']!, _cliMeta),
+      );
+    }
+    if (data.containsKey('model')) {
+      context.handle(
+        _modelMeta,
+        model.isAcceptableOrUnknown(data['model']!, _modelMeta),
+      );
+    }
+    if (data.containsKey('configuration')) {
+      context.handle(
+        _configurationMeta,
+        configuration.isAcceptableOrUnknown(
+          data['configuration']!,
+          _configurationMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_configurationMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RunSnapshotStep map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RunSnapshotStep(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      sourceWorkflowStepId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_workflow_step_id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      cli: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cli'],
+      ),
+      model: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}model'],
+      ),
+      configuration: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}configuration'],
+      )!,
+    );
+  }
+
+  @override
+  $RunSnapshotStepsTable createAlias(String alias) {
+    return $RunSnapshotStepsTable(attachedDatabase, alias);
+  }
+}
+
+class RunSnapshotStep extends DataClass implements Insertable<RunSnapshotStep> {
+  final String id;
+  final String runId;
+  final String sourceWorkflowStepId;
+  final int position;
+  final String kind;
+  final String name;
+  final String? cli;
+  final String? model;
+  final String configuration;
+  const RunSnapshotStep({
+    required this.id,
+    required this.runId,
+    required this.sourceWorkflowStepId,
+    required this.position,
+    required this.kind,
+    required this.name,
+    this.cli,
+    this.model,
+    required this.configuration,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['run_id'] = Variable<String>(runId);
+    map['source_workflow_step_id'] = Variable<String>(sourceWorkflowStepId);
+    map['position'] = Variable<int>(position);
+    map['kind'] = Variable<String>(kind);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || cli != null) {
+      map['cli'] = Variable<String>(cli);
+    }
+    if (!nullToAbsent || model != null) {
+      map['model'] = Variable<String>(model);
+    }
+    map['configuration'] = Variable<String>(configuration);
+    return map;
+  }
+
+  RunSnapshotStepsCompanion toCompanion(bool nullToAbsent) {
+    return RunSnapshotStepsCompanion(
+      id: Value(id),
+      runId: Value(runId),
+      sourceWorkflowStepId: Value(sourceWorkflowStepId),
+      position: Value(position),
+      kind: Value(kind),
+      name: Value(name),
+      cli: cli == null && nullToAbsent ? const Value.absent() : Value(cli),
+      model: model == null && nullToAbsent
+          ? const Value.absent()
+          : Value(model),
+      configuration: Value(configuration),
+    );
+  }
+
+  factory RunSnapshotStep.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RunSnapshotStep(
+      id: serializer.fromJson<String>(json['id']),
+      runId: serializer.fromJson<String>(json['runId']),
+      sourceWorkflowStepId: serializer.fromJson<String>(
+        json['sourceWorkflowStepId'],
+      ),
+      position: serializer.fromJson<int>(json['position']),
+      kind: serializer.fromJson<String>(json['kind']),
+      name: serializer.fromJson<String>(json['name']),
+      cli: serializer.fromJson<String?>(json['cli']),
+      model: serializer.fromJson<String?>(json['model']),
+      configuration: serializer.fromJson<String>(json['configuration']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'runId': serializer.toJson<String>(runId),
+      'sourceWorkflowStepId': serializer.toJson<String>(sourceWorkflowStepId),
+      'position': serializer.toJson<int>(position),
+      'kind': serializer.toJson<String>(kind),
+      'name': serializer.toJson<String>(name),
+      'cli': serializer.toJson<String?>(cli),
+      'model': serializer.toJson<String?>(model),
+      'configuration': serializer.toJson<String>(configuration),
+    };
+  }
+
+  RunSnapshotStep copyWith({
+    String? id,
+    String? runId,
+    String? sourceWorkflowStepId,
+    int? position,
+    String? kind,
+    String? name,
+    Value<String?> cli = const Value.absent(),
+    Value<String?> model = const Value.absent(),
+    String? configuration,
+  }) => RunSnapshotStep(
+    id: id ?? this.id,
+    runId: runId ?? this.runId,
+    sourceWorkflowStepId: sourceWorkflowStepId ?? this.sourceWorkflowStepId,
+    position: position ?? this.position,
+    kind: kind ?? this.kind,
+    name: name ?? this.name,
+    cli: cli.present ? cli.value : this.cli,
+    model: model.present ? model.value : this.model,
+    configuration: configuration ?? this.configuration,
+  );
+  RunSnapshotStep copyWithCompanion(RunSnapshotStepsCompanion data) {
+    return RunSnapshotStep(
+      id: data.id.present ? data.id.value : this.id,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      sourceWorkflowStepId: data.sourceWorkflowStepId.present
+          ? data.sourceWorkflowStepId.value
+          : this.sourceWorkflowStepId,
+      position: data.position.present ? data.position.value : this.position,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      name: data.name.present ? data.name.value : this.name,
+      cli: data.cli.present ? data.cli.value : this.cli,
+      model: data.model.present ? data.model.value : this.model,
+      configuration: data.configuration.present
+          ? data.configuration.value
+          : this.configuration,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunSnapshotStep(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('sourceWorkflowStepId: $sourceWorkflowStepId, ')
+          ..write('position: $position, ')
+          ..write('kind: $kind, ')
+          ..write('name: $name, ')
+          ..write('cli: $cli, ')
+          ..write('model: $model, ')
+          ..write('configuration: $configuration')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    runId,
+    sourceWorkflowStepId,
+    position,
+    kind,
+    name,
+    cli,
+    model,
+    configuration,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RunSnapshotStep &&
+          other.id == this.id &&
+          other.runId == this.runId &&
+          other.sourceWorkflowStepId == this.sourceWorkflowStepId &&
+          other.position == this.position &&
+          other.kind == this.kind &&
+          other.name == this.name &&
+          other.cli == this.cli &&
+          other.model == this.model &&
+          other.configuration == this.configuration);
+}
+
+class RunSnapshotStepsCompanion extends UpdateCompanion<RunSnapshotStep> {
+  final Value<String> id;
+  final Value<String> runId;
+  final Value<String> sourceWorkflowStepId;
+  final Value<int> position;
+  final Value<String> kind;
+  final Value<String> name;
+  final Value<String?> cli;
+  final Value<String?> model;
+  final Value<String> configuration;
+  final Value<int> rowid;
+  const RunSnapshotStepsCompanion({
+    this.id = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.sourceWorkflowStepId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.name = const Value.absent(),
+    this.cli = const Value.absent(),
+    this.model = const Value.absent(),
+    this.configuration = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RunSnapshotStepsCompanion.insert({
+    required String id,
+    required String runId,
+    required String sourceWorkflowStepId,
+    required int position,
+    required String kind,
+    required String name,
+    this.cli = const Value.absent(),
+    this.model = const Value.absent(),
+    required String configuration,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       runId = Value(runId),
+       sourceWorkflowStepId = Value(sourceWorkflowStepId),
+       position = Value(position),
+       kind = Value(kind),
+       name = Value(name),
+       configuration = Value(configuration);
+  static Insertable<RunSnapshotStep> custom({
+    Expression<String>? id,
+    Expression<String>? runId,
+    Expression<String>? sourceWorkflowStepId,
+    Expression<int>? position,
+    Expression<String>? kind,
+    Expression<String>? name,
+    Expression<String>? cli,
+    Expression<String>? model,
+    Expression<String>? configuration,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (runId != null) 'run_id': runId,
+      if (sourceWorkflowStepId != null)
+        'source_workflow_step_id': sourceWorkflowStepId,
+      if (position != null) 'position': position,
+      if (kind != null) 'kind': kind,
+      if (name != null) 'name': name,
+      if (cli != null) 'cli': cli,
+      if (model != null) 'model': model,
+      if (configuration != null) 'configuration': configuration,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RunSnapshotStepsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? runId,
+    Value<String>? sourceWorkflowStepId,
+    Value<int>? position,
+    Value<String>? kind,
+    Value<String>? name,
+    Value<String?>? cli,
+    Value<String?>? model,
+    Value<String>? configuration,
+    Value<int>? rowid,
+  }) {
+    return RunSnapshotStepsCompanion(
+      id: id ?? this.id,
+      runId: runId ?? this.runId,
+      sourceWorkflowStepId: sourceWorkflowStepId ?? this.sourceWorkflowStepId,
+      position: position ?? this.position,
+      kind: kind ?? this.kind,
+      name: name ?? this.name,
+      cli: cli ?? this.cli,
+      model: model ?? this.model,
+      configuration: configuration ?? this.configuration,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (sourceWorkflowStepId.present) {
+      map['source_workflow_step_id'] = Variable<String>(
+        sourceWorkflowStepId.value,
+      );
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (cli.present) {
+      map['cli'] = Variable<String>(cli.value);
+    }
+    if (model.present) {
+      map['model'] = Variable<String>(model.value);
+    }
+    if (configuration.present) {
+      map['configuration'] = Variable<String>(configuration.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunSnapshotStepsCompanion(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('sourceWorkflowStepId: $sourceWorkflowStepId, ')
+          ..write('position: $position, ')
+          ..write('kind: $kind, ')
+          ..write('name: $name, ')
+          ..write('cli: $cli, ')
+          ..write('model: $model, ')
+          ..write('configuration: $configuration, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RunAttemptsTable extends RunAttempts
+    with TableInfo<$RunAttemptsTable, RunAttempt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RunAttemptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflow_runs (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _snapshotStepIdMeta = const VerificationMeta(
+    'snapshotStepId',
+  );
+  @override
+  late final GeneratedColumn<String> snapshotStepId = GeneratedColumn<String>(
+    'snapshot_step_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES run_snapshot_steps (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _attemptNumberMeta = const VerificationMeta(
+    'attemptNumber',
+  );
+  @override
+  late final GeneratedColumn<int> attemptNumber = GeneratedColumn<int>(
+    'attempt_number',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(attemptNumber).isBiggerThanValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _exitCodeMeta = const VerificationMeta(
+    'exitCode',
+  );
+  @override
+  late final GeneratedColumn<int> exitCode = GeneratedColumn<int>(
+    'exit_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _failureCodeMeta = const VerificationMeta(
+    'failureCode',
+  );
+  @override
+  late final GeneratedColumn<String> failureCode = GeneratedColumn<String>(
+    'failure_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _declaredContextMeta = const VerificationMeta(
+    'declaredContext',
+  );
+  @override
+  late final GeneratedColumn<String> declaredContext = GeneratedColumn<String>(
+    'declared_context',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    runId,
+    snapshotStepId,
+    attemptNumber,
+    status,
+    startedAt,
+    completedAt,
+    exitCode,
+    failureCode,
+    declaredContext,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'run_attempts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RunAttempt> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('snapshot_step_id')) {
+      context.handle(
+        _snapshotStepIdMeta,
+        snapshotStepId.isAcceptableOrUnknown(
+          data['snapshot_step_id']!,
+          _snapshotStepIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotStepIdMeta);
+    }
+    if (data.containsKey('attempt_number')) {
+      context.handle(
+        _attemptNumberMeta,
+        attemptNumber.isAcceptableOrUnknown(
+          data['attempt_number']!,
+          _attemptNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_attemptNumberMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('exit_code')) {
+      context.handle(
+        _exitCodeMeta,
+        exitCode.isAcceptableOrUnknown(data['exit_code']!, _exitCodeMeta),
+      );
+    }
+    if (data.containsKey('failure_code')) {
+      context.handle(
+        _failureCodeMeta,
+        failureCode.isAcceptableOrUnknown(
+          data['failure_code']!,
+          _failureCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('declared_context')) {
+      context.handle(
+        _declaredContextMeta,
+        declaredContext.isAcceptableOrUnknown(
+          data['declared_context']!,
+          _declaredContextMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RunAttempt map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RunAttempt(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      snapshotStepId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot_step_id'],
+      )!,
+      attemptNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt_number'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+      exitCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}exit_code'],
+      ),
+      failureCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_code'],
+      ),
+      declaredContext: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}declared_context'],
+      ),
+    );
+  }
+
+  @override
+  $RunAttemptsTable createAlias(String alias) {
+    return $RunAttemptsTable(attachedDatabase, alias);
+  }
+}
+
+class RunAttempt extends DataClass implements Insertable<RunAttempt> {
+  final String id;
+  final String runId;
+  final String snapshotStepId;
+  final int attemptNumber;
+  final String status;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+  final int? exitCode;
+  final String? failureCode;
+  final String? declaredContext;
+  const RunAttempt({
+    required this.id,
+    required this.runId,
+    required this.snapshotStepId,
+    required this.attemptNumber,
+    required this.status,
+    required this.startedAt,
+    this.completedAt,
+    this.exitCode,
+    this.failureCode,
+    this.declaredContext,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['run_id'] = Variable<String>(runId);
+    map['snapshot_step_id'] = Variable<String>(snapshotStepId);
+    map['attempt_number'] = Variable<int>(attemptNumber);
+    map['status'] = Variable<String>(status);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    if (!nullToAbsent || exitCode != null) {
+      map['exit_code'] = Variable<int>(exitCode);
+    }
+    if (!nullToAbsent || failureCode != null) {
+      map['failure_code'] = Variable<String>(failureCode);
+    }
+    if (!nullToAbsent || declaredContext != null) {
+      map['declared_context'] = Variable<String>(declaredContext);
+    }
+    return map;
+  }
+
+  RunAttemptsCompanion toCompanion(bool nullToAbsent) {
+    return RunAttemptsCompanion(
+      id: Value(id),
+      runId: Value(runId),
+      snapshotStepId: Value(snapshotStepId),
+      attemptNumber: Value(attemptNumber),
+      status: Value(status),
+      startedAt: Value(startedAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+      exitCode: exitCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(exitCode),
+      failureCode: failureCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureCode),
+      declaredContext: declaredContext == null && nullToAbsent
+          ? const Value.absent()
+          : Value(declaredContext),
+    );
+  }
+
+  factory RunAttempt.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RunAttempt(
+      id: serializer.fromJson<String>(json['id']),
+      runId: serializer.fromJson<String>(json['runId']),
+      snapshotStepId: serializer.fromJson<String>(json['snapshotStepId']),
+      attemptNumber: serializer.fromJson<int>(json['attemptNumber']),
+      status: serializer.fromJson<String>(json['status']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      exitCode: serializer.fromJson<int?>(json['exitCode']),
+      failureCode: serializer.fromJson<String?>(json['failureCode']),
+      declaredContext: serializer.fromJson<String?>(json['declaredContext']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'runId': serializer.toJson<String>(runId),
+      'snapshotStepId': serializer.toJson<String>(snapshotStepId),
+      'attemptNumber': serializer.toJson<int>(attemptNumber),
+      'status': serializer.toJson<String>(status),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'exitCode': serializer.toJson<int?>(exitCode),
+      'failureCode': serializer.toJson<String?>(failureCode),
+      'declaredContext': serializer.toJson<String?>(declaredContext),
+    };
+  }
+
+  RunAttempt copyWith({
+    String? id,
+    String? runId,
+    String? snapshotStepId,
+    int? attemptNumber,
+    String? status,
+    DateTime? startedAt,
+    Value<DateTime?> completedAt = const Value.absent(),
+    Value<int?> exitCode = const Value.absent(),
+    Value<String?> failureCode = const Value.absent(),
+    Value<String?> declaredContext = const Value.absent(),
+  }) => RunAttempt(
+    id: id ?? this.id,
+    runId: runId ?? this.runId,
+    snapshotStepId: snapshotStepId ?? this.snapshotStepId,
+    attemptNumber: attemptNumber ?? this.attemptNumber,
+    status: status ?? this.status,
+    startedAt: startedAt ?? this.startedAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    exitCode: exitCode.present ? exitCode.value : this.exitCode,
+    failureCode: failureCode.present ? failureCode.value : this.failureCode,
+    declaredContext: declaredContext.present
+        ? declaredContext.value
+        : this.declaredContext,
+  );
+  RunAttempt copyWithCompanion(RunAttemptsCompanion data) {
+    return RunAttempt(
+      id: data.id.present ? data.id.value : this.id,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      snapshotStepId: data.snapshotStepId.present
+          ? data.snapshotStepId.value
+          : this.snapshotStepId,
+      attemptNumber: data.attemptNumber.present
+          ? data.attemptNumber.value
+          : this.attemptNumber,
+      status: data.status.present ? data.status.value : this.status,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      exitCode: data.exitCode.present ? data.exitCode.value : this.exitCode,
+      failureCode: data.failureCode.present
+          ? data.failureCode.value
+          : this.failureCode,
+      declaredContext: data.declaredContext.present
+          ? data.declaredContext.value
+          : this.declaredContext,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunAttempt(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('snapshotStepId: $snapshotStepId, ')
+          ..write('attemptNumber: $attemptNumber, ')
+          ..write('status: $status, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('exitCode: $exitCode, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('declaredContext: $declaredContext')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    runId,
+    snapshotStepId,
+    attemptNumber,
+    status,
+    startedAt,
+    completedAt,
+    exitCode,
+    failureCode,
+    declaredContext,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RunAttempt &&
+          other.id == this.id &&
+          other.runId == this.runId &&
+          other.snapshotStepId == this.snapshotStepId &&
+          other.attemptNumber == this.attemptNumber &&
+          other.status == this.status &&
+          other.startedAt == this.startedAt &&
+          other.completedAt == this.completedAt &&
+          other.exitCode == this.exitCode &&
+          other.failureCode == this.failureCode &&
+          other.declaredContext == this.declaredContext);
+}
+
+class RunAttemptsCompanion extends UpdateCompanion<RunAttempt> {
+  final Value<String> id;
+  final Value<String> runId;
+  final Value<String> snapshotStepId;
+  final Value<int> attemptNumber;
+  final Value<String> status;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> completedAt;
+  final Value<int?> exitCode;
+  final Value<String?> failureCode;
+  final Value<String?> declaredContext;
+  final Value<int> rowid;
+  const RunAttemptsCompanion({
+    this.id = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.snapshotStepId = const Value.absent(),
+    this.attemptNumber = const Value.absent(),
+    this.status = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.exitCode = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.declaredContext = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RunAttemptsCompanion.insert({
+    required String id,
+    required String runId,
+    required String snapshotStepId,
+    required int attemptNumber,
+    required String status,
+    required DateTime startedAt,
+    this.completedAt = const Value.absent(),
+    this.exitCode = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.declaredContext = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       runId = Value(runId),
+       snapshotStepId = Value(snapshotStepId),
+       attemptNumber = Value(attemptNumber),
+       status = Value(status),
+       startedAt = Value(startedAt);
+  static Insertable<RunAttempt> custom({
+    Expression<String>? id,
+    Expression<String>? runId,
+    Expression<String>? snapshotStepId,
+    Expression<int>? attemptNumber,
+    Expression<String>? status,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? completedAt,
+    Expression<int>? exitCode,
+    Expression<String>? failureCode,
+    Expression<String>? declaredContext,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (runId != null) 'run_id': runId,
+      if (snapshotStepId != null) 'snapshot_step_id': snapshotStepId,
+      if (attemptNumber != null) 'attempt_number': attemptNumber,
+      if (status != null) 'status': status,
+      if (startedAt != null) 'started_at': startedAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (exitCode != null) 'exit_code': exitCode,
+      if (failureCode != null) 'failure_code': failureCode,
+      if (declaredContext != null) 'declared_context': declaredContext,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RunAttemptsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? runId,
+    Value<String>? snapshotStepId,
+    Value<int>? attemptNumber,
+    Value<String>? status,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? completedAt,
+    Value<int?>? exitCode,
+    Value<String?>? failureCode,
+    Value<String?>? declaredContext,
+    Value<int>? rowid,
+  }) {
+    return RunAttemptsCompanion(
+      id: id ?? this.id,
+      runId: runId ?? this.runId,
+      snapshotStepId: snapshotStepId ?? this.snapshotStepId,
+      attemptNumber: attemptNumber ?? this.attemptNumber,
+      status: status ?? this.status,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      exitCode: exitCode ?? this.exitCode,
+      failureCode: failureCode ?? this.failureCode,
+      declaredContext: declaredContext ?? this.declaredContext,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (snapshotStepId.present) {
+      map['snapshot_step_id'] = Variable<String>(snapshotStepId.value);
+    }
+    if (attemptNumber.present) {
+      map['attempt_number'] = Variable<int>(attemptNumber.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (exitCode.present) {
+      map['exit_code'] = Variable<int>(exitCode.value);
+    }
+    if (failureCode.present) {
+      map['failure_code'] = Variable<String>(failureCode.value);
+    }
+    if (declaredContext.present) {
+      map['declared_context'] = Variable<String>(declaredContext.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunAttemptsCompanion(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('snapshotStepId: $snapshotStepId, ')
+          ..write('attemptNumber: $attemptNumber, ')
+          ..write('status: $status, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('exitCode: $exitCode, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('declaredContext: $declaredContext, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RunLogSegmentsTable extends RunLogSegments
+    with TableInfo<$RunLogSegmentsTable, RunLogSegment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RunLogSegmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflow_runs (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _attemptIdMeta = const VerificationMeta(
+    'attemptId',
+  );
+  @override
+  late final GeneratedColumn<String> attemptId = GeneratedColumn<String>(
+    'attempt_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES run_attempts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _snapshotStepIdMeta = const VerificationMeta(
+    'snapshotStepId',
+  );
+  @override
+  late final GeneratedColumn<String> snapshotStepId = GeneratedColumn<String>(
+    'snapshot_step_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES run_snapshot_steps (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(sequence).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _channelMeta = const VerificationMeta(
+    'channel',
+  );
+  @override
+  late final GeneratedColumn<String> channel = GeneratedColumn<String>(
+    'channel',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bytesMeta = const VerificationMeta('bytes');
+  @override
+  late final GeneratedColumn<Uint8List> bytes = GeneratedColumn<Uint8List>(
+    'bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _compressionMeta = const VerificationMeta(
+    'compression',
+  );
+  @override
+  late final GeneratedColumn<String> compression = GeneratedColumn<String>(
+    'compression',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('none'),
+  );
+  static const VerificationMeta _originalByteLengthMeta =
+      const VerificationMeta('originalByteLength');
+  @override
+  late final GeneratedColumn<int> originalByteLength = GeneratedColumn<int>(
+    'original_byte_length',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(originalByteLength).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    runId,
+    attemptId,
+    snapshotStepId,
+    sequence,
+    channel,
+    bytes,
+    compression,
+    originalByteLength,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'run_log_segments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RunLogSegment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('attempt_id')) {
+      context.handle(
+        _attemptIdMeta,
+        attemptId.isAcceptableOrUnknown(data['attempt_id']!, _attemptIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_attemptIdMeta);
+    }
+    if (data.containsKey('snapshot_step_id')) {
+      context.handle(
+        _snapshotStepIdMeta,
+        snapshotStepId.isAcceptableOrUnknown(
+          data['snapshot_step_id']!,
+          _snapshotStepIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotStepIdMeta);
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceMeta);
+    }
+    if (data.containsKey('channel')) {
+      context.handle(
+        _channelMeta,
+        channel.isAcceptableOrUnknown(data['channel']!, _channelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_channelMeta);
+    }
+    if (data.containsKey('bytes')) {
+      context.handle(
+        _bytesMeta,
+        bytes.isAcceptableOrUnknown(data['bytes']!, _bytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bytesMeta);
+    }
+    if (data.containsKey('compression')) {
+      context.handle(
+        _compressionMeta,
+        compression.isAcceptableOrUnknown(
+          data['compression']!,
+          _compressionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('original_byte_length')) {
+      context.handle(
+        _originalByteLengthMeta,
+        originalByteLength.isAcceptableOrUnknown(
+          data['original_byte_length']!,
+          _originalByteLengthMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originalByteLengthMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RunLogSegment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RunLogSegment(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      attemptId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attempt_id'],
+      )!,
+      snapshotStepId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot_step_id'],
+      )!,
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      )!,
+      channel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel'],
+      )!,
+      bytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}bytes'],
+      )!,
+      compression: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}compression'],
+      )!,
+      originalByteLength: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}original_byte_length'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RunLogSegmentsTable createAlias(String alias) {
+    return $RunLogSegmentsTable(attachedDatabase, alias);
+  }
+}
+
+class RunLogSegment extends DataClass implements Insertable<RunLogSegment> {
+  final String id;
+  final String runId;
+  final String attemptId;
+  final String snapshotStepId;
+  final int sequence;
+  final String channel;
+  final Uint8List bytes;
+  final String compression;
+  final int originalByteLength;
+  final DateTime createdAt;
+  const RunLogSegment({
+    required this.id,
+    required this.runId,
+    required this.attemptId,
+    required this.snapshotStepId,
+    required this.sequence,
+    required this.channel,
+    required this.bytes,
+    required this.compression,
+    required this.originalByteLength,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['run_id'] = Variable<String>(runId);
+    map['attempt_id'] = Variable<String>(attemptId);
+    map['snapshot_step_id'] = Variable<String>(snapshotStepId);
+    map['sequence'] = Variable<int>(sequence);
+    map['channel'] = Variable<String>(channel);
+    map['bytes'] = Variable<Uint8List>(bytes);
+    map['compression'] = Variable<String>(compression);
+    map['original_byte_length'] = Variable<int>(originalByteLength);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  RunLogSegmentsCompanion toCompanion(bool nullToAbsent) {
+    return RunLogSegmentsCompanion(
+      id: Value(id),
+      runId: Value(runId),
+      attemptId: Value(attemptId),
+      snapshotStepId: Value(snapshotStepId),
+      sequence: Value(sequence),
+      channel: Value(channel),
+      bytes: Value(bytes),
+      compression: Value(compression),
+      originalByteLength: Value(originalByteLength),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory RunLogSegment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RunLogSegment(
+      id: serializer.fromJson<String>(json['id']),
+      runId: serializer.fromJson<String>(json['runId']),
+      attemptId: serializer.fromJson<String>(json['attemptId']),
+      snapshotStepId: serializer.fromJson<String>(json['snapshotStepId']),
+      sequence: serializer.fromJson<int>(json['sequence']),
+      channel: serializer.fromJson<String>(json['channel']),
+      bytes: serializer.fromJson<Uint8List>(json['bytes']),
+      compression: serializer.fromJson<String>(json['compression']),
+      originalByteLength: serializer.fromJson<int>(json['originalByteLength']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'runId': serializer.toJson<String>(runId),
+      'attemptId': serializer.toJson<String>(attemptId),
+      'snapshotStepId': serializer.toJson<String>(snapshotStepId),
+      'sequence': serializer.toJson<int>(sequence),
+      'channel': serializer.toJson<String>(channel),
+      'bytes': serializer.toJson<Uint8List>(bytes),
+      'compression': serializer.toJson<String>(compression),
+      'originalByteLength': serializer.toJson<int>(originalByteLength),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  RunLogSegment copyWith({
+    String? id,
+    String? runId,
+    String? attemptId,
+    String? snapshotStepId,
+    int? sequence,
+    String? channel,
+    Uint8List? bytes,
+    String? compression,
+    int? originalByteLength,
+    DateTime? createdAt,
+  }) => RunLogSegment(
+    id: id ?? this.id,
+    runId: runId ?? this.runId,
+    attemptId: attemptId ?? this.attemptId,
+    snapshotStepId: snapshotStepId ?? this.snapshotStepId,
+    sequence: sequence ?? this.sequence,
+    channel: channel ?? this.channel,
+    bytes: bytes ?? this.bytes,
+    compression: compression ?? this.compression,
+    originalByteLength: originalByteLength ?? this.originalByteLength,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  RunLogSegment copyWithCompanion(RunLogSegmentsCompanion data) {
+    return RunLogSegment(
+      id: data.id.present ? data.id.value : this.id,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      attemptId: data.attemptId.present ? data.attemptId.value : this.attemptId,
+      snapshotStepId: data.snapshotStepId.present
+          ? data.snapshotStepId.value
+          : this.snapshotStepId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
+      channel: data.channel.present ? data.channel.value : this.channel,
+      bytes: data.bytes.present ? data.bytes.value : this.bytes,
+      compression: data.compression.present
+          ? data.compression.value
+          : this.compression,
+      originalByteLength: data.originalByteLength.present
+          ? data.originalByteLength.value
+          : this.originalByteLength,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunLogSegment(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('attemptId: $attemptId, ')
+          ..write('snapshotStepId: $snapshotStepId, ')
+          ..write('sequence: $sequence, ')
+          ..write('channel: $channel, ')
+          ..write('bytes: $bytes, ')
+          ..write('compression: $compression, ')
+          ..write('originalByteLength: $originalByteLength, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    runId,
+    attemptId,
+    snapshotStepId,
+    sequence,
+    channel,
+    $driftBlobEquality.hash(bytes),
+    compression,
+    originalByteLength,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RunLogSegment &&
+          other.id == this.id &&
+          other.runId == this.runId &&
+          other.attemptId == this.attemptId &&
+          other.snapshotStepId == this.snapshotStepId &&
+          other.sequence == this.sequence &&
+          other.channel == this.channel &&
+          $driftBlobEquality.equals(other.bytes, this.bytes) &&
+          other.compression == this.compression &&
+          other.originalByteLength == this.originalByteLength &&
+          other.createdAt == this.createdAt);
+}
+
+class RunLogSegmentsCompanion extends UpdateCompanion<RunLogSegment> {
+  final Value<String> id;
+  final Value<String> runId;
+  final Value<String> attemptId;
+  final Value<String> snapshotStepId;
+  final Value<int> sequence;
+  final Value<String> channel;
+  final Value<Uint8List> bytes;
+  final Value<String> compression;
+  final Value<int> originalByteLength;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const RunLogSegmentsCompanion({
+    this.id = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.attemptId = const Value.absent(),
+    this.snapshotStepId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    this.channel = const Value.absent(),
+    this.bytes = const Value.absent(),
+    this.compression = const Value.absent(),
+    this.originalByteLength = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RunLogSegmentsCompanion.insert({
+    required String id,
+    required String runId,
+    required String attemptId,
+    required String snapshotStepId,
+    required int sequence,
+    required String channel,
+    required Uint8List bytes,
+    this.compression = const Value.absent(),
+    required int originalByteLength,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       runId = Value(runId),
+       attemptId = Value(attemptId),
+       snapshotStepId = Value(snapshotStepId),
+       sequence = Value(sequence),
+       channel = Value(channel),
+       bytes = Value(bytes),
+       originalByteLength = Value(originalByteLength),
+       createdAt = Value(createdAt);
+  static Insertable<RunLogSegment> custom({
+    Expression<String>? id,
+    Expression<String>? runId,
+    Expression<String>? attemptId,
+    Expression<String>? snapshotStepId,
+    Expression<int>? sequence,
+    Expression<String>? channel,
+    Expression<Uint8List>? bytes,
+    Expression<String>? compression,
+    Expression<int>? originalByteLength,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (runId != null) 'run_id': runId,
+      if (attemptId != null) 'attempt_id': attemptId,
+      if (snapshotStepId != null) 'snapshot_step_id': snapshotStepId,
+      if (sequence != null) 'sequence': sequence,
+      if (channel != null) 'channel': channel,
+      if (bytes != null) 'bytes': bytes,
+      if (compression != null) 'compression': compression,
+      if (originalByteLength != null)
+        'original_byte_length': originalByteLength,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RunLogSegmentsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? runId,
+    Value<String>? attemptId,
+    Value<String>? snapshotStepId,
+    Value<int>? sequence,
+    Value<String>? channel,
+    Value<Uint8List>? bytes,
+    Value<String>? compression,
+    Value<int>? originalByteLength,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return RunLogSegmentsCompanion(
+      id: id ?? this.id,
+      runId: runId ?? this.runId,
+      attemptId: attemptId ?? this.attemptId,
+      snapshotStepId: snapshotStepId ?? this.snapshotStepId,
+      sequence: sequence ?? this.sequence,
+      channel: channel ?? this.channel,
+      bytes: bytes ?? this.bytes,
+      compression: compression ?? this.compression,
+      originalByteLength: originalByteLength ?? this.originalByteLength,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (attemptId.present) {
+      map['attempt_id'] = Variable<String>(attemptId.value);
+    }
+    if (snapshotStepId.present) {
+      map['snapshot_step_id'] = Variable<String>(snapshotStepId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
+    }
+    if (channel.present) {
+      map['channel'] = Variable<String>(channel.value);
+    }
+    if (bytes.present) {
+      map['bytes'] = Variable<Uint8List>(bytes.value);
+    }
+    if (compression.present) {
+      map['compression'] = Variable<String>(compression.value);
+    }
+    if (originalByteLength.present) {
+      map['original_byte_length'] = Variable<int>(originalByteLength.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunLogSegmentsCompanion(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('attemptId: $attemptId, ')
+          ..write('snapshotStepId: $snapshotStepId, ')
+          ..write('sequence: $sequence, ')
+          ..write('channel: $channel, ')
+          ..write('bytes: $bytes, ')
+          ..write('compression: $compression, ')
+          ..write('originalByteLength: $originalByteLength, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RunRecoveryRequestsTable extends RunRecoveryRequests
+    with TableInfo<$RunRecoveryRequestsTable, RunRecoveryRequest> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RunRecoveryRequestsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflow_runs (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _attemptIdMeta = const VerificationMeta(
+    'attemptId',
+  );
+  @override
+  late final GeneratedColumn<String> attemptId = GeneratedColumn<String>(
+    'attempt_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES run_attempts (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestedAtMeta = const VerificationMeta(
+    'requestedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> requestedAt = GeneratedColumn<DateTime>(
+    'requested_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    runId,
+    attemptId,
+    action,
+    status,
+    requestedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'run_recovery_requests';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RunRecoveryRequest> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('attempt_id')) {
+      context.handle(
+        _attemptIdMeta,
+        attemptId.isAcceptableOrUnknown(data['attempt_id']!, _attemptIdMeta),
+      );
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('requested_at')) {
+      context.handle(
+        _requestedAtMeta,
+        requestedAt.isAcceptableOrUnknown(
+          data['requested_at']!,
+          _requestedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_requestedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RunRecoveryRequest map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RunRecoveryRequest(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      attemptId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attempt_id'],
+      ),
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      requestedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}requested_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RunRecoveryRequestsTable createAlias(String alias) {
+    return $RunRecoveryRequestsTable(attachedDatabase, alias);
+  }
+}
+
+class RunRecoveryRequest extends DataClass
+    implements Insertable<RunRecoveryRequest> {
+  final String id;
+  final String runId;
+  final String? attemptId;
+  final String action;
+  final String status;
+  final DateTime requestedAt;
+  const RunRecoveryRequest({
+    required this.id,
+    required this.runId,
+    this.attemptId,
+    required this.action,
+    required this.status,
+    required this.requestedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['run_id'] = Variable<String>(runId);
+    if (!nullToAbsent || attemptId != null) {
+      map['attempt_id'] = Variable<String>(attemptId);
+    }
+    map['action'] = Variable<String>(action);
+    map['status'] = Variable<String>(status);
+    map['requested_at'] = Variable<DateTime>(requestedAt);
+    return map;
+  }
+
+  RunRecoveryRequestsCompanion toCompanion(bool nullToAbsent) {
+    return RunRecoveryRequestsCompanion(
+      id: Value(id),
+      runId: Value(runId),
+      attemptId: attemptId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(attemptId),
+      action: Value(action),
+      status: Value(status),
+      requestedAt: Value(requestedAt),
+    );
+  }
+
+  factory RunRecoveryRequest.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RunRecoveryRequest(
+      id: serializer.fromJson<String>(json['id']),
+      runId: serializer.fromJson<String>(json['runId']),
+      attemptId: serializer.fromJson<String?>(json['attemptId']),
+      action: serializer.fromJson<String>(json['action']),
+      status: serializer.fromJson<String>(json['status']),
+      requestedAt: serializer.fromJson<DateTime>(json['requestedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'runId': serializer.toJson<String>(runId),
+      'attemptId': serializer.toJson<String?>(attemptId),
+      'action': serializer.toJson<String>(action),
+      'status': serializer.toJson<String>(status),
+      'requestedAt': serializer.toJson<DateTime>(requestedAt),
+    };
+  }
+
+  RunRecoveryRequest copyWith({
+    String? id,
+    String? runId,
+    Value<String?> attemptId = const Value.absent(),
+    String? action,
+    String? status,
+    DateTime? requestedAt,
+  }) => RunRecoveryRequest(
+    id: id ?? this.id,
+    runId: runId ?? this.runId,
+    attemptId: attemptId.present ? attemptId.value : this.attemptId,
+    action: action ?? this.action,
+    status: status ?? this.status,
+    requestedAt: requestedAt ?? this.requestedAt,
+  );
+  RunRecoveryRequest copyWithCompanion(RunRecoveryRequestsCompanion data) {
+    return RunRecoveryRequest(
+      id: data.id.present ? data.id.value : this.id,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      attemptId: data.attemptId.present ? data.attemptId.value : this.attemptId,
+      action: data.action.present ? data.action.value : this.action,
+      status: data.status.present ? data.status.value : this.status,
+      requestedAt: data.requestedAt.present
+          ? data.requestedAt.value
+          : this.requestedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunRecoveryRequest(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('attemptId: $attemptId, ')
+          ..write('action: $action, ')
+          ..write('status: $status, ')
+          ..write('requestedAt: $requestedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, runId, attemptId, action, status, requestedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RunRecoveryRequest &&
+          other.id == this.id &&
+          other.runId == this.runId &&
+          other.attemptId == this.attemptId &&
+          other.action == this.action &&
+          other.status == this.status &&
+          other.requestedAt == this.requestedAt);
+}
+
+class RunRecoveryRequestsCompanion extends UpdateCompanion<RunRecoveryRequest> {
+  final Value<String> id;
+  final Value<String> runId;
+  final Value<String?> attemptId;
+  final Value<String> action;
+  final Value<String> status;
+  final Value<DateTime> requestedAt;
+  final Value<int> rowid;
+  const RunRecoveryRequestsCompanion({
+    this.id = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.attemptId = const Value.absent(),
+    this.action = const Value.absent(),
+    this.status = const Value.absent(),
+    this.requestedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RunRecoveryRequestsCompanion.insert({
+    required String id,
+    required String runId,
+    this.attemptId = const Value.absent(),
+    required String action,
+    required String status,
+    required DateTime requestedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       runId = Value(runId),
+       action = Value(action),
+       status = Value(status),
+       requestedAt = Value(requestedAt);
+  static Insertable<RunRecoveryRequest> custom({
+    Expression<String>? id,
+    Expression<String>? runId,
+    Expression<String>? attemptId,
+    Expression<String>? action,
+    Expression<String>? status,
+    Expression<DateTime>? requestedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (runId != null) 'run_id': runId,
+      if (attemptId != null) 'attempt_id': attemptId,
+      if (action != null) 'action': action,
+      if (status != null) 'status': status,
+      if (requestedAt != null) 'requested_at': requestedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RunRecoveryRequestsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? runId,
+    Value<String?>? attemptId,
+    Value<String>? action,
+    Value<String>? status,
+    Value<DateTime>? requestedAt,
+    Value<int>? rowid,
+  }) {
+    return RunRecoveryRequestsCompanion(
+      id: id ?? this.id,
+      runId: runId ?? this.runId,
+      attemptId: attemptId ?? this.attemptId,
+      action: action ?? this.action,
+      status: status ?? this.status,
+      requestedAt: requestedAt ?? this.requestedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (attemptId.present) {
+      map['attempt_id'] = Variable<String>(attemptId.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (requestedAt.present) {
+      map['requested_at'] = Variable<DateTime>(requestedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RunRecoveryRequestsCompanion(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('attemptId: $attemptId, ')
+          ..write('action: $action, ')
+          ..write('status: $status, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$MaestroDatabase extends GeneratedDatabase {
   _$MaestroDatabase(QueryExecutor e) : super(e);
   $MaestroDatabaseManager get managers => $MaestroDatabaseManager(this);
@@ -4005,6 +7380,15 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final $WorkflowStepsTable workflowSteps = $WorkflowStepsTable(this);
   late final $WorkflowProjectRefsTable workflowProjectRefs =
       $WorkflowProjectRefsTable(this);
+  late final $WorkflowRunsTable workflowRuns = $WorkflowRunsTable(this);
+  late final $RunSnapshotsTable runSnapshots = $RunSnapshotsTable(this);
+  late final $RunSnapshotStepsTable runSnapshotSteps = $RunSnapshotStepsTable(
+    this,
+  );
+  late final $RunAttemptsTable runAttempts = $RunAttemptsTable(this);
+  late final $RunLogSegmentsTable runLogSegments = $RunLogSegmentsTable(this);
+  late final $RunRecoveryRequestsTable runRecoveryRequests =
+      $RunRecoveryRequestsTable(this);
   late final Index localUsersSingleOperatingSystem = Index(
     'local_users_single_operating_system',
     'CREATE UNIQUE INDEX local_users_single_operating_system ON local_users (auth_method) WHERE auth_method = \'operatingSystem\'',
@@ -4016,6 +7400,38 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final Index workflowProjectRefsProject = Index(
     'workflow_project_refs_project',
     'CREATE INDEX workflow_project_refs_project ON workflow_project_refs (project_id)',
+  );
+  late final Index workflowRunsProjectStatus = Index(
+    'workflow_runs_project_status',
+    'CREATE INDEX workflow_runs_project_status ON workflow_runs (project_id, status)',
+  );
+  late final Index workflowRunsStatus = Index(
+    'workflow_runs_status',
+    'CREATE INDEX workflow_runs_status ON workflow_runs (status)',
+  );
+  late final Index runSnapshotStepsRunPosition = Index(
+    'run_snapshot_steps_run_position',
+    'CREATE UNIQUE INDEX run_snapshot_steps_run_position ON run_snapshot_steps (run_id, position)',
+  );
+  late final Index runAttemptsStepNumber = Index(
+    'run_attempts_step_number',
+    'CREATE UNIQUE INDEX run_attempts_step_number ON run_attempts (run_id, snapshot_step_id, attempt_number)',
+  );
+  late final Index runAttemptsRunStatus = Index(
+    'run_attempts_run_status',
+    'CREATE INDEX run_attempts_run_status ON run_attempts (run_id, status)',
+  );
+  late final Index runLogSegmentsAttemptSequence = Index(
+    'run_log_segments_attempt_sequence',
+    'CREATE UNIQUE INDEX run_log_segments_attempt_sequence ON run_log_segments (attempt_id, sequence)',
+  );
+  late final Index runLogSegmentsRun = Index(
+    'run_log_segments_run',
+    'CREATE INDEX run_log_segments_run ON run_log_segments (run_id)',
+  );
+  late final Index runRecoveryRequestsRunStatus = Index(
+    'run_recovery_requests_run_status',
+    'CREATE INDEX run_recovery_requests_run_status ON run_recovery_requests (run_id, status)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -4031,9 +7447,23 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     workflows,
     workflowSteps,
     workflowProjectRefs,
+    workflowRuns,
+    runSnapshots,
+    runSnapshotSteps,
+    runAttempts,
+    runLogSegments,
+    runRecoveryRequests,
     localUsersSingleOperatingSystem,
     workflowStepsWorkflowPosition,
     workflowProjectRefsProject,
+    workflowRunsProjectStatus,
+    workflowRunsStatus,
+    runSnapshotStepsRunPosition,
+    runAttemptsStepNumber,
+    runAttemptsRunStatus,
+    runLogSegmentsAttemptSequence,
+    runLogSegmentsRun,
+    runRecoveryRequestsRunStatus,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4057,6 +7487,62 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('workflow_project_refs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'projects',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('workflow_runs', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflows',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('workflow_runs', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_snapshots', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_snapshot_steps', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_attempts', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_log_segments', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'run_attempts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_log_segments', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('run_recovery_requests', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -5283,6 +8769,24 @@ final class $$ProjectsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$WorkflowRunsTable, List<WorkflowRun>>
+  _workflowRunsRefsTable(_$MaestroDatabase db) => MultiTypedResultKey.fromTable(
+    db.workflowRuns,
+    aliasName: 'projects__id__workflow_runs__project_id',
+  );
+
+  $$WorkflowRunsTableProcessedTableManager get workflowRunsRefs {
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_workflowRunsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProjectsTableFilterComposer
@@ -5345,6 +8849,31 @@ class $$ProjectsTableFilterComposer
           }) => $$WorkflowProjectRefsTableFilterComposer(
             $db: $db,
             $table: $db.workflowProjectRefs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> workflowRunsRefs(
+    Expression<bool> Function($$WorkflowRunsTableFilterComposer f) f,
+  ) {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5459,6 +8988,31 @@ class $$ProjectsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> workflowRunsRefs<T extends Object>(
+    Expression<T> Function($$WorkflowRunsTableAnnotationComposer a) f,
+  ) {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -5474,7 +9028,10 @@ class $$ProjectsTableTableManager
           $$ProjectsTableUpdateCompanionBuilder,
           (Project, $$ProjectsTableReferences),
           Project,
-          PrefetchHooks Function({bool workflowProjectRefsRefs})
+          PrefetchHooks Function({
+            bool workflowProjectRefsRefs,
+            bool workflowRunsRefs,
+          })
         > {
   $$ProjectsTableTableManager(_$MaestroDatabase db, $ProjectsTable table)
     : super(
@@ -5535,37 +9092,63 @@ class $$ProjectsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({workflowProjectRefsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [
-                if (workflowProjectRefsRefs) db.workflowProjectRefs,
-              ],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (workflowProjectRefsRefs)
-                    await $_getPrefetchedData<
-                      Project,
-                      $ProjectsTable,
-                      WorkflowProjectRef
-                    >(
-                      currentTable: table,
-                      referencedTable: $$ProjectsTableReferences
-                          ._workflowProjectRefsRefsTable(db),
-                      managerFromTypedResult: (p0) => $$ProjectsTableReferences(
-                        db,
-                        table,
-                        p0,
-                      ).workflowProjectRefsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.projectId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({workflowProjectRefsRefs = false, workflowRunsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (workflowProjectRefsRefs) db.workflowProjectRefs,
+                    if (workflowRunsRefs) db.workflowRuns,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (workflowProjectRefsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          WorkflowProjectRef
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._workflowProjectRefsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).workflowProjectRefsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (workflowRunsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          WorkflowRun
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._workflowRunsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).workflowRunsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -5582,7 +9165,10 @@ typedef $$ProjectsTableProcessedTableManager =
       $$ProjectsTableUpdateCompanionBuilder,
       (Project, $$ProjectsTableReferences),
       Project,
-      PrefetchHooks Function({bool workflowProjectRefsRefs})
+      PrefetchHooks Function({
+        bool workflowProjectRefsRefs,
+        bool workflowRunsRefs,
+      })
     >;
 typedef $$WorkflowsTableCreateCompanionBuilder =
     WorkflowsCompanion Function({
@@ -5653,6 +9239,24 @@ final class $$WorkflowsTableReferences
     final cache = $_typedResult.readTableOrNull(
       _workflowProjectRefsRefsTable($_db),
     );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$WorkflowRunsTable, List<WorkflowRun>>
+  _workflowRunsRefsTable(_$MaestroDatabase db) => MultiTypedResultKey.fromTable(
+    db.workflowRuns,
+    aliasName: 'workflows__id__workflow_runs__workflow_id',
+  );
+
+  $$WorkflowRunsTableProcessedTableManager get workflowRunsRefs {
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.workflowId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_workflowRunsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5754,6 +9358,31 @@ class $$WorkflowsTableFilterComposer
           }) => $$WorkflowProjectRefsTableFilterComposer(
             $db: $db,
             $table: $db.workflowProjectRefs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> workflowRunsRefs(
+    Expression<bool> Function($$WorkflowRunsTableFilterComposer f) f,
+  ) {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.workflowId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5909,6 +9538,31 @@ class $$WorkflowsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> workflowRunsRefs<T extends Object>(
+    Expression<T> Function($$WorkflowRunsTableAnnotationComposer a) f,
+  ) {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.workflowId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$WorkflowsTableTableManager
@@ -5927,6 +9581,7 @@ class $$WorkflowsTableTableManager
           PrefetchHooks Function({
             bool workflowStepsRefs,
             bool workflowProjectRefsRefs,
+            bool workflowRunsRefs,
           })
         > {
   $$WorkflowsTableTableManager(_$MaestroDatabase db, $WorkflowsTable table)
@@ -5997,12 +9652,17 @@ class $$WorkflowsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({workflowStepsRefs = false, workflowProjectRefsRefs = false}) {
+              ({
+                workflowStepsRefs = false,
+                workflowProjectRefsRefs = false,
+                workflowRunsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (workflowStepsRefs) db.workflowSteps,
                     if (workflowProjectRefsRefs) db.workflowProjectRefs,
+                    if (workflowRunsRefs) db.workflowRuns,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -6049,6 +9709,27 @@ class $$WorkflowsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (workflowRunsRefs)
+                        await $_getPrefetchedData<
+                          Workflow,
+                          $WorkflowsTable,
+                          WorkflowRun
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowsTableReferences
+                              ._workflowRunsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).workflowRunsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.workflowId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -6072,6 +9753,7 @@ typedef $$WorkflowsTableProcessedTableManager =
       PrefetchHooks Function({
         bool workflowStepsRefs,
         bool workflowProjectRefsRefs,
+        bool workflowRunsRefs,
       })
     >;
 typedef $$WorkflowStepsTableCreateCompanionBuilder =
@@ -6824,6 +10506,3745 @@ typedef $$WorkflowProjectRefsTableProcessedTableManager =
       WorkflowProjectRef,
       PrefetchHooks Function({bool workflowId, bool projectId})
     >;
+typedef $$WorkflowRunsTableCreateCompanionBuilder =
+    WorkflowRunsCompanion Function({
+      required String id,
+      Value<String?> projectId,
+      Value<String?> workflowId,
+      required String label,
+      required String status,
+      required int currentStepPosition,
+      Value<String?> branchName,
+      Value<String?> worktreePath,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> startedAt,
+      Value<DateTime?> completedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$WorkflowRunsTableUpdateCompanionBuilder =
+    WorkflowRunsCompanion Function({
+      Value<String> id,
+      Value<String?> projectId,
+      Value<String?> workflowId,
+      Value<String> label,
+      Value<String> status,
+      Value<int> currentStepPosition,
+      Value<String?> branchName,
+      Value<String?> worktreePath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> startedAt,
+      Value<DateTime?> completedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+final class $$WorkflowRunsTableReferences
+    extends BaseReferences<_$MaestroDatabase, $WorkflowRunsTable, WorkflowRun> {
+  $$WorkflowRunsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$MaestroDatabase db) =>
+      db.projects.createAlias('workflow_runs__project_id__projects__id');
+
+  $$ProjectsTableProcessedTableManager? get projectId {
+    final $_column = $_itemColumn<String>('project_id');
+    if ($_column == null) return null;
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $WorkflowsTable _workflowIdTable(_$MaestroDatabase db) =>
+      db.workflows.createAlias('workflow_runs__workflow_id__workflows__id');
+
+  $$WorkflowsTableProcessedTableManager? get workflowId {
+    final $_column = $_itemColumn<String>('workflow_id');
+    if ($_column == null) return null;
+    final manager = $$WorkflowsTableTableManager(
+      $_db,
+      $_db.workflows,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_workflowIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$RunSnapshotsTable, List<RunSnapshot>>
+  _runSnapshotsRefsTable(_$MaestroDatabase db) => MultiTypedResultKey.fromTable(
+    db.runSnapshots,
+    aliasName: 'workflow_runs__id__run_snapshots__run_id',
+  );
+
+  $$RunSnapshotsTableProcessedTableManager get runSnapshotsRefs {
+    final manager = $$RunSnapshotsTableTableManager(
+      $_db,
+      $_db.runSnapshots,
+    ).filter((f) => f.runId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_runSnapshotsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RunSnapshotStepsTable, List<RunSnapshotStep>>
+  _runSnapshotStepsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.runSnapshotSteps,
+        aliasName: 'workflow_runs__id__run_snapshot_steps__run_id',
+      );
+
+  $$RunSnapshotStepsTableProcessedTableManager get runSnapshotStepsRefs {
+    final manager = $$RunSnapshotStepsTableTableManager(
+      $_db,
+      $_db.runSnapshotSteps,
+    ).filter((f) => f.runId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _runSnapshotStepsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RunAttemptsTable, List<RunAttempt>>
+  _runAttemptsRefsTable(_$MaestroDatabase db) => MultiTypedResultKey.fromTable(
+    db.runAttempts,
+    aliasName: 'workflow_runs__id__run_attempts__run_id',
+  );
+
+  $$RunAttemptsTableProcessedTableManager get runAttemptsRefs {
+    final manager = $$RunAttemptsTableTableManager(
+      $_db,
+      $_db.runAttempts,
+    ).filter((f) => f.runId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_runAttemptsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RunLogSegmentsTable, List<RunLogSegment>>
+  _runLogSegmentsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.runLogSegments,
+        aliasName: 'workflow_runs__id__run_log_segments__run_id',
+      );
+
+  $$RunLogSegmentsTableProcessedTableManager get runLogSegmentsRefs {
+    final manager = $$RunLogSegmentsTableTableManager(
+      $_db,
+      $_db.runLogSegments,
+    ).filter((f) => f.runId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_runLogSegmentsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $RunRecoveryRequestsTable,
+    List<RunRecoveryRequest>
+  >
+  _runRecoveryRequestsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.runRecoveryRequests,
+        aliasName: 'workflow_runs__id__run_recovery_requests__run_id',
+      );
+
+  $$RunRecoveryRequestsTableProcessedTableManager get runRecoveryRequestsRefs {
+    final manager = $$RunRecoveryRequestsTableTableManager(
+      $_db,
+      $_db.runRecoveryRequests,
+    ).filter((f) => f.runId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _runRecoveryRequestsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$WorkflowRunsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $WorkflowRunsTable> {
+  $$WorkflowRunsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentStepPosition => $composableBuilder(
+    column: $table.currentStepPosition,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchName => $composableBuilder(
+    column: $table.branchName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get worktreePath => $composableBuilder(
+    column: $table.worktreePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$WorkflowsTableFilterComposer get workflowId {
+    final $$WorkflowsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> runSnapshotsRefs(
+    Expression<bool> Function($$RunSnapshotsTableFilterComposer f) f,
+  ) {
+    final $$RunSnapshotsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runSnapshots,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotsTableFilterComposer(
+            $db: $db,
+            $table: $db.runSnapshots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> runSnapshotStepsRefs(
+    Expression<bool> Function($$RunSnapshotStepsTableFilterComposer f) f,
+  ) {
+    final $$RunSnapshotStepsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableFilterComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> runAttemptsRefs(
+    Expression<bool> Function($$RunAttemptsTableFilterComposer f) f,
+  ) {
+    final $$RunAttemptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableFilterComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> runLogSegmentsRefs(
+    Expression<bool> Function($$RunLogSegmentsTableFilterComposer f) f,
+  ) {
+    final $$RunLogSegmentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runLogSegments,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunLogSegmentsTableFilterComposer(
+            $db: $db,
+            $table: $db.runLogSegments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> runRecoveryRequestsRefs(
+    Expression<bool> Function($$RunRecoveryRequestsTableFilterComposer f) f,
+  ) {
+    final $$RunRecoveryRequestsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runRecoveryRequests,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunRecoveryRequestsTableFilterComposer(
+            $db: $db,
+            $table: $db.runRecoveryRequests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$WorkflowRunsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $WorkflowRunsTable> {
+  $$WorkflowRunsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get currentStepPosition => $composableBuilder(
+    column: $table.currentStepPosition,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchName => $composableBuilder(
+    column: $table.branchName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get worktreePath => $composableBuilder(
+    column: $table.worktreePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$WorkflowsTableOrderingComposer get workflowId {
+    final $$WorkflowsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WorkflowRunsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $WorkflowRunsTable> {
+  $$WorkflowRunsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get currentStepPosition => $composableBuilder(
+    column: $table.currentStepPosition,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchName => $composableBuilder(
+    column: $table.branchName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get worktreePath => $composableBuilder(
+    column: $table.worktreePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$WorkflowsTableAnnotationComposer get workflowId {
+    final $$WorkflowsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.workflowId,
+      referencedTable: $db.workflows,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflows,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> runSnapshotsRefs<T extends Object>(
+    Expression<T> Function($$RunSnapshotsTableAnnotationComposer a) f,
+  ) {
+    final $$RunSnapshotsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runSnapshots,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runSnapshots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> runSnapshotStepsRefs<T extends Object>(
+    Expression<T> Function($$RunSnapshotStepsTableAnnotationComposer a) f,
+  ) {
+    final $$RunSnapshotStepsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> runAttemptsRefs<T extends Object>(
+    Expression<T> Function($$RunAttemptsTableAnnotationComposer a) f,
+  ) {
+    final $$RunAttemptsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> runLogSegmentsRefs<T extends Object>(
+    Expression<T> Function($$RunLogSegmentsTableAnnotationComposer a) f,
+  ) {
+    final $$RunLogSegmentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runLogSegments,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunLogSegmentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runLogSegments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> runRecoveryRequestsRefs<T extends Object>(
+    Expression<T> Function($$RunRecoveryRequestsTableAnnotationComposer a) f,
+  ) {
+    final $$RunRecoveryRequestsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.runRecoveryRequests,
+          getReferencedColumn: (t) => t.runId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$RunRecoveryRequestsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.runRecoveryRequests,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$WorkflowRunsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $WorkflowRunsTable,
+          WorkflowRun,
+          $$WorkflowRunsTableFilterComposer,
+          $$WorkflowRunsTableOrderingComposer,
+          $$WorkflowRunsTableAnnotationComposer,
+          $$WorkflowRunsTableCreateCompanionBuilder,
+          $$WorkflowRunsTableUpdateCompanionBuilder,
+          (WorkflowRun, $$WorkflowRunsTableReferences),
+          WorkflowRun,
+          PrefetchHooks Function({
+            bool projectId,
+            bool workflowId,
+            bool runSnapshotsRefs,
+            bool runSnapshotStepsRefs,
+            bool runAttemptsRefs,
+            bool runLogSegmentsRefs,
+            bool runRecoveryRequestsRefs,
+          })
+        > {
+  $$WorkflowRunsTableTableManager(
+    _$MaestroDatabase db,
+    $WorkflowRunsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkflowRunsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkflowRunsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WorkflowRunsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> projectId = const Value.absent(),
+                Value<String?> workflowId = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<int> currentStepPosition = const Value.absent(),
+                Value<String?> branchName = const Value.absent(),
+                Value<String?> worktreePath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowRunsCompanion(
+                id: id,
+                projectId: projectId,
+                workflowId: workflowId,
+                label: label,
+                status: status,
+                currentStepPosition: currentStepPosition,
+                branchName: branchName,
+                worktreePath: worktreePath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> projectId = const Value.absent(),
+                Value<String?> workflowId = const Value.absent(),
+                required String label,
+                required String status,
+                required int currentStepPosition,
+                Value<String?> branchName = const Value.absent(),
+                Value<String?> worktreePath = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkflowRunsCompanion.insert(
+                id: id,
+                projectId: projectId,
+                workflowId: workflowId,
+                label: label,
+                status: status,
+                currentStepPosition: currentStepPosition,
+                branchName: branchName,
+                worktreePath: worktreePath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$WorkflowRunsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                projectId = false,
+                workflowId = false,
+                runSnapshotsRefs = false,
+                runSnapshotStepsRefs = false,
+                runAttemptsRefs = false,
+                runLogSegmentsRefs = false,
+                runRecoveryRequestsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (runSnapshotsRefs) db.runSnapshots,
+                    if (runSnapshotStepsRefs) db.runSnapshotSteps,
+                    if (runAttemptsRefs) db.runAttempts,
+                    if (runLogSegmentsRefs) db.runLogSegments,
+                    if (runRecoveryRequestsRefs) db.runRecoveryRequests,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (projectId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.projectId,
+                                    referencedTable:
+                                        $$WorkflowRunsTableReferences
+                                            ._projectIdTable(db),
+                                    referencedColumn:
+                                        $$WorkflowRunsTableReferences
+                                            ._projectIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (workflowId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.workflowId,
+                                    referencedTable:
+                                        $$WorkflowRunsTableReferences
+                                            ._workflowIdTable(db),
+                                    referencedColumn:
+                                        $$WorkflowRunsTableReferences
+                                            ._workflowIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (runSnapshotsRefs)
+                        await $_getPrefetchedData<
+                          WorkflowRun,
+                          $WorkflowRunsTable,
+                          RunSnapshot
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowRunsTableReferences
+                              ._runSnapshotsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowRunsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runSnapshotsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.runId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (runSnapshotStepsRefs)
+                        await $_getPrefetchedData<
+                          WorkflowRun,
+                          $WorkflowRunsTable,
+                          RunSnapshotStep
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowRunsTableReferences
+                              ._runSnapshotStepsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowRunsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runSnapshotStepsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.runId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (runAttemptsRefs)
+                        await $_getPrefetchedData<
+                          WorkflowRun,
+                          $WorkflowRunsTable,
+                          RunAttempt
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowRunsTableReferences
+                              ._runAttemptsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowRunsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runAttemptsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.runId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (runLogSegmentsRefs)
+                        await $_getPrefetchedData<
+                          WorkflowRun,
+                          $WorkflowRunsTable,
+                          RunLogSegment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowRunsTableReferences
+                              ._runLogSegmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowRunsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runLogSegmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.runId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (runRecoveryRequestsRefs)
+                        await $_getPrefetchedData<
+                          WorkflowRun,
+                          $WorkflowRunsTable,
+                          RunRecoveryRequest
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowRunsTableReferences
+                              ._runRecoveryRequestsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowRunsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runRecoveryRequestsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.runId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$WorkflowRunsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $WorkflowRunsTable,
+      WorkflowRun,
+      $$WorkflowRunsTableFilterComposer,
+      $$WorkflowRunsTableOrderingComposer,
+      $$WorkflowRunsTableAnnotationComposer,
+      $$WorkflowRunsTableCreateCompanionBuilder,
+      $$WorkflowRunsTableUpdateCompanionBuilder,
+      (WorkflowRun, $$WorkflowRunsTableReferences),
+      WorkflowRun,
+      PrefetchHooks Function({
+        bool projectId,
+        bool workflowId,
+        bool runSnapshotsRefs,
+        bool runSnapshotStepsRefs,
+        bool runAttemptsRefs,
+        bool runLogSegmentsRefs,
+        bool runRecoveryRequestsRefs,
+      })
+    >;
+typedef $$RunSnapshotsTableCreateCompanionBuilder =
+    RunSnapshotsCompanion Function({
+      required String runId,
+      required int schemaVersion,
+      required String canonicalPayload,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$RunSnapshotsTableUpdateCompanionBuilder =
+    RunSnapshotsCompanion Function({
+      Value<String> runId,
+      Value<int> schemaVersion,
+      Value<String> canonicalPayload,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$RunSnapshotsTableReferences
+    extends BaseReferences<_$MaestroDatabase, $RunSnapshotsTable, RunSnapshot> {
+  $$RunSnapshotsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $WorkflowRunsTable _runIdTable(_$MaestroDatabase db) =>
+      db.workflowRuns.createAlias('run_snapshots__run_id__workflow_runs__id');
+
+  $$WorkflowRunsTableProcessedTableManager get runId {
+    final $_column = $_itemColumn<String>('run_id')!;
+
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_runIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RunSnapshotsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $RunSnapshotsTable> {
+  $$RunSnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get canonicalPayload => $composableBuilder(
+    column: $table.canonicalPayload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowRunsTableFilterComposer get runId {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunSnapshotsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $RunSnapshotsTable> {
+  $$RunSnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get canonicalPayload => $composableBuilder(
+    column: $table.canonicalPayload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowRunsTableOrderingComposer get runId {
+    final $$WorkflowRunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunSnapshotsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $RunSnapshotsTable> {
+  $$RunSnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get canonicalPayload => $composableBuilder(
+    column: $table.canonicalPayload,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$WorkflowRunsTableAnnotationComposer get runId {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunSnapshotsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $RunSnapshotsTable,
+          RunSnapshot,
+          $$RunSnapshotsTableFilterComposer,
+          $$RunSnapshotsTableOrderingComposer,
+          $$RunSnapshotsTableAnnotationComposer,
+          $$RunSnapshotsTableCreateCompanionBuilder,
+          $$RunSnapshotsTableUpdateCompanionBuilder,
+          (RunSnapshot, $$RunSnapshotsTableReferences),
+          RunSnapshot,
+          PrefetchHooks Function({bool runId})
+        > {
+  $$RunSnapshotsTableTableManager(
+    _$MaestroDatabase db,
+    $RunSnapshotsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RunSnapshotsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RunSnapshotsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RunSnapshotsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> runId = const Value.absent(),
+                Value<int> schemaVersion = const Value.absent(),
+                Value<String> canonicalPayload = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RunSnapshotsCompanion(
+                runId: runId,
+                schemaVersion: schemaVersion,
+                canonicalPayload: canonicalPayload,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String runId,
+                required int schemaVersion,
+                required String canonicalPayload,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RunSnapshotsCompanion.insert(
+                runId: runId,
+                schemaVersion: schemaVersion,
+                canonicalPayload: canonicalPayload,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RunSnapshotsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({runId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (runId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.runId,
+                                referencedTable: $$RunSnapshotsTableReferences
+                                    ._runIdTable(db),
+                                referencedColumn: $$RunSnapshotsTableReferences
+                                    ._runIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$RunSnapshotsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $RunSnapshotsTable,
+      RunSnapshot,
+      $$RunSnapshotsTableFilterComposer,
+      $$RunSnapshotsTableOrderingComposer,
+      $$RunSnapshotsTableAnnotationComposer,
+      $$RunSnapshotsTableCreateCompanionBuilder,
+      $$RunSnapshotsTableUpdateCompanionBuilder,
+      (RunSnapshot, $$RunSnapshotsTableReferences),
+      RunSnapshot,
+      PrefetchHooks Function({bool runId})
+    >;
+typedef $$RunSnapshotStepsTableCreateCompanionBuilder =
+    RunSnapshotStepsCompanion Function({
+      required String id,
+      required String runId,
+      required String sourceWorkflowStepId,
+      required int position,
+      required String kind,
+      required String name,
+      Value<String?> cli,
+      Value<String?> model,
+      required String configuration,
+      Value<int> rowid,
+    });
+typedef $$RunSnapshotStepsTableUpdateCompanionBuilder =
+    RunSnapshotStepsCompanion Function({
+      Value<String> id,
+      Value<String> runId,
+      Value<String> sourceWorkflowStepId,
+      Value<int> position,
+      Value<String> kind,
+      Value<String> name,
+      Value<String?> cli,
+      Value<String?> model,
+      Value<String> configuration,
+      Value<int> rowid,
+    });
+
+final class $$RunSnapshotStepsTableReferences
+    extends
+        BaseReferences<
+          _$MaestroDatabase,
+          $RunSnapshotStepsTable,
+          RunSnapshotStep
+        > {
+  $$RunSnapshotStepsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $WorkflowRunsTable _runIdTable(_$MaestroDatabase db) => db.workflowRuns
+      .createAlias('run_snapshot_steps__run_id__workflow_runs__id');
+
+  $$WorkflowRunsTableProcessedTableManager get runId {
+    final $_column = $_itemColumn<String>('run_id')!;
+
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_runIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$RunAttemptsTable, List<RunAttempt>>
+  _runAttemptsRefsTable(_$MaestroDatabase db) => MultiTypedResultKey.fromTable(
+    db.runAttempts,
+    aliasName: 'run_snapshot_steps__id__run_attempts__snapshot_step_id',
+  );
+
+  $$RunAttemptsTableProcessedTableManager get runAttemptsRefs {
+    final manager = $$RunAttemptsTableTableManager(
+      $_db,
+      $_db.runAttempts,
+    ).filter((f) => f.snapshotStepId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_runAttemptsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RunLogSegmentsTable, List<RunLogSegment>>
+  _runLogSegmentsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.runLogSegments,
+        aliasName: 'run_snapshot_steps__id__run_log_segments__snapshot_step_id',
+      );
+
+  $$RunLogSegmentsTableProcessedTableManager get runLogSegmentsRefs {
+    final manager = $$RunLogSegmentsTableTableManager(
+      $_db,
+      $_db.runLogSegments,
+    ).filter((f) => f.snapshotStepId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_runLogSegmentsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$RunSnapshotStepsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $RunSnapshotStepsTable> {
+  $$RunSnapshotStepsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceWorkflowStepId => $composableBuilder(
+    column: $table.sourceWorkflowStepId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cli => $composableBuilder(
+    column: $table.cli,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get model => $composableBuilder(
+    column: $table.model,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowRunsTableFilterComposer get runId {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> runAttemptsRefs(
+    Expression<bool> Function($$RunAttemptsTableFilterComposer f) f,
+  ) {
+    final $$RunAttemptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.snapshotStepId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableFilterComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> runLogSegmentsRefs(
+    Expression<bool> Function($$RunLogSegmentsTableFilterComposer f) f,
+  ) {
+    final $$RunLogSegmentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runLogSegments,
+      getReferencedColumn: (t) => t.snapshotStepId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunLogSegmentsTableFilterComposer(
+            $db: $db,
+            $table: $db.runLogSegments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$RunSnapshotStepsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $RunSnapshotStepsTable> {
+  $$RunSnapshotStepsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceWorkflowStepId => $composableBuilder(
+    column: $table.sourceWorkflowStepId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cli => $composableBuilder(
+    column: $table.cli,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get model => $composableBuilder(
+    column: $table.model,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowRunsTableOrderingComposer get runId {
+    final $$WorkflowRunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunSnapshotStepsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $RunSnapshotStepsTable> {
+  $$RunSnapshotStepsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceWorkflowStepId => $composableBuilder(
+    column: $table.sourceWorkflowStepId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get cli =>
+      $composableBuilder(column: $table.cli, builder: (column) => column);
+
+  GeneratedColumn<String> get model =>
+      $composableBuilder(column: $table.model, builder: (column) => column);
+
+  GeneratedColumn<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => column,
+  );
+
+  $$WorkflowRunsTableAnnotationComposer get runId {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> runAttemptsRefs<T extends Object>(
+    Expression<T> Function($$RunAttemptsTableAnnotationComposer a) f,
+  ) {
+    final $$RunAttemptsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.snapshotStepId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> runLogSegmentsRefs<T extends Object>(
+    Expression<T> Function($$RunLogSegmentsTableAnnotationComposer a) f,
+  ) {
+    final $$RunLogSegmentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runLogSegments,
+      getReferencedColumn: (t) => t.snapshotStepId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunLogSegmentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runLogSegments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$RunSnapshotStepsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $RunSnapshotStepsTable,
+          RunSnapshotStep,
+          $$RunSnapshotStepsTableFilterComposer,
+          $$RunSnapshotStepsTableOrderingComposer,
+          $$RunSnapshotStepsTableAnnotationComposer,
+          $$RunSnapshotStepsTableCreateCompanionBuilder,
+          $$RunSnapshotStepsTableUpdateCompanionBuilder,
+          (RunSnapshotStep, $$RunSnapshotStepsTableReferences),
+          RunSnapshotStep,
+          PrefetchHooks Function({
+            bool runId,
+            bool runAttemptsRefs,
+            bool runLogSegmentsRefs,
+          })
+        > {
+  $$RunSnapshotStepsTableTableManager(
+    _$MaestroDatabase db,
+    $RunSnapshotStepsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RunSnapshotStepsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RunSnapshotStepsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RunSnapshotStepsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> runId = const Value.absent(),
+                Value<String> sourceWorkflowStepId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> cli = const Value.absent(),
+                Value<String?> model = const Value.absent(),
+                Value<String> configuration = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RunSnapshotStepsCompanion(
+                id: id,
+                runId: runId,
+                sourceWorkflowStepId: sourceWorkflowStepId,
+                position: position,
+                kind: kind,
+                name: name,
+                cli: cli,
+                model: model,
+                configuration: configuration,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String runId,
+                required String sourceWorkflowStepId,
+                required int position,
+                required String kind,
+                required String name,
+                Value<String?> cli = const Value.absent(),
+                Value<String?> model = const Value.absent(),
+                required String configuration,
+                Value<int> rowid = const Value.absent(),
+              }) => RunSnapshotStepsCompanion.insert(
+                id: id,
+                runId: runId,
+                sourceWorkflowStepId: sourceWorkflowStepId,
+                position: position,
+                kind: kind,
+                name: name,
+                cli: cli,
+                model: model,
+                configuration: configuration,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RunSnapshotStepsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                runId = false,
+                runAttemptsRefs = false,
+                runLogSegmentsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (runAttemptsRefs) db.runAttempts,
+                    if (runLogSegmentsRefs) db.runLogSegments,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (runId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.runId,
+                                    referencedTable:
+                                        $$RunSnapshotStepsTableReferences
+                                            ._runIdTable(db),
+                                    referencedColumn:
+                                        $$RunSnapshotStepsTableReferences
+                                            ._runIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (runAttemptsRefs)
+                        await $_getPrefetchedData<
+                          RunSnapshotStep,
+                          $RunSnapshotStepsTable,
+                          RunAttempt
+                        >(
+                          currentTable: table,
+                          referencedTable: $$RunSnapshotStepsTableReferences
+                              ._runAttemptsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$RunSnapshotStepsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runAttemptsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.snapshotStepId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (runLogSegmentsRefs)
+                        await $_getPrefetchedData<
+                          RunSnapshotStep,
+                          $RunSnapshotStepsTable,
+                          RunLogSegment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$RunSnapshotStepsTableReferences
+                              ._runLogSegmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$RunSnapshotStepsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runLogSegmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.snapshotStepId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$RunSnapshotStepsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $RunSnapshotStepsTable,
+      RunSnapshotStep,
+      $$RunSnapshotStepsTableFilterComposer,
+      $$RunSnapshotStepsTableOrderingComposer,
+      $$RunSnapshotStepsTableAnnotationComposer,
+      $$RunSnapshotStepsTableCreateCompanionBuilder,
+      $$RunSnapshotStepsTableUpdateCompanionBuilder,
+      (RunSnapshotStep, $$RunSnapshotStepsTableReferences),
+      RunSnapshotStep,
+      PrefetchHooks Function({
+        bool runId,
+        bool runAttemptsRefs,
+        bool runLogSegmentsRefs,
+      })
+    >;
+typedef $$RunAttemptsTableCreateCompanionBuilder =
+    RunAttemptsCompanion Function({
+      required String id,
+      required String runId,
+      required String snapshotStepId,
+      required int attemptNumber,
+      required String status,
+      required DateTime startedAt,
+      Value<DateTime?> completedAt,
+      Value<int?> exitCode,
+      Value<String?> failureCode,
+      Value<String?> declaredContext,
+      Value<int> rowid,
+    });
+typedef $$RunAttemptsTableUpdateCompanionBuilder =
+    RunAttemptsCompanion Function({
+      Value<String> id,
+      Value<String> runId,
+      Value<String> snapshotStepId,
+      Value<int> attemptNumber,
+      Value<String> status,
+      Value<DateTime> startedAt,
+      Value<DateTime?> completedAt,
+      Value<int?> exitCode,
+      Value<String?> failureCode,
+      Value<String?> declaredContext,
+      Value<int> rowid,
+    });
+
+final class $$RunAttemptsTableReferences
+    extends BaseReferences<_$MaestroDatabase, $RunAttemptsTable, RunAttempt> {
+  $$RunAttemptsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $WorkflowRunsTable _runIdTable(_$MaestroDatabase db) =>
+      db.workflowRuns.createAlias('run_attempts__run_id__workflow_runs__id');
+
+  $$WorkflowRunsTableProcessedTableManager get runId {
+    final $_column = $_itemColumn<String>('run_id')!;
+
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_runIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $RunSnapshotStepsTable _snapshotStepIdTable(_$MaestroDatabase db) => db
+      .runSnapshotSteps
+      .createAlias('run_attempts__snapshot_step_id__run_snapshot_steps__id');
+
+  $$RunSnapshotStepsTableProcessedTableManager get snapshotStepId {
+    final $_column = $_itemColumn<String>('snapshot_step_id')!;
+
+    final manager = $$RunSnapshotStepsTableTableManager(
+      $_db,
+      $_db.runSnapshotSteps,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_snapshotStepIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$RunLogSegmentsTable, List<RunLogSegment>>
+  _runLogSegmentsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.runLogSegments,
+        aliasName: 'run_attempts__id__run_log_segments__attempt_id',
+      );
+
+  $$RunLogSegmentsTableProcessedTableManager get runLogSegmentsRefs {
+    final manager = $$RunLogSegmentsTableTableManager(
+      $_db,
+      $_db.runLogSegments,
+    ).filter((f) => f.attemptId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_runLogSegmentsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $RunRecoveryRequestsTable,
+    List<RunRecoveryRequest>
+  >
+  _runRecoveryRequestsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.runRecoveryRequests,
+        aliasName: 'run_attempts__id__run_recovery_requests__attempt_id',
+      );
+
+  $$RunRecoveryRequestsTableProcessedTableManager get runRecoveryRequestsRefs {
+    final manager = $$RunRecoveryRequestsTableTableManager(
+      $_db,
+      $_db.runRecoveryRequests,
+    ).filter((f) => f.attemptId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _runRecoveryRequestsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$RunAttemptsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $RunAttemptsTable> {
+  $$RunAttemptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attemptNumber => $composableBuilder(
+    column: $table.attemptNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get exitCode => $composableBuilder(
+    column: $table.exitCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get declaredContext => $composableBuilder(
+    column: $table.declaredContext,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowRunsTableFilterComposer get runId {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunSnapshotStepsTableFilterComposer get snapshotStepId {
+    final $$RunSnapshotStepsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.snapshotStepId,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableFilterComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> runLogSegmentsRefs(
+    Expression<bool> Function($$RunLogSegmentsTableFilterComposer f) f,
+  ) {
+    final $$RunLogSegmentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runLogSegments,
+      getReferencedColumn: (t) => t.attemptId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunLogSegmentsTableFilterComposer(
+            $db: $db,
+            $table: $db.runLogSegments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> runRecoveryRequestsRefs(
+    Expression<bool> Function($$RunRecoveryRequestsTableFilterComposer f) f,
+  ) {
+    final $$RunRecoveryRequestsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runRecoveryRequests,
+      getReferencedColumn: (t) => t.attemptId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunRecoveryRequestsTableFilterComposer(
+            $db: $db,
+            $table: $db.runRecoveryRequests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$RunAttemptsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $RunAttemptsTable> {
+  $$RunAttemptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attemptNumber => $composableBuilder(
+    column: $table.attemptNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get exitCode => $composableBuilder(
+    column: $table.exitCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get declaredContext => $composableBuilder(
+    column: $table.declaredContext,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowRunsTableOrderingComposer get runId {
+    final $$WorkflowRunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunSnapshotStepsTableOrderingComposer get snapshotStepId {
+    final $$RunSnapshotStepsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.snapshotStepId,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableOrderingComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunAttemptsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $RunAttemptsTable> {
+  $$RunAttemptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptNumber => $composableBuilder(
+    column: $table.attemptNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get exitCode =>
+      $composableBuilder(column: $table.exitCode, builder: (column) => column);
+
+  GeneratedColumn<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get declaredContext => $composableBuilder(
+    column: $table.declaredContext,
+    builder: (column) => column,
+  );
+
+  $$WorkflowRunsTableAnnotationComposer get runId {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunSnapshotStepsTableAnnotationComposer get snapshotStepId {
+    final $$RunSnapshotStepsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.snapshotStepId,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> runLogSegmentsRefs<T extends Object>(
+    Expression<T> Function($$RunLogSegmentsTableAnnotationComposer a) f,
+  ) {
+    final $$RunLogSegmentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.runLogSegments,
+      getReferencedColumn: (t) => t.attemptId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunLogSegmentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runLogSegments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> runRecoveryRequestsRefs<T extends Object>(
+    Expression<T> Function($$RunRecoveryRequestsTableAnnotationComposer a) f,
+  ) {
+    final $$RunRecoveryRequestsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.runRecoveryRequests,
+          getReferencedColumn: (t) => t.attemptId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$RunRecoveryRequestsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.runRecoveryRequests,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$RunAttemptsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $RunAttemptsTable,
+          RunAttempt,
+          $$RunAttemptsTableFilterComposer,
+          $$RunAttemptsTableOrderingComposer,
+          $$RunAttemptsTableAnnotationComposer,
+          $$RunAttemptsTableCreateCompanionBuilder,
+          $$RunAttemptsTableUpdateCompanionBuilder,
+          (RunAttempt, $$RunAttemptsTableReferences),
+          RunAttempt,
+          PrefetchHooks Function({
+            bool runId,
+            bool snapshotStepId,
+            bool runLogSegmentsRefs,
+            bool runRecoveryRequestsRefs,
+          })
+        > {
+  $$RunAttemptsTableTableManager(_$MaestroDatabase db, $RunAttemptsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RunAttemptsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RunAttemptsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RunAttemptsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> runId = const Value.absent(),
+                Value<String> snapshotStepId = const Value.absent(),
+                Value<int> attemptNumber = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<int?> exitCode = const Value.absent(),
+                Value<String?> failureCode = const Value.absent(),
+                Value<String?> declaredContext = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RunAttemptsCompanion(
+                id: id,
+                runId: runId,
+                snapshotStepId: snapshotStepId,
+                attemptNumber: attemptNumber,
+                status: status,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                exitCode: exitCode,
+                failureCode: failureCode,
+                declaredContext: declaredContext,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String runId,
+                required String snapshotStepId,
+                required int attemptNumber,
+                required String status,
+                required DateTime startedAt,
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<int?> exitCode = const Value.absent(),
+                Value<String?> failureCode = const Value.absent(),
+                Value<String?> declaredContext = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RunAttemptsCompanion.insert(
+                id: id,
+                runId: runId,
+                snapshotStepId: snapshotStepId,
+                attemptNumber: attemptNumber,
+                status: status,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                exitCode: exitCode,
+                failureCode: failureCode,
+                declaredContext: declaredContext,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RunAttemptsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                runId = false,
+                snapshotStepId = false,
+                runLogSegmentsRefs = false,
+                runRecoveryRequestsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (runLogSegmentsRefs) db.runLogSegments,
+                    if (runRecoveryRequestsRefs) db.runRecoveryRequests,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (runId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.runId,
+                                    referencedTable:
+                                        $$RunAttemptsTableReferences
+                                            ._runIdTable(db),
+                                    referencedColumn:
+                                        $$RunAttemptsTableReferences
+                                            ._runIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (snapshotStepId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.snapshotStepId,
+                                    referencedTable:
+                                        $$RunAttemptsTableReferences
+                                            ._snapshotStepIdTable(db),
+                                    referencedColumn:
+                                        $$RunAttemptsTableReferences
+                                            ._snapshotStepIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (runLogSegmentsRefs)
+                        await $_getPrefetchedData<
+                          RunAttempt,
+                          $RunAttemptsTable,
+                          RunLogSegment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$RunAttemptsTableReferences
+                              ._runLogSegmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$RunAttemptsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runLogSegmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.attemptId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (runRecoveryRequestsRefs)
+                        await $_getPrefetchedData<
+                          RunAttempt,
+                          $RunAttemptsTable,
+                          RunRecoveryRequest
+                        >(
+                          currentTable: table,
+                          referencedTable: $$RunAttemptsTableReferences
+                              ._runRecoveryRequestsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$RunAttemptsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).runRecoveryRequestsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.attemptId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$RunAttemptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $RunAttemptsTable,
+      RunAttempt,
+      $$RunAttemptsTableFilterComposer,
+      $$RunAttemptsTableOrderingComposer,
+      $$RunAttemptsTableAnnotationComposer,
+      $$RunAttemptsTableCreateCompanionBuilder,
+      $$RunAttemptsTableUpdateCompanionBuilder,
+      (RunAttempt, $$RunAttemptsTableReferences),
+      RunAttempt,
+      PrefetchHooks Function({
+        bool runId,
+        bool snapshotStepId,
+        bool runLogSegmentsRefs,
+        bool runRecoveryRequestsRefs,
+      })
+    >;
+typedef $$RunLogSegmentsTableCreateCompanionBuilder =
+    RunLogSegmentsCompanion Function({
+      required String id,
+      required String runId,
+      required String attemptId,
+      required String snapshotStepId,
+      required int sequence,
+      required String channel,
+      required Uint8List bytes,
+      Value<String> compression,
+      required int originalByteLength,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$RunLogSegmentsTableUpdateCompanionBuilder =
+    RunLogSegmentsCompanion Function({
+      Value<String> id,
+      Value<String> runId,
+      Value<String> attemptId,
+      Value<String> snapshotStepId,
+      Value<int> sequence,
+      Value<String> channel,
+      Value<Uint8List> bytes,
+      Value<String> compression,
+      Value<int> originalByteLength,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$RunLogSegmentsTableReferences
+    extends
+        BaseReferences<_$MaestroDatabase, $RunLogSegmentsTable, RunLogSegment> {
+  $$RunLogSegmentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $WorkflowRunsTable _runIdTable(_$MaestroDatabase db) => db.workflowRuns
+      .createAlias('run_log_segments__run_id__workflow_runs__id');
+
+  $$WorkflowRunsTableProcessedTableManager get runId {
+    final $_column = $_itemColumn<String>('run_id')!;
+
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_runIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $RunAttemptsTable _attemptIdTable(_$MaestroDatabase db) => db
+      .runAttempts
+      .createAlias('run_log_segments__attempt_id__run_attempts__id');
+
+  $$RunAttemptsTableProcessedTableManager get attemptId {
+    final $_column = $_itemColumn<String>('attempt_id')!;
+
+    final manager = $$RunAttemptsTableTableManager(
+      $_db,
+      $_db.runAttempts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_attemptIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $RunSnapshotStepsTable _snapshotStepIdTable(_$MaestroDatabase db) =>
+      db.runSnapshotSteps.createAlias(
+        'run_log_segments__snapshot_step_id__run_snapshot_steps__id',
+      );
+
+  $$RunSnapshotStepsTableProcessedTableManager get snapshotStepId {
+    final $_column = $_itemColumn<String>('snapshot_step_id')!;
+
+    final manager = $$RunSnapshotStepsTableTableManager(
+      $_db,
+      $_db.runSnapshotSteps,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_snapshotStepIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RunLogSegmentsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $RunLogSegmentsTable> {
+  $$RunLogSegmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get compression => $composableBuilder(
+    column: $table.compression,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get originalByteLength => $composableBuilder(
+    column: $table.originalByteLength,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowRunsTableFilterComposer get runId {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunAttemptsTableFilterComposer get attemptId {
+    final $$RunAttemptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attemptId,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableFilterComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunSnapshotStepsTableFilterComposer get snapshotStepId {
+    final $$RunSnapshotStepsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.snapshotStepId,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableFilterComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunLogSegmentsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $RunLogSegmentsTable> {
+  $$RunLogSegmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get compression => $composableBuilder(
+    column: $table.compression,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get originalByteLength => $composableBuilder(
+    column: $table.originalByteLength,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowRunsTableOrderingComposer get runId {
+    final $$WorkflowRunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunAttemptsTableOrderingComposer get attemptId {
+    final $$RunAttemptsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attemptId,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableOrderingComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunSnapshotStepsTableOrderingComposer get snapshotStepId {
+    final $$RunSnapshotStepsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.snapshotStepId,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableOrderingComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunLogSegmentsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $RunLogSegmentsTable> {
+  $$RunLogSegmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
+
+  GeneratedColumn<String> get channel =>
+      $composableBuilder(column: $table.channel, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get bytes =>
+      $composableBuilder(column: $table.bytes, builder: (column) => column);
+
+  GeneratedColumn<String> get compression => $composableBuilder(
+    column: $table.compression,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get originalByteLength => $composableBuilder(
+    column: $table.originalByteLength,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$WorkflowRunsTableAnnotationComposer get runId {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunAttemptsTableAnnotationComposer get attemptId {
+    final $$RunAttemptsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attemptId,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunSnapshotStepsTableAnnotationComposer get snapshotStepId {
+    final $$RunSnapshotStepsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.snapshotStepId,
+      referencedTable: $db.runSnapshotSteps,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunSnapshotStepsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runSnapshotSteps,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunLogSegmentsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $RunLogSegmentsTable,
+          RunLogSegment,
+          $$RunLogSegmentsTableFilterComposer,
+          $$RunLogSegmentsTableOrderingComposer,
+          $$RunLogSegmentsTableAnnotationComposer,
+          $$RunLogSegmentsTableCreateCompanionBuilder,
+          $$RunLogSegmentsTableUpdateCompanionBuilder,
+          (RunLogSegment, $$RunLogSegmentsTableReferences),
+          RunLogSegment,
+          PrefetchHooks Function({
+            bool runId,
+            bool attemptId,
+            bool snapshotStepId,
+          })
+        > {
+  $$RunLogSegmentsTableTableManager(
+    _$MaestroDatabase db,
+    $RunLogSegmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RunLogSegmentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RunLogSegmentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RunLogSegmentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> runId = const Value.absent(),
+                Value<String> attemptId = const Value.absent(),
+                Value<String> snapshotStepId = const Value.absent(),
+                Value<int> sequence = const Value.absent(),
+                Value<String> channel = const Value.absent(),
+                Value<Uint8List> bytes = const Value.absent(),
+                Value<String> compression = const Value.absent(),
+                Value<int> originalByteLength = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RunLogSegmentsCompanion(
+                id: id,
+                runId: runId,
+                attemptId: attemptId,
+                snapshotStepId: snapshotStepId,
+                sequence: sequence,
+                channel: channel,
+                bytes: bytes,
+                compression: compression,
+                originalByteLength: originalByteLength,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String runId,
+                required String attemptId,
+                required String snapshotStepId,
+                required int sequence,
+                required String channel,
+                required Uint8List bytes,
+                Value<String> compression = const Value.absent(),
+                required int originalByteLength,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RunLogSegmentsCompanion.insert(
+                id: id,
+                runId: runId,
+                attemptId: attemptId,
+                snapshotStepId: snapshotStepId,
+                sequence: sequence,
+                channel: channel,
+                bytes: bytes,
+                compression: compression,
+                originalByteLength: originalByteLength,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RunLogSegmentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({runId = false, attemptId = false, snapshotStepId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (runId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.runId,
+                                    referencedTable:
+                                        $$RunLogSegmentsTableReferences
+                                            ._runIdTable(db),
+                                    referencedColumn:
+                                        $$RunLogSegmentsTableReferences
+                                            ._runIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (attemptId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.attemptId,
+                                    referencedTable:
+                                        $$RunLogSegmentsTableReferences
+                                            ._attemptIdTable(db),
+                                    referencedColumn:
+                                        $$RunLogSegmentsTableReferences
+                                            ._attemptIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (snapshotStepId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.snapshotStepId,
+                                    referencedTable:
+                                        $$RunLogSegmentsTableReferences
+                                            ._snapshotStepIdTable(db),
+                                    referencedColumn:
+                                        $$RunLogSegmentsTableReferences
+                                            ._snapshotStepIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$RunLogSegmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $RunLogSegmentsTable,
+      RunLogSegment,
+      $$RunLogSegmentsTableFilterComposer,
+      $$RunLogSegmentsTableOrderingComposer,
+      $$RunLogSegmentsTableAnnotationComposer,
+      $$RunLogSegmentsTableCreateCompanionBuilder,
+      $$RunLogSegmentsTableUpdateCompanionBuilder,
+      (RunLogSegment, $$RunLogSegmentsTableReferences),
+      RunLogSegment,
+      PrefetchHooks Function({bool runId, bool attemptId, bool snapshotStepId})
+    >;
+typedef $$RunRecoveryRequestsTableCreateCompanionBuilder =
+    RunRecoveryRequestsCompanion Function({
+      required String id,
+      required String runId,
+      Value<String?> attemptId,
+      required String action,
+      required String status,
+      required DateTime requestedAt,
+      Value<int> rowid,
+    });
+typedef $$RunRecoveryRequestsTableUpdateCompanionBuilder =
+    RunRecoveryRequestsCompanion Function({
+      Value<String> id,
+      Value<String> runId,
+      Value<String?> attemptId,
+      Value<String> action,
+      Value<String> status,
+      Value<DateTime> requestedAt,
+      Value<int> rowid,
+    });
+
+final class $$RunRecoveryRequestsTableReferences
+    extends
+        BaseReferences<
+          _$MaestroDatabase,
+          $RunRecoveryRequestsTable,
+          RunRecoveryRequest
+        > {
+  $$RunRecoveryRequestsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $WorkflowRunsTable _runIdTable(_$MaestroDatabase db) => db.workflowRuns
+      .createAlias('run_recovery_requests__run_id__workflow_runs__id');
+
+  $$WorkflowRunsTableProcessedTableManager get runId {
+    final $_column = $_itemColumn<String>('run_id')!;
+
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_runIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $RunAttemptsTable _attemptIdTable(_$MaestroDatabase db) => db
+      .runAttempts
+      .createAlias('run_recovery_requests__attempt_id__run_attempts__id');
+
+  $$RunAttemptsTableProcessedTableManager? get attemptId {
+    final $_column = $_itemColumn<String>('attempt_id');
+    if ($_column == null) return null;
+    final manager = $$RunAttemptsTableTableManager(
+      $_db,
+      $_db.runAttempts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_attemptIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RunRecoveryRequestsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $RunRecoveryRequestsTable> {
+  $$RunRecoveryRequestsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowRunsTableFilterComposer get runId {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunAttemptsTableFilterComposer get attemptId {
+    final $$RunAttemptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attemptId,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableFilterComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunRecoveryRequestsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $RunRecoveryRequestsTable> {
+  $$RunRecoveryRequestsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowRunsTableOrderingComposer get runId {
+    final $$WorkflowRunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunAttemptsTableOrderingComposer get attemptId {
+    final $$RunAttemptsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attemptId,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableOrderingComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunRecoveryRequestsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $RunRecoveryRequestsTable> {
+  $$RunRecoveryRequestsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => column,
+  );
+
+  $$WorkflowRunsTableAnnotationComposer get runId {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$RunAttemptsTableAnnotationComposer get attemptId {
+    final $$RunAttemptsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attemptId,
+      referencedTable: $db.runAttempts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RunAttemptsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.runAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RunRecoveryRequestsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $RunRecoveryRequestsTable,
+          RunRecoveryRequest,
+          $$RunRecoveryRequestsTableFilterComposer,
+          $$RunRecoveryRequestsTableOrderingComposer,
+          $$RunRecoveryRequestsTableAnnotationComposer,
+          $$RunRecoveryRequestsTableCreateCompanionBuilder,
+          $$RunRecoveryRequestsTableUpdateCompanionBuilder,
+          (RunRecoveryRequest, $$RunRecoveryRequestsTableReferences),
+          RunRecoveryRequest,
+          PrefetchHooks Function({bool runId, bool attemptId})
+        > {
+  $$RunRecoveryRequestsTableTableManager(
+    _$MaestroDatabase db,
+    $RunRecoveryRequestsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RunRecoveryRequestsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RunRecoveryRequestsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$RunRecoveryRequestsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> runId = const Value.absent(),
+                Value<String?> attemptId = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> requestedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RunRecoveryRequestsCompanion(
+                id: id,
+                runId: runId,
+                attemptId: attemptId,
+                action: action,
+                status: status,
+                requestedAt: requestedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String runId,
+                Value<String?> attemptId = const Value.absent(),
+                required String action,
+                required String status,
+                required DateTime requestedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RunRecoveryRequestsCompanion.insert(
+                id: id,
+                runId: runId,
+                attemptId: attemptId,
+                action: action,
+                status: status,
+                requestedAt: requestedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RunRecoveryRequestsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({runId = false, attemptId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (runId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.runId,
+                                referencedTable:
+                                    $$RunRecoveryRequestsTableReferences
+                                        ._runIdTable(db),
+                                referencedColumn:
+                                    $$RunRecoveryRequestsTableReferences
+                                        ._runIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (attemptId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.attemptId,
+                                referencedTable:
+                                    $$RunRecoveryRequestsTableReferences
+                                        ._attemptIdTable(db),
+                                referencedColumn:
+                                    $$RunRecoveryRequestsTableReferences
+                                        ._attemptIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$RunRecoveryRequestsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $RunRecoveryRequestsTable,
+      RunRecoveryRequest,
+      $$RunRecoveryRequestsTableFilterComposer,
+      $$RunRecoveryRequestsTableOrderingComposer,
+      $$RunRecoveryRequestsTableAnnotationComposer,
+      $$RunRecoveryRequestsTableCreateCompanionBuilder,
+      $$RunRecoveryRequestsTableUpdateCompanionBuilder,
+      (RunRecoveryRequest, $$RunRecoveryRequestsTableReferences),
+      RunRecoveryRequest,
+      PrefetchHooks Function({bool runId, bool attemptId})
+    >;
 
 class $MaestroDatabaseManager {
   final _$MaestroDatabase _db;
@@ -6846,4 +14267,16 @@ class $MaestroDatabaseManager {
       $$WorkflowStepsTableTableManager(_db, _db.workflowSteps);
   $$WorkflowProjectRefsTableTableManager get workflowProjectRefs =>
       $$WorkflowProjectRefsTableTableManager(_db, _db.workflowProjectRefs);
+  $$WorkflowRunsTableTableManager get workflowRuns =>
+      $$WorkflowRunsTableTableManager(_db, _db.workflowRuns);
+  $$RunSnapshotsTableTableManager get runSnapshots =>
+      $$RunSnapshotsTableTableManager(_db, _db.runSnapshots);
+  $$RunSnapshotStepsTableTableManager get runSnapshotSteps =>
+      $$RunSnapshotStepsTableTableManager(_db, _db.runSnapshotSteps);
+  $$RunAttemptsTableTableManager get runAttempts =>
+      $$RunAttemptsTableTableManager(_db, _db.runAttempts);
+  $$RunLogSegmentsTableTableManager get runLogSegments =>
+      $$RunLogSegmentsTableTableManager(_db, _db.runLogSegments);
+  $$RunRecoveryRequestsTableTableManager get runRecoveryRequests =>
+      $$RunRecoveryRequestsTableTableManager(_db, _db.runRecoveryRequests);
 }
