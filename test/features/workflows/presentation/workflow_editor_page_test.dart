@@ -174,7 +174,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.definitions.single.id, 'workflow-id');
       expect(repository.definitions.single.revision, 4);
-      expect(repository.definitions.single.projectIds, ['deleted', 'one', 'two']);
+      expect(repository.definitions.single.projectIds, [
+        'deleted',
+        'one',
+        'two',
+      ]);
       expect(
         find.bySemanticsLabel(RegExp(r'^Workflow success')),
         findsOneWidget,
