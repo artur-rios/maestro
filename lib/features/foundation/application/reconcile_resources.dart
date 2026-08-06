@@ -58,7 +58,8 @@ final class ReconcileResources {
         );
         continue;
       }
-      if (resource.kind != OwnedResourceKind.process &&
+      if (resource.kind != OwnedResourceKind.branch &&
+          resource.kind != OwnedResourceKind.process &&
           evaluatePath(resource.path) != OwnershipDecision.allowed) {
         const message = 'Resource path is not proven safe for cleanup.';
         await store.markFailed(resource.id, message);

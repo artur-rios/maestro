@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart' as db;
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/domain/run_models.dart' as domain;
 
 final class StoredRunAggregate {
@@ -34,11 +35,13 @@ final class RunLogPage {
   final bool hasMore;
 }
 
-final class DriftRunRepository implements ActiveProjectRunReader {
+final class DriftRunRepository
+    implements ActiveProjectRunReader, RunStartRepository {
   const DriftRunRepository(this._database);
 
   final db.MaestroDatabase _database;
 
+  @override
   Future<void> create({
     required domain.WorkflowRun run,
     required domain.RunSnapshot snapshot,
@@ -147,6 +150,7 @@ final class DriftRunRepository implements ActiveProjectRunReader {
     );
   }
 
+  @override
   Future<void> transitionRun({
     required String runId,
     required domain.RunStatus expectedStatus,
