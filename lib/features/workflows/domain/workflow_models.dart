@@ -154,8 +154,9 @@ final class WorkflowDraft {
 
   WorkflowDraft moveStep(String rowKey, int newIndex) {
     final oldIndex = steps.indexWhere((step) => step.rowKey == rowKey);
-    if (oldIndex < 0)
+    if (oldIndex < 0) {
       throw ArgumentError.value(rowKey, 'rowKey', 'Unknown row.');
+    }
     if (newIndex < 0 || newIndex >= steps.length) {
       throw RangeError.range(newIndex, 0, steps.length - 1, 'newIndex');
     }

@@ -9,8 +9,24 @@ import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
+  testWidgets(
+    'GivenAuthenticatedWorkspace_WhenWorkflowsSelected_ThenSharedEditorIsShown',
+    (tester) async {
+      await tester.pumpWidget(_app(workflowService: _workflowService()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create workflow'), findsOneWidget);
+      expect(find.text('Plan'), findsOneWidget);
+      expect(find.text('Execute'), findsOneWidget);
+      expect(find.text('Review'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'GivenEmptyWorkspace_WhenShown_ThenFoundationDiagnosticsRemainMainContent',
     (tester) async {
@@ -290,6 +306,10 @@ void main() {
         find.textContaining('source folder and files remain untouched'),
         findsOneWidget,
       );
+      expect(
+        find.textContaining('Associated workflow links are removed'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
@@ -352,6 +372,7 @@ Widget _app({
   _Validator? validator,
   _ActiveRuns? activeRuns,
   ProjectFolderPicker picker = const _Picker(null),
+  WorkflowDesignService? workflowService,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
@@ -379,10 +400,37 @@ Widget _app({
       home: ProjectWorkspacePage(
         actorId: 'actor-1',
         lifecycleService: lifecycle,
+        workflowService: workflowService,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
     ),
   );
+}
+
+WorkflowDesignService _workflowService() => WorkflowDesignService(
+  repository: _WorkflowRepository(),
+  projectReadiness: const _WorkflowReadiness(),
+  clock: () => DateTime.utc(2026, 8, 6),
+  newId: () => 'workflow-id',
+);
+
+final class _WorkflowRepository implements WorkflowRepository {
+  @override
+  Future<WorkflowDefinition?> findById(String id) async => null;
+  @override
+  Future<List<WorkflowDefinition>> list() async => const [];
+  @override
+  Future<WorkflowRepositorySaveResult> save({
+    required WorkflowDefinition definition,
+    required int? expectedRevision,
+  }) async => WorkflowRepositorySaved(definition);
+}
+
+final class _WorkflowReadiness implements ProjectExecutionReadinessReader {
+  const _WorkflowReadiness();
+  @override
+  Future<ProjectExecutionAvailability> availability(String projectId) async =>
+      ProjectExecutionAvailability.available;
 }
 
 Widget _host({

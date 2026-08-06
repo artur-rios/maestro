@@ -84,6 +84,8 @@ class Projects extends Table {
 
 class Workflows extends Table {
   TextColumn get id => text()();
+  // Drift's generated SQL resolves this getter reference to its column.
+  // ignore: recursive_getters
   IntColumn get revision => integer().check(revision.isBiggerOrEqualValue(1))();
   TextColumn get name => text().nullable()();
   BoolColumn get isReusable => boolean()();
@@ -107,6 +109,8 @@ class WorkflowSteps extends Table {
   TextColumn get id => text()();
   TextColumn get workflowId =>
       text().references(Workflows, #id, onDelete: KeyAction.cascade)();
+  // Drift's generated SQL resolves this getter reference to its column.
+  // ignore: recursive_getters
   IntColumn get position => integer().check(position.isBiggerOrEqualValue(0))();
   TextColumn get kind => text()();
   TextColumn get name => text()();

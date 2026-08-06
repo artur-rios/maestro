@@ -9,6 +9,8 @@ import 'package:maestro/features/authentication/domain/authentication_models.dar
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
   testWidgets(
@@ -77,6 +79,7 @@ void main() {
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
           projectFolderPicker: const _ProjectFolderPicker(),
+          workflowDesignService: _workflowService(),
         ),
       );
 
@@ -86,8 +89,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Projects'), findsOneWidget);
+      expect(find.text('Workflows'), findsOneWidget);
       expect(find.text('Foundation ready'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
+
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create workflow'), findsOneWidget);
     },
   );
 
@@ -236,6 +244,37 @@ void main() {
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );
+}
+
+WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
+    WorkflowDesignService(
+      repository: repository ?? _WorkflowRepository(),
+      projectReadiness: const _WorkflowReadiness(),
+      clock: () => DateTime.utc(2026, 8, 6),
+      newId: () => 'workflow-id',
+    );
+
+final class _WorkflowRepository implements WorkflowRepository {
+  final definitions = <WorkflowDefinition>[];
+  @override
+  Future<WorkflowDefinition?> findById(String id) async => null;
+  @override
+  Future<List<WorkflowDefinition>> list() async => List.of(definitions);
+  @override
+  Future<WorkflowRepositorySaveResult> save({
+    required WorkflowDefinition definition,
+    required int? expectedRevision,
+  }) async {
+    definitions.add(definition);
+    return WorkflowRepositorySaved(definition);
+  }
+}
+
+final class _WorkflowReadiness implements ProjectExecutionReadinessReader {
+  const _WorkflowReadiness();
+  @override
+  Future<ProjectExecutionAvailability> availability(String projectId) async =>
+      ProjectExecutionAvailability.available;
 }
 
 AuthenticationService _authenticationService({

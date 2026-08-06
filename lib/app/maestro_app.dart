@@ -10,6 +10,7 @@ import 'package:maestro/features/projects/application/project_lifecycle_service.
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 
 class MaestroApp extends StatefulWidget {
   const MaestroApp({
@@ -17,6 +18,7 @@ class MaestroApp extends StatefulWidget {
     this.projectService,
     this.projectLifecycleService,
     this.projectFolderPicker,
+    this.workflowDesignService,
     this.foundationProbes = const <FoundationProbe>[],
     this.onDispose,
     super.key,
@@ -26,6 +28,7 @@ class MaestroApp extends StatefulWidget {
   final ProjectService? projectService;
   final ProjectLifecycleService? projectLifecycleService;
   final ProjectFolderPicker? projectFolderPicker;
+  final WorkflowDesignService? workflowDesignService;
   final List<FoundationProbe> foundationProbes;
   final VoidCallback? onDispose;
 
@@ -90,6 +93,7 @@ final class _MaestroAppState extends State<MaestroApp> {
             return ProjectWorkspacePage(
               actorId: session.userId,
               lifecycleService: projectLifecycleService,
+              workflowService: widget.workflowDesignService,
               emptyContent: const FoundationPage(),
             );
           },
