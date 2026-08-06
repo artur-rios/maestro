@@ -104,7 +104,7 @@ final class CommandRunnerRunGitPort implements RunGitPort {
       'list',
       '--porcelain',
     ]);
-    if (!result.succeeded) {
+    if (!result.succeeded || result.stdoutTruncated) {
       return const RunGitPresence.inaccessible(
         'Git could not inspect registered worktrees.',
       );
@@ -134,12 +134,29 @@ final class CommandRunnerRunGitPort implements RunGitPort {
     required String sourcePath,
     required String branchName,
     required String worktreePath,
-  }) => _mutation(sourcePath, <String>[
-    'worktree',
-    'add',
-    worktreePath,
-    branchName,
-  ]);
+  }) async {
+    final registration = await _mutation(sourcePath, <String>[
+      'worktree',
+      'add',
+      '--no-checkout',
+      worktreePath,
+      branchName,
+    ]);
+    if (registration is RunGitMutationFailed) return registration;
+
+    final materialization = await _run(worktreePath, <String>[
+      'checkout',
+      '--force',
+      branchName,
+    ]);
+    if (!materialization.succeeded) {
+      return const RunGitMutationFailed(
+        'Git registered the worktree but could not materialize it.',
+        resourceCreatedByInvocation: true,
+      );
+    }
+    return const RunGitMutationSucceeded();
+  }
 
   @override
   Future<void> removeWorktree({

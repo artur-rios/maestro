@@ -38,6 +38,26 @@ void main() {
       expect(presence.code, RunGitPresenceCode.inaccessible);
     },
   );
+
+  test(
+    'Given successful worktree inspection is truncated_When queried_Then presence is inaccessible rather than absent',
+    () async {
+      final git = CommandRunnerRunGitPort(
+        _Runner(
+          const CommandResult(
+            exitCode: 0,
+            stdout: 'worktree /partial',
+            stderr: '',
+            stdoutTruncated: true,
+          ),
+        ),
+      );
+
+      final presence = await git.worktreePresence('/repo', '/different');
+
+      expect(presence.code, RunGitPresenceCode.inaccessible);
+    },
+  );
 }
 
 final class _Runner implements CommandRunner {

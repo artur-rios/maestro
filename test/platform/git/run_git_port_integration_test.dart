@@ -254,6 +254,43 @@ void main() {
   );
 
   test(
+    'Given production worktree registration succeeds_When materialization fails_Then proven registration is compensated',
+    () async {
+      final productionGit = CommandRunnerRunGitPort(
+        _FailWorktreeMaterializationRunner(const ProcessCommandRunner()),
+      );
+      final service = _service(
+        root: root,
+        source: source,
+        git: productionGit,
+        runId: 'run-ffffffff',
+      );
+      final path = p.join(
+        root.path,
+        'app-data',
+        'worktrees',
+        'project-1',
+        'run-ffffffff',
+      );
+
+      final result = await service(_request(source, _workflow));
+
+      expect((result as RunStartRejected).code, 'run.git.worktree_create');
+      expect(
+        (await git.worktreePresence(source.path, path)).code,
+        RunGitPresenceCode.absent,
+      );
+      expect(
+        (await git.branchPresence(
+          source.path,
+          'feature/uc-06-start-runs-runffffffff',
+        )).code,
+        RunGitPresenceCode.absent,
+      );
+    },
+  );
+
+  test(
     'Given another actor wins the real branch race_When Maestro create fails_Then the competing branch remains',
     () async {
       final service = _service(
@@ -542,6 +579,27 @@ abstract base class _DelegatingRunGitPort implements RunGitPort {
     String sourcePath,
     String worktreePath,
   ) => delegate.worktreePresence(sourcePath, worktreePath);
+}
+
+final class _FailWorktreeMaterializationRunner implements CommandRunner {
+  const _FailWorktreeMaterializationRunner(this.delegate);
+
+  final CommandRunner delegate;
+
+  @override
+  Future<CommandResult> run(CommandRequest request) {
+    if (request.arguments.contains('checkout') &&
+        request.arguments.contains('feature/uc-06-start-runs-runffffffff')) {
+      return Future<CommandResult>.value(
+        const CommandResult(
+          exitCode: 1,
+          stdout: '',
+          stderr: 'injected materialization failure',
+        ),
+      );
+    }
+    return delegate.run(request);
+  }
 }
 
 final class _Repository implements RunStartRepository {
