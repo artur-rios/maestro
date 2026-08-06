@@ -93,7 +93,7 @@ void main() {
   });
 
   test(
-    'GivenLateCatalogRefresh_WhenNewDraftCreated_ThenCompletionIsIgnored',
+    'GivenCatalogRefresh_WhenCreateRequested_ThenCreateIsIgnoredAndRefreshCompletes',
     () async {
       final completer = Completer<AgentCliCatalog>();
       final fixture = _Fixture(
@@ -107,8 +107,9 @@ void main() {
       completer.complete(_catalog(AgentCliKind.codex));
       await refresh;
 
-      expect(fixture.state.catalogs, isNull);
-      expect(fixture.state.draft.kind, WorkflowKind.oneOff);
+      expect(fixture.state.catalogs, isNotNull);
+      expect(fixture.state.catalogBusy, isFalse);
+      expect(fixture.state.draft.kind, WorkflowKind.reusable);
     },
   );
 
@@ -407,6 +408,49 @@ void main() {
       expect(fixture.state.feedback?.isSuccess, isTrue);
     },
   );
+
+  test(
+    'GivenCatalogRefreshInFlight_WhenMissingWorkflowSelected_ThenSelectIsIgnoredAndRefreshCompletes',
+    () async {
+      final pending = Completer<AgentCliCatalog>();
+      final fixture = _Fixture(
+        codex: _Adapter(AgentCliKind.codex, pending.future),
+      );
+      addTearDown(fixture.dispose);
+
+      final refresh = fixture.controller.refreshAgents();
+      await Future<void>.delayed(Duration.zero);
+      await fixture.controller.select('missing');
+      expect(fixture.repository.findCalls, 0);
+
+      pending.complete(_catalog(AgentCliKind.codex));
+      await refresh;
+      expect(fixture.state.catalogBusy, isFalse);
+      expect(fixture.state.feedback, isNull);
+    },
+  );
+
+  test(
+    'GivenCatalogRefreshInFlight_WhenFailingWorkflowSelected_ThenSelectIsIgnoredAndRefreshCompletes',
+    () async {
+      final pending = Completer<AgentCliCatalog>();
+      final fixture = _Fixture(
+        codex: _Adapter(AgentCliKind.codex, pending.future),
+      );
+      fixture.repository.throwOnFind = StateError('must not run');
+      addTearDown(fixture.dispose);
+
+      final refresh = fixture.controller.refreshAgents();
+      await Future<void>.delayed(Duration.zero);
+      await fixture.controller.select('failing');
+      expect(fixture.repository.findCalls, 0);
+
+      pending.complete(_catalog(AgentCliKind.codex));
+      await refresh;
+      expect(fixture.state.catalogBusy, isFalse);
+      expect(fixture.state.feedback, isNull);
+    },
+  );
 }
 
 Future<AgentRowStateCode> _pendingCode({
@@ -527,11 +571,17 @@ AgentCliCatalog _catalog(AgentCliKind kind, {bool cliOnly = false}) =>
 
 final class _Repository implements WorkflowRepository {
   int saveCalls = 0;
+  int findCalls = 0;
   WorkflowDefinition? last;
   Completer<WorkflowRepositorySaveResult>? pending;
+  Object? throwOnFind;
   @override
-  Future<WorkflowDefinition?> findById(String id) async =>
-      last?.id == id ? last : null;
+  Future<WorkflowDefinition?> findById(String id) async {
+    findCalls++;
+    if (throwOnFind case final error?) throw error;
+    return last?.id == id ? last : null;
+  }
+
   @override
   Future<List<WorkflowDefinition>> list() async => [?last];
   @override

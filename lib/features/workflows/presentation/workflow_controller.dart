@@ -141,7 +141,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   }
 
   void create(WorkflowKind kind) {
-    if (state.busy) return;
+    if (state.busy || state.catalogBusy) return;
     _generation++;
     _replaceDraft(WorkflowDraft.initial(kind: kind));
   }
@@ -175,7 +175,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   void reconcileRetainedProjectIds(Iterable<String> ids) {
     _hasRetainedProjectSnapshot = true;
     _retainedProjectIds = Set<String>.unmodifiable(ids);
-    if (state.busy || _disposed) return;
+    if (state.busy || state.catalogBusy || _disposed) return;
     final reconciled = _reconcileDraft(state.draft);
     if (_sameProjectIds(reconciled.projectIds, state.draft.projectIds)) return;
     state = state.copyWith(
@@ -188,7 +188,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
   }
 
   Future<void> select(String id) async {
-    if (state.busy) return;
+    if (state.busy || state.catalogBusy) return;
     final generation = ++_generation;
     state = state.copyWith(busy: true, clearFeedback: true);
     final result = await _service.load(id);
@@ -507,7 +507,7 @@ final class WorkflowController extends Notifier<WorkflowEditorState> {
     Map<String, AgentCliKind>? pendingCliKinds,
     Map<String, AgentRowState>? agentRowStates,
   }) {
-    if (state.busy || _disposed) return;
+    if (state.busy || state.catalogBusy || _disposed) return;
     state = state.copyWith(
       draft: draft,
       rowErrors: const {},

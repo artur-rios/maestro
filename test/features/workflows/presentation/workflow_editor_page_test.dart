@@ -96,6 +96,51 @@ void main() {
   );
 
   testWidgets(
+    'GivenCatalogRefreshInFlight_WhenSavedWorkflowShown_ThenListRowsAndStructureAreDisabled',
+    (tester) async {
+      await _largeSurface(tester);
+      final pending = Completer<AgentCliCatalog>();
+      final repository = _Repository()..definitions.add(_definition());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          codex: _FutureCatalogAdapter(AgentCliKind.codex, pending.future),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<ListTile>(
+              find.byKey(const ValueKey('workflow-workflow-id')),
+            )
+            .onTap,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('step-name-default-plan')),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<DropdownButtonFormField<AgentCliKind>>(
+              find.byKey(const ValueKey('step-cli-default-plan')),
+            )
+            .onChanged,
+        isNull,
+      );
+
+      pending.complete(_agentCatalog(AgentCliKind.codex));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
     'GivenNewWorkflow_WhenShown_ThenAccessibleDefaultsAndActionsExist',
     (tester) async {
       await _largeSurface(tester);
