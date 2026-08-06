@@ -166,6 +166,69 @@ void main() {
     },
   );
 
+  test(
+    'forced mid-stream flush converges across overlapping secrets',
+    () async {
+      const leftSecret = 'left-shared';
+      const rightSecret = 'shared-right';
+      final prefix = 'x' * 65526;
+      final suffix = 'z' * 507;
+      final repository = _Repository()
+        ..aggregates['run-1'] = _aggregate(
+          'run-1',
+          count: 1,
+          worktreePath: Directory.current.path,
+        );
+      final launcher = _BoundaryLauncher.payload(
+        '$prefix$leftSecret-right$suffix',
+      );
+      var attempt = 0;
+      var log = 0;
+      final orchestrator = RunOrchestrator(
+        repository: repository,
+        launcher: launcher,
+        resultFiles: _Results(),
+        executableFor: (cli) => cli,
+        environment: const <String, String>{
+          'LEFT_TOKEN': leftSecret,
+          'RIGHT_TOKEN': rightSecret,
+        },
+        newAttemptId: () => 'attempt-${++attempt}',
+        newLogId: () => 'log-${++log}',
+        newNonce: () => 'nonce',
+        now: () => DateTime.now().toUtc(),
+      );
+      final firstSummary = orchestrator.events.first;
+      final execution = orchestrator.execute('run-1');
+
+      await firstSummary.timeout(const Duration(milliseconds: 100));
+      final midstream = utf8.decode(
+        repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(midstream, isNotEmpty);
+      expect(midstream, isNot(contains('left')));
+      expect(midstream, isNot(contains('shared')));
+      expect(midstream, isNot(contains('right')));
+
+      launcher.release.complete();
+      await execution;
+      final output = utf8.decode(
+        repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      for (final forbidden in <String>[
+        leftSecret,
+        rightSecret,
+        'left-',
+        'shared',
+        '-right',
+      ]) {
+        expect(output, isNot(contains(forbidden)));
+      }
+      expect(output, contains('[REDACTED]'));
+      expect(output.replaceFirst('[REDACTED]', ''), '$prefix$suffix');
+    },
+  );
+
   test('coalesces newline floods and releases completed-run tails', () async {
     final fixture = _Fixture(stepCount: 1);
     fixture.launcher.results.add(
@@ -612,26 +675,27 @@ final class _TimedProcess implements StepProcess {
 }
 
 final class _BoundaryLauncher implements StepProcessLauncher {
-  _BoundaryLauncher(this.secret);
-  final String secret;
+  _BoundaryLauncher(String secret)
+    : payload = '${'x' * (64 * 1024 - 6)}$secret${'z' * 505}';
+  _BoundaryLauncher.payload(this.payload);
+  final String payload;
   final Completer<void> release = Completer<void>();
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async =>
-      StepProcessStart.started(_BoundaryProcess(secret, release));
+      StepProcessStart.started(_BoundaryProcess(payload, release));
 }
 
 final class _BoundaryProcess implements StepProcess {
-  _BoundaryProcess(this.secret, this.release);
-  final String secret;
+  _BoundaryProcess(this.payload, this.release);
+  final String payload;
   final Completer<void> release;
   final Completer<int> _exit = Completer<int>();
 
   @override
   Stream<StepOutputFrame> get frames async* {
-    final prefix = 'x' * (64 * 1024 - 6);
     yield StepOutputFrame(
       RunLogChannel.stdout,
-      Uint8List.fromList(utf8.encode('$prefix$secret${'z' * 505}')),
+      Uint8List.fromList(utf8.encode(payload)),
     );
     await release.future;
     _exit.complete(0);

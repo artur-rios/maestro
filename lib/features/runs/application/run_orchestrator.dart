@@ -408,20 +408,22 @@ Do not add fields and do not write this protocol to stdout.
 
 final class _StreamingFrameRedactor {
   factory _StreamingFrameRedactor(Map<String, String> environment) {
-    final secrets = environment.values
+    final secretValues = environment.values
         .where((value) => value.isNotEmpty)
-        .map(utf8.encode)
         .toList(growable: false);
-    return _StreamingFrameRedactor._(environment, secrets);
+    return _StreamingFrameRedactor._(
+      secretValues,
+      secretValues.map(utf8.encode).toList(growable: false),
+    );
   }
 
-  _StreamingFrameRedactor._(this.environment, this._secretBytes)
+  _StreamingFrameRedactor._(this._environmentSecrets, this._secretBytes)
     : _overlapBytes = _secretBytes.fold<int>(
         512,
         (largest, value) => largest > value.length ? largest : value.length,
       );
   static const int maximumPendingBytes = 64 * 1024;
-  final Map<String, String> environment;
+  final List<String> _environmentSecrets;
   final List<List<int>> _secretBytes;
   final int _overlapBytes;
   final List<int> _pending = <int>[];
@@ -455,35 +457,36 @@ final class _StreamingFrameRedactor {
 
   int _safeFlushCount(int proposed) {
     var safe = proposed;
-    for (final secret in _secretBytes) {
-      if (secret.isEmpty) continue;
-      final firstCandidate = (proposed - secret.length + 1).clamp(0, proposed);
-      final lastCandidate = (proposed - 1).clamp(0, proposed);
-      for (var start = firstCandidate; start <= lastCandidate; start++) {
-        if (start + secret.length > proposed &&
-            start + secret.length <= _pending.length &&
-            _matchesAt(_pending, secret, start)) {
-          if (start < safe) safe = start;
-          break;
+    while (safe > 0) {
+      final previous = safe;
+      for (final secret in _secretBytes) {
+        if (secret.isEmpty) continue;
+        final firstCandidate = (safe - secret.length + 1).clamp(0, safe);
+        final lastCandidate = safe - 1;
+        for (var start = firstCandidate; start <= lastCandidate; start++) {
+          if (start + secret.length > safe &&
+              start + secret.length <= _pending.length &&
+              _matchesAt(_pending, secret, start)) {
+            if (start < safe) safe = start;
+            break;
+          }
         }
       }
-    }
-    while (safe > 0 &&
-        safe < _pending.length &&
-        (_pending[safe] & 0xc0) == 0x80) {
-      safe--;
+      while (safe > 0 &&
+          safe < _pending.length &&
+          (_pending[safe] & 0xc0) == 0x80) {
+        safe--;
+      }
+      if (safe == previous) break;
     }
     return safe;
   }
 
-  Uint8List _redact(List<int> bytes) => Uint8List.fromList(
-    utf8.encode(
-      _redactor.redact(
-        utf8.decode(bytes, allowMalformed: true),
-        environment: environment,
-      ),
-    ),
-  );
+  Uint8List _redact(List<int> bytes) {
+    final text = utf8.decode(bytes, allowMalformed: true);
+    final exactRedacted = _redactExactSecrets(text, _environmentSecrets);
+    return Uint8List.fromList(utf8.encode(_redactor.redact(exactRedacted)));
+  }
 }
 
 bool _matchesAt(List<int> source, List<int> pattern, int start) {
@@ -491,6 +494,40 @@ bool _matchesAt(List<int> source, List<int> pattern, int start) {
     if (source[start + index] != pattern[index]) return false;
   }
   return true;
+}
+
+String _redactExactSecrets(String source, Iterable<String> secrets) {
+  final ranges = <(int, int)>[];
+  for (final secret in secrets) {
+    if (secret.isEmpty) continue;
+    var from = 0;
+    while (from < source.length) {
+      final start = source.indexOf(secret, from);
+      if (start < 0) break;
+      ranges.add((start, start + secret.length));
+      from = start + 1;
+    }
+  }
+  if (ranges.isEmpty) return source;
+  ranges.sort((left, right) => left.$1.compareTo(right.$1));
+  final merged = <(int, int)>[];
+  for (final range in ranges) {
+    if (merged.isEmpty || range.$1 > merged.last.$2) {
+      merged.add(range);
+    } else if (range.$2 > merged.last.$2) {
+      merged[merged.length - 1] = (merged.last.$1, range.$2);
+    }
+  }
+  final output = StringBuffer();
+  var cursor = 0;
+  for (final range in merged) {
+    output
+      ..write(source.substring(cursor, range.$1))
+      ..write('[REDACTED]');
+    cursor = range.$2;
+  }
+  output.write(source.substring(cursor));
+  return output.toString();
 }
 
 final class _LogBatcher {
