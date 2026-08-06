@@ -23,8 +23,6 @@ final class LinuxGroupProcessTree implements NativeProcessTree {
       includeParentEnvironment: true,
       runInShell: false,
     );
-    unawaited(process.stdout.drain<void>());
-    unawaited(process.stderr.drain<void>());
     return _LinuxOwnedProcess(process, _bindings);
   }
 }
@@ -40,6 +38,15 @@ final class _LinuxOwnedProcess implements OwnedNativeProcess {
 
   @override
   Future<int> get exitCode => _process.exitCode;
+
+  @override
+  IOSink get stdin => _process.stdin;
+
+  @override
+  Stream<List<int>> get stdout => _process.stdout;
+
+  @override
+  Stream<List<int>> get stderr => _process.stderr;
 
   @override
   Future<ProcessTerminalState> terminateTree() async {

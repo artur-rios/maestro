@@ -10,6 +10,7 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
@@ -107,6 +108,10 @@ void main() {
       expect(composition.projectRepository, isA<ProjectLifecycleStore>());
       expect(composition.workflowRepository, isA<DriftWorkflowRepository>());
       expect(composition.workflowDesignService, isA<WorkflowDesignService>());
+      expect(
+        composition.agentConfigurationService,
+        isA<AgentConfigurationService>(),
+      );
       expect(workflow.revision, 1);
       expect(workflow.projectIds, <String>[project.id]);
       expect(

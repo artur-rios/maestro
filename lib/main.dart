@@ -18,9 +18,13 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/data/file_selector_project_folder_picker.dart';
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
+import 'package:maestro/platform/agents/claude_code_adapter.dart';
+import 'package:maestro/platform/agents/codex_adapter.dart';
+import 'package:maestro/platform/agents/open_code_adapter.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
@@ -40,6 +44,7 @@ final class ProductionAppComposition {
     required this.projectLifecycleService,
     required this.workflowRepository,
     required this.workflowDesignService,
+    required this.agentConfigurationService,
     required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
@@ -53,6 +58,7 @@ final class ProductionAppComposition {
   final ProjectLifecycleService projectLifecycleService;
   final DriftWorkflowRepository workflowRepository;
   final WorkflowDesignService workflowDesignService;
+  final AgentConfigurationService agentConfigurationService;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -65,6 +71,7 @@ final class ProductionAppComposition {
     projectLifecycleService: projectLifecycleService,
     projectFolderPicker: projectFolderPicker,
     workflowDesignService: workflowDesignService,
+    agentConfigurationService: agentConfigurationService,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
   );
@@ -133,6 +140,14 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
   );
+  final agentConfigurationService = AgentConfigurationService(
+    adapters: [
+      ClaudeCodeAdapter(commandRunner),
+      CodexAdapter(commandRunner),
+      OpenCodeAdapter(commandRunner),
+    ],
+    workflowDesignService: workflowDesignService,
+  );
   return ProductionAppComposition._(
     database: database,
     authenticationService: authenticationService,
@@ -141,6 +156,7 @@ Future<ProductionAppComposition> composeProductionApp({
     projectLifecycleService: projectLifecycleService,
     workflowRepository: workflowRepository,
     workflowDesignService: workflowDesignService,
+    agentConfigurationService: agentConfigurationService,
     activeProjectRuns: activeProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: ProductionFoundation(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/workflows/application/agent_cli_discovery.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 
@@ -67,7 +69,7 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
                 ),
                 PopupMenuButton<WorkflowKind>(
                   tooltip: 'Create workflow',
-                  enabled: !state.busy,
+                  enabled: !state.busy && !state.catalogBusy,
                   onSelected: controller.create,
                   itemBuilder: (_) => const [
                     PopupMenuItem(
@@ -99,7 +101,7 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
                     selected: state.draft.id == definition.id,
                     title: Text(definition.name ?? 'One-off workflow'),
                     subtitle: Text('Revision ${definition.revision}'),
-                    onTap: state.busy
+                    onTap: state.busy || state.catalogBusy
                         ? null
                         : () => controller.select(definition.id),
                   ),
@@ -146,6 +148,7 @@ final class _Editor extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(workflowControllerProvider.notifier);
     final draft = state.draft;
+    final enabled = !state.busy && !state.catalogBusy;
     final projectOptions =
         <_WorkflowProjectOption>[
           for (final project in projects)
@@ -187,7 +190,7 @@ final class _Editor extends ConsumerWidget {
             ButtonSegment(value: WorkflowKind.oneOff, label: Text('One-off')),
           ],
           selected: {draft.kind},
-          onSelectionChanged: state.busy
+          onSelectionChanged: !enabled
               ? null
               : (value) => controller.setKind(value.single),
         ),
@@ -197,7 +200,7 @@ final class _Editor extends ConsumerWidget {
             'workflow-name-${draft.id ?? 'new'}-${draft.kind.name}',
           ),
           initialValue: draft.name,
-          enabled: !state.busy,
+          enabled: enabled,
           decoration: InputDecoration(
             labelText: draft.kind == WorkflowKind.reusable
                 ? 'Workflow name'
@@ -229,14 +232,35 @@ final class _Editor extends ConsumerWidget {
               child: Text('Free-form task'),
             ),
           ],
-          onChanged: state.busy
+          onChanged: !enabled
               ? null
               : (value) {
                   if (value != null) controller.setUnitType(value);
                 },
         ),
         const SizedBox(height: 20),
-        Text('Steps', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Steps',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            Semantics(
+              label: 'Refresh agent catalogs',
+              button: true,
+              child: IconButton(
+                tooltip: 'Refresh agent catalogs',
+                onPressed: state.busy || state.catalogBusy
+                    ? null
+                    : controller.refreshAgents,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ],
+        ),
+        if (state.catalogBusy) const LinearProgressIndicator(),
         for (final (index, step) in draft.steps.indexed)
           _StepRow(
             key: ValueKey(step.rowKey),
@@ -244,13 +268,16 @@ final class _Editor extends ConsumerWidget {
             index: index,
             count: draft.steps.length,
             hasError: state.rowErrors.contains(step.rowKey),
-            enabled: !state.busy,
+            enabled: enabled,
+            catalogs: state.catalogs,
+            rowState: state.agentRowStates[step.rowKey],
+            pendingKind: state.pendingCliKinds[step.rowKey],
           ),
         Align(
           alignment: Alignment.centerLeft,
           child: PopupMenuButton<WorkflowStepKind>(
             tooltip: 'Add workflow step',
-            enabled: !state.busy,
+            enabled: enabled,
             onSelected: controller.addStep,
             itemBuilder: (_) => const [
               PopupMenuItem(
@@ -287,7 +314,7 @@ final class _Editor extends ConsumerWidget {
           CheckboxListTile(
             key: ValueKey('workflow-project-${project.id}'),
             value: draft.projectIds.contains(project.id),
-            onChanged: state.busy || draft.kind == WorkflowKind.oneOff
+            onChanged: !enabled || draft.kind == WorkflowKind.oneOff
                 ? null
                 : (value) =>
                       controller.toggleProject(project.id, value ?? false),
@@ -322,7 +349,7 @@ final class _Editor extends ConsumerWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton(
-            onPressed: state.busy ? null : controller.save,
+            onPressed: state.busy || state.catalogBusy ? null : controller.save,
             child: Text(state.busy ? 'Saving…' : 'Save workflow'),
           ),
         ),
@@ -338,6 +365,9 @@ final class _StepRow extends ConsumerWidget {
     required this.count,
     required this.hasError,
     required this.enabled,
+    required this.catalogs,
+    required this.rowState,
+    required this.pendingKind,
     super.key,
   });
   final WorkflowDraftStep step;
@@ -345,11 +375,29 @@ final class _StepRow extends ConsumerWidget {
   final int count;
   final bool hasError;
   final bool enabled;
+  final AgentCatalogSnapshot? catalogs;
+  final AgentRowState? rowState;
+  final AgentCliKind? pendingKind;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(workflowControllerProvider.notifier);
     final position = index + 1;
+    final selectedKind = pendingKind ?? step.assignment?.kind;
+    final catalog = selectedKind == null || catalogs == null
+        ? null
+        : catalogs!.forKind(selectedKind);
+    final catalogUsable =
+        catalog != null &&
+        catalog.installation == AgentCliInstallation.available &&
+        catalog.session == AgentCliSession.authenticated &&
+        (catalog.modelVerification == AgentModelVerification.accountVerified ||
+            (selectedKind == AgentCliKind.claudeCode &&
+                catalog.modelVerification == AgentModelVerification.cliOnly));
+    final selectedModel = step.assignment?.kind == selectedKind
+        ? step.assignment?.model
+        : null;
+    final models = catalog?.models ?? const <String>[];
     final nameField = TextFormField(
       key: ValueKey('step-name-${step.rowKey}'),
       initialValue: step.name,
@@ -393,6 +441,66 @@ final class _StepRow extends ConsumerWidget {
         ),
       ),
     ];
+    final agentControls = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<AgentCliKind>(
+          key: ValueKey('step-cli-${step.rowKey}'),
+          initialValue: selectedKind,
+          decoration: InputDecoration(
+            labelText: 'Agent CLI for step $position',
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: AgentCliKind.claudeCode,
+              child: Text('Claude Code'),
+            ),
+            DropdownMenuItem(value: AgentCliKind.codex, child: Text('Codex')),
+            DropdownMenuItem(
+              value: AgentCliKind.openCode,
+              child: Text('OpenCode'),
+            ),
+          ],
+          onChanged: enabled
+              ? (value) {
+                  if (value != null) {
+                    controller.selectAgentCli(step.rowKey, value);
+                  }
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey('step-model-${step.rowKey}'),
+          initialValue: selectedModel != null && models.contains(selectedModel)
+              ? selectedModel
+              : null,
+          decoration: InputDecoration(
+            labelText: 'Model for step $position',
+            hintText: selectedModel != null && !models.contains(selectedModel)
+                ? 'Replacement required'
+                : 'Select model',
+          ),
+          items: [
+            for (final model in models)
+              DropdownMenuItem(value: model, child: Text(model)),
+          ],
+          onChanged: enabled && catalogUsable
+              ? (value) {
+                  if (value != null) {
+                    controller.selectAgentModel(step.rowKey, value);
+                  }
+                }
+              : null,
+        ),
+        const SizedBox(height: 6),
+        Semantics(
+          liveRegion: true,
+          label: 'Agent status for step $position. ${_guidance(rowState)}',
+          child: Text(_guidance(rowState)),
+        ),
+      ],
+    );
     return LayoutBuilder(
       builder: (context, constraints) => constraints.maxWidth < 560
           ? Padding(
@@ -402,6 +510,8 @@ final class _StepRow extends ConsumerWidget {
                 children: [
                   Text('Step $position'),
                   nameField,
+                  const SizedBox(height: 8),
+                  agentControls,
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Wrap(children: actions),
@@ -409,14 +519,37 @@ final class _StepRow extends ConsumerWidget {
                 ],
               ),
             )
-          : Row(
-              children: [
-                SizedBox(width: 32, child: Text('$position')),
-                Expanded(child: nameField),
-                ...actions,
-              ],
+          : Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 32, child: Text('$position')),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        nameField,
+                        const SizedBox(height: 8),
+                        agentControls,
+                      ],
+                    ),
+                  ),
+                  ...actions,
+                ],
+              ),
             ),
     );
+  }
+
+  static String _guidance(AgentRowState? state) {
+    if (state == null) return 'Select an agent CLI and model.';
+    return switch (state.code) {
+      AgentRowStateCode.unauthenticated =>
+        'Authenticate in the project terminal (embedded terminal when available), then refresh. Maestro never starts login.',
+      AgentRowStateCode.cliOnly =>
+        'This is a documented CLI alias; account access is checked when the step starts.',
+      _ => state.guidance,
+    };
   }
 }
 

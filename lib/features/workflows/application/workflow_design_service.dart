@@ -109,25 +109,29 @@ final class WorkflowDesignService {
   final DateTime Function() _clock;
   final String Function() _newId;
 
-  Future<WorkflowSaveResult> save(WorkflowDraft draft) async {
-    final issues = _validate(draft);
-    final executeCount = draft.steps
-        .where((step) => step.kind == WorkflowStepKind.execute)
-        .length;
-    if (executeCount != 1) {
-      return WorkflowSaveRejected(
-        code: 'workflow.execute.count',
-        message: 'A workflow must contain exactly one Execute step.',
-        remediation: 'Add or remove Execute steps, then save again.',
-        issues: issues,
+  Future<WorkflowSaveResult> save(
+    WorkflowDraft draft, {
+    bool requireAgentConfiguration = false,
+  }) async {
+    final structureRejection = validateStructure(draft);
+    if (structureRejection != null) return structureRejection;
+    final assignmentIssues = _validateAgentAssignments(
+      draft,
+      requireCompleteConfiguration: requireAgentConfiguration,
+    );
+    if (assignmentIssues.isNotEmpty) {
+      final hasMissing = assignmentIssues.any(
+        (issue) => issue.code == 'workflow.step.agent_required',
       );
-    }
-    if (issues.isNotEmpty) {
       return WorkflowSaveRejected(
-        code: 'workflow.validation_failed',
-        message: 'The workflow has invalid required values.',
-        remediation: 'Correct the highlighted fields, then save again.',
-        issues: issues,
+        code: hasMissing
+            ? 'workflow.agent_configuration.incomplete'
+            : 'workflow.agent_assignment.unverified',
+        message: hasMissing
+            ? 'Every workflow step requires an agent and model.'
+            : 'An agent assignment has not been verified.',
+        remediation: 'Refresh the agent catalog and select a verified model.',
+        issues: assignmentIssues,
       );
     }
 
@@ -149,6 +153,9 @@ final class WorkflowDesignService {
             position: index,
             kind: step.kind,
             name: step.name.trim(),
+            cli: step.assignment?.kind.persistedValue,
+            model: step.assignment?.model,
+            configuration: step.configuration,
           ),
       ],
       projectIds: draft.kind == WorkflowKind.oneOff
@@ -176,6 +183,30 @@ final class WorkflowDesignService {
         remediation: 'Try again.',
       );
     }
+  }
+
+  WorkflowSaveRejected? validateStructure(WorkflowDraft draft) {
+    final issues = _validate(draft);
+    final executeCount = draft.steps
+        .where((step) => step.kind == WorkflowStepKind.execute)
+        .length;
+    if (executeCount != 1) {
+      return WorkflowSaveRejected(
+        code: 'workflow.execute.count',
+        message: 'A workflow must contain exactly one Execute step.',
+        remediation: 'Add or remove Execute steps, then save again.',
+        issues: issues,
+      );
+    }
+    if (issues.isNotEmpty) {
+      return WorkflowSaveRejected(
+        code: 'workflow.validation_failed',
+        message: 'The workflow has invalid required values.',
+        remediation: 'Correct the highlighted fields, then save again.',
+        issues: issues,
+      );
+    }
+    return null;
   }
 
   Future<Result<List<WorkflowDefinition>>> list() async {
@@ -262,6 +293,51 @@ final class WorkflowDesignService {
           WorkflowValidationIssue(
             code: 'workflow.step.name_required',
             message: 'Step ${index + 1} requires a name.',
+            rowKey: step.rowKey,
+            stepIndex: index,
+          ),
+        );
+      }
+    }
+    return List<WorkflowValidationIssue>.unmodifiable(issues);
+  }
+
+  List<WorkflowValidationIssue> _validateAgentAssignments(
+    WorkflowDraft draft, {
+    required bool requireCompleteConfiguration,
+  }) {
+    final issues = <WorkflowValidationIssue>[];
+    for (final (index, step) in draft.steps.indexed) {
+      final assignment = step.assignment;
+      if (assignment == null) {
+        if (requireCompleteConfiguration) {
+          issues.add(
+            WorkflowValidationIssue(
+              code: 'workflow.step.agent_required',
+              message: 'Step ${index + 1} requires an agent and model.',
+              rowKey: step.rowKey,
+              stepIndex: index,
+            ),
+          );
+        } else if (step.hasPersistedAssignment) {
+          issues.add(
+            WorkflowValidationIssue(
+              code: 'workflow.step.agent_unverified',
+              message: 'Step ${index + 1} has an unverified agent change.',
+              rowKey: step.rowKey,
+              stepIndex: index,
+            ),
+          );
+        }
+        continue;
+      }
+      if (!step.assignmentValidated &&
+          (requireCompleteConfiguration ||
+              !step.isUnchangedPersistedAssignment)) {
+        issues.add(
+          WorkflowValidationIssue(
+            code: 'workflow.step.agent_unverified',
+            message: 'Step ${index + 1} has an unverified agent assignment.',
             rowKey: step.rowKey,
             stepIndex: index,
           ),

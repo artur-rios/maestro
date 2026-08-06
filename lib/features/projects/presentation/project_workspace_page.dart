@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
+import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
@@ -12,6 +13,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
     required this.lifecycleService,
     required this.emptyContent,
     this.workflowService,
+    this.agentConfigurationService,
     super.key,
   });
 
@@ -19,6 +21,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final ProjectLifecycleService lifecycleService;
   final Widget emptyContent;
   final WorkflowDesignService? workflowService;
+  final AgentConfigurationService? agentConfigurationService;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +32,10 @@ final class ProjectWorkspacePage extends StatelessWidget {
         projectLifecycleServiceProvider.overrideWithValue(lifecycleService),
         if (workflowService != null)
           workflowDesignServiceProvider.overrideWithValue(workflowService!),
+        if (agentConfigurationService != null)
+          agentConfigurationServiceProvider.overrideWithValue(
+            agentConfigurationService!,
+          ),
         if (workflowService != null)
           workflowControllerProvider.overrideWith(WorkflowController.new),
       ],
