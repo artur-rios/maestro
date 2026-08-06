@@ -6,6 +6,7 @@ import 'package:maestro/features/authentication/presentation/authentication_page
 import 'package:maestro/features/foundation/application/foundation_probe.dart';
 import 'package:maestro/features/foundation/presentation/foundation_controller.dart';
 import 'package:maestro/features/foundation/presentation/foundation_page.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
@@ -14,6 +15,7 @@ class MaestroApp extends StatefulWidget {
   const MaestroApp({
     required this.authenticationService,
     this.projectService,
+    this.projectLifecycleService,
     this.projectFolderPicker,
     this.foundationProbes = const <FoundationProbe>[],
     this.onDispose,
@@ -22,6 +24,7 @@ class MaestroApp extends StatefulWidget {
 
   final AuthenticationService authenticationService;
   final ProjectService? projectService;
+  final ProjectLifecycleService? projectLifecycleService;
   final ProjectFolderPicker? projectFolderPicker;
   final List<FoundationProbe> foundationProbes;
   final VoidCallback? onDispose;
@@ -41,10 +44,16 @@ final class _MaestroAppState extends State<MaestroApp> {
   @override
   Widget build(BuildContext context) {
     final projectService = widget.projectService;
+    final projectLifecycleService = widget.projectLifecycleService;
     final projectFolderPicker = widget.projectFolderPicker;
     if ((projectService == null) != (projectFolderPicker == null)) {
       throw ArgumentError(
         'ProjectService and ProjectFolderPicker must be provided together.',
+      );
+    }
+    if (projectLifecycleService != null && projectService == null) {
+      throw ArgumentError(
+        'ProjectLifecycleService requires the project workspace services.',
       );
     }
     return ProviderScope(
@@ -64,9 +73,26 @@ final class _MaestroAppState extends State<MaestroApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         ),
         home: AuthenticationPage(
-          authenticatedBuilder: (_) => projectService == null
-              ? const FoundationPage()
-              : const ProjectWorkspacePage(emptyContent: FoundationPage()),
+          authenticatedBuilder: (_) {
+            if (projectService == null) return const FoundationPage();
+            final session = widget.authenticationService.currentSession;
+            if (session == null) {
+              throw StateError(
+                'Authenticated workspace requires an active session.',
+              );
+            }
+            if (projectLifecycleService == null) {
+              throw StateError(
+                'Authenticated project workspace requires '
+                'ProjectLifecycleService.',
+              );
+            }
+            return ProjectWorkspacePage(
+              actorId: session.userId,
+              lifecycleService: projectLifecycleService,
+              emptyContent: const FoundationPage(),
+            );
+          },
         ),
       ),
     );

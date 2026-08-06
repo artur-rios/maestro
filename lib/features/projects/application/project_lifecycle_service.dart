@@ -8,17 +8,51 @@ final class ProjectLifecycleService {
     required ActiveProjectRunReader activeRuns,
     required DateTime Function() clock,
     required String Function() newId,
-  }) : _repository = repository,
-       _store = store,
-       _activeRuns = activeRuns,
-       _clock = clock,
-       _newId = newId;
+  }) : this._(
+         repository: repository,
+         store: store,
+         activeRuns: activeRuns,
+         clock: clock,
+         newId: newId,
+       );
+
+  const ProjectLifecycleService._({
+    required this._repository,
+    required this._store,
+    required this._activeRuns,
+    required this._clock,
+    required this._newId,
+  });
 
   final ProjectRepository _repository;
   final ProjectLifecycleStore _store;
   final ActiveProjectRunReader _activeRuns;
   final DateTime Function() _clock;
   final String Function() _newId;
+
+  Future<ProjectLifecycleListResult> listDeleted() async {
+    try {
+      final records =
+          (await _repository.listRetained())
+              .where((record) => record.isDeleted)
+              .toList()
+            ..sort((first, second) {
+              final byName = first.normalizedName.compareTo(
+                second.normalizedName,
+              );
+              return byName != 0 ? byName : first.id.compareTo(second.id);
+            });
+      return ProjectLifecycleRecordsLoaded(
+        List<ProjectRecord>.unmodifiable(records),
+      );
+    } catch (_) {
+      return const ProjectLifecycleListRejected(
+        code: 'project.lifecycle.storage_failed',
+        message: 'Could not load project lifecycle metadata.',
+        remediation: 'Try again.',
+      );
+    }
+  }
 
   Future<ProjectLifecycleResult> softDelete({
     required String projectId,

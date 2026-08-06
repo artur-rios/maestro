@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 
 final class ProjectWorkspacePage extends StatelessWidget {
-  const ProjectWorkspacePage({required this.emptyContent, super.key});
+  const ProjectWorkspacePage({
+    required this.actorId,
+    required this.lifecycleService,
+    required this.emptyContent,
+    super.key,
+  });
 
+  final String actorId;
+  final ProjectLifecycleService lifecycleService;
   final Widget emptyContent;
 
   @override
@@ -12,6 +20,8 @@ final class ProjectWorkspacePage extends StatelessWidget {
     return ProviderScope(
       overrides: [
         projectControllerProvider.overrideWith(ProjectController.new),
+        projectLifecycleActorIdProvider.overrideWithValue(actorId),
+        projectLifecycleServiceProvider.overrideWithValue(lifecycleService),
       ],
       child: _ProjectWorkspaceView(emptyContent: emptyContent),
     );
@@ -100,35 +110,129 @@ final class _ProjectPanel extends ConsumerWidget {
         ),
         if (state.status == ProjectWorkspaceStatus.loading)
           const LinearProgressIndicator(),
-        if (state.projects.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('No projects registered.'),
-          )
-        else
-          Expanded(
-            child: ListView.builder(
-              itemCount: state.projects.length,
-              itemBuilder: (context, index) {
-                final project = state.projects[index];
-                return ListTile(
-                  selected: state.selected?.record.id == project.record.id,
-                  title: Text(project.record.name),
-                  subtitle: project.folderActionsEnabled
-                      ? null
-                      : const Text('Unavailable'),
-                  trailing: project.folderActionsEnabled
-                      ? null
-                      : const Icon(Icons.warning_amber_rounded),
-                  onTap: () => ref
-                      .read(projectControllerProvider.notifier)
-                      .select(project.record.id),
-                );
-              },
-            ),
+        Expanded(
+          child: ListView(
+            children: <Widget>[
+              if (state.projects.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No active projects.'),
+                )
+              else
+                for (final project in state.projects)
+                  ListTile(
+                    selected: state.selected?.record.id == project.record.id,
+                    title: Text(project.record.name),
+                    subtitle: project.folderActionsEnabled
+                        ? null
+                        : const Text('Unavailable'),
+                    trailing: project.folderActionsEnabled
+                        ? null
+                        : const Icon(Icons.warning_amber_rounded),
+                    onTap: state.status == ProjectWorkspaceStatus.loading
+                        ? null
+                        : () => ref
+                              .read(projectControllerProvider.notifier)
+                              .select(project.record.id),
+                  ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  'Deleted projects',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              if (state.deletedProjects.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  child: Text('No deleted projects.'),
+                )
+              else
+                for (final project in state.deletedProjects)
+                  ListTile(
+                    title: Text(project.name),
+                    subtitle: const Text('Maestro metadata retained'),
+                    trailing: Wrap(
+                      spacing: 0,
+                      children: <Widget>[
+                        Semantics(
+                          label: 'Restore ${project.name}',
+                          button: true,
+                          child: IconButton(
+                            tooltip: 'Restore ${project.name}',
+                            onPressed:
+                                state.status == ProjectWorkspaceStatus.loading
+                                ? null
+                                : () => ref
+                                      .read(projectControllerProvider.notifier)
+                                      .restore(project.id),
+                            icon: const Icon(Icons.restore),
+                          ),
+                        ),
+                        Semantics(
+                          label: 'Permanently delete ${project.name}',
+                          button: true,
+                          child: IconButton(
+                            tooltip: 'Permanently delete ${project.name}',
+                            onPressed:
+                                state.status == ProjectWorkspaceStatus.loading
+                                ? null
+                                : () => _confirmPermanentDeletion(
+                                    context,
+                                    ref,
+                                    project.id,
+                                    project.name,
+                                  ),
+                            icon: const Icon(Icons.delete_forever_outlined),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+            ],
           ),
+        ),
       ],
     );
+  }
+
+  Future<void> _confirmPermanentDeletion(
+    BuildContext context,
+    WidgetRef ref,
+    String projectId,
+    String projectName,
+  ) async {
+    final decision = await showDialog<PermanentDeletionDecision>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permanently delete $projectName metadata?'),
+        content: const Text(
+          'Affected Maestro records: the project metadata and its lifecycle '
+          'audit relationship. The source folder and files remain untouched. '
+          'This cannot be undone.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, PermanentDeletionDecision.cancelled),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, PermanentDeletionDecision.confirmed),
+            child: const Text('Permanently delete metadata'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    await ref
+        .read(projectControllerProvider.notifier)
+        .permanentlyDelete(
+          projectId,
+          decision ?? PermanentDeletionDecision.cancelled,
+        );
   }
 
   Future<void> _showRegistrationDialog(
@@ -208,6 +312,11 @@ final class _ProjectContent extends ConsumerWidget {
       return Column(
         children: <Widget>[
           Expanded(child: emptyContent),
+          if (state.lifecycleFeedback case final feedback?)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: _ProjectLifecycleMessage(feedback: feedback),
+            ),
           if (failure != null)
             Padding(
               padding: const EdgeInsets.all(16),
@@ -225,6 +334,27 @@ final class _ProjectContent extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         SelectableText(selected.record.folderPath),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PopupMenuButton<SourcePreservationDecision>(
+            tooltip: 'Project lifecycle actions',
+            enabled: state.status != ProjectWorkspaceStatus.loading,
+            onSelected: (decision) =>
+                _confirmSoftDeletion(context, ref, decision),
+            itemBuilder: (_) =>
+                const <PopupMenuEntry<SourcePreservationDecision>>[
+                  PopupMenuItem<SourcePreservationDecision>(
+                    value: SourcePreservationDecision.confirmed,
+                    child: Text('Move to Deleted'),
+                  ),
+                ],
+            child: const Chip(
+              avatar: Icon(Icons.more_horiz),
+              label: Text('Project lifecycle actions'),
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
         if (!selected.folderActionsEnabled) ...<Widget>[
           const Text('Unavailable'),
@@ -255,6 +385,10 @@ final class _ProjectContent extends ConsumerWidget {
           const SizedBox(height: 16),
           _ProjectFailureMessage(failure: failure),
         ],
+        if (state.lifecycleFeedback case final feedback?) ...<Widget>[
+          const SizedBox(height: 16),
+          _ProjectLifecycleMessage(feedback: feedback),
+        ],
         Semantics(
           label: selected.folderActionsEnabled
               ? 'Folder-dependent actions enabled'
@@ -271,6 +405,78 @@ final class _ProjectContent extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _confirmSoftDeletion(
+    BuildContext context,
+    WidgetRef ref,
+    SourcePreservationDecision requested,
+  ) async {
+    if (requested != SourcePreservationDecision.confirmed) return;
+    final decision = await showDialog<SourcePreservationDecision>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Move project metadata to Deleted?'),
+        content: const Text(
+          'Affected Maestro records: this project metadata and its lifecycle '
+          'state. The source folder and files will remain untouched.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, SourcePreservationDecision.cancelled),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, SourcePreservationDecision.confirmed),
+            child: const Text('Confirm metadata deletion'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    await ref
+        .read(projectControllerProvider.notifier)
+        .softDelete(decision ?? SourcePreservationDecision.cancelled);
+  }
+}
+
+final class _ProjectLifecycleMessage extends StatelessWidget {
+  const _ProjectLifecycleMessage({required this.feedback});
+
+  final ProjectLifecycleFeedback feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      excludeSemantics: true,
+      label: feedback.isSuccess
+          ? 'Project lifecycle success'
+          : 'Project lifecycle error',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: feedback.isSuccess
+              ? Theme.of(context).colorScheme.secondaryContainer
+              : Theme.of(context).colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(feedback.message),
+              if (feedback.remediation case final remediation?)
+                Text(remediation),
+              for (final label in feedback.activeRunLabels) Text(label),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

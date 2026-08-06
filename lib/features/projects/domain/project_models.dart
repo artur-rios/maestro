@@ -189,6 +189,28 @@ sealed class ProjectLifecycleResult {
   const ProjectLifecycleResult();
 }
 
+sealed class ProjectLifecycleListResult {
+  const ProjectLifecycleListResult();
+}
+
+final class ProjectLifecycleRecordsLoaded extends ProjectLifecycleListResult {
+  const ProjectLifecycleRecordsLoaded(this.records);
+
+  final List<ProjectRecord> records;
+}
+
+final class ProjectLifecycleListRejected extends ProjectLifecycleListResult {
+  const ProjectLifecycleListRejected({
+    required this.code,
+    required this.message,
+    required this.remediation,
+  });
+
+  final String code;
+  final String message;
+  final String remediation;
+}
+
 final class ProjectLifecycleSucceeded extends ProjectLifecycleResult {
   const ProjectLifecycleSucceeded({required this.action, required this.record});
 
