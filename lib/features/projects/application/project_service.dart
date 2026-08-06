@@ -13,6 +13,14 @@ abstract interface class ProjectFolderValidator {
   Future<ProjectFolderValidation> validate(ProjectFolder folder);
 }
 
+abstract interface class ProjectFolderPicker {
+  Future<String?> chooseFolder();
+}
+
+final class ProjectFolderPickerException implements Exception {
+  const ProjectFolderPickerException();
+}
+
 abstract final class ProjectRepositoryFailureCodes {
   static const duplicateName = 'project.repository.duplicate_name';
 }

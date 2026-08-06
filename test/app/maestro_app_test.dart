@@ -6,6 +6,8 @@ import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/features/projects/application/project_service.dart';
+import 'package:maestro/features/projects/domain/project_models.dart';
 
 void main() {
   testWidgets(
@@ -14,7 +16,11 @@ void main() {
       final semantics = tester.ensureSemantics();
       try {
         await tester.pumpWidget(
-          MaestroApp(authenticationService: _authenticationService()),
+          MaestroApp(
+            authenticationService: _authenticationService(),
+            projectService: _projectService(),
+            projectFolderPicker: const _ProjectFolderPicker(),
+          ),
         );
 
         expect(find.text('Maestro'), findsOneWidget);
@@ -40,6 +46,8 @@ void main() {
     await tester.pumpWidget(
       MaestroApp(
         authenticationService: service,
+        projectService: _projectService(),
+        projectFolderPicker: const _ProjectFolderPicker(),
         onDispose: () => disposeCount++,
       ),
     );
@@ -56,6 +64,28 @@ void main() {
     expect(disposeCount, 1);
     expect(service.currentSession, isNull);
   });
+
+  testWidgets(
+    'GivenAuthenticatedSession_WhenAppUnlocks_ThenProjectWorkspaceWrapsFoundationDiagnostics',
+    (tester) async {
+      await tester.pumpWidget(
+        MaestroApp(
+          authenticationService: _authenticationService(),
+          projectService: _projectService(),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Projects'), findsOneWidget);
+      expect(find.text('Foundation ready'), findsOneWidget);
+      expect(find.text('Sign out'), findsOneWidget);
+    },
+  );
 }
 
 AuthenticationService _authenticationService({
@@ -73,6 +103,47 @@ AuthenticationService _authenticationService({
     clock: () => DateTime.utc(2026, 8, 5),
     newId: () => 'id-${nextId++}',
   );
+}
+
+ProjectService _projectService() {
+  return ProjectService(
+    repository: _ProjectRepository(),
+    folderValidator: const _ProjectFolderValidator(),
+    clock: () => DateTime.utc(2026, 8, 6),
+    newId: () => 'project-id',
+  );
+}
+
+final class _ProjectFolderPicker implements ProjectFolderPicker {
+  const _ProjectFolderPicker();
+
+  @override
+  Future<String?> chooseFolder() async => null;
+}
+
+final class _ProjectFolderValidator implements ProjectFolderValidator {
+  const _ProjectFolderValidator();
+
+  @override
+  Future<ProjectFolderValidation> validate(ProjectFolder folder) async {
+    return ProjectFolderValidation.available(folder);
+  }
+}
+
+final class _ProjectRepository implements ProjectRepository {
+  @override
+  Future<ProjectRecord?> findById(String id) async => null;
+
+  @override
+  Future<ProjectRecord?> findByNormalizedName(String normalizedName) async =>
+      null;
+
+  @override
+  Future<List<ProjectRecord>> listRetained() async => <ProjectRecord>[];
+
+  @override
+  Future<Result<void>> save(ProjectRecord record) async =>
+      const Success<void>(null);
 }
 
 final class _AuthenticationRepository

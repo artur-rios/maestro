@@ -1,0 +1,283 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/core/errors/failure.dart';
+import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/projects/application/project_service.dart';
+import 'package:maestro/features/projects/domain/project_models.dart';
+
+final projectServiceProvider = Provider<ProjectService>((ref) {
+  throw StateError('ProjectService must be provided by the application.');
+});
+
+final projectFolderPickerProvider = Provider<ProjectFolderPicker>((ref) {
+  throw StateError('ProjectFolderPicker must be provided by the application.');
+});
+
+final projectControllerProvider =
+    NotifierProvider<ProjectController, ProjectWorkspaceState>(
+      ProjectController.new,
+    );
+
+enum ProjectWorkspaceStatus { idle, loading, ready }
+
+enum ProjectFailureCategory {
+  invalidName,
+  invalidFolder,
+  duplicateName,
+  unavailable,
+  storage,
+  picker,
+}
+
+final class ProjectPresentationFailure {
+  const ProjectPresentationFailure({
+    required this.category,
+    required this.message,
+    required this.remediation,
+  });
+
+  final ProjectFailureCategory category;
+  final String message;
+  final String remediation;
+}
+
+final class ProjectWorkspaceState {
+  const ProjectWorkspaceState({
+    this.projects = const <ProjectSelection>[],
+    this.selected,
+    this.status = ProjectWorkspaceStatus.idle,
+    this.failure,
+  });
+
+  final List<ProjectSelection> projects;
+  final ProjectSelection? selected;
+  final ProjectWorkspaceStatus status;
+  final ProjectPresentationFailure? failure;
+
+  ProjectWorkspaceState copyWith({
+    List<ProjectSelection>? projects,
+    ProjectSelection? selected,
+    bool clearSelection = false,
+    ProjectWorkspaceStatus? status,
+    ProjectPresentationFailure? failure,
+    bool clearFailure = false,
+  }) {
+    return ProjectWorkspaceState(
+      projects: projects ?? this.projects,
+      selected: clearSelection ? null : selected ?? this.selected,
+      status: status ?? this.status,
+      failure: clearFailure ? null : failure ?? this.failure,
+    );
+  }
+}
+
+final class ProjectController extends Notifier<ProjectWorkspaceState> {
+  int _operationGeneration = 0;
+  bool _disposed = false;
+
+  ProjectService get _service => ref.read(projectServiceProvider);
+  ProjectFolderPicker get _picker => ref.read(projectFolderPickerProvider);
+
+  @override
+  ProjectWorkspaceState build() {
+    ref.onDispose(() {
+      _disposed = true;
+      _operationGeneration++;
+    });
+    return const ProjectWorkspaceState();
+  }
+
+  Future<void> load() async {
+    final generation = ++_operationGeneration;
+    state = state.copyWith(
+      status: ProjectWorkspaceStatus.loading,
+      clearFailure: true,
+    );
+    final Result<List<ProjectSelection>> result;
+    try {
+      result = await _service.listWithAvailability();
+    } on Object {
+      if (_owns(generation)) {
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: _storageFailure,
+        );
+      }
+      return;
+    }
+    if (!_owns(generation)) return;
+    switch (result) {
+      case Success<List<ProjectSelection>>(:final value):
+        final selectedId = state.selected?.record.id;
+        final selected = selectedId == null
+            ? null
+            : value.where((item) => item.record.id == selectedId).firstOrNull;
+        state = ProjectWorkspaceState(
+          projects: List.unmodifiable(value),
+          selected: selected,
+          status: ProjectWorkspaceStatus.ready,
+          failure: selected == null ? null : _availabilityFailure(selected),
+        );
+      case FailureResult<List<ProjectSelection>>():
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: _storageFailure,
+        );
+    }
+  }
+
+  Future<void> register(String name) async {
+    final generation = ++_operationGeneration;
+    final String? folderPath;
+    try {
+      folderPath = await _picker.chooseFolder();
+    } on Object {
+      if (_owns(generation)) {
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: const ProjectPresentationFailure(
+            category: ProjectFailureCategory.picker,
+            message: 'Could not open the folder picker.',
+            remediation: 'Try choosing the folder again.',
+          ),
+        );
+      }
+      return;
+    }
+    if (!_owns(generation) || folderPath == null) return;
+    state = state.copyWith(
+      status: ProjectWorkspaceStatus.loading,
+      clearFailure: true,
+    );
+    final Result<ProjectSelection> result;
+    try {
+      result = await _service.register(name: name, folderPath: folderPath);
+    } on Object {
+      if (_owns(generation)) {
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: _storageFailure,
+        );
+      }
+      return;
+    }
+    if (!_owns(generation)) return;
+    switch (result) {
+      case Success<ProjectSelection>(:final value):
+        final projects = <ProjectSelection>[
+          ...state.projects.where(
+            (project) => project.record.id != value.record.id,
+          ),
+          value,
+        ]..sort(_compareSelections);
+        state = ProjectWorkspaceState(
+          projects: List.unmodifiable(projects),
+          selected: value,
+          status: ProjectWorkspaceStatus.ready,
+        );
+      case FailureResult<ProjectSelection>(:final failure):
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: _presentFailure(failure),
+        );
+    }
+  }
+
+  Future<void> select(String id) => _select(id, refresh: false);
+
+  Future<void> refreshSelected() async {
+    final id = state.selected?.record.id;
+    if (id != null) await _select(id, refresh: true);
+  }
+
+  Future<void> _select(String id, {required bool refresh}) async {
+    final generation = ++_operationGeneration;
+    state = state.copyWith(
+      status: ProjectWorkspaceStatus.loading,
+      clearFailure: true,
+    );
+    final Result<ProjectSelection> result;
+    try {
+      result = refresh ? await _service.refresh(id) : await _service.select(id);
+    } on Object {
+      if (_owns(generation)) {
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: _storageFailure,
+        );
+      }
+      return;
+    }
+    if (!_owns(generation)) return;
+    switch (result) {
+      case Success<ProjectSelection>(:final value):
+        final projects = state.projects
+            .map((item) => item.record.id == value.record.id ? value : item)
+            .toList(growable: false);
+        state = ProjectWorkspaceState(
+          projects: projects,
+          selected: value,
+          status: ProjectWorkspaceStatus.ready,
+          failure: _availabilityFailure(value),
+        );
+      case FailureResult<ProjectSelection>(:final failure):
+        state = state.copyWith(
+          status: ProjectWorkspaceStatus.ready,
+          failure: _presentFailure(failure),
+        );
+    }
+  }
+
+  bool _owns(int generation) =>
+      !_disposed && generation == _operationGeneration;
+
+  static int _compareSelections(ProjectSelection a, ProjectSelection b) {
+    final byName = a.record.normalizedName.compareTo(b.record.normalizedName);
+    return byName != 0 ? byName : a.record.id.compareTo(b.record.id);
+  }
+
+  static ProjectPresentationFailure? _availabilityFailure(
+    ProjectSelection selection,
+  ) {
+    return selection.folderActionsEnabled
+        ? null
+        : ProjectPresentationFailure(
+            category: ProjectFailureCategory.unavailable,
+            message: 'This project folder is unavailable.',
+            remediation: selection.remediation,
+          );
+  }
+
+  static ProjectPresentationFailure _presentFailure(MaestroFailure failure) {
+    final category = switch (failure.code) {
+      'project.name.invalid' => ProjectFailureCategory.invalidName,
+      'project.name.duplicate' => ProjectFailureCategory.duplicateName,
+      final code when code.startsWith('project.folder.') =>
+        ProjectFailureCategory.invalidFolder,
+      _ => ProjectFailureCategory.storage,
+    };
+    return switch (category) {
+      ProjectFailureCategory.invalidName => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.invalidName,
+        message: 'Enter a valid project name.',
+        remediation: 'Use a non-empty name without control characters.',
+      ),
+      ProjectFailureCategory.duplicateName => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.duplicateName,
+        message: 'A project already uses this name.',
+        remediation: 'Choose a unique project name.',
+      ),
+      ProjectFailureCategory.invalidFolder => const ProjectPresentationFailure(
+        category: ProjectFailureCategory.invalidFolder,
+        message: 'The selected folder is not a valid Git project.',
+        remediation: 'Choose an existing Git working-tree root.',
+      ),
+      _ => _storageFailure,
+    };
+  }
+
+  static const _storageFailure = ProjectPresentationFailure(
+    category: ProjectFailureCategory.storage,
+    message: 'Could not load or save project metadata.',
+    remediation: 'Try again.',
+  );
+}
