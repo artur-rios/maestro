@@ -166,14 +166,20 @@ void main() {
           _ok('''
 \u001b[32m┌  Credentials ~/.local/share/opencode/auth.json\u001b[0m
 │
-●  openai oauth
+●  OpenCode Zen api
 │
-●  anthropic api
+●  Anthropic oauth
 │
 └  2 credentials
+
+┌  Environment
+│
+●  Groq GROQ_API_KEY
+│
+└  1 environment variable
 '''),
           _ok(
-            'openai/gpt-5\nanthropic/claude-sonnet-4-5\ngoogle/gemini\nopenai/bad\u0001\nopenai/${'x' * 300}',
+            'opencode/gpt-5\nanthropic/claude-sonnet-4-5\ngroq/llama\ngoogle/gemini\nopencode/bad\u0001\nopencode/${'x' * 300}',
           ),
         ]);
         final catalog = await OpenCodeAdapter(
@@ -186,8 +192,9 @@ void main() {
           AgentModelVerification.accountVerified,
         );
         expect(catalog.models, <String>[
-          'openai/gpt-5',
+          'opencode/gpt-5',
           'anthropic/claude-sonnet-4-5',
+          'groq/llama',
         ]);
         expect(runner.requests.last.arguments, <String>['models']);
       },
@@ -232,6 +239,27 @@ void main() {
 ┌  Credentials /home/openai/.local/share/opencode/auth.json
 │
 └  0 credentials
+'''),
+          ]),
+          resolver: _resolved(),
+        ).discover();
+        expect(catalog.session, AgentCliSession.unauthenticated);
+        expect(catalog.models, isEmpty);
+      },
+    );
+
+    test(
+      'GivenNearMissAuthText_WhenParsed_ThenNoProviderIsAuthorized',
+      () async {
+        final catalog = await OpenCodeAdapter(
+          _QueueRunner(<CommandResult>[
+            _ok('1.1.2'),
+            _ok('''
+┌  Credentials /home/openai/.local/share/opencode/auth.json
+●  /home/anthropic api
+●  Credentials oauth
+●  Environment GROQ_API_KEY extra
+└  9 credentials
 '''),
           ]),
           resolver: _resolved(),

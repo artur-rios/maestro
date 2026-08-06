@@ -92,8 +92,9 @@ final class ProcessCommandSessionRunner implements CommandSessionRunner {
 
   @override
   Future<CommandSessionStart> start(CommandRequest request) async {
+    OwnedNativeProcess? process;
     try {
-      final process = await (processTree ?? ProcessTreeFactory.current())
+      final activeProcess = await (processTree ?? ProcessTreeFactory.current())
           .start(
             ProcessStartRequest(
               executable: request.executable,
@@ -102,10 +103,13 @@ final class ProcessCommandSessionRunner implements CommandSessionRunner {
               environment: request.environment,
             ),
           );
-      return CommandSessionStart.success(_ProcessCommandSession(process));
+      process = activeProcess;
+      return CommandSessionStart.success(_ProcessCommandSession(activeProcess));
     } on ProcessException catch (error) {
+      await _terminateSafely(process);
       return CommandSessionStart.failure(_failureKind(error));
     } on Object {
+      await _terminateSafely(process);
       return CommandSessionStart.failure(CommandFailureKind.startFailure);
     }
   }
@@ -118,8 +122,11 @@ final class ProcessCommandRunner implements CommandRunner {
 
   @override
   Future<CommandResult> run(CommandRequest request) async {
+    OwnedNativeProcess? process;
+    StreamSubscription<List<int>>? stdoutSubscription;
+    StreamSubscription<List<int>>? stderrSubscription;
     try {
-      final process = await (processTree ?? ProcessTreeFactory.current())
+      final activeProcess = await (processTree ?? ProcessTreeFactory.current())
           .start(
             ProcessStartRequest(
               executable: request.executable,
@@ -128,19 +135,20 @@ final class ProcessCommandRunner implements CommandRunner {
               environment: request.environment,
             ),
           );
+      process = activeProcess;
       final stdout = _BoundedCapture(request.maximumOutputBytes);
       final stderr = _BoundedCapture(request.maximumOutputBytes);
-      final stdoutSubscription = process.stdout.listen(stdout.add);
-      final stderrSubscription = process.stderr.listen(stderr.add);
+      stdoutSubscription = activeProcess.stdout.listen(stdout.add);
+      stderrSubscription = activeProcess.stderr.listen(stderr.add);
       final stdoutDone = stdoutSubscription.asFuture<void>();
       final stderrDone = stderrSubscription.asFuture<void>();
       try {
         final exitCode = await (() async {
           if (request.stdin.isNotEmpty) {
-            process.stdin.add(request.stdin);
+            activeProcess.stdin.add(request.stdin);
           }
-          await process.stdin.close();
-          return process.exitCode;
+          await activeProcess.stdin.close();
+          return activeProcess.exitCode;
         })().timeout(request.timeout);
         var streamsCompleted = true;
         try {
@@ -150,10 +158,8 @@ final class ProcessCommandRunner implements CommandRunner {
           ]).timeout(const Duration(milliseconds: 500));
         } on TimeoutException {
           streamsCompleted = false;
-          await process.terminateTree();
+          await activeProcess.terminateTree();
         }
-        await stdoutSubscription.cancel();
-        await stderrSubscription.cancel();
         return CommandResult(
           exitCode: exitCode,
           stdout: stdout.text,
@@ -162,13 +168,11 @@ final class ProcessCommandRunner implements CommandRunner {
           stderrTruncated: stderr.truncated || !streamsCompleted,
         );
       } on TimeoutException {
-        await process.terminateTree();
+        await activeProcess.terminateTree();
         await Future.wait(<Future<void>>[
           stdoutDone,
           stderrDone,
         ]).timeout(const Duration(seconds: 2), onTimeout: () => const <void>[]);
-        await stdoutSubscription.cancel();
-        await stderrSubscription.cancel();
         return CommandResult(
           exitCode: null,
           stdout: stdout.text,
@@ -192,7 +196,27 @@ final class ProcessCommandRunner implements CommandRunner {
         stderr: '',
         failureKind: CommandFailureKind.startFailure,
       );
+    } finally {
+      await _cancelSafely(stdoutSubscription);
+      await _cancelSafely(stderrSubscription);
+      await _terminateSafely(process);
     }
+  }
+}
+
+Future<void> _cancelSafely(StreamSubscription<List<int>>? subscription) async {
+  try {
+    await subscription?.cancel();
+  } on Object {
+    // Cleanup must not mask the typed command outcome.
+  }
+}
+
+Future<void> _terminateSafely(OwnedNativeProcess? process) async {
+  try {
+    await process?.terminateTree();
+  } on Object {
+    // Cleanup must not mask the typed command outcome.
   }
 }
 
@@ -234,20 +258,37 @@ final class _ProcessCommandSession implements CommandSession {
 
   @override
   Future<void> writeLine(String line) async {
-    if (_closed) throw StateError('The command session is closed.');
-    if (line.contains('\n') || line.contains('\r')) {
-      throw ArgumentError.value(
-        line,
-        'line',
-        'A session frame must be one line.',
-      );
+    try {
+      if (_closed) throw StateError('The command session is closed.');
+      if (line.contains('\n') || line.contains('\r')) {
+        throw ArgumentError.value(
+          line,
+          'line',
+          'A session frame must be one line.',
+        );
+      }
+      _process.stdin.add(utf8.encode('$line\n'));
+      await _process.stdin.flush();
+    } on Object {
+      await close();
+      rethrow;
     }
-    _process.stdin.add(utf8.encode('$line\n'));
-    await _process.stdin.flush();
   }
 
   @override
   Future<String?> readLine({
+    required Duration timeout,
+    required int maximumBytes,
+  }) async {
+    try {
+      return await _readLine(timeout: timeout, maximumBytes: maximumBytes);
+    } on Object {
+      await close();
+      rethrow;
+    }
+  }
+
+  Future<String?> _readLine({
     required Duration timeout,
     required int maximumBytes,
   }) async {
@@ -331,20 +372,23 @@ final class _ProcessCommandSession implements CommandSession {
     if (_closed) return;
     _closed = true;
     try {
-      await _process.stdin.close();
-    } on Object {
-      // The child may already have closed stdin.
-    }
-    if (!_exited) {
       try {
-        await _process.exitCode.timeout(const Duration(milliseconds: 300));
-      } on TimeoutException {
-        await _process.terminateTree();
+        await _process.stdin.close();
+      } on Object {
+        // The child may already have closed stdin.
       }
+      if (!_exited) {
+        try {
+          await _process.exitCode.timeout(const Duration(milliseconds: 300));
+        } on TimeoutException {
+          // The shared finally block terminates the owned tree.
+        }
+      }
+    } finally {
+      await _terminateSafely(_process);
+      await _cancelSafely(_stdoutSubscription);
+      await _cancelSafely(_stderrSubscription);
     }
-    await _process.terminateTree();
-    await _stdoutSubscription.cancel();
-    await _stderrSubscription.cancel();
   }
 }
 

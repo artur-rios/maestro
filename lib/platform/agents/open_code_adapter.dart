@@ -17,8 +17,7 @@ final class OpenCodeAdapter implements AgentCliAdapter {
     r'\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))',
   );
   static final RegExp _credentialRecord = RegExp(
-    r'^\s*●\s+([a-z0-9][a-z0-9._-]{0,63})\s+(?:api|oauth)\s*$',
-    caseSensitive: false,
+    r'^\s*●\s+([A-Za-z0-9][A-Za-z0-9 ._+-]{0,79})\s+(?:api|oauth|[A-Z][A-Z0-9_]{2,})\s*$',
   );
   final AgentAdapterSupport _support;
 
@@ -75,10 +74,31 @@ final class OpenCodeAdapter implements AgentCliAdapter {
     final clean = _stripAnsi(output);
     final providers = <String>{};
     for (final line in clean.split(RegExp(r'\r?\n'))) {
-      final provider = _credentialRecord.firstMatch(line)?.group(1);
-      if (provider != null) providers.add(provider.toLowerCase());
+      final label = _credentialRecord.firstMatch(line)?.group(1);
+      final provider = label == null ? null : _providerId(label);
+      if (provider != null) providers.add(provider);
     }
     return providers;
+  }
+
+  String? _providerId(String label) {
+    final normalizedLabel = label.trim().toLowerCase();
+    if (normalizedLabel == 'opencode zen') return 'opencode';
+    if (const <String>{
+      'credentials',
+      'credential',
+      'environment',
+      'environment variable',
+    }.contains(normalizedLabel)) {
+      return null;
+    }
+    final identifier = normalizedLabel
+        .replaceAll(RegExp(r'[^a-z0-9._+-]+'), '-')
+        .replaceAll(RegExp('-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    return RegExp(r'^[a-z0-9][a-z0-9._+-]{0,63}$').hasMatch(identifier)
+        ? identifier
+        : null;
   }
 
   String _stripAnsi(String value) => value.replaceAll(_ansi, '');
