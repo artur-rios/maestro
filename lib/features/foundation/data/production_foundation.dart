@@ -1,6 +1,5 @@
 import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
-import 'package:maestro/core/storage/database/database_factory.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/core/storage/owned_path_policy.dart';
 import 'package:maestro/features/foundation/application/foundation_probe.dart';
@@ -16,12 +15,13 @@ import 'package:maestro/platform/common/executable_probe.dart';
 final class ProductionFoundation {
   ProductionFoundation({
     required this.paths,
+    required this.database,
     this.commandRunner = const ProcessCommandRunner(),
   });
 
   final ApplicationPaths paths;
+  final MaestroDatabase database;
   final CommandRunner commandRunner;
-  MaestroDatabase? _database;
 
   List<FoundationProbe> get probes => <FoundationProbe>[
     _CallbackFoundationProbe('paths', true, _initializePaths),
@@ -69,15 +69,14 @@ final class ProductionFoundation {
   }
 
   Future<String> _openDatabase() async {
-    _database = await const DatabaseFactory().open(paths);
+    final result = await database.integrityCheck();
+    if (result != 'ok') {
+      throw StateError('SQLite integrity check failed.');
+    }
     return 'SQLite storage passed its integrity check.';
   }
 
   Future<String> _reconcile() async {
-    final database = _database;
-    if (database == null) {
-      throw StateError('Database must be ready before reconciliation.');
-    }
     final store = DriftOwnedResourceStore(database);
     final pending = await store.findPending();
     final policy = OwnedPathPolicy(
