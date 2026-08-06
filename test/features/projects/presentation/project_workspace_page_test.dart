@@ -110,6 +110,92 @@ void main() {
   );
 
   testWidgets(
+    'GivenWorkflowEditedWhileProjectCatalogLoads_WhenCatalogBecomesReady_ThenRetainedAssociationsArePreserved',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final catalogGate = Completer<void>();
+      final projects = _Repository()
+        ..records.addAll([_record(), _deletedRecord(id: 'two')])
+        ..nextListRetained = catalogGate;
+      final workflows = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition(projectIds: const ['one', 'two']))
+        ..validProjectIds.addAll(['one', 'two']);
+      await tester.pumpWidget(
+        _app(
+          repository: projects,
+          workflowService: _workflowService(workflows),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Workflows'));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Edited while loading',
+      );
+
+      catalogGate.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-one')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('workflow-project-two')),
+            )
+            .value,
+        isTrue,
+      );
+      await tester.tap(find.text('Save workflow'));
+      await tester.pumpAndSettle();
+
+      expect(workflows.definitions.single.revision, 4);
+      expect(workflows.definitions.single.name, 'Edited while loading');
+      expect(
+        workflows.definitions.single.projectIds,
+        unorderedEquals(['one', 'two']),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenReadyEmptyProjectCatalog_WhenWorkflowSaved_ThenAbsentAssociationsAreRemoved',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final workflows = _WorkflowRepository()
+        ..definitions.add(_workflowDefinition(projectIds: const ['gone']));
+      await tester.pumpWidget(
+        _app(workflowService: _workflowService(workflows)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Saved against empty catalog',
+      );
+      await tester.tap(find.text('Save workflow'));
+      await tester.pumpAndSettle();
+
+      expect(workflows.definitions.single.revision, 4);
+      expect(workflows.definitions.single.projectIds, isEmpty);
+    },
+  );
+
+  testWidgets(
     'GivenPendingPicker_WhenWorkspaceIsRemoved_ThenCompletionNeverInvokesProjectService',
     (tester) async {
       final repository = _Repository();
@@ -634,6 +720,7 @@ final class _Repository implements ProjectRepository {
   Completer<Result<void>>? nextSave;
   Completer<void>? saveStarted;
   Completer<ProjectRecord?>? nextFind;
+  Completer<void>? nextListRetained;
 
   @override
   Future<ProjectRecord?> findById(String id) async {
@@ -649,7 +736,15 @@ final class _Repository implements ProjectRepository {
   Future<ProjectRecord?> findByNormalizedName(String name) async =>
       records.where((r) => r.normalizedName == name).firstOrNull;
   @override
-  Future<List<ProjectRecord>> listRetained() async => List.of(records);
+  Future<List<ProjectRecord>> listRetained() async {
+    final pending = nextListRetained;
+    if (pending != null) {
+      nextListRetained = null;
+      await pending.future;
+    }
+    return List.of(records);
+  }
+
   @override
   Future<Result<void>> save(ProjectRecord record) async {
     saveStarted?.complete();
@@ -677,10 +772,10 @@ ProjectRecord _record() => ProjectRecord(
   deletedAt: null,
 );
 
-ProjectRecord _deletedRecord() => ProjectRecord(
-  id: 'one',
+ProjectRecord _deletedRecord({String id = 'one'}) => ProjectRecord(
+  id: id,
   name: 'Demo',
-  normalizedName: 'demo',
+  normalizedName: 'demo-$id',
   folderPath: r'C:\missing\demo',
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6, 11),

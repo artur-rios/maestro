@@ -8,10 +8,12 @@ final class WorkflowEditorPage extends ConsumerStatefulWidget {
   const WorkflowEditorPage({
     required this.projects,
     this.deletedProjects = const [],
+    this.projectCatalogReady = true,
     super.key,
   });
   final List<ProjectSelection> projects;
   final List<ProjectRecord> deletedProjects;
+  final bool projectCatalogReady;
 
   @override
   ConsumerState<WorkflowEditorPage> createState() => _WorkflowEditorPageState();
@@ -34,10 +36,12 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
     Future<void>.microtask(() async {
       if (!mounted) return;
       final controller = ref.read(workflowControllerProvider.notifier);
-      controller.reconcileRetainedProjectIds(<String>{
-        for (final project in widget.projects) project.record.id,
-        for (final project in widget.deletedProjects) project.id,
-      });
+      if (widget.projectCatalogReady) {
+        controller.reconcileRetainedProjectIds(<String>{
+          for (final project in widget.projects) project.record.id,
+          for (final project in widget.deletedProjects) project.id,
+        });
+      }
       if (loadDefinitions) await controller.load();
     });
   }

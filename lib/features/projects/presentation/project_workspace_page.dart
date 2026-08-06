@@ -127,6 +127,8 @@ final class _ProjectWorkspacePageState
                 : WorkflowEditorPage(
                     projects: state.projects,
                     deletedProjects: state.deletedProjects,
+                    projectCatalogReady:
+                        state.status == ProjectWorkspaceStatus.ready,
                   ),
           ),
         ],
