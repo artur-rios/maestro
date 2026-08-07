@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
@@ -62,7 +60,6 @@ void main() {
       var next = 0;
       final completions = <String, Completer<void>>{};
       final events = RunSummaryEvents();
-      final tails = <String, Uint8List>{};
       final controller = _controller(
         starter: (_) async {
           next++;
@@ -74,7 +71,6 @@ void main() {
         },
         execute: (runId) => (completions[runId] = Completer<void>()).future,
         events: events,
-        tailFor: (runId) => tails[runId] ?? Uint8List(0),
         statusFor: (runId) async => const RunPresentationSnapshot(
           status: RunStatus.succeeded,
           currentStep: 'Execute',
@@ -86,7 +82,6 @@ void main() {
 
       await controller.start();
       await controller.start();
-      tails['run-1'] = Uint8List.fromList(utf8.encode('planning'));
       events.add(
         const RunLogSummary(
           runId: 'run-1',
@@ -98,8 +93,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(controller.state.runs, hasLength(2));
-      expect(controller.state.runs.first.tail, 'planning');
-      expect(controller.state.runs.last.tail, isEmpty);
+      expect(controller.state.runs.map((run) => run.runId), <String>[
+        'run-1',
+        'run-2',
+      ]);
+      // Only the run that published a summary refreshed its durable status.
+      expect(controller.state.runs.first.status, RunStatus.succeeded);
       expect(controller.state.runs.last.status, RunStatus.running);
       expect(controller.state.runs.last.currentStep, 'Execute');
       completions['run-1']!.complete();
@@ -355,7 +354,6 @@ RunStartController _controller({
   Future<RunStartResult> Function(StartRunRequest request)? starter,
   Future<void> Function(String runId)? execute,
   RunSummaryEvents? events,
-  Uint8List Function(String runId)? tailFor,
   Future<RunPresentationSnapshot?> Function(String runId)? statusFor,
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[],
   Future<void> Function(RunRecoveryOffer, RecoveryAction)? selectRecovery,
@@ -376,7 +374,6 @@ RunStartController _controller({
       ),
   execute: execute ?? (_) async {},
   events: events ?? RunSummaryEvents(),
-  tailFor: tailFor ?? (_) => Uint8List(0),
   statusFor: statusFor ?? (_) async => null,
   recoveryOffers: recoveryOffers,
   loadRecoveryOffers: loadRecoveryOffers,

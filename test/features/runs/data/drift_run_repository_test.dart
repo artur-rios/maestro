@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
@@ -8,6 +9,7 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/runs/data/drift_run_repository.dart';
 import 'package:maestro/features/runs/domain/run_models.dart' as domain;
+import 'package:maestro/features/runs/domain/run_observation.dart';
 
 void main() {
   late MaestroDatabase database;
@@ -20,6 +22,216 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  test(
+    'GivenProjectRuns_WhenListingObservable_ThenActiveRunsPrecedeTerminalRuns',
+    () async {
+      // Given: an older active run and a newer finished run for one project.
+      await _createRun(
+        repository,
+        run: _run(
+          status: domain.RunStatus.running,
+          createdAt: DateTime.utc(2026, 8, 6, 10),
+        ),
+        snapshot: _snapshot(),
+      );
+      await _createRun(
+        repository,
+        run: _run(
+          id: 'run-2',
+          status: domain.RunStatus.failed,
+          createdAt: DateTime.utc(2026, 8, 6, 14),
+        ),
+        snapshot: _snapshot(stepIdPrefix: 'run-2-step'),
+      );
+
+      // When: observable runs are listed for the project.
+      final runs = await repository.listObservable('project-1');
+
+      // Then: the run the user can still act on leads, with derived steps.
+      expect(runs.map((run) => run.runId), <String>['run-1', 'run-2']);
+      expect(runs.first.status, domain.RunStatus.running);
+      expect(runs.first.steps.map((step) => step.name), <String>[
+        'Plan',
+        'Execute',
+      ]);
+      expect(runs.first.currentStep?.position, 0);
+    },
+  );
+
+  test(
+    'GivenRunAttempts_WhenListingObservable_ThenStepStatusIsDerived',
+    () async {
+      // Given: a running run whose first step has an active attempt.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.beginAttempt(_attempt());
+
+      // When: observable runs are listed.
+      final runs = await repository.listObservable('project-1');
+
+      // Then: the attempt evidence colors exactly its own step.
+      expect(runs.single.steps.first.status, RunStepStatus.running);
+      expect(runs.single.steps.first.latestAttemptId, 'attempt-1');
+      expect(runs.single.steps.last.status, RunStepStatus.pending);
+    },
+  );
+
+  test('GivenDeletedRun_WhenListingObservable_ThenItIsExcluded', () async {
+    // Given: a run whose record has been soft-deleted.
+    await _createRun(
+      repository,
+      run: _run(status: domain.RunStatus.failed),
+      snapshot: _snapshot(),
+    );
+    await database
+        .update(database.workflowRuns)
+        .replace(
+          (await (database.select(
+            database.workflowRuns,
+          )..where((table) => table.id.equals('run-1'))).getSingle()).copyWith(
+            deletedAt: Value(DateTime.utc(2026, 8, 6, 15)),
+          ),
+        );
+
+    // When: observable runs are listed and the run is asked for directly.
+    final runs = await repository.listObservable('project-1');
+
+    // Then: neither path exposes a deleted record.
+    expect(runs, isEmpty);
+    expect(await repository.topologyFor('run-1'), isNull);
+  });
+
+  test('GivenOtherProjectRun_WhenListingObservable_ThenItIsExcluded', () async {
+    // Given: two projects, each with one run.
+    await DriftProjectRepository(
+      database,
+    ).save(_project(id: 'project-2', name: 'Other', normalizedName: 'other'));
+    await _createRun(repository, run: _run(), snapshot: _snapshot());
+    await _createRun(
+      repository,
+      run: _run(id: 'run-2', projectId: 'project-2'),
+      snapshot: _snapshot(projectId: 'project-2', stepIdPrefix: 'other-step'),
+    );
+
+    // When: observable runs are listed for the first project.
+    final runs = await repository.listObservable('project-1');
+
+    // Then: another project's run never leaks into this one's view.
+    expect(runs.map((run) => run.runId), <String>['run-1']);
+  });
+
+  test(
+    'GivenStoredSegments_WhenReadingOutputTail_ThenNewestWindowAndChannelsReturn',
+    () async {
+      // Given: an attempt with ordered output on two channels.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      final attempt = _attempt();
+      await repository.beginAttempt(attempt);
+      await _appendOutput(
+        repository,
+        attempt: attempt,
+        fragments: <(domain.RunLogChannel, String)>[
+          (domain.RunLogChannel.stdout, 'one'),
+          (domain.RunLogChannel.stderr, 'two'),
+          (domain.RunLogChannel.system, 'three'),
+        ],
+      );
+
+      // When: the newest two segments are read.
+      final tail = await repository.readOutputTail(
+        runId: 'run-1',
+        attemptId: attempt.id,
+        limit: 2,
+      );
+
+      // Then: the window is ordered, channel-tagged, and reports earlier data.
+      expect(tail.chunks.map((chunk) => chunk.text), <String>['two', 'three']);
+      expect(tail.chunks.map((chunk) => chunk.channel), <domain.RunLogChannel>[
+        domain.RunLogChannel.stderr,
+        domain.RunLogChannel.system,
+      ]);
+      expect(tail.firstSequence, 1);
+      expect(tail.lastSequence, 2);
+      expect(tail.hasEarlier, isTrue);
+    },
+  );
+
+  test(
+    'GivenLoadedWindow_WhenReadingOutputBefore_ThenPrecedingSegmentsReturn',
+    () async {
+      // Given: an attempt whose newest window has already been read.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      final attempt = _attempt();
+      await repository.beginAttempt(attempt);
+      await _appendOutput(
+        repository,
+        attempt: attempt,
+        fragments: <(domain.RunLogChannel, String)>[
+          (domain.RunLogChannel.stdout, 'one'),
+          (domain.RunLogChannel.stdout, 'two'),
+          (domain.RunLogChannel.stdout, 'three'),
+        ],
+      );
+
+      // When: the output preceding sequence 1 is read.
+      final earlier = await repository.readOutputBefore(
+        runId: 'run-1',
+        attemptId: attempt.id,
+        beforeSequenceExclusive: 1,
+        limit: 10,
+      );
+
+      // Then: the oldest segment returns and nothing precedes it.
+      expect(earlier.chunks.map((chunk) => chunk.text), <String>['one']);
+      expect(earlier.firstSequence, 0);
+      expect(earlier.hasEarlier, isFalse);
+    },
+  );
+
+  test(
+    'GivenAnotherRunsAttempt_WhenReadingOutput_ThenCrossRunEvidenceIsRejected',
+    () async {
+      // Given: two runs, each with its own attempt.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await _createRun(
+        repository,
+        run: _run(id: 'run-2', status: domain.RunStatus.running),
+        snapshot: _snapshot(stepIdPrefix: 'run-2-step'),
+      );
+      await repository.beginAttempt(_attempt());
+
+      // When: the second run asks for the first run's attempt output.
+      // Then: the read fails closed rather than mixing runs' evidence.
+      await expectLater(
+        repository.readOutputTail(runId: 'run-2', attemptId: 'attempt-1'),
+        throwsStateError,
+      );
+      await expectLater(
+        repository.readOutputBefore(
+          runId: 'run-2',
+          attemptId: 'attempt-1',
+          beforeSequenceExclusive: 5,
+        ),
+        throwsStateError,
+      );
+    },
+  );
 
   test(
     'GivenRunAndSnapshot_WhenCreated_ThenAggregateAndOrderedStepsCommitAtomically',
@@ -778,10 +990,14 @@ void main() {
   );
 }
 
-ProjectRecord _project() => ProjectRecord(
-  id: 'project-1',
-  name: 'Maestro',
-  normalizedName: 'maestro',
+ProjectRecord _project({
+  String id = 'project-1',
+  String name = 'Maestro',
+  String normalizedName = 'maestro',
+}) => ProjectRecord(
+  id: id,
+  name: name,
+  normalizedName: normalizedName,
   folderPath: r'C:\source\maestro',
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6),
@@ -793,16 +1009,43 @@ domain.WorkflowRun _run({
   domain.RunStatus status = domain.RunStatus.queued,
   int currentStepPosition = 0,
   String label = 'UC-06 Start runs',
+  String projectId = 'project-1',
+  DateTime? createdAt,
 }) => domain.WorkflowRun(
   id: id,
-  projectId: 'project-1',
+  projectId: projectId,
   workflowId: null,
   label: label,
   status: status,
   currentStepPosition: currentStepPosition,
-  createdAt: DateTime.utc(2026, 8, 6, 12),
-  updatedAt: DateTime.utc(2026, 8, 6, 12),
+  createdAt: createdAt ?? DateTime.utc(2026, 8, 6, 12),
+  updatedAt: createdAt ?? DateTime.utc(2026, 8, 6, 12),
 );
+
+/// Stores the ordered output of one attempt so observation reads have history.
+Future<void> _appendOutput(
+  DriftRunRepository repository, {
+  required domain.RunAttempt attempt,
+  required List<(domain.RunLogChannel, String)> fragments,
+}) async {
+  for (var index = 0; index < fragments.length; index++) {
+    final (channel, text) = fragments[index];
+    await repository.appendLog(
+      domain.RunLogSegment(
+        id: 'log-${attempt.id}-$index',
+        runId: attempt.runId,
+        attemptId: attempt.id,
+        snapshotStepId: attempt.snapshotStepId,
+        sequence: index,
+        channel: channel,
+        bytes: Uint8List.fromList(utf8.encode(text)),
+        compression: 'none',
+        originalByteLength: utf8.encode(text).length,
+        createdAt: DateTime.utc(2026, 8, 6, 12, 1, index),
+      ),
+    );
+  }
+}
 
 domain.RunSnapshot _snapshot({
   String projectId = 'project-1',

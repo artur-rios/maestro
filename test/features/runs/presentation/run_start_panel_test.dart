@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +26,6 @@ void main() {
         ),
         execute: (_) async {},
         events: RunSummaryEvents(),
-        tailFor: (_) => Uint8List(0),
         statusFor: (_) async => null,
       );
 
@@ -90,7 +88,6 @@ void main() {
         ),
         execute: (_) async {},
         events: RunSummaryEvents(),
-        tailFor: (_) => Uint8List(0),
         statusFor: (_) async => null,
         recoveryOffers: <RunRecoveryOffer>[offer],
         selectRecovery: (_, _) async => throw StateError('stale'),
@@ -133,7 +130,6 @@ void main() {
         ),
         execute: (_) => completion.future,
         events: RunSummaryEvents(),
-        tailFor: (_) => Uint8List(0),
         statusFor: (_) async => null,
       );
       await tester.pumpWidget(
@@ -178,7 +174,6 @@ void main() {
           ),
           execute: (_) => completion.future,
           events: RunSummaryEvents(),
-          tailFor: (_) => Uint8List(0),
           statusFor: (_) async => null,
         );
       }

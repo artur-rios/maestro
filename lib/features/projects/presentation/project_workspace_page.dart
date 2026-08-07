@@ -23,6 +23,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
     this.workflowService,
     this.agentConfigurationService,
     this.runStartBuilder,
+    this.runObservationBuilder,
     super.key,
   });
 
@@ -32,6 +33,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final WorkflowDesignService? workflowService;
   final AgentConfigurationService? agentConfigurationService;
   final RunStartWorkspaceBuilder? runStartBuilder;
+  final RunStartWorkspaceBuilder? runObservationBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +55,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
         actorId: actorId,
         emptyContent: emptyContent,
         runStartBuilder: runStartBuilder,
+        runObservationBuilder: runObservationBuilder,
       ),
     );
   }
@@ -63,11 +66,13 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
     required this.actorId,
     required this.emptyContent,
     required this.runStartBuilder,
+    required this.runObservationBuilder,
   });
 
   final String actorId;
   final Widget emptyContent;
   final RunStartWorkspaceBuilder? runStartBuilder;
+  final RunStartWorkspaceBuilder? runObservationBuilder;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -96,6 +101,7 @@ final class _ProjectWorkspacePageState
       state: state,
       emptyContent: widget.emptyContent,
       runStartBuilder: widget.runStartBuilder,
+      runObservationBuilder: widget.runObservationBuilder,
     );
     final projectsBody = Row(
       children: <Widget>[
@@ -397,12 +403,14 @@ final class _ProjectContent extends ConsumerWidget {
     required this.state,
     required this.emptyContent,
     required this.runStartBuilder,
+    required this.runObservationBuilder,
   });
 
   final String actorId;
   final ProjectWorkspaceState state;
   final Widget emptyContent;
   final RunStartWorkspaceBuilder? runStartBuilder;
+  final RunStartWorkspaceBuilder? runObservationBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -502,6 +510,8 @@ final class _ProjectContent extends ConsumerWidget {
               ? runStartBuilder!(context, actorId, selected.record)
               : const SizedBox(height: 1, width: double.infinity),
         ),
+        if (runObservationBuilder != null)
+          runObservationBuilder!(context, actorId, selected.record),
       ],
     );
   }

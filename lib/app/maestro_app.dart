@@ -22,6 +22,7 @@ class MaestroApp extends StatefulWidget {
     this.workflowDesignService,
     this.agentConfigurationService,
     this.runStartBuilder,
+    this.runObservationBuilder,
     this.foundationProbes = const <FoundationProbe>[],
     this.onDispose,
     super.key,
@@ -34,6 +35,7 @@ class MaestroApp extends StatefulWidget {
   final WorkflowDesignService? workflowDesignService;
   final AgentConfigurationService? agentConfigurationService;
   final RunStartWorkspaceBuilder? runStartBuilder;
+  final RunStartWorkspaceBuilder? runObservationBuilder;
   final List<FoundationProbe> foundationProbes;
   final VoidCallback? onDispose;
 
@@ -101,6 +103,7 @@ final class _MaestroAppState extends State<MaestroApp> {
               workflowService: widget.workflowDesignService,
               agentConfigurationService: widget.agentConfigurationService,
               runStartBuilder: widget.runStartBuilder,
+              runObservationBuilder: widget.runObservationBuilder,
               emptyContent: const FoundationPage(),
             );
           },

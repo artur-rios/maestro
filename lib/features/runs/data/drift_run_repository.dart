@@ -5,10 +5,12 @@ import 'package:maestro/core/storage/database/maestro_database.dart' as db;
 import 'package:maestro/features/foundation/application/reconcile_resources.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/domain/run_models.dart' as domain;
+import 'package:maestro/features/runs/domain/run_observation.dart';
 
 final class StoredRunAggregate {
   StoredRunAggregate({
@@ -46,7 +48,8 @@ final class DriftRunRepository
         RunExecutionRepository,
         RunInterruptionRepository,
         RunActivityReader,
-        RunInterruptionStateReader {
+        RunInterruptionStateReader,
+        RunObservationRepository {
   const DriftRunRepository(this._database);
 
   final db.MaestroDatabase _database;
@@ -836,6 +839,129 @@ final class DriftRunRepository
         .map((row) => ActiveProjectRun(id: row.id, label: row.label))
         .toList(growable: false);
   }
+
+  @override
+  Future<List<RunTopology>> listObservable(String projectId) async {
+    final rows =
+        await (_database.select(_database.workflowRuns)..where(
+              (table) =>
+                  table.projectId.equals(projectId) & table.deletedAt.isNull(),
+            ))
+            .get();
+    final topologies = <RunTopology>[];
+    for (final row in rows) {
+      final topology = await _topologyForRow(row);
+      if (topology != null) topologies.add(topology);
+    }
+    // Runs the user can still act on come first; within each group the newest
+    // run leads, because that is the one just started.
+    topologies.sort((left, right) {
+      final active = _activeRank(
+        left.status,
+      ).compareTo(_activeRank(right.status));
+      if (active != 0) return active;
+      final created = right.createdAt.compareTo(left.createdAt);
+      return created != 0 ? created : right.runId.compareTo(left.runId);
+    });
+    return List<RunTopology>.unmodifiable(topologies);
+  }
+
+  @override
+  Future<RunTopology?> topologyFor(String runId) async {
+    final row = await (_database.select(
+      _database.workflowRuns,
+    )..where((table) => table.id.equals(runId))).getSingleOrNull();
+    if (row == null || row.deletedAt != null) return null;
+    return _topologyForRow(row);
+  }
+
+  @override
+  Future<ObservedOutput> readOutputTail({
+    required String runId,
+    required String attemptId,
+    int limit = ObserveRuns.defaultWindowSize,
+  }) async {
+    final segments = await readLogTail(
+      runId: runId,
+      attemptId: attemptId,
+      limit: limit,
+    );
+    return _outputFrom(segments);
+  }
+
+  @override
+  Future<ObservedOutput> readOutputBefore({
+    required String runId,
+    required String attemptId,
+    required int beforeSequenceExclusive,
+    int limit = ObserveRuns.defaultWindowSize,
+  }) async {
+    _validateLogLimit(limit);
+    await _requireAttemptOwnership(runId: runId, attemptId: attemptId);
+    final rows =
+        await (_database.select(_database.runLogSegments)
+              ..where(
+                (table) =>
+                    table.runId.equals(runId) &
+                    table.attemptId.equals(attemptId) &
+                    table.sequence.isSmallerThanValue(beforeSequenceExclusive),
+              )
+              ..orderBy(<OrderingTerm Function(db.RunLogSegments)>[
+                (table) => OrderingTerm.desc(table.sequence),
+              ])
+              ..limit(limit))
+            .get();
+    return _outputFrom(rows.reversed.map(_logFromRow).toList(growable: false));
+  }
+
+  @override
+  Future<ObservedOutput> readOutputAfter({
+    required String runId,
+    required String attemptId,
+    required int afterSequenceExclusive,
+    int limit = ObserveRuns.defaultWindowSize,
+  }) async {
+    final page = await readLogPage(
+      runId: runId,
+      attemptId: attemptId,
+      afterSequenceExclusive: afterSequenceExclusive,
+      limit: limit,
+    );
+    return _outputFrom(page.segments);
+  }
+
+  Future<RunTopology?> _topologyForRow(db.WorkflowRun row) async {
+    final snapshotRow = await (_database.select(
+      _database.runSnapshots,
+    )..where((table) => table.runId.equals(row.id))).getSingleOrNull();
+    if (snapshotRow == null) return null;
+    final attempts = await (_database.select(
+      _database.runAttempts,
+    )..where((table) => table.runId.equals(row.id))).get();
+    return deriveTopology(
+      run: _runFromRow(row),
+      snapshot: domain.RunSnapshot.fromCanonicalJson(
+        snapshotRow.canonicalPayload,
+      ),
+      attempts: attempts.map(_attemptFromRow),
+    );
+  }
+
+  static ObservedOutput _outputFrom(List<domain.RunLogSegment> segments) {
+    if (segments.isEmpty) return ObservedOutput.empty;
+    final first = segments.first.sequence;
+    return ObservedOutput(
+      chunks: segments.map(
+        (segment) =>
+            RunOutputChunk(channel: segment.channel, bytes: segment.bytes),
+      ),
+      hasEarlier: first > 0,
+      firstSequence: first,
+      lastSequence: segments.last.sequence,
+    );
+  }
+
+  static int _activeRank(domain.RunStatus status) => status.isTerminal ? 1 : 0;
 
   Future<void> _insertLog(domain.RunLogSegment segment) => _database
       .into(_database.runLogSegments)

@@ -23,6 +23,7 @@ import 'package:maestro/features/projects/data/file_selector_project_folder_pick
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/application/work_item_resolver.dart';
@@ -31,6 +32,8 @@ import 'package:maestro/features/runs/data/owned_attempt_result_files.dart';
 import 'package:maestro/features/runs/data/production_run_preflight.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/data/production_work_item_resolvers.dart';
+import 'package:maestro/features/runs/presentation/active_runs_panel.dart';
+import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_panel.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
@@ -71,6 +74,7 @@ final class ProductionAppComposition {
     required this.runRepository,
     required this.runOrchestrator,
     required this.runStartBuilder,
+    required this.runObservationBuilder,
     required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
@@ -88,6 +92,7 @@ final class ProductionAppComposition {
   final DriftRunRepository runRepository;
   final RunOrchestrator runOrchestrator;
   final RunStartWorkspaceBuilder runStartBuilder;
+  final RunStartWorkspaceBuilder runObservationBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -102,6 +107,7 @@ final class ProductionAppComposition {
     workflowDesignService: workflowDesignService,
     agentConfigurationService: agentConfigurationService,
     runStartBuilder: runStartBuilder,
+    runObservationBuilder: runObservationBuilder,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
   );
@@ -262,7 +268,6 @@ Future<ProductionAppComposition> composeProductionApp({
       starter: starter.call,
       execute: runOrchestrator.execute,
       events: runOrchestrator.events,
-      tailFor: runOrchestrator.tailFor,
       statusFor: (runId) async {
         final aggregate = await runRepository.findById(runId);
         if (aggregate == null) return null;
@@ -290,6 +295,20 @@ Future<ProductionAppComposition> composeProductionApp({
     createController: () => createRunStartController(actorId, project),
   );
 
+  final observeRuns = ObserveRuns(repository: runRepository);
+  Widget runObservationBuilder(
+    BuildContext context,
+    String actorId,
+    ProjectRecord project,
+  ) => ActiveRunsPanel(
+    key: ValueKey<String>('run-observation-${project.id}'),
+    createController: () => RunObservationController(
+      projectId: project.id,
+      observe: observeRuns,
+      events: runOrchestrator.events,
+    ),
+  );
+
   return ProductionAppComposition._(
     database: database,
     authenticationService: authenticationService,
@@ -302,6 +321,7 @@ Future<ProductionAppComposition> composeProductionApp({
     runRepository: runRepository,
     runOrchestrator: runOrchestrator,
     runStartBuilder: runStartBuilder,
+    runObservationBuilder: runObservationBuilder,
     activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: foundation,
