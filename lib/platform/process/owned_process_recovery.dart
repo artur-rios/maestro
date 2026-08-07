@@ -120,7 +120,6 @@ enum LinuxGroupSignal { terminate, kill }
 
 abstract interface class LinuxGroupControl {
   void signal(int groupId, LinuxGroupSignal signal);
-  Future<bool> exists(int groupId);
 }
 
 final class PlatformLinuxGroupControl implements LinuxGroupControl {
@@ -135,17 +134,9 @@ final class PlatformLinuxGroupControl implements LinuxGroupControl {
           : ProcessSignal.sigkill,
     );
   }
-
-  @override
-  Future<bool> exists(int groupId) async {
-    final probe = await Process.run('/bin/kill', <String>[
-      '-0',
-      '--',
-      '-$groupId',
-    ], runInShell: false);
-    return probe.exitCode == 0;
-  }
 }
+
+enum _OwnedGroupState { present, gone, reusedLeader }
 
 final class LinuxOwnedProcessRecovery implements OwnedProcessRecoveryAdapter {
   const LinuxOwnedProcessRecovery({
@@ -169,34 +160,45 @@ final class LinuxOwnedProcessRecovery implements OwnedProcessRecoveryAdapter {
       return ProcessRecoveryOutcome.retainedFailure;
     }
     try {
-      final snapshots = await _processTable.snapshots();
-      final leader = snapshots
-          .where((value) => value.pid == identity.pid)
-          .firstOrNull;
-      if (leader != null &&
-          (leader.startTime != persisted.startTime ||
-              leader.sessionId != persisted.sessionId ||
-              leader.processGroupId != groupId)) {
-        return ProcessRecoveryOutcome.retainedFailure;
-      }
-      final members = _matchingMembers(
-        snapshots,
+      final initial = _observe(
+        await _processTable.snapshots(),
+        leaderPid: identity.pid,
         groupId: groupId,
+        startTime: persisted.startTime,
         sessionId: persisted.sessionId,
       );
-      if (members.isEmpty) return ProcessRecoveryOutcome.resolved;
+      if (initial == _OwnedGroupState.reusedLeader) {
+        return ProcessRecoveryOutcome.retainedFailure;
+      }
+      if (initial == _OwnedGroupState.gone) {
+        return ProcessRecoveryOutcome.resolved;
+      }
 
       _groupControl.signal(groupId, LinuxGroupSignal.terminate);
       if (await _waitAbsent(
+        identity.pid,
         groupId,
+        persisted.startTime,
         persisted.sessionId,
         const Duration(seconds: 2),
       )) {
         return ProcessRecoveryOutcome.resolved;
       }
+      final beforeEscalation = _observe(
+        await _processTable.snapshots(),
+        leaderPid: identity.pid,
+        groupId: groupId,
+        startTime: persisted.startTime,
+        sessionId: persisted.sessionId,
+      );
+      if (beforeEscalation != _OwnedGroupState.present) {
+        return ProcessRecoveryOutcome.resolved;
+      }
       _groupControl.signal(groupId, LinuxGroupSignal.kill);
       return await _waitAbsent(
+            identity.pid,
             groupId,
+            persisted.startTime,
             persisted.sessionId,
             const Duration(seconds: 3),
           )
@@ -207,30 +209,50 @@ final class LinuxOwnedProcessRecovery implements OwnedProcessRecoveryAdapter {
     }
   }
 
-  Future<bool> _waitAbsent(int groupId, int sessionId, Duration timeout) async {
+  Future<bool> _waitAbsent(
+    int leaderPid,
+    int groupId,
+    int startTime,
+    int sessionId,
+    Duration timeout,
+  ) async {
     final deadline = DateTime.now().add(timeout);
     while (true) {
-      final members = _matchingMembers(
+      final state = _observe(
         await _processTable.snapshots(),
+        leaderPid: leaderPid,
         groupId: groupId,
+        startTime: startTime,
         sessionId: sessionId,
       );
-      if (members.isEmpty && !await _groupControl.exists(groupId)) return true;
+      if (state != _OwnedGroupState.present) return true;
       if (DateTime.now().isAfter(deadline)) return false;
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
   }
 
-  static List<LinuxProcessSnapshot> _matchingMembers(
+  static _OwnedGroupState _observe(
     List<LinuxProcessSnapshot> snapshots, {
+    required int leaderPid,
     required int groupId,
+    required int startTime,
     required int sessionId,
-  }) => snapshots
-      .where(
-        (value) =>
-            value.processGroupId == groupId && value.sessionId == sessionId,
-      )
-      .toList(growable: false);
+  }) {
+    final leader = snapshots
+        .where((value) => value.pid == leaderPid)
+        .firstOrNull;
+    if (leader != null &&
+        (leader.startTime != startTime ||
+            leader.sessionId != sessionId ||
+            leader.processGroupId != groupId)) {
+      return _OwnedGroupState.reusedLeader;
+    }
+    final hasOwnedMembers = snapshots.any(
+      (value) =>
+          value.processGroupId == groupId && value.sessionId == sessionId,
+    );
+    return hasOwnedMembers ? _OwnedGroupState.present : _OwnedGroupState.gone;
+  }
 }
 
 ({int startTime, int sessionId})? _parseLinuxFingerprint(String value) {

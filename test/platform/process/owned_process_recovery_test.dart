@@ -100,6 +100,27 @@ void main() {
     },
   );
 
+  test('group reused after TERM resolves without signalling KILL', () async {
+    final descendant = _snapshot(pid: 43, groupId: 42, sessionId: 42);
+    final reusedLeader = _snapshot(
+      pid: 42,
+      groupId: 42,
+      sessionId: 42,
+      startTime: 999,
+    );
+    final control = _FakeLinuxGroupControl();
+    final outcome = await LinuxOwnedProcessRecovery(
+      processTable: _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
+        <LinuxProcessSnapshot>[descendant],
+        <LinuxProcessSnapshot>[reusedLeader],
+      ]),
+      groupControl: control,
+    ).reconcile(_identity());
+
+    expect(outcome, ProcessRecoveryOutcome.resolved);
+    expect(control.signals, <LinuxGroupSignal>[LinuxGroupSignal.terminate]);
+  });
+
   test(
     'Linux gated identity survives exec and genuine recovery kills only match',
     () async {
@@ -222,9 +243,6 @@ final class _FakeLinuxProcessTable implements LinuxProcessTable {
 
 final class _FakeLinuxGroupControl implements LinuxGroupControl {
   final List<LinuxGroupSignal> signals = <LinuxGroupSignal>[];
-
-  @override
-  Future<bool> exists(int groupId) async => false;
 
   @override
   void signal(int groupId, LinuxGroupSignal signal) => signals.add(signal);
