@@ -26,6 +26,7 @@ final class RunExecutionAggregate {
 abstract interface class RunExecutionRepository {
   Future<RunExecutionAggregate?> load(String runId);
   Future<void> markRunning(String runId, DateTime at);
+  Future<void> pauseRun(String runId, DateTime at);
   Future<void> beginAttempt(RunAttempt attempt);
   Future<void> appendLog(RunLogSegment segment);
   Future<void> completeAttemptAndAdvance({
@@ -279,6 +280,7 @@ final class RunOrchestrator {
       <String, Queue<RunOutputChunk>>{};
   final Map<String, int> _tailSizes = <String, int>{};
   final Map<String, Future<void>> _active = <String, Future<void>>{};
+  final Set<String> _pauseRequested = <String>{};
 
   RunSummaryEvents get events => _events;
   int get retainedTailRunCount => _tails.length;
@@ -293,6 +295,13 @@ final class RunOrchestrator {
         _tails[runId] ?? const <RunOutputChunk>[],
       );
 
+  /// Asks a run to pause once its active step finishes (FR-RC-01, FR-RC-02).
+  ///
+  /// The request is honored between steps, never mid-step, so the step's
+  /// evidence stays complete. A run that fails first ends failed rather than
+  /// paused (AF-02), which the flag's placement in the loop guarantees.
+  void requestPause(String runId) => _pauseRequested.add(runId);
+
   Future<void> execute(String runId) {
     final existing = _active[runId];
     if (existing != null) return existing;
@@ -302,6 +311,9 @@ final class RunOrchestrator {
       _active.remove(runId);
       _tails.remove(runId);
       _tailSizes.remove(runId);
+      // A request that never got honored — because the run failed, or ended —
+      // must not survive to pause a later execution of the same run.
+      _pauseRequested.remove(runId);
     });
   }
 
@@ -571,6 +583,14 @@ final class RunOrchestrator {
         exitCode: exitCode,
         declaredContext: priorContext,
       );
+      // The step is complete and its evidence is durable; this is the only
+      // point at which a pause can be honored without truncating a step. A
+      // pause on the final step is moot — the run has already succeeded.
+      final hasNextStep = position + 1 < aggregate.snapshot.steps.length;
+      if (hasNextStep && _pauseRequested.remove(runId)) {
+        await _repository.pauseRun(runId, _now());
+        return;
+      }
     }
   }
 

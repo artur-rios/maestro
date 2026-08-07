@@ -183,6 +183,14 @@ final class DriftRunRepository
   );
 
   @override
+  Future<void> pauseRun(String runId, DateTime at) => transitionRun(
+    runId: runId,
+    expectedStatus: domain.RunStatus.pauseRequested,
+    nextStatus: domain.RunStatus.paused,
+    at: at,
+  );
+
+  @override
   Future<void> transitionRun({
     required String runId,
     required domain.RunStatus expectedStatus,

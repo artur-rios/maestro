@@ -1013,6 +1013,100 @@ void main() {
     });
   });
 
+  test(
+    'GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheRunPausesBeforeTheNextStep',
+    () async {
+      // Given: a two-step run whose first step is still executing.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.addAll(<_Script>[
+        _Script(gate: gate),
+        const _Script(),
+      ]);
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the user asks to pause, and the active step then finishes.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the run pauses and the second step never begins (FR-RC-02).
+      expect(fixture.repository.paused, <String>['run-1']);
+      expect(fixture.repository.begun, hasLength(1));
+      expect(fixture.launcher.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheStepIsNotAbandoned',
+    () async {
+      // Given: a two-step run paused during its first step.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.addAll(<_Script>[
+        _Script(gate: gate),
+        const _Script(),
+      ]);
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the pause request lands mid-step.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the active step still completes normally rather than being cut
+      // short — a pause is not a cancellation.
+      expect(fixture.repository.completed, <String>['attempt-1']);
+      expect(fixture.repository.failed, isEmpty);
+    },
+  );
+
+  test(
+    'GivenPauseRequestedOnTheLastStep_WhenItSucceeds_ThenTheRunSucceeds',
+    () async {
+      // Given: a single-step run, so there is no next step to pause before.
+      final fixture = _Fixture(stepCount: 1);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: pause is requested during the final step.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the run completes rather than parking in paused.
+      expect(fixture.repository.paused, isEmpty);
+      expect(fixture.repository.completed, <String>['attempt-1']);
+    },
+  );
+
+  test(
+    'GivenPauseRequested_WhenTheStepFails_ThenTheRunFailsRatherThanPauses',
+    () async {
+      // Given: a two-step run whose first step will exit non-zero (AF-02).
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate, exitCode: 3));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: pause is requested and the step then fails.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: failure is recorded, not a pause, so retry becomes the offer.
+      expect(fixture.repository.failed, <(String, String)>[
+        ('attempt-1', 'run.step.nonzero_exit'),
+      ]);
+      expect(fixture.repository.paused, isEmpty);
+    },
+  );
+
   test('two run IDs can overlap while each run remains serial', () async {
     final fixture = _Fixture(stepCount: 1);
     final first = Completer<void>();
@@ -1360,6 +1454,7 @@ final class _Repository implements RunExecutionRepository {
   final List<RunLogSegment> logs = <RunLogSegment>[];
   final List<String> completed = <String>[];
   final List<(String, String)> failed = <(String, String)>[];
+  final List<String> paused = <String>[];
 
   /// The number of upcoming `appendLog` calls that fail before storage
   /// recovers.
@@ -1369,6 +1464,8 @@ final class _Repository implements RunExecutionRepository {
   Future<RunExecutionAggregate?> load(String id) async => aggregates[id];
   @override
   Future<void> markRunning(String id, DateTime at) async {}
+  @override
+  Future<void> pauseRun(String id, DateTime at) async => paused.add(id);
   @override
   Future<void> beginAttempt(RunAttempt value) async => begun.add(value);
   @override
