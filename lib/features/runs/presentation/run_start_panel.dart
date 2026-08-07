@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 
+/// Owns one run workspace controller for as long as the panel state lives.
+///
+/// The controller is created once from [createController] instead of being
+/// injected per build, so rebuilds of the hosting workspace never discard the
+/// active runs, their live tails, or the pending recovery offers.
 final class RunStartPanel extends StatefulWidget {
-  const RunStartPanel({required this.controller, super.key});
+  const RunStartPanel({required this.createController, super.key});
 
-  final RunStartController controller;
+  final RunStartController Function() createController;
 
   @override
   State<RunStartPanel> createState() => _RunStartPanelState();
@@ -13,24 +18,15 @@ final class RunStartPanel extends StatefulWidget {
 
 final class _RunStartPanelState extends State<RunStartPanel> {
   final TextEditingController _workItem = TextEditingController();
+  late final RunStartController _controller;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_changed);
-    _workItem.text = widget.controller.state.workItem;
-    widget.controller.load();
-  }
-
-  @override
-  void didUpdateWidget(covariant RunStartPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller) return;
-    oldWidget.controller.removeListener(_changed);
-    oldWidget.controller.dispose();
-    widget.controller.addListener(_changed);
-    _workItem.text = widget.controller.state.workItem;
-    widget.controller.load();
+    _controller = widget.createController();
+    _controller.addListener(_changed);
+    _workItem.text = _controller.state.workItem;
+    _controller.load();
   }
 
   void _changed() {
@@ -39,15 +35,15 @@ final class _RunStartPanelState extends State<RunStartPanel> {
 
   @override
   void dispose() {
-    widget.controller.removeListener(_changed);
-    widget.controller.dispose();
+    _controller.removeListener(_changed);
+    _controller.dispose();
     _workItem.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.controller.state;
+    final state = _controller.state;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -80,7 +76,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                                 onPressed:
                                     state.recoveringRunIds.contains(offer.runId)
                                     ? null
-                                    : () => widget.controller.selectRecovery(
+                                    : () => _controller.selectRecovery(
                                         offer,
                                         action,
                                       ),
@@ -109,7 +105,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                   ? null
                   : (value) {
                       if (value != null) {
-                        widget.controller.selectWorkflow(value);
+                        _controller.selectWorkflow(value);
                       }
                     },
             ),
@@ -119,7 +115,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
               controller: _workItem,
               enabled: !state.starting,
               decoration: InputDecoration(labelText: state.workItemLabel),
-              onChanged: widget.controller.setWorkItem,
+              onChanged: _controller.setWorkItem,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<DeliveryMode>(
@@ -137,7 +133,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                   ? null
                   : (value) {
                       if (value != null) {
-                        widget.controller.setDeliveryMode(value);
+                        _controller.setDeliveryMode(value);
                       }
                     },
             ),
@@ -157,7 +153,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                   ? null
                   : (value) {
                       if (value != null) {
-                        widget.controller.setBranchWorkType(value);
+                        _controller.setBranchWorkType(value);
                       }
                     },
             ),
@@ -166,7 +162,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
               key: const Key('start-run'),
               onPressed: state.starting || state.selectedWorkflow == null
                   ? null
-                  : widget.controller.start,
+                  : _controller.start,
               icon: const Icon(Icons.play_arrow),
               label: Text(state.starting ? 'Starting…' : 'Start isolated run'),
             ),

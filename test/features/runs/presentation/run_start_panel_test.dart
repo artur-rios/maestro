@@ -35,7 +35,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: RunStartPanel(controller: controller),
+              child: RunStartPanel(createController: () => controller),
             ),
           ),
         ),
@@ -100,7 +100,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: RunStartPanel(controller: controller),
+              child: RunStartPanel(createController: () => controller),
             ),
           ),
         ),
@@ -140,7 +140,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: RunStartPanel(controller: controller),
+              child: RunStartPanel(createController: () => controller),
             ),
           ),
         ),
@@ -156,6 +156,80 @@ void main() {
       await tester.pump();
     },
   );
+
+  testWidgets(
+    'GivenAcceptedRun_WhenTheHostingWorkspaceRebuilds_ThenTheRunRemainsVisible',
+    (tester) async {
+      final completion = Completer<void>();
+      addTearDown(() {
+        if (!completion.isCompleted) completion.complete();
+      });
+      var built = 0;
+      RunStartController createController() {
+        built++;
+        return RunStartController(
+          actorId: 'actor-1',
+          project: _project(),
+          loadWorkflows: () async => <WorkflowDefinition>[_workflow()],
+          starter: (_) async => const RunStartAccepted(
+            runId: 'run-visible',
+            branchName: 'feature/run-visible',
+            worktreePath: 'worktree-visible',
+          ),
+          execute: (_) => completion.future,
+          events: RunSummaryEvents(),
+          tailFor: (_) => Uint8List(0),
+          statusFor: (_) async => null,
+        );
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: _RebuildableHost(
+                child: () => RunStartPanel(
+                  key: const ValueKey<String>('run-start-project-1'),
+                  createController: createController,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('run-work-item')), 'UC-06');
+      await tester.tap(find.byKey(const Key('start-run')));
+      await tester.pump();
+      expect(find.text('Run run-visible · running'), findsOneWidget);
+
+      tester
+          .state<_RebuildableHostState>(find.byType(_RebuildableHost))
+          .rebuild();
+      await tester.pump();
+
+      expect(find.text('Run run-visible · running'), findsOneWidget);
+      expect(find.text('Current step: Execute'), findsOneWidget);
+      expect(built, 1);
+    },
+  );
+}
+
+/// Mirrors a workspace that rebuilds its children on unrelated state changes.
+final class _RebuildableHost extends StatefulWidget {
+  const _RebuildableHost({required this.child});
+
+  final Widget Function() child;
+
+  @override
+  State<_RebuildableHost> createState() => _RebuildableHostState();
+}
+
+final class _RebuildableHostState extends State<_RebuildableHost> {
+  void rebuild() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) => widget.child();
 }
 
 ProjectRecord _project() => ProjectRecord(
