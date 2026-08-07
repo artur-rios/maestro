@@ -6,9 +6,10 @@ steps, assigns an AI CLI and model to each step, and lets Maestro execute the wo
 branch in the background.
 
 > **Status:** milestones M-01 through M-03 are complete, and M-04 has delivered
-> UC-06. Projects can be registered and managed, workflows designed with step
-> agents assigned, and workflow runs started on an isolated branch and worktree.
-> Observing, controlling, and delivering runs are still in progress.
+> UC-06 and UC-07. Projects can be registered and managed, workflows designed
+> with step agents assigned, workflow runs started on an isolated branch and
+> worktree, and active runs observed with their ordered steps, current status,
+> and streamed output. Controlling and delivering runs are still in progress.
 
 ## What It Does
 
