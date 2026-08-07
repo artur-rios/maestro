@@ -232,23 +232,62 @@ final class WindowsJobTermination {
 
   final WindowsJobTerminationApi _api;
   final Future<int> _exitCode;
-  Future<ProcessTerminalState>? _result;
+  Future<ProcessTerminalState>? _settled;
+  var _closed = false;
 
-  Future<ProcessTerminalState> terminateTree() => _result ??= _terminateTree();
+  /// Terminates the job, reassessing the outcome when a previous attempt
+  /// reported survivors.
+  ///
+  /// Only a settled tree is cached. A failure is not: caching it would leave
+  /// the user replaying a stale verdict they can never clear, even after
+  /// kill-on-close finally lands.
+  Future<ProcessTerminalState> terminateTree() {
+    final settled = _settled;
+    if (settled != null) return settled;
+    final attempt = _terminateTree();
+    return attempt.then((state) {
+      if (state == ProcessTerminalState.cancelled) {
+        _settled = Future<ProcessTerminalState>.value(state);
+      }
+      return state;
+    });
+  }
 
   Future<ProcessTerminalState> _terminateTree() async {
+    // The handle is closed at most once. After that, kill-on-close has already
+    // fired and there is nothing left to escalate — only to re-check.
+    if (_closed) return _confirmExit();
+    var state = ProcessTerminalState.terminationFailed;
     try {
-      if (!_api.terminate()) {
-        return ProcessTerminalState.terminationFailed;
+      if (_api.terminate()) {
+        await _exitCode.timeout(const Duration(seconds: 2));
+        if (await _api.waitForEmpty(const Duration(seconds: 3))) {
+          state = ProcessTerminalState.cancelled;
+        }
       }
-      await _exitCode.timeout(const Duration(seconds: 2));
-      return await _api.waitForEmpty(const Duration(seconds: 3))
-          ? ProcessTerminalState.cancelled
-          : ProcessTerminalState.terminationFailed;
     } on TimeoutException {
-      return ProcessTerminalState.terminationFailed;
+      state = ProcessTerminalState.terminationFailed;
     } finally {
+      // Closing the handle is the last-resort kill: the job was created with
+      // KILL_ON_JOB_CLOSE precisely so a failed terminate still ends the tree.
       _api.close();
+      _closed = true;
+    }
+    // That kill lands after the poll above, so a tree reported as surviving may
+    // already be gone. Confirm before telling the user it is still running.
+    return state == ProcessTerminalState.cancelled ? state : _confirmExit();
+  }
+
+  /// Whether the root process has exited since the handle was closed.
+  ///
+  /// With the job destroyed, its accounting can no longer be queried, so the
+  /// root's exit is the strongest remaining evidence that the tree is gone.
+  Future<ProcessTerminalState> _confirmExit() async {
+    try {
+      await _exitCode.timeout(const Duration(milliseconds: 500));
+      return ProcessTerminalState.cancelled;
+    } on Object {
+      return ProcessTerminalState.terminationFailed;
     }
   }
 }

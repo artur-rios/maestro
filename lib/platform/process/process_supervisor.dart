@@ -15,9 +15,28 @@ final class ProcessSupervisor {
     _process = process;
   }
 
+  /// Terminates the attached tree, retrying when a previous attempt failed.
+  ///
+  /// A settled tree is never killed twice, so a successful outcome is cached.
+  /// A failure is not: descendants that resisted termination are still running,
+  /// and caching that verdict would make every later cancellation replay a
+  /// stale answer instead of escalating again.
   Future<ProcessTerminalState> cancel() {
-    return _cancellation ??= _cancelAttachedProcess();
+    final settled = _cancellation;
+    if (settled != null) return settled;
+    final attempt = _cancelAttachedProcess();
+    _cancellation = attempt;
+    return attempt.then((state) {
+      if (!_isSettled(state) && identical(_cancellation, attempt)) {
+        _cancellation = null;
+      }
+      return state;
+    });
   }
+
+  static bool _isSettled(ProcessTerminalState state) =>
+      state == ProcessTerminalState.completed ||
+      state == ProcessTerminalState.cancelled;
 
   Future<ProcessTerminalState> _cancelAttachedProcess() async {
     final process = _process;

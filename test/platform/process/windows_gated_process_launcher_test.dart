@@ -26,6 +26,70 @@ void main() {
   );
 
   test(
+    'GivenResistedTermination_WhenTerminatedAgain_ThenTheOutcomeIsReassessed',
+    () async {
+      // Given: a job whose processes survived termination and the last-resort
+      // kill-on-close, so the first cancellation reported failure.
+      final api = _FailingTerminationApi();
+      final exit = Completer<int>();
+      final termination = WindowsJobTermination(api, exit.future);
+      expect(
+        await termination.terminateTree(),
+        ProcessTerminalState.terminationFailed,
+      );
+
+      // When: the user cancels again.
+      final second = await termination.terminateTree();
+
+      // Then: the verdict is reassessed rather than replayed from a cache, and
+      // the already-closed handle is neither reused nor closed twice.
+      expect(second, ProcessTerminalState.terminationFailed);
+      expect(api.terminateCalls, 1);
+      expect(api.closeCalls, 1);
+    },
+  );
+
+  test(
+    'GivenKillOnJobCloseLandsLate_WhenTerminatedAgain_ThenCancelledIsReported',
+    () async {
+      // Given: a first cancellation that reported failure because the job was
+      // still populated when it was polled.
+      final api = _FailingTerminationApi();
+      final exit = Completer<int>();
+      final termination = WindowsJobTermination(api, exit.future);
+      expect(
+        await termination.terminateTree(),
+        ProcessTerminalState.terminationFailed,
+      );
+
+      // When: kill-on-close finally takes effect and the user cancels again.
+      exit.complete(1);
+      final second = await termination.terminateTree();
+
+      // Then: the user is told the truth — the tree is gone — instead of a
+      // stale failure they can never clear.
+      expect(second, ProcessTerminalState.cancelled);
+    },
+  );
+
+  test(
+    'GivenSettledTermination_WhenTerminatedAgain_ThenTheTreeIsNotKilledTwice',
+    () async {
+      // Given: a job that terminated cleanly.
+      final api = _SucceedingTerminationApi();
+      final termination = WindowsJobTermination(api, Future<int>.value(0));
+      expect(await termination.terminateTree(), ProcessTerminalState.cancelled);
+
+      // When: termination is requested again.
+      expect(await termination.terminateTree(), ProcessTerminalState.cancelled);
+
+      // Then: a settled tree is never re-terminated.
+      expect(api.terminateCalls, 1);
+      expect(api.closeCalls, 1);
+    },
+  );
+
+  test(
     'GivenBlockedWindowsBootstrap_WhenNotReleased_ThenTargetCannotStart',
     () async {
       if (!Platform.isWindows) return;
@@ -77,6 +141,23 @@ final class _FailingTerminationApi implements WindowsJobTerminationApi {
     closeCalls += 1;
     killOnJobCloseObserved = true;
   }
+}
+
+final class _SucceedingTerminationApi implements WindowsJobTerminationApi {
+  int terminateCalls = 0;
+  int closeCalls = 0;
+
+  @override
+  bool terminate() {
+    terminateCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<bool> waitForEmpty(Duration timeout) async => true;
+
+  @override
+  void close() => closeCalls += 1;
 }
 
 String _dartExecutable() {

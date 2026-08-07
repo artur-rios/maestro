@@ -108,11 +108,11 @@ flutter test test/app/production_run_observation_composition_test.dart          
 - Linux: not run locally. The Ubuntu `flutter test --coverage` job on the pull
   request covers it.
 
-## Known limitation
+## Resolved limitation
 
-On Windows, `WindowsJobTermination` memoizes its result and closes the job
-handle, so a second Cancel on a tree that survived the first reports
-`incomplete` again rather than re-escalating. The escalation inside
-`TerminateJobObject` plus `KILL_ON_JOB_CLOSE` has already fired by then, and any
-surviving process is reclaimed by owned-resource reconciliation at next startup.
-Changing that memoization is platform work outside this use case.
+This record originally noted that a second Cancel on a surviving tree replayed a
+cached failure instead of re-escalating. That was fixed in
+`fix/re-escalate-a-resisted-cancellation`: `ProcessSupervisor` and
+`WindowsJobTermination` now cache only a settled outcome, so a repeated Cancel
+re-runs the platform escalation on Linux and reassesses the verdict on Windows
+once kill-on-close has landed. See `docs/development/cancellation-escalation.md`.

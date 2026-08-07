@@ -300,6 +300,46 @@ void main() {
   );
 
   test(
+    'GivenResistedTermination_WhenCancellingAgain_ThenTerminationIsReattempted',
+    () async {
+      // Given: a launched step whose tree survived the first cancellation.
+      final temporary = await Directory.systemTemp.createTemp(
+        'maestro-terminate-retry-',
+      );
+      addTearDown(() => temporary.delete(recursive: true));
+      final process = _Process(
+        File(p.join(temporary.path, 'stdin')),
+        terminalState: ProcessTerminalState.terminationFailed,
+      );
+      final launcher = OwnedStepProcessLauncher(
+        processTree: _Tree(process),
+        commands: _FixtureCommands('fixture'),
+      );
+      final started = await launcher.start(
+        const StepLaunchRequest(
+          cli: 'codex',
+          model: 'fixture',
+          executable: 'executable',
+          prompt: 'prompt',
+          workingDirectory: '.',
+          environment: <String, String>{},
+        ),
+      );
+      expect(await started.process!.terminate(), StepTermination.incomplete);
+
+      // When: the user cancels again and the escalation succeeds this time.
+      process.terminalState = ProcessTerminalState.cancelled;
+      final second = await started.process!.terminate();
+
+      // Then: the platform escalation ran again and the tree is reported gone,
+      // rather than the first failure being replayed forever (AF-03).
+      expect(second, StepTermination.cancelled);
+      expect(process.terminationCalls, 2);
+      await process.stdin.close();
+    },
+  );
+
+  test(
     'applies native backpressure before startup flood is listened',
     () async {
       final temporary = await Directory.systemTemp.createTemp(
@@ -473,7 +513,8 @@ final class _Process implements OwnedNativeProcess {
     File stdinFile, {
     this.terminalState = ProcessTerminalState.cancelled,
   }) : _stdin = stdinFile.openWrite();
-  final ProcessTerminalState terminalState;
+  ProcessTerminalState terminalState;
+  int terminationCalls = 0;
   final IOSink _stdin;
   final StreamController<List<int>> stdoutController =
       StreamController<List<int>>();
@@ -491,5 +532,8 @@ final class _Process implements OwnedNativeProcess {
   @override
   Stream<List<int>> get stderr => stderrController.stream;
   @override
-  Future<ProcessTerminalState> terminateTree() async => terminalState;
+  Future<ProcessTerminalState> terminateTree() async {
+    terminationCalls += 1;
+    return terminalState;
+  }
 }
