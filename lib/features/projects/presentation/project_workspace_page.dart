@@ -489,25 +489,19 @@ final class _ProjectContent extends ConsumerWidget {
           const SizedBox(height: 16),
           _ProjectLifecycleMessage(feedback: feedback),
         ],
+        // Announces whether the folder supports action, and carries the run
+        // workspace once one is available. It previously wrapped a placeholder
+        // button, which UC-06 made redundant by supplying the real
+        // folder-dependent action.
         Semantics(
           label: selected.folderActionsEnabled
               ? 'Folder-dependent actions enabled'
               : 'Folder-dependent actions disabled',
-          child: IgnorePointer(
-            ignoring: !selected.folderActionsEnabled,
-            child: Opacity(
-              opacity: selected.folderActionsEnabled ? 1 : 0.5,
-              child: FilledButton(
-                onPressed: selected.folderActionsEnabled ? () {} : null,
-                child: const Text('Project actions coming soon'),
-              ),
-            ),
-          ),
+          container: true,
+          child: selected.folderActionsEnabled && runStartBuilder != null
+              ? runStartBuilder!(context, actorId, selected.record)
+              : const SizedBox(height: 1, width: double.infinity),
         ),
-        if (selected.folderActionsEnabled && runStartBuilder != null) ...[
-          const SizedBox(height: 16),
-          runStartBuilder!(context, actorId, selected.record),
-        ],
       ],
     );
   }
