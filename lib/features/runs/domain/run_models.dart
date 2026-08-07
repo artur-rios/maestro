@@ -9,6 +9,7 @@ enum RunStatus {
   queued,
   starting,
   running,
+
   /// A pause the user asked for, recorded while the active step finishes.
   ///
   /// FR-RC-02 pauses *before the next step*, never mid-step, so the request and
@@ -48,9 +49,7 @@ enum RunStatus {
     (paused, canceled) => true,
     // Recovery re-entry (FR-RC-05..07). The repository adds the evidence
     // guards; the lifecycle only says the move is possible.
-    (failed, running) ||
-    (canceled, running) ||
-    (interrupted, running) => true,
+    (failed, running) || (canceled, running) || (interrupted, running) => true,
     _ => false,
   };
 }

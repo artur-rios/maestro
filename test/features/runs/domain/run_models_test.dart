@@ -140,10 +140,7 @@ void main() {
 
     // When / Then: a pause request is a legal forward transition.
     expect(status.canTransitionTo(RunStatus.pauseRequested), isTrue);
-    expect(
-      RunStatus.paused.canTransitionTo(RunStatus.pauseRequested),
-      isFalse,
-    );
+    expect(RunStatus.paused.canTransitionTo(RunStatus.pauseRequested), isFalse);
   });
 
   test('GivenPauseRequestedRun_WhenPausing_ThenTheTransitionIsLegal', () {
