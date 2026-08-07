@@ -44,7 +44,11 @@ final class DriftOwnedResourceStore
   Future<List<OwnedResourceRecord>> findPending() async {
     final rows =
         await (_database.select(_database.ownedResources)..where(
-              (table) => table.state.isIn(<String>['owned', 'cleanupPending']),
+              (table) => table.state.isIn(<String>[
+                'owned',
+                'cleanupPending',
+                'cleanupFailed',
+              ]),
             ))
             .get();
     return rows

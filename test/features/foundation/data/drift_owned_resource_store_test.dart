@@ -41,4 +41,25 @@ void main() {
       expect(await database.select(database.ownedResources).get(), isEmpty);
     },
   );
+
+  test(
+    'Given cleanup failed_When next restart queries pending_Then record remains retryable',
+    () async {
+      const record = OwnedResourceRecord(
+        id: 'run-1:process',
+        kind: OwnedResourceKind.process,
+        path: '{"schema":1}',
+        runId: 'run-1',
+        processId: 42,
+      );
+      await store.registerPending(record);
+      await store.markFailed(record.id, 'retry required');
+
+      expect((await store.findPending()).single.id, record.id);
+      expect(
+        (await database.select(database.ownedResources).getSingle()).state,
+        'cleanupFailed',
+      );
+    },
+  );
 }

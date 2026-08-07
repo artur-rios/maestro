@@ -201,7 +201,7 @@ void main() {
         domain.RecoveryAction.restartWorkflow,
       );
       expect(foundation.recoveryOffers, isEmpty);
-      expect(await foundation.listRecoveryOffers(), isEmpty);
+      expect(await foundation.listRecoveryOffersAfterStartup(), isEmpty);
       expect(
         (await runs.findById('run-1'))!.recoveryRequests.single.action,
         domain.RecoveryAction.restartWorkflow,
@@ -224,7 +224,7 @@ void main() {
         at: DateTime.utc(2026, 8, 6, 14, 2),
       );
 
-      expect(await foundation.listRecoveryOffers(), isEmpty);
+      expect(await foundation.listRecoveryOffersAfterStartup(), isEmpty);
       final secondStartupProbe = await foundation.probes
           .singleWhere((probe) => probe.id == 'reconciliation')
           .probe();
@@ -233,6 +233,113 @@ void main() {
         (await runs.findById('run-2'))!.run.status,
         domain.RunStatus.running,
       );
+    },
+  );
+
+  test(
+    'GivenProcessRecoveryFailsAcrossRestarts_WhenStartupRuns_ThenArtifactsAndOffersStayBlockedUntilSettlement',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'maestro-process-retry-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final paths = ApplicationPaths.fromRoot(root);
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      await DriftProjectRepository(database).save(
+        ProjectRecord(
+          id: 'project-1',
+          name: 'Project',
+          normalizedName: 'project',
+          folderPath: '${root.path}/source',
+          createdAt: DateTime.utc(2026, 8, 6),
+          updatedAt: DateTime.utc(2026, 8, 6),
+          deletedAt: null,
+        ),
+      );
+      final runs = DriftRunRepository(database);
+      await runs.create(
+        run: _queuedRun('run-retry', DateTime.utc(2026, 8, 6, 12)),
+        snapshot: _snapshot(root, 'retry'),
+      );
+      await runs.transitionRun(
+        runId: 'run-retry',
+        expectedStatus: domain.RunStatus.queued,
+        nextStatus: domain.RunStatus.starting,
+        at: DateTime.utc(2026, 8, 6, 12, 1),
+      );
+      final resultFile = File('${paths.runResultsDirectory.path}/result.json');
+      await resultFile.parent.create(recursive: true);
+      await resultFile.writeAsString('stale');
+      final ownership = DriftOwnedResourceStore(database);
+      await ownership.registerPending(
+        OwnedResourceRecord(
+          id: 'process-retry',
+          kind: OwnedResourceKind.process,
+          path: const DurableProcessIdentity(
+            platform: 'test',
+            pid: 42,
+            fingerprint: 'fingerprint-42',
+            groupId: null,
+          ).encode(),
+          runId: 'run-retry',
+          processId: 42,
+        ),
+      );
+      await ownership.registerPending(
+        OwnedResourceRecord(
+          id: 'result-retry',
+          kind: OwnedResourceKind.resultFile,
+          path: resultFile.path,
+          runId: 'run-retry',
+        ),
+      );
+      final recovery = _SequenceProcessRecovery(<ProcessRecoveryOutcome>[
+        ProcessRecoveryOutcome.retainedFailure,
+        ProcessRecoveryOutcome.retainedFailure,
+        ProcessRecoveryOutcome.resolved,
+      ]);
+
+      Future<({FoundationCheck check, ProductionFoundation foundation})>
+      restart() async {
+        final foundation = ProductionFoundation(
+          paths: paths,
+          database: database,
+          runRepository: runs,
+          processRecovery: recovery,
+          clock: () => DateTime.utc(2026, 8, 6, 13),
+          newId: () => 'restart-log',
+        );
+        final check = await foundation.probes
+            .singleWhere((probe) => probe.id == 'reconciliation')
+            .probe();
+        return (check: check, foundation: foundation);
+      }
+
+      for (var restartNumber = 1; restartNumber <= 2; restartNumber++) {
+        final restartResult = await restart();
+        expect(restartResult.check.health, FoundationHealth.degraded);
+        expect(restartResult.foundation.recoveryOffers, isEmpty);
+        expect(await resultFile.exists(), isTrue);
+        expect(
+          (await runs.findById('run-retry'))!.run.status,
+          domain.RunStatus.starting,
+        );
+        expect(
+          (await ownership.findPending()).map((record) => record.id),
+          contains('process-retry'),
+        );
+      }
+
+      final settled = await restart();
+      expect(settled.check.health, FoundationHealth.ready);
+      expect(settled.foundation.recoveryOffers, hasLength(1));
+      expect(await resultFile.exists(), isFalse);
+      expect(
+        (await runs.findById('run-retry'))!.run.status,
+        domain.RunStatus.interrupted,
+      );
+      expect(recovery.calls, 3);
     },
   );
 }
@@ -250,6 +357,18 @@ final class _CheckingProcessRecovery implements OwnedProcessRecoveryAdapter {
     observedStatus = await _readStatus();
     return ProcessRecoveryOutcome.resolved;
   }
+}
+
+final class _SequenceProcessRecovery implements OwnedProcessRecoveryAdapter {
+  _SequenceProcessRecovery(this.outcomes);
+
+  final List<ProcessRecoveryOutcome> outcomes;
+  var calls = 0;
+
+  @override
+  Future<ProcessRecoveryOutcome> reconcile(
+    DurableProcessIdentity identity,
+  ) async => outcomes[calls++];
 }
 
 domain.WorkflowRun _queuedRun(String id, DateTime at) => domain.WorkflowRun(

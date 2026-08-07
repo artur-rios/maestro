@@ -54,11 +54,7 @@ final class ProductionFoundation {
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
   Future<String>? _startupReconciliation;
 
-  Future<List<RunRecoveryOffer>> listRecoveryOffers() async {
-    recoveryOffers = await _runReconciler.listOffers();
-    return recoveryOffers;
-  }
-
+  /// Waits for the one mutating startup pass, then reads offers read-only.
   Future<List<RunRecoveryOffer>> listRecoveryOffersAfterStartup() async {
     await beginStartupReconciliation();
     recoveryOffers = await _startupRecovery.listOffersAfterStartup();
@@ -69,6 +65,7 @@ final class ProductionFoundation {
     RunRecoveryOffer offer,
     RecoveryAction action,
   ) async {
+    await beginStartupReconciliation();
     await _runReconciler.select(offer, action);
     recoveryOffers = recoveryOffers
         .where((value) => value.runId != offer.runId)
@@ -139,6 +136,12 @@ final class ProductionFoundation {
       store: store,
       adapter: _processRecovery,
     )();
+    if (processReport.failed != 0) {
+      recoveryOffers = const <RunRecoveryOffer>[];
+      throw StateError(
+        '${processReport.failed} process reconciliation(s) need review.',
+      );
+    }
     final pending = await store.findPending();
     final policy = OwnedPathPolicy(
       appPaths: paths,
@@ -157,11 +160,6 @@ final class ProductionFoundation {
         evaluatePath: policy.evaluate,
       )();
     });
-    if (processReport.failed != 0) {
-      throw StateError(
-        '${processReport.failed} process reconciliation(s) need review.',
-      );
-    }
     if (report.failures.isNotEmpty) {
       throw StateError(
         '${report.failures.length} resource cleanup(s) need review.',
