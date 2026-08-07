@@ -278,7 +278,7 @@ final class RunOrchestrator {
     } else if (aggregate.run.status != RunStatus.running) {
       throw StateError('Only active runs can execute.');
     }
-    DeclaredContext? priorContext;
+    DeclaredContext? priorContext = _resumedContext(aggregate);
     for (
       var position = aggregate.run.currentStepPosition;
       position < aggregate.snapshot.steps.length;
@@ -485,6 +485,32 @@ final class RunOrchestrator {
         declaredContext: priorContext,
       );
     }
+  }
+
+  /// Recovers the context the preceding step declared, for a resumed run.
+  ///
+  /// FR-EX-06 requires each step to receive the prior step's declared output
+  /// context. A run that resumes at a later position never executed that step
+  /// in this call, so the context has to come from the persisted attempt that
+  /// advanced the run rather than from this loop.
+  static DeclaredContext? _resumedContext(RunExecutionAggregate aggregate) {
+    final position = aggregate.run.currentStepPosition;
+    if (position <= 0 || position > aggregate.snapshot.steps.length) {
+      return null;
+    }
+    final previousStepId = aggregate.snapshot.steps[position - 1].id;
+    DeclaredContext? recovered;
+    var highestAttemptNumber = 0;
+    for (final attempt in aggregate.attempts) {
+      if (attempt.snapshotStepId != previousStepId ||
+          attempt.status != AttemptStatus.succeeded ||
+          attempt.attemptNumber < highestAttemptNumber) {
+        continue;
+      }
+      highestAttemptNumber = attempt.attemptNumber;
+      recovered = attempt.declaredContext;
+    }
+    return recovered;
   }
 
   Future<void> _resolveIgnoringErrors(String path) async {

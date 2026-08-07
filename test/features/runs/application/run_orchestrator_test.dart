@@ -116,6 +116,55 @@ void main() {
     },
   );
 
+  test(
+    'resumed run hands the prior step declared context to the next step',
+    () async {
+      final fixture = _Fixture(stepCount: 2);
+      fixture.repository.aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 2,
+        worktreePath: '/tmp/run-1',
+        currentStepPosition: 1,
+        attempts: <RunAttempt>[
+          RunAttempt(
+            id: 'attempt-earlier',
+            runId: 'run-1',
+            snapshotStepId: 's0',
+            attemptNumber: 1,
+            status: AttemptStatus.failed,
+            startedAt: DateTime.utc(2026),
+            completedAt: DateTime.utc(2026),
+            failureCode: 'run.step.nonzero_exit',
+          ),
+          RunAttempt(
+            id: 'attempt-advanced',
+            runId: 'run-1',
+            snapshotStepId: 's0',
+            attemptNumber: 2,
+            status: AttemptStatus.succeeded,
+            startedAt: DateTime.utc(2026),
+            completedAt: DateTime.utc(2026),
+            exitCode: 0,
+            declaredContext: DeclaredContext.parse('persisted-from-step-one'),
+          ),
+        ],
+      );
+      fixture.launcher.results.add(_Script(context: 'from-two'));
+
+      await fixture.orchestrator.execute('run-1');
+
+      expect(fixture.launcher.requests, hasLength(1));
+      expect(
+        fixture.launcher.requests.single.prompt,
+        contains('persisted-from-step-one'),
+      );
+      expect(
+        fixture.launcher.requests.single.prompt,
+        isNot(contains('(none)')),
+      );
+    },
+  );
+
   test('retains an incomplete UTF-8 code point across frames', () async {
     final fixture = _Fixture(stepCount: 1);
     fixture.launcher.results.add(
@@ -1010,6 +1059,8 @@ RunExecutionAggregate _aggregate(
   String id, {
   required int count,
   required String worktreePath,
+  int currentStepPosition = 0,
+  Iterable<RunAttempt> attempts = const <RunAttempt>[],
 }) => RunExecutionAggregate(
   run: WorkflowRun(
     id: id,
@@ -1017,7 +1068,7 @@ RunExecutionAggregate _aggregate(
     workflowId: 'w',
     label: id,
     status: RunStatus.starting,
-    currentStepPosition: 0,
+    currentStepPosition: currentStepPosition,
     branchName: 'feature/$id',
     worktreePath: worktreePath,
     createdAt: DateTime.utc(2026),
@@ -1049,7 +1100,7 @@ RunExecutionAggregate _aggregate(
       ),
     ),
   ),
-  attempts: const <RunAttempt>[],
+  attempts: attempts,
 );
 
 final class _Repository implements RunExecutionRepository {
