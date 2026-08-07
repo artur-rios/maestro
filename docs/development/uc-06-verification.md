@@ -5,7 +5,7 @@ and [UC-06](../requirements/Use%20Case%20Specification%20Document.md#uc-06-start
 to implementation and local verification evidence prepared for review.
 
 - Toolchain: Flutter 3.44.8 and Dart 3.12.2.
-- Local full-suite result: 529 tests passed on Windows.
+- Local full-suite result: 540 tests passed on Windows.
 - Static analysis and architecture/workflow verification: passed.
 - Platform evidence: disposable real Git repositories, real Windows owned
   processes and Job Objects, and platform-gated Linux process-group tests.
@@ -27,7 +27,13 @@ to implementation and local verification evidence prepared for review.
 | NFR-01..03 | Output ingestion uses bounded source backpressure, 16 KiB/25 ms coalescing, persist-before-summary, one-latest isolated subscribers, capped live tails, and explicit paged/tail history reads. | Flood tests preserve 200,000 bytes in bounded batches, coalesce 1,000 alternating records in order, keep paused subscriber storage constant, release completed tails, and overlap real processes. |
 | NFR-04 / IR-06 | Startup first reconciles durably owned processes, then marks starting/running evidence interrupted, derives recovery offers, and finally cleans resource types safe to remove. | Startup race tests prove exactly-once ordering, early UI waits, later reloads are read-only, and newly live runs are not interrupted. |
 | NFR-06 | Child environments are explicit allowlists; parent inheritance is disabled end-to-end. Streaming redaction is stateful across frames, forced 64 KiB boundaries, overlapping exact secrets, long token/Authorization values, and UTF-8 boundaries. | Real environment contract excludes an ambient sentinel; redaction tests prove full and partial secrets are absent while non-secret bytes remain exact. |
+| NFR-08 / IR-01 | Run UI, domain/application policy, Drift persistence, and Git/process adapters communicate through typed inward-facing contracts. Concrete filesystem and process recovery remain in data/platform layers. | `architecture_test.dart` and `tooling/verify_architecture.dart` reject outward application/domain dependencies; final architecture verification passes after the result-protocol and process-recovery boundary split. |
+| NFR-10 | Immutable snapshots, ordered attempts/log segments, ownership transitions, interruption system evidence, and recovery requests are timestamped and append-only until later lifecycle use cases remove them. | Drift repository tests cover ordered sequences, atomic transitions, prior-evidence preservation, interruption system logs, and durable recovery selection without snapshot mutation. |
+| NFR-12 | Every start, Git, work-item, agent, execution, result, cleanup, interruption, and recovery-selection failure crosses the UI boundary as a bounded typed code with actionable guidance. | Controller/widget tests retain user input and render dirty-source, invalid-work-item, stale-base, Git conflict/cleanup-required, CLI, status-read, and stale/invalid/duplicate recovery guidance. |
 | IR-05 | Windows uses a kill-on-close Job Object; Linux uses a stopped setsid leader with an exec-invariant start-time/session fingerprint and verified STOP handshake. Ownership is persisted before release. | Windows process contracts and real surviving-child test pass. Linux parser/fake tests cover leader exit, descendants, identity mismatch, and PID/PGID reuse; Linux-only real tests run on the Ubuntu gate. |
+| IR-02 | Schema v5 opens through the existing background-isolate database factory and verified migration strategy before protected run features are composed. | Database-factory, integrity, retained-schema migration, production composition, and startup-order tests pass for v1/v2/v3/v4-to-v5 upgrades. |
+| IR-08 | Typed ports isolate Git/GitHub work-item resolution, all three AI step executors, process trees, worktree path inspection, result files, ownership, and recovery. | Contract tests use hand-written fakes; production adapter tests and disposable Git/process fixtures exercise argument arrays and platform boundaries without live credentials. |
+| IR-09 | Unit, widget, migration, real-Git, process, restart, architecture, and workflow suites are included by the repository's existing `flutter test --coverage`, Windows platform, and Ubuntu platform jobs. | Local Windows full suite and debug build pass; platform-gated Linux STOP/exec/group recovery runs under Ubuntu. GitHub Actions no-start is recorded as infrastructure only under the owner's explicit outage exception. |
 
 ## Use-case flow evidence
 
@@ -38,7 +44,7 @@ to implementation and local verification evidence prepared for review.
 | Main flow 3: snapshot and isolate | Atomic snapshot persistence precedes pending ownership. Branch registration and phased no-checkout worktree materialization each require explicit creation proof; ambiguous outcomes retain ownership for restart reconciliation. |
 | Main flow 4: start first step and stream output | Silent runs immediately publish `running` and their current snapshotted step. Real fixtures stream stdout/stderr through owned platform processes with durable batching. |
 | Main flow 5: record success and pass declared context | Successful attempts atomically advance position and pass only validated declared context. Ordinary stdout is never interpreted as control data. |
-| Main flow 6: concurrent isolated runs and terminal outcomes | Disposable Git and owned-process tests prove same-project isolation and real overlap. Success, nonzero exit, spawn/stream/persistence/result failures, and interruption persist typed terminal evidence. |
+| Main flow 6: concurrent isolated runs and terminal outcomes | Disposable Git and owned-process tests prove same-project isolation and real overlap. Success, nonzero exit, spawn/stream/persistence/result failures, and interruption persist typed terminal evidence. `RunStartPanel` owns its controller for the lifetime of the selected project, so an unrelated workspace rebuild keeps every active run, tail, and recovery offer visible. |
 | AF-01: dirty source | Start is blocked before persistence; guidance requires commit or explicit user-directed discard. Maestro performs no destructive Git command. |
 | AF-02: invalid/inaccessible work item | Typed resolver failures retain form input and create no run or Git resource. |
 | AF-03: branch/worktree conflict or partial failure | Presence inspection fails closed, truncation is inaccessible, concurrent actors' resources are never deleted, and compensation requires explicit per-invocation creation proof. Unknown outcomes remain durably pending. |
@@ -63,12 +69,12 @@ to implementation and local verification evidence prepared for review.
 
 ## Local verification commands
 
-Commands use the pinned Flutter toolchain and set `TEMP`/`TMP` to
-`build/native-temp` on the worktree drive.
+Commands use the pinned Flutter toolchain. No suite depends on `TEMP`/`TMP`
+pointing at the worktree drive; the default temporary directory is used.
 
 ```text
 flutter test
-# Exit 0; 529 tests passed after final Linux PID/PGID reuse hardening.
+# Exit 0; 540 tests passed after final Linux PID/PGID reuse hardening.
 
 flutter analyze
 # Exit 0; No issues found.
@@ -90,7 +96,7 @@ composition regression suites.
 
 ## Platform and delivery status
 
-- Windows: the full 529-test suite, real Git integration, Windows process/job
+- Windows: the full 540-test suite, real Git integration, Windows process/job
   contracts, junction protection, environment isolation, and owned-child
   settlement passed locally.
 - Linux: `/proc` parsing and recovery state-machine tests pass on Windows;
