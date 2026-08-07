@@ -2,11 +2,20 @@ name: CI
 
 on:
   pull_request:
+  # Work branches are covered by their pull request. Listing them here as well
+  # ran every commit twice, which doubled cost and doubled exposure to
+  # infrastructure flake in the native-asset and desktop build steps.
   push:
-    branches: [main, 'feature/**', 'fix/**', 'refactor/**', 'hotfix/**']
+    branches: [main]
 
 permissions:
   contents: read
+
+# A newer commit supersedes an in-flight run for the same pull request or
+# branch; superseded results are never the ones delivery is judged on.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze-test:
@@ -74,7 +83,10 @@ jobs:
           channel: stable
           cache: true
       - name: Install Linux build prerequisites
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
+        # libsqlite3-dev matches analyze-test: this job builds and links the
+        # Linux application, so it must not rely on the runner image happening
+        # to provide the sqlite3 development files its native assets need.
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
       - run: flutter pub get
       - run: xvfb-run -a flutter test integration_test/platform/process_tree_integration_test.dart -d linux
       - name: Run production startup integration with Secret Service
