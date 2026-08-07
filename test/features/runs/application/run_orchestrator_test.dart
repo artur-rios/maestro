@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
+import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:path/path.dart' as p;

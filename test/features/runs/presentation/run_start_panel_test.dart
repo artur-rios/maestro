@@ -71,6 +71,7 @@ void main() {
     (tester) async {
       final offer = RunRecoveryOffer(
         runId: 'interrupted-run',
+        projectId: 'project-1',
         interruptedAttemptId: 'attempt-1',
         evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
         actions: const <RecoveryAction>{

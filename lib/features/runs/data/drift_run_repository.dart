@@ -45,7 +45,8 @@ final class DriftRunRepository
         RunStartRepository,
         RunExecutionRepository,
         RunInterruptionRepository,
-        RunActivityReader {
+        RunActivityReader,
+        RunInterruptionStateReader {
   const DriftRunRepository(this._database);
 
   final db.MaestroDatabase _database;
@@ -694,6 +695,7 @@ final class DriftRunRepository
       evidence.add(
         InterruptedRunEvidence(
           runId: run.id,
+          projectId: run.projectId,
           updatedAt: run.updatedAt.toUtc(),
           interruptedAttemptId: interrupted?.id,
           hasPreservedContext: hasPreservedContext,
@@ -798,6 +800,16 @@ final class DriftRunRepository
       domain.RunStatus.paused.name,
       domain.RunStatus.interrupted.name,
     }.contains(row.status);
+  }
+
+  @override
+  Future<bool> isInterrupted(String runId) async {
+    final row = await (_database.select(
+      _database.workflowRuns,
+    )..where((table) => table.id.equals(runId))).getSingleOrNull();
+    return row != null &&
+        row.deletedAt == null &&
+        row.status == domain.RunStatus.interrupted.name;
   }
 
   @override

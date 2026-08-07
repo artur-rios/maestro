@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
+import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
 import 'package:path/path.dart' as p;
 
 void main() {

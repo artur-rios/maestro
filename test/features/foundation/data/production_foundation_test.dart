@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
+import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
@@ -60,6 +61,9 @@ void main() {
       await paths.worktreesDirectory.create(recursive: true);
       final worktree = Directory('${paths.worktreesDirectory.path}/run-1');
       await worktree.create();
+      final resultFile = File('${paths.root.path}/run-results/result.json');
+      await resultFile.parent.create(recursive: true);
+      await resultFile.writeAsString('stale');
       final database = MaestroDatabase(NativeDatabase.memory());
       addTearDown(database.close);
       await DriftProjectRepository(database).save(
@@ -122,7 +126,8 @@ void main() {
         branchName: 'feature/uc-06-run-1',
         worktreePath: worktree.path,
       );
-      await DriftOwnedResourceStore(database).registerPending(
+      final ownership = DriftOwnedResourceStore(database);
+      await ownership.registerPending(
         OwnedResourceRecord(
           id: 'worktree-1',
           kind: OwnedResourceKind.worktree,
@@ -130,19 +135,45 @@ void main() {
           runId: 'run-1',
         ),
       );
+      await ownership.registerPending(
+        OwnedResourceRecord(
+          id: 'result-1',
+          kind: OwnedResourceKind.resultFile,
+          path: resultFile.path,
+          runId: 'run-1',
+        ),
+      );
+      await ownership.registerPending(
+        OwnedResourceRecord(
+          id: 'process-1',
+          kind: OwnedResourceKind.process,
+          path: const DurableProcessIdentity(
+            platform: 'test',
+            pid: 42,
+            fingerprint: 'fingerprint-42',
+            groupId: null,
+          ).encode(),
+          runId: 'run-1',
+          processId: 42,
+        ),
+      );
+      final processRecovery = _CheckingProcessRecovery(
+        () async => (await runs.findById('run-1'))!.run.status,
+      );
       final foundation = ProductionFoundation(
         paths: paths,
         database: database,
         runRepository: runs,
         clock: () => DateTime.utc(2026, 8, 6, 13),
         newId: () => 'restart-log',
+        processRecovery: processRecovery,
       );
 
       final check = await foundation.probes
           .singleWhere((probe) => probe.id == 'reconciliation')
           .probe();
 
-      expect(check.health, FoundationHealth.ready);
+      expect(check.health, FoundationHealth.ready, reason: check.message);
       expect(
         (await runs.findById('run-1'))!.run.status,
         domain.RunStatus.interrupted,
@@ -153,6 +184,12 @@ void main() {
       );
       expect((await runs.findById('run-1'))!.logSegmentCount, 1);
       expect(await worktree.exists(), isTrue);
+      expect(await resultFile.exists(), isFalse);
+      expect(processRecovery.observedStatus, domain.RunStatus.starting);
+      expect(
+        (await ownership.findPending()).map((record) => record.id),
+        <String>['worktree-1'],
+      );
       final offer = foundation.recoveryOffers.single;
       expect(offer.runId, 'run-1');
       expect(offer.actions, <domain.RecoveryAction>{
@@ -198,6 +235,21 @@ void main() {
       );
     },
   );
+}
+
+final class _CheckingProcessRecovery implements OwnedProcessRecoveryAdapter {
+  _CheckingProcessRecovery(this._readStatus);
+
+  final Future<domain.RunStatus> Function() _readStatus;
+  domain.RunStatus? observedStatus;
+
+  @override
+  Future<ProcessRecoveryOutcome> reconcile(
+    DurableProcessIdentity identity,
+  ) async {
+    observedStatus = await _readStatus();
+    return ProcessRecoveryOutcome.resolved;
+  }
 }
 
 domain.WorkflowRun _queuedRun(String id, DateTime at) => domain.WorkflowRun(

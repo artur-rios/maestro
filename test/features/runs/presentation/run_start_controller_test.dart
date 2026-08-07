@@ -138,6 +138,7 @@ void main() {
       final selected = <RecoveryAction>[];
       final offer = RunRecoveryOffer(
         runId: 'interrupted-run',
+        projectId: 'project-1',
         interruptedAttemptId: 'attempt-1',
         evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
         actions: const <RecoveryAction>{
@@ -164,6 +165,7 @@ void main() {
     () async {
       final offer = RunRecoveryOffer(
         runId: 'late-interrupted-run',
+        projectId: 'project-1',
         interruptedAttemptId: null,
         evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
         actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
@@ -180,10 +182,35 @@ void main() {
   );
 
   test(
+    'GivenRecoveryOffersForMultipleProjects_WhenLoaded_ThenOnlySelectedProjectOfferIsPublished',
+    () async {
+      RunRecoveryOffer offer(String runId, String projectId) =>
+          RunRecoveryOffer(
+            runId: runId,
+            projectId: projectId,
+            interruptedAttemptId: null,
+            evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+            actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
+          );
+      final mine = offer('mine', 'project-1');
+      final other = offer('other', 'project-2');
+      final controller = _controller(
+        loadRecoveryOffers: () async => <RunRecoveryOffer>[other, mine],
+      );
+      addTearDown(controller.dispose);
+
+      await controller.load();
+
+      expect(controller.state.recoveryOffers, <RunRecoveryOffer>[mine]);
+    },
+  );
+
+  test(
     'GivenStaleRecoveryOrStatusReadFailure_WhenObserved_ThenTypedFailureIsPublishedWithoutLosingEvidence',
     () async {
       final offer = RunRecoveryOffer(
         runId: 'interrupted-run',
+        projectId: 'project-1',
         interruptedAttemptId: null,
         evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
         actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
@@ -224,6 +251,7 @@ void main() {
       var calls = 0;
       final offer = RunRecoveryOffer(
         runId: 'interrupted-run',
+        projectId: 'project-1',
         interruptedAttemptId: 'attempt-1',
         evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
         actions: const <RecoveryAction>{RecoveryAction.rerunStepFresh},
@@ -248,6 +276,7 @@ void main() {
 
       final invalidOffer = RunRecoveryOffer(
         runId: 'another-run',
+        projectId: 'project-1',
         interruptedAttemptId: null,
         evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 14),
         actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},

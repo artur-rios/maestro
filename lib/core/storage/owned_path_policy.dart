@@ -18,14 +18,16 @@ final class OwnedPathPolicy {
     required Iterable<String> sourcePaths,
     required Iterable<String> ownedPaths,
   }) : _applicationRoot = _canonicalize(appPaths.root.path),
-       _worktreesRoot = _canonicalize(appPaths.worktreesDirectory.path),
-       _updatesRoot = _canonicalize(appPaths.updatesDirectory.path),
+       _ownedRoots = Set<String>.unmodifiable(<String>{
+         _canonicalize(appPaths.worktreesDirectory.path),
+         _canonicalize(appPaths.updatesDirectory.path),
+         _canonicalize(appPaths.runResultsDirectory.path),
+       }),
        _sourcePaths = Set<String>.unmodifiable(sourcePaths.map(_canonicalize)),
        _ownedPaths = Set<String>.unmodifiable(ownedPaths.map(_canonicalize));
 
   final String _applicationRoot;
-  final String _worktreesRoot;
-  final String _updatesRoot;
+  final Set<String> _ownedRoots;
   final Set<String> _sourcePaths;
   final Set<String> _ownedPaths;
 
@@ -37,15 +39,16 @@ final class OwnedPathPolicy {
     if (_overlapsAny(resolved, _sourcePaths)) {
       return OwnershipDecision.protectedSource;
     }
-    if (_same(resolved, _applicationRoot) ||
-        p.isWithin(resolved, _applicationRoot)) {
+    if (_same(resolved, _applicationRoot)) {
       return OwnershipDecision.protectedApplicationRoot;
     }
-    final underOwnedRoot =
-        p.isWithin(_worktreesRoot, resolved) ||
-        p.isWithin(_updatesRoot, resolved);
+    final underOwnedRoot = _ownedRoots.any(
+      (root) => _same(root, resolved) || p.isWithin(root, resolved),
+    );
     if (!underOwnedRoot) {
-      return OwnershipDecision.outsideOwnedRoots;
+      return p.isWithin(_applicationRoot, resolved)
+          ? OwnershipDecision.protectedApplicationRoot
+          : OwnershipDecision.outsideOwnedRoots;
     }
     if (!_ownedPaths.any((owned) => _same(owned, resolved))) {
       return OwnershipDecision.unknownOwnership;

@@ -162,7 +162,9 @@ final class RunStartController extends ChangeNotifier {
        _events = events {
     _subscription = events.listen(_onSummary);
     state = RunStartState(
-      recoveryOffers: List<RunRecoveryOffer>.unmodifiable(recoveryOffers),
+      recoveryOffers: List<RunRecoveryOffer>.unmodifiable(
+        recoveryOffers.where((offer) => offer.projectId == project.id),
+      ),
     );
   }
 
@@ -194,7 +196,9 @@ final class RunStartController extends ChangeNotifier {
                 workflow.projectIds.contains(project.id),
           )
           .toList(growable: false);
-      final recoveryOffers = await _loadRecoveryOffers();
+      final recoveryOffers = (await _loadRecoveryOffers())
+          .where((offer) => offer.projectId == project.id)
+          .toList(growable: false);
       if (!_owns(generation)) return;
       _publish(
         state.copyWith(

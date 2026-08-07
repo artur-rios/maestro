@@ -70,6 +70,8 @@ final class StepCommand {
 
 final class StepLaunchRequest {
   const StepLaunchRequest({
+    this.runId = '',
+    this.attemptId = '',
     required this.cli,
     required this.model,
     required this.executable,
@@ -77,6 +79,8 @@ final class StepLaunchRequest {
     required this.workingDirectory,
     required this.environment,
   });
+  final String runId;
+  final String attemptId;
   final String cli;
   final String model;
   final String executable;
@@ -331,6 +335,8 @@ final class RunOrchestrator {
       try {
         launch = await _launcher.start(
           StepLaunchRequest(
+            runId: runId,
+            attemptId: attemptId,
             cli: step.cli!,
             model: step.model!,
             executable: executable,
@@ -412,6 +418,11 @@ final class RunOrchestrator {
         exitCode = completed.first! as int;
         await process.settle();
       } on Object {
+        try {
+          await process.settle();
+        } on Object {
+          // The durable process record remains for startup reconciliation.
+        }
         await _resolveIgnoringErrors(resultPath);
         await _failAttempt(attemptId, 'run.step.stream_failed');
         return;

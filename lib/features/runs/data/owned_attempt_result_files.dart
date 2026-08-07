@@ -7,6 +7,7 @@ import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
+import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
 import 'package:path/path.dart' as p;
 
 final class OwnedAttemptResultFiles implements AttemptResultFiles {

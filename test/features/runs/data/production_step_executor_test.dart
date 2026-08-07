@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
+import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
+import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/platform/process/native_process_tree.dart';
@@ -67,6 +70,51 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test(
+    'persists durable ownership before gated release and resolves on settle',
+    () async {
+      final temporary = await Directory.systemTemp.createTemp(
+        'maestro-owned-gate-',
+      );
+      addTearDown(() => temporary.delete(recursive: true));
+      final process = _Process(File(p.join(temporary.path, 'stdin')));
+      final ownership = _OwnershipStore();
+      final tree = _GatedTree(process, ownership);
+      final started =
+          await OwnedStepProcessLauncher(
+            processTree: tree,
+            ownership: ownership,
+            newResourceId: () => 'process-resource-1',
+            identityProvider: const _IdentityProvider(),
+          ).start(
+            const StepLaunchRequest(
+              runId: 'run-1',
+              attemptId: 'attempt-1',
+              cli: 'codex',
+              model: 'm',
+              executable: 'fixture-codex',
+              prompt: 'prompt',
+              workingDirectory: '/isolated',
+              environment: <String, String>{},
+            ),
+          );
+
+      expect(tree.released, isTrue);
+      expect(ownership.events, <String>['pending', 'active', 'release']);
+      expect(ownership.record!.kind, OwnedResourceKind.process);
+      expect(ownership.record!.runId, 'run-1');
+      expect(ownership.record!.processId, 42);
+      expect(
+        DurableProcessIdentity.decode(ownership.record!.path).fingerprint,
+        'fingerprint-42',
+      );
+
+      await started.process!.settle();
+      expect(ownership.events.last, 'resolved');
+      await process.stdin.close();
+    },
+  );
 
   test(
     'owned launcher streams both channels with an isolated environment',
@@ -298,6 +346,60 @@ final class _Tree implements NativeProcessTree {
     this.request = request;
     return process;
   }
+}
+
+final class _GatedTree implements GatedNativeProcessTree {
+  _GatedTree(this.process, this.ownership);
+
+  final _Process process;
+  final _OwnershipStore ownership;
+  var released = false;
+
+  @override
+  Future<OwnedNativeProcess> start(ProcessStartRequest request) =>
+      startOwned(request, (_) async {});
+
+  @override
+  Future<OwnedNativeProcess> startOwned(
+    ProcessStartRequest request,
+    Future<void> Function(OwnedNativeProcess process) beforeRelease,
+  ) async {
+    await beforeRelease(process);
+    expect(ownership.events, <String>['pending', 'active']);
+    ownership.events.add('release');
+    released = true;
+    return process;
+  }
+}
+
+final class _OwnershipStore implements RunOwnedResourceStore {
+  OwnedResourceRecord? record;
+  final List<String> events = <String>[];
+
+  @override
+  Future<void> registerPending(OwnedResourceRecord record) async {
+    this.record = record;
+    events.add('pending');
+  }
+
+  @override
+  Future<void> markActive(String id) async => events.add('active');
+
+  @override
+  Future<void> markResolved(String id) async => events.add('resolved');
+}
+
+final class _IdentityProvider implements ProcessIdentityProvider {
+  const _IdentityProvider();
+
+  @override
+  Future<DurableProcessIdentity> capture(int pid) async =>
+      DurableProcessIdentity(
+        platform: 'test',
+        pid: pid,
+        fingerprint: 'fingerprint-$pid',
+        groupId: null,
+      );
 }
 
 final class _Process implements OwnedNativeProcess {

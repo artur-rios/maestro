@@ -184,9 +184,12 @@ Future<ProductionAppComposition> composeProductionApp({
   final ownership = DriftOwnedResourceStore(database);
   final runOrchestrator = RunOrchestrator(
     repository: runRepository,
-    launcher: OwnedStepProcessLauncher(),
+    launcher: OwnedStepProcessLauncher(
+      ownership: ownership,
+      newResourceId: newId,
+    ),
     resultFiles: OwnedAttemptResultFiles(
-      resultRoot: p.join(paths.root.path, 'run-results'),
+      resultRoot: paths.runResultsDirectory.path,
       ownership: ownership,
       newResourceId: newId,
     ),

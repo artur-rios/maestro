@@ -3,12 +3,14 @@ import 'package:maestro/features/runs/domain/run_models.dart';
 final class InterruptedRunEvidence {
   const InterruptedRunEvidence({
     required this.runId,
+    this.projectId,
     required this.updatedAt,
     this.interruptedAttemptId,
     this.hasPreservedContext = false,
   });
 
   final String runId;
+  final String? projectId;
   final DateTime updatedAt;
   final String? interruptedAttemptId;
   final bool hasPreservedContext;
@@ -17,12 +19,14 @@ final class InterruptedRunEvidence {
 final class RunRecoveryOffer {
   RunRecoveryOffer({
     required this.runId,
+    this.projectId,
     required this.interruptedAttemptId,
     required this.evidenceUpdatedAt,
     required Iterable<RecoveryAction> actions,
   }) : actions = Set<RecoveryAction>.unmodifiable(actions);
 
   final String runId;
+  final String? projectId;
   final String? interruptedAttemptId;
   final DateTime evidenceUpdatedAt;
   final Set<RecoveryAction> actions;
@@ -96,6 +100,7 @@ final class RunInterruptionReconciler {
     }
     return RunRecoveryOffer(
       runId: evidence.runId,
+      projectId: evidence.projectId,
       interruptedAttemptId: evidence.interruptedAttemptId,
       evidenceUpdatedAt: evidence.updatedAt,
       actions: actions,

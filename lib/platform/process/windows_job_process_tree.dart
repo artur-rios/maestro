@@ -11,14 +11,21 @@ import 'package:win32/win32.dart';
 
 const int _jobObjectLimitKillOnJobClose = 0x00002000;
 
-final class WindowsJobProcessTree implements NativeProcessTree {
+final class WindowsJobProcessTree implements GatedNativeProcessTree {
   const WindowsJobProcessTree({WindowsGatedProcessLauncher? launcher})
     : _launcher = launcher ?? const WindowsGatedProcessLauncher();
 
   final WindowsGatedProcessLauncher _launcher;
 
   @override
-  Future<OwnedNativeProcess> start(ProcessStartRequest request) async {
+  Future<OwnedNativeProcess> start(ProcessStartRequest request) =>
+      startOwned(request, (_) async {});
+
+  @override
+  Future<OwnedNativeProcess> startOwned(
+    ProcessStartRequest request,
+    Future<void> Function(OwnedNativeProcess process) beforeRelease,
+  ) async {
     if (!Platform.isWindows) {
       throw UnsupportedError('Windows Job Objects require Windows.');
     }
@@ -73,6 +80,7 @@ final class WindowsJobProcessTree implements NativeProcessTree {
           process.exitCode,
         ),
       );
+      await beforeRelease(owned);
       await launch.release();
       return owned;
     } catch (_) {

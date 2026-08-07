@@ -22,6 +22,13 @@ abstract interface class NativeProcessTree {
   Future<OwnedNativeProcess> start(ProcessStartRequest request);
 }
 
+abstract interface class GatedNativeProcessTree implements NativeProcessTree {
+  Future<OwnedNativeProcess> startOwned(
+    ProcessStartRequest request,
+    Future<void> Function(OwnedNativeProcess process) beforeRelease,
+  );
+}
+
 abstract interface class OwnedNativeProcess implements OwnedProcess {
   int get pid;
   Future<int> get exitCode;

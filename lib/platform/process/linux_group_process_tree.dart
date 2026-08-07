@@ -5,25 +5,47 @@ import 'dart:io';
 import 'package:maestro/platform/process/native_process_tree.dart';
 import 'package:maestro/platform/process/process_supervisor.dart';
 
-final class LinuxGroupProcessTree implements NativeProcessTree {
+final class LinuxGroupProcessTree implements GatedNativeProcessTree {
   LinuxGroupProcessTree() : _bindings = _LinuxProcessBindings();
 
   final _LinuxProcessBindings _bindings;
 
   @override
-  Future<OwnedNativeProcess> start(ProcessStartRequest request) async {
+  Future<OwnedNativeProcess> start(ProcessStartRequest request) =>
+      startOwned(request, (_) async {});
+
+  @override
+  Future<OwnedNativeProcess> startOwned(
+    ProcessStartRequest request,
+    Future<void> Function(OwnedNativeProcess process) beforeRelease,
+  ) async {
     if (!Platform.isLinux) {
       throw UnsupportedError('Unix process groups require Linux.');
     }
     final process = await Process.start(
       '/usr/bin/setsid',
-      <String>[request.executable, ...request.arguments],
+      <String>[
+        '/bin/sh',
+        '-c',
+        r'kill -STOP $$; exec "$@"',
+        'maestro-process-gate',
+        request.executable,
+        ...request.arguments,
+      ],
       workingDirectory: request.workingDirectory,
       environment: request.environment,
       includeParentEnvironment: request.includeParentEnvironment,
       runInShell: false,
     );
-    return _LinuxOwnedProcess(process, _bindings);
+    final owned = _LinuxOwnedProcess(process, _bindings);
+    try {
+      await beforeRelease(owned);
+      _bindings.signalGroup(process.pid, 18);
+    } on Object {
+      await owned.terminateTree();
+      rethrow;
+    }
+    return owned;
   }
 }
 

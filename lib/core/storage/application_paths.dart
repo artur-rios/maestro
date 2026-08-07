@@ -9,6 +9,7 @@ final class ApplicationPaths {
     required this.logsDirectory,
     required this.updatesDirectory,
     required this.worktreesDirectory,
+    required this.runResultsDirectory,
   });
 
   factory ApplicationPaths.fromRoot(Directory root) {
@@ -23,6 +24,9 @@ final class ApplicationPaths {
       logsDirectory: Directory(p.join(normalizedRoot.path, 'logs')),
       updatesDirectory: Directory(p.join(normalizedRoot.path, 'updates')),
       worktreesDirectory: Directory(p.join(normalizedRoot.path, 'worktrees')),
+      runResultsDirectory: Directory(
+        p.join(normalizedRoot.path, 'run-results'),
+      ),
     );
   }
 
@@ -31,11 +35,13 @@ final class ApplicationPaths {
   final Directory logsDirectory;
   final Directory updatesDirectory;
   final Directory worktreesDirectory;
+  final Directory runResultsDirectory;
 
   Iterable<String> get all => <String>[
     databaseFile.path,
     logsDirectory.path,
     updatesDirectory.path,
     worktreesDirectory.path,
+    runResultsDirectory.path,
   ];
 }
