@@ -1,27 +1,76 @@
+// Public constructor names describe ports; stored fields remain private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/core/storage/owned_path_policy.dart';
 import 'package:maestro/features/foundation/application/foundation_probe.dart';
+import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 import 'package:maestro/features/foundation/application/reconcile_resources.dart';
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/local_owned_resource_cleaner.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
+import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
+import 'package:maestro/features/runs/data/drift_run_repository.dart';
+import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/common/executable_probe.dart';
+import 'package:maestro/platform/process/owned_process_recovery.dart';
 
 final class ProductionFoundation {
   ProductionFoundation({
     required this.paths,
     required this.database,
     this.commandRunner = const ProcessCommandRunner(),
-  });
+    DriftRunRepository? runRepository,
+    DateTime Function()? clock,
+    String Function()? newId,
+    OwnedProcessRecoveryAdapter processRecovery =
+        const PlatformOwnedProcessRecovery(),
+  }) : runRepository = runRepository ?? DriftRunRepository(database),
+       _clock = clock ?? _utcNow,
+       _newId = newId ?? _fallbackId,
+       _processRecovery = processRecovery {
+    _runReconciler = RunInterruptionReconciler(
+      repository: this.runRepository,
+      now: _clock,
+      newId: _newId,
+    );
+    _startupRecovery = StartupRunRecoveryCoordinator(_runReconciler);
+  }
 
   final ApplicationPaths paths;
   final MaestroDatabase database;
   final CommandRunner commandRunner;
+  final DriftRunRepository runRepository;
+  final DateTime Function() _clock;
+  final String Function() _newId;
+  final OwnedProcessRecoveryAdapter _processRecovery;
+  late final RunInterruptionReconciler _runReconciler;
+  late final StartupRunRecoveryCoordinator _startupRecovery;
+  List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
+  Future<String>? _startupReconciliation;
+
+  /// Waits for the one mutating startup pass, then reads offers read-only.
+  Future<List<RunRecoveryOffer>> listRecoveryOffersAfterStartup() async {
+    await beginStartupReconciliation();
+    recoveryOffers = await _startupRecovery.listOffersAfterStartup();
+    return recoveryOffers;
+  }
+
+  Future<void> selectRecovery(
+    RunRecoveryOffer offer,
+    RecoveryAction action,
+  ) async {
+    await beginStartupReconciliation();
+    await _runReconciler.select(offer, action);
+    recoveryOffers = recoveryOffers
+        .where((value) => value.runId != offer.runId)
+        .toList(growable: false);
+  }
 
   List<FoundationProbe> get probes => <FoundationProbe>[
     _CallbackFoundationProbe('paths', true, _initializePaths),
@@ -43,13 +92,18 @@ final class ProductionFoundation {
           command: specification.command,
         ),
       ),
-    _CallbackFoundationProbe('reconciliation', false, _reconcile),
+    _CallbackFoundationProbe(
+      'reconciliation',
+      false,
+      beginStartupReconciliation,
+    ),
   ];
 
   Future<String> _initializePaths() async {
     await paths.root.create(recursive: true);
     await paths.updatesDirectory.create(recursive: true);
     await paths.worktreesDirectory.create(recursive: true);
+    await paths.runResultsDirectory.create(recursive: true);
     return 'Application data paths are ready.';
   }
 
@@ -78,6 +132,16 @@ final class ProductionFoundation {
 
   Future<String> _reconcile() async {
     final store = DriftOwnedResourceStore(database);
+    final processReport = await ReconcileOwnedProcesses(
+      store: store,
+      adapter: _processRecovery,
+    )();
+    if (processReport.failed != 0) {
+      recoveryOffers = const <RunRecoveryOffer>[];
+      throw StateError(
+        '${processReport.failed} process reconciliation(s) need review.',
+      );
+    }
     final pending = await store.findPending();
     final policy = OwnedPathPolicy(
       appPaths: paths,
@@ -86,12 +150,16 @@ final class ProductionFoundation {
           .where((resource) => resource.kind != OwnedResourceKind.process)
           .map((resource) => resource.path),
     );
-    final report = await ReconcileResources(
-      store: store,
-      runActivity: const _InactiveRunReader(),
-      cleaner: const LocalOwnedResourceCleaner(),
-      evaluatePath: policy.evaluate,
-    )();
+    late final ReconciliationReport report;
+    recoveryOffers = await _startupRecovery.begin(() async {
+      report = await ReconcileResources(
+        store: store,
+        runActivity: runRepository,
+        interruptionState: runRepository,
+        cleaner: const LocalOwnedResourceCleaner(),
+        evaluatePath: policy.evaluate,
+      )();
+    });
     if (report.failures.isNotEmpty) {
       throw StateError(
         '${report.failures.length} resource cleanup(s) need review.',
@@ -99,6 +167,9 @@ final class ProductionFoundation {
     }
     return 'Owned-resource reconciliation completed.';
   }
+
+  Future<String> beginStartupReconciliation() =>
+      _startupReconciliation ??= _reconcile();
 }
 
 final class StaticFoundationProbe implements FoundationProbe {
@@ -162,9 +233,7 @@ final class _CapabilityFoundationProbe implements FoundationProbe {
   }
 }
 
-final class _InactiveRunReader implements RunActivityReader {
-  const _InactiveRunReader();
+DateTime _utcNow() => DateTime.now().toUtc();
 
-  @override
-  Future<bool> isActive(String runId) async => false;
-}
+String _fallbackId() =>
+    'foundation-${DateTime.now().toUtc().microsecondsSinceEpoch}';

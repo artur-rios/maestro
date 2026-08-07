@@ -56,6 +56,61 @@ void main() {
       },
     );
 
+    test(
+      'GivenAccompaniedOrRewordedNonGitDiagnostic_WhenValidated_ThenStillNotGitWorkingTree',
+      () async {
+        for (final stderr in <String>[
+          'warning: unable to access system config\n'
+              'fatal: not a git repository (or any of the parent directories): .git\n',
+          'fatal: not a git repository: .git\r\n',
+          'fatal: Not a git repository (or any parent up to mount point /)\n'
+              'Stopping at filesystem boundary.\n',
+        ]) {
+          final runner = _RecordingRunner(
+            CommandResult(exitCode: 128, stdout: '', stderr: stderr),
+          );
+          final validator = _validator(
+            runner,
+            ProjectDirectoryState.accessible,
+          );
+
+          final result = await validator.validate(ProjectFolder.parse('/repo'));
+
+          expect(
+            result.availability,
+            ProjectAvailability.notGitWorkingTree,
+            reason: stderr,
+          );
+        }
+      },
+    );
+
+    test(
+      'GivenUnrecognizedOrLostDiagnostic_WhenValidated_ThenFailureStaysTransient',
+      () async {
+        for (final stderr in <String>[
+          '',
+          'error: could not lock config file\n',
+        ]) {
+          final runner = _RecordingRunner(
+            CommandResult(exitCode: 128, stdout: '', stderr: stderr),
+          );
+          final validator = _validator(
+            runner,
+            ProjectDirectoryState.accessible,
+          );
+
+          final result = await validator.validate(ProjectFolder.parse('/repo'));
+
+          expect(
+            result.availability,
+            ProjectAvailability.transientFailure,
+            reason: stderr,
+          );
+        }
+      },
+    );
+
     test('GivenNestedSelection_WhenValidated_ThenNotRoot', () async {
       final runner = _RecordingRunner(_success('/repo'));
       final validator = _validator(runner, ProjectDirectoryState.accessible);

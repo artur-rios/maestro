@@ -11,14 +11,21 @@ import 'package:win32/win32.dart';
 
 const int _jobObjectLimitKillOnJobClose = 0x00002000;
 
-final class WindowsJobProcessTree implements NativeProcessTree {
+final class WindowsJobProcessTree implements GatedNativeProcessTree {
   const WindowsJobProcessTree({WindowsGatedProcessLauncher? launcher})
     : _launcher = launcher ?? const WindowsGatedProcessLauncher();
 
   final WindowsGatedProcessLauncher _launcher;
 
   @override
-  Future<OwnedNativeProcess> start(ProcessStartRequest request) async {
+  Future<OwnedNativeProcess> start(ProcessStartRequest request) =>
+      startOwned(request, (_) async {});
+
+  @override
+  Future<OwnedNativeProcess> startOwned(
+    ProcessStartRequest request,
+    Future<void> Function(OwnedNativeProcess process) beforeRelease,
+  ) async {
     if (!Platform.isWindows) {
       throw UnsupportedError('Windows Job Objects require Windows.');
     }
@@ -66,7 +73,14 @@ final class WindowsJobProcessTree implements NativeProcessTree {
       } finally {
         processHandle.close();
       }
-      final owned = _WindowsOwnedProcess(process, job);
+      final owned = _WindowsOwnedProcess(
+        process,
+        WindowsJobTermination(
+          _NativeWindowsJobTerminationApi(job),
+          process.exitCode,
+        ),
+      );
+      await beforeRelease(owned);
       await launch.release();
       return owned;
     } catch (_) {
@@ -167,7 +181,7 @@ exit $LASTEXITCODE
         ],
         workingDirectory: request.workingDirectory,
         environment: environment,
-        includeParentEnvironment: true,
+        includeParentEnvironment: request.includeParentEnvironment,
         runInShell: false,
       );
       return WindowsGatedLaunch(process, gate);
@@ -183,13 +197,10 @@ exit $LASTEXITCODE
 }
 
 final class _WindowsOwnedProcess implements OwnedNativeProcess {
-  _WindowsOwnedProcess(this._process, this._job) {
-    unawaited(_process.exitCode.whenComplete(_closeJob));
-  }
+  _WindowsOwnedProcess(this._process, this._termination);
 
   final Process _process;
-  final HANDLE _job;
-  bool _jobClosed = false;
+  final WindowsJobTermination _termination;
 
   @override
   int get pid => _process.pid;
@@ -207,27 +218,107 @@ final class _WindowsOwnedProcess implements OwnedNativeProcess {
   Stream<List<int>> get stderr => _process.stderr;
 
   @override
-  Future<ProcessTerminalState> terminateTree() async {
-    final result = TerminateJobObject(_job, 1);
-    if (!result.value) {
-      return ProcessTerminalState.terminationFailed;
-    }
+  Future<ProcessTerminalState> terminateTree() => _termination.terminateTree();
+}
+
+abstract interface class WindowsJobTerminationApi {
+  bool terminate();
+  Future<bool> waitForEmpty(Duration timeout);
+  void close();
+}
+
+final class WindowsJobTermination {
+  WindowsJobTermination(this._api, this._exitCode);
+
+  final WindowsJobTerminationApi _api;
+  final Future<int> _exitCode;
+  Future<ProcessTerminalState>? _result;
+
+  Future<ProcessTerminalState> terminateTree() => _result ??= _terminateTree();
+
+  Future<ProcessTerminalState> _terminateTree() async {
     try {
-      await _process.exitCode.timeout(const Duration(seconds: 5));
-      return ProcessTerminalState.cancelled;
+      if (!_api.terminate()) {
+        return ProcessTerminalState.terminationFailed;
+      }
+      await _exitCode.timeout(const Duration(seconds: 2));
+      return await _api.waitForEmpty(const Duration(seconds: 3))
+          ? ProcessTerminalState.cancelled
+          : ProcessTerminalState.terminationFailed;
     } on TimeoutException {
       return ProcessTerminalState.terminationFailed;
     } finally {
-      _closeJob();
+      _api.close();
+    }
+  }
+}
+
+final class _NativeWindowsJobTerminationApi
+    implements WindowsJobTerminationApi {
+  _NativeWindowsJobTerminationApi(this._job);
+
+  final HANDLE _job;
+  var _closed = false;
+
+  @override
+  bool terminate() => TerminateJobObject(_job, 1).value;
+
+  @override
+  Future<bool> waitForEmpty(Duration timeout) async {
+    final information = calloc<_JobObjectBasicAccountingInformation>();
+    try {
+      final deadline = DateTime.now().add(timeout);
+      while (true) {
+        final queried = QueryInformationJobObject(
+          _job,
+          JobObjectBasicAccountingInformation,
+          information.cast<Void>(),
+          sizeOf<_JobObjectBasicAccountingInformation>(),
+          nullptr,
+        );
+        if (!queried.value) return false;
+        if (information.ref.activeProcesses == 0) return true;
+        if (DateTime.now().isAfter(deadline)) return false;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    } finally {
+      calloc.free(information);
     }
   }
 
-  void _closeJob() {
-    if (!_jobClosed) {
-      _jobClosed = true;
+  @override
+  void close() {
+    if (!_closed) {
+      _closed = true;
       _job.close();
     }
   }
+}
+
+final class _JobObjectBasicAccountingInformation extends Struct {
+  @Int64()
+  external int totalUserTime;
+
+  @Int64()
+  external int totalKernelTime;
+
+  @Int64()
+  external int thisPeriodTotalUserTime;
+
+  @Int64()
+  external int thisPeriodTotalKernelTime;
+
+  @Uint32()
+  external int totalPageFaultCount;
+
+  @Uint32()
+  external int totalProcesses;
+
+  @Uint32()
+  external int activeProcesses;
+
+  @Uint32()
+  external int totalTerminatedProcesses;
 }
 
 final class _JobObjectBasicLimitInformation extends Struct {

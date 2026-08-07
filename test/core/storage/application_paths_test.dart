@@ -15,6 +15,7 @@ void main() {
         expect(p.isWithin(root.path, path), isTrue, reason: path);
       }
       expect(paths.databaseFile.path, p.join(root.path, 'data', 'maestro.db'));
+      expect(paths.runResultsDirectory.path, p.join(root.path, 'run-results'));
     });
 
     test('GivenRelativeRoot_WhenBuildingPaths_ThenArgumentIsRejected', () {

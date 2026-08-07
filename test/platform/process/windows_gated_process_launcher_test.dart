@@ -1,12 +1,30 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/platform/process/native_process_tree.dart';
+import 'package:maestro/platform/process/process_supervisor.dart';
 import 'package:maestro/platform/process/windows_job_process_tree.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  test(
+    'failed job termination still closes the kill-on-close handle',
+    () async {
+      final api = _FailingTerminationApi();
+      final termination = WindowsJobTermination(api, Completer<int>().future);
+
+      expect(
+        await termination.terminateTree(),
+        ProcessTerminalState.terminationFailed,
+      );
+      expect(api.terminateCalls, 1);
+      expect(api.closeCalls, 1);
+      expect(api.killOnJobCloseObserved, isTrue);
+    },
+  );
+
   test(
     'GivenBlockedWindowsBootstrap_WhenNotReleased_ThenTargetCannotStart',
     () async {
@@ -38,6 +56,27 @@ void main() {
       await launch.process.exitCode;
     },
   );
+}
+
+final class _FailingTerminationApi implements WindowsJobTerminationApi {
+  int terminateCalls = 0;
+  int closeCalls = 0;
+  bool killOnJobCloseObserved = false;
+
+  @override
+  bool terminate() {
+    terminateCalls += 1;
+    return false;
+  }
+
+  @override
+  Future<bool> waitForEmpty(Duration timeout) async => false;
+
+  @override
+  void close() {
+    closeCalls += 1;
+    killOnJobCloseObserved = true;
+  }
 }
 
 String _dartExecutable() {

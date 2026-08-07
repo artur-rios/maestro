@@ -1,4 +1,11 @@
-enum OwnedResourceKind { worktree, update, process, unknown }
+enum OwnedResourceKind {
+  branch,
+  worktree,
+  update,
+  process,
+  resultFile,
+  unknown,
+}
 
 final class OwnedResourceRecord {
   const OwnedResourceRecord({
@@ -18,6 +25,7 @@ final class OwnedResourceRecord {
 
 enum ReconciliationReason {
   activeRun,
+  externallyManaged,
   unsafePath,
   duplicateRecord,
   cleanupFailed,

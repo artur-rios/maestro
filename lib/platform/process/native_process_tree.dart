@@ -8,16 +8,34 @@ final class ProcessStartRequest {
     this.arguments = const <String>[],
     this.workingDirectory,
     this.environment = const <String, String>{},
+    this.includeParentEnvironment = true,
   });
 
   final String executable;
   final List<String> arguments;
   final String? workingDirectory;
   final Map<String, String> environment;
+  final bool includeParentEnvironment;
 }
 
 abstract interface class NativeProcessTree {
   Future<OwnedNativeProcess> start(ProcessStartRequest request);
+}
+
+final class ProcessGateException implements Exception {
+  const ProcessGateException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => 'ProcessGateException($code)';
+}
+
+abstract interface class GatedNativeProcessTree implements NativeProcessTree {
+  Future<OwnedNativeProcess> startOwned(
+    ProcessStartRequest request,
+    Future<void> Function(OwnedNativeProcess process) beforeRelease,
+  );
 }
 
 abstract interface class OwnedNativeProcess implements OwnedProcess {
@@ -34,7 +52,7 @@ Future<Process> startNativeProcess(ProcessStartRequest request) {
     request.arguments,
     workingDirectory: request.workingDirectory,
     environment: request.environment,
-    includeParentEnvironment: true,
+    includeParentEnvironment: request.includeParentEnvironment,
     runInShell: false,
   );
 }

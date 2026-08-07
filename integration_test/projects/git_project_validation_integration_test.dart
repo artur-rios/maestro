@@ -52,7 +52,11 @@ void main() {
         ProjectFolder.parse(sandbox.path),
       );
 
-      expect(result.availability, ProjectAvailability.notGitWorkingTree);
+      expect(
+        result.availability,
+        ProjectAvailability.notGitWorkingTree,
+        reason: runner.evidence,
+      );
       expect(result.canonicalFolder, isNull);
       expect(runner.requests, hasLength(1));
       expect(runner.requests.single.arguments, <String>[
@@ -215,10 +219,27 @@ final class _RecordingCommandRunner implements CommandRunner {
 
   final CommandRunner delegate;
   final List<CommandRequest> requests = <CommandRequest>[];
+  final List<CommandResult> results = <CommandResult>[];
 
   @override
-  Future<CommandResult> run(CommandRequest request) {
+  Future<CommandResult> run(CommandRequest request) async {
     requests.add(request);
-    return delegate.run(request);
+    final result = await delegate.run(request);
+    results.add(result);
+    return result;
   }
+
+  /// Reports what Git actually said so a host-specific difference in exit
+  /// status, diagnostic wording, or stream truncation is visible in the
+  /// failure instead of only the classification it produced.
+  String get evidence => results
+      .map(
+        (result) =>
+            'exit=${result.exitCode} kind=${result.failureKind} '
+            'stdoutTruncated=${result.stdoutTruncated} '
+            'stderrTruncated=${result.stderrTruncated} '
+            'stdout=${jsonEncode(result.stdout)} '
+            'stderr=${jsonEncode(result.stderr)}',
+      )
+      .join(' | ');
 }

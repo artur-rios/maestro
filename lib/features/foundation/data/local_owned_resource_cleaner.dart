@@ -8,7 +8,8 @@ final class LocalOwnedResourceCleaner implements OwnedResourceCleaner {
 
   @override
   Future<void> remove(OwnedResourceRecord resource) async {
-    if (resource.kind == OwnedResourceKind.process ||
+    if (resource.kind == OwnedResourceKind.branch ||
+        resource.kind == OwnedResourceKind.process ||
         resource.kind == OwnedResourceKind.unknown) {
       throw UnsupportedError(
         'Resource kind ${resource.kind.name} requires a live owner.',

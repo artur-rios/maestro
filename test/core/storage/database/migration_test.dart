@@ -298,4 +298,142 @@ void main() {
       },
     );
   }
+
+  for (final sourceVersion in <int>[1, 2, 3, 4]) {
+    test(
+      'GivenVersion${sourceVersion}Database_WhenMigratedToVersionFive_ThenAllPriorDataAndRunConstraintsRemainValid',
+      () async {
+        final verifier = SchemaVerifier(GeneratedHelper());
+        final schema = await verifier.schemaAt(sourceVersion);
+        final database = MaestroDatabase(schema.newConnection());
+        await database.customStatement(
+          'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)',
+          <Object?>['retentionDays', '30', 1785931200],
+        );
+        if (sourceVersion >= 2) {
+          await database.customStatement(
+            'INSERT INTO local_users '
+            '(id, email, auth_method, verifier_key, created_at) '
+            'VALUES (?, ?, ?, ?, ?)',
+            <Object?>[
+              'user-v$sourceVersion',
+              'v$sourceVersion@example.com',
+              'emailPassword',
+              'key',
+              1785931200,
+            ],
+          );
+        }
+        if (sourceVersion >= 3) {
+          await database.customStatement(
+            'INSERT INTO projects (id, name, normalized_name, folder_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            <Object?>[
+              'project-1',
+              'Maestro',
+              'maestro',
+              r'C:\source\maestro',
+              1785931200,
+              1785931200,
+            ],
+          );
+        }
+        if (sourceVersion >= 4) {
+          await database.customStatement(
+            'INSERT INTO workflows (id, revision, name, is_reusable, unit_type, supervised_delivery, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            <Object?>[
+              'workflow-1',
+              1,
+              'Delivery',
+              1,
+              'useCase',
+              1,
+              1785931200,
+              1785931200,
+            ],
+          );
+        }
+
+        await verifier.migrateAndValidate(database, 5);
+
+        expect(
+          (await database
+                  .customSelect(
+                    "SELECT value FROM settings WHERE key = 'retentionDays'",
+                  )
+                  .getSingle())
+              .read<String>('value'),
+          '30',
+        );
+        if (sourceVersion >= 2) {
+          expect(
+            (await database
+                    .customSelect('SELECT id FROM local_users')
+                    .getSingle())
+                .read<String>('id'),
+            'user-v$sourceVersion',
+          );
+        }
+        if (sourceVersion < 3) {
+          await database.customStatement(
+            'INSERT INTO projects (id, name, normalized_name, folder_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            <Object?>[
+              'project-1',
+              'Maestro',
+              'maestro',
+              r'C:\source\maestro',
+              1785931200,
+              1785931200,
+            ],
+          );
+        } else {
+          expect(
+            (await database
+                    .customSelect(
+                      "SELECT folder_path FROM projects WHERE id = 'project-1'",
+                    )
+                    .getSingle())
+                .read<String>('folder_path'),
+            r'C:\source\maestro',
+          );
+        }
+        if (sourceVersion >= 4) {
+          expect(
+            (await database
+                    .customSelect(
+                      "SELECT name FROM workflows WHERE id = 'workflow-1'",
+                    )
+                    .getSingle())
+                .read<String?>('name'),
+            'Delivery',
+          );
+        }
+        await database.customStatement(
+          'INSERT INTO workflow_runs (id, project_id, label, status, current_step_position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          <Object?>[
+            'run-1',
+            'project-1',
+            'UC-06',
+            'queued',
+            0,
+            1785931200,
+            1785931200,
+          ],
+        );
+        await database.customStatement(
+          'INSERT INTO run_snapshots (run_id, schema_version, canonical_payload, created_at) VALUES (?, ?, ?, ?)',
+          <Object?>['run-1', 1, '{}', 1785931200],
+        );
+        await expectLater(
+          database.customStatement(
+            'INSERT INTO run_snapshots (run_id, schema_version, canonical_payload, created_at) VALUES (?, ?, ?, ?)',
+            <Object?>['run-1', 1, '{}', 1785931200],
+          ),
+          throwsA(anything),
+        );
+
+        await database.close();
+        schema.close();
+      },
+    );
+  }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:maestro/features/projects/application/project_service.dart';
@@ -117,9 +118,24 @@ final class LocalGitProjectValidator implements ProjectFolderValidator {
     return value;
   }
 
+  /// Recognizes Git's "no repository here" diagnostic on any reported line.
+  ///
+  /// Matching the whole stream against one exact sentence made a definite
+  /// answer depend on Git's wording, on no other line being present, and on
+  /// the stream never being truncated. Any of those turned a directory that is
+  /// provably not a working tree into a transient failure. Scanning lines for
+  /// the diagnostic keeps unrelated failures transient while tolerating
+  /// leading warnings, trailing detail, and wording differences between Git
+  /// builds.
   bool _isKnownNotGitDiagnostic(String stderr) {
-    return _withoutTerminalLineEndings(stderr) ==
-        'fatal: not a git repository (or any of the parent directories): .git';
+    return const LineSplitter()
+        .convert(stderr)
+        .map((line) => line.trim().toLowerCase())
+        .any(
+          (line) =>
+              line.startsWith('fatal:') &&
+              line.contains('not a git repository'),
+        );
   }
 
   String _withoutTerminalLineEndings(String value) {

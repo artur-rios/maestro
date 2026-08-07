@@ -21,6 +21,7 @@ class MaestroApp extends StatefulWidget {
     this.projectFolderPicker,
     this.workflowDesignService,
     this.agentConfigurationService,
+    this.runStartBuilder,
     this.foundationProbes = const <FoundationProbe>[],
     this.onDispose,
     super.key,
@@ -32,6 +33,7 @@ class MaestroApp extends StatefulWidget {
   final ProjectFolderPicker? projectFolderPicker;
   final WorkflowDesignService? workflowDesignService;
   final AgentConfigurationService? agentConfigurationService;
+  final RunStartWorkspaceBuilder? runStartBuilder;
   final List<FoundationProbe> foundationProbes;
   final VoidCallback? onDispose;
 
@@ -98,6 +100,7 @@ final class _MaestroAppState extends State<MaestroApp> {
               lifecycleService: projectLifecycleService,
               workflowService: widget.workflowDesignService,
               agentConfigurationService: widget.agentConfigurationService,
+              runStartBuilder: widget.runStartBuilder,
               emptyContent: const FoundationPage(),
             );
           },

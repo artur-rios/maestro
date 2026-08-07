@@ -5,7 +5,12 @@ import 'package:maestro/platform/agents/executable_resolver.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  // A POSIX `PATH` separates entries with `:`, which is also the Windows drive
+  // separator. A Windows temporary directory therefore cannot express a POSIX
+  // `PATH` entry, so this case runs only on the platform it describes. The
+  // Windows equivalent is covered by the `.exe` cases below.
   test('GivenExecutableOnPath_WhenResolved_ThenExactPathIsReturned', () async {
+    if (Platform.isWindows) return;
     final root = await Directory.systemTemp.createTemp('maestro-resolver-');
     addTearDown(() => root.delete(recursive: true));
     final file = File(p.join(root.path, 'codex'));
@@ -87,6 +92,7 @@ void main() {
       ).resolve('codex');
 
       expect((result as ResolvedExecutable).executable, valid.path);
+      expect(result.argumentPrefix, isEmpty);
     },
   );
 

@@ -11,6 +11,10 @@ abstract interface class RunActivityReader {
   Future<bool> isActive(String runId);
 }
 
+abstract interface class RunInterruptionStateReader {
+  Future<bool> isInterrupted(String runId);
+}
+
 abstract interface class OwnedResourceCleaner {
   Future<void> remove(OwnedResourceRecord resource);
 }
@@ -23,12 +27,14 @@ final class ReconcileResources {
     required this.runActivity,
     required this.cleaner,
     required this.evaluatePath,
+    this.interruptionState,
   });
 
   final OwnedResourceStore store;
   final RunActivityReader runActivity;
   final OwnedResourceCleaner cleaner;
   final OwnedPathEvaluator evaluatePath;
+  final RunInterruptionStateReader? interruptionState;
 
   Future<ReconciliationReport> call() async {
     final removed = <OwnedResourceRecord>[];
@@ -48,7 +54,25 @@ final class ReconcileResources {
         continue;
       }
       final runId = resource.runId;
-      if (runId != null && await runActivity.isActive(runId)) {
+      final interrupted =
+          runId != null &&
+          interruptionState != null &&
+          await interruptionState!.isInterrupted(runId);
+      if (resource.kind == OwnedResourceKind.branch ||
+          resource.kind == OwnedResourceKind.process) {
+        retained.add(
+          ReconciliationFinding(
+            resource: resource,
+            reason: ReconciliationReason.externallyManaged,
+            message:
+                'Resource requires its owning Git or process adapter for cleanup.',
+          ),
+        );
+        continue;
+      }
+      if (runId != null &&
+          await runActivity.isActive(runId) &&
+          !(interrupted && resource.kind == OwnedResourceKind.resultFile)) {
         retained.add(
           ReconciliationFinding(
             resource: resource,
@@ -58,8 +82,7 @@ final class ReconcileResources {
         );
         continue;
       }
-      if (resource.kind != OwnedResourceKind.process &&
-          evaluatePath(resource.path) != OwnershipDecision.allowed) {
+      if (evaluatePath(resource.path) != OwnershipDecision.allowed) {
         const message = 'Resource path is not proven safe for cleanup.';
         await store.markFailed(resource.id, message);
         failures.add(
