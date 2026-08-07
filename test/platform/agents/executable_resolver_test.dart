@@ -57,6 +57,34 @@ void main() {
   );
 
   test(
+    'GivenBothPowerShellHosts_WhenResolved_ThenPowerShell7RunsTheWrapper',
+    () async {
+      final system = await Directory.systemTemp.createTemp('maestro-system-');
+      final seven = await Directory.systemTemp.createTemp('maestro-seven-');
+      addTearDown(() async {
+        await system.delete(recursive: true);
+        await seven.delete(recursive: true);
+      });
+      final wrapper = File(p.join(system.path, 'claude.ps1'));
+      await wrapper.writeAsString('fixture');
+      await File(p.join(system.path, 'powershell.exe')).writeAsString('legacy');
+      final pwsh = File(p.join(seven.path, 'pwsh.exe'));
+      await pwsh.writeAsString('modern');
+
+      final result = await ExecutableResolver(
+        // Windows PowerShell's directory comes first, as System32 does in a
+        // real PATH, so only host preference can select PowerShell 7.
+        path: '${system.path};${seven.path}',
+        isWindows: true,
+      ).resolve('claude');
+
+      final resolved = result as ResolvedExecutable;
+      expect(resolved.executable, pwsh.path);
+      expect(resolved.argumentPrefix.last, wrapper.path);
+    },
+  );
+
+  test(
     'GivenCmdOnlyWrapper_WhenResolved_ThenInstallationIsInaccessible',
     () async {
       final root = await Directory.systemTemp.createTemp('maestro-resolver-');

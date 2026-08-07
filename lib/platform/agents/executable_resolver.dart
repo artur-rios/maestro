@@ -94,9 +94,21 @@ final class ExecutableResolver implements ExecutableLocator {
         : const MissingExecutable();
   }
 
+  /// Prefers PowerShell 7 over Windows PowerShell for wrapper execution.
+  ///
+  /// Windows PowerShell 5.1 accepts only the first line written to a wrapped
+  /// process's standard input when the writer is another process; later lines
+  /// are discarded rather than buffered, so a multi-turn protocol such as
+  /// Codex model discovery stalls until its deadline and reports an
+  /// unverified session. PowerShell 7 delivers every line.
+  ///
+  /// The host name is the outer loop so an interpreter earlier on `PATH` does
+  /// not win on directory order alone; `System32` almost always precedes a
+  /// PowerShell 7 installation. Windows PowerShell remains the fallback for
+  /// machines that have nothing else.
   Future<File?> _findPowerShell() async {
-    for (final directory in _path.split(';')) {
-      for (final name in const <String>['powershell.exe', 'pwsh.exe']) {
+    for (final name in const <String>['pwsh.exe', 'powershell.exe']) {
+      for (final directory in _path.split(';')) {
         final candidate = File(p.join(directory, name));
         if (await candidate.exists() && await _canExecute(candidate)) {
           return candidate;
