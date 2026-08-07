@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
@@ -124,10 +126,53 @@ void main() {
       expect(offers.single.runId, 'already-interrupted');
     },
   );
+
+  test(
+    'GivenUiOfferReadBeforeDelayedStartupCompletes_WhenGateOpens_ThenSameStartupFinishesBeforeOfferAndReloadStaysReadOnly',
+    () async {
+      final gate = Completer<void>();
+      final calls = <String>[];
+      final repository = _Repository(
+        evidence: <InterruptedRunEvidence>[
+          InterruptedRunEvidence(
+            runId: 'interrupted-after-startup',
+            updatedAt: DateTime.utc(2026, 8, 6, 13),
+          ),
+        ],
+        calls: calls,
+        interruptGate: gate,
+      );
+      final coordinator = StartupRunRecoveryCoordinator(
+        RunInterruptionReconciler(
+          repository: repository,
+          now: () => DateTime.utc(2026, 8, 6, 13),
+          newId: () => 'restart-log',
+        ),
+      );
+      final startup = coordinator.begin(() async => calls.add('cleanup'));
+      var uiCompleted = false;
+      final uiRead = coordinator.listOffersAfterStartup().then((offers) {
+        uiCompleted = true;
+        return offers;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(uiCompleted, isFalse);
+
+      gate.complete();
+      await startup;
+      final offers = await uiRead;
+
+      expect(offers.single.runId, 'interrupted-after-startup');
+      expect(calls, <String>['interrupt', 'list', 'cleanup', 'list']);
+      expect(repository.interruptions, 1);
+      await coordinator.listOffersAfterStartup();
+      expect(repository.interruptions, 1);
+    },
+  );
 }
 
 final class _Repository implements RunInterruptionRepository {
-  _Repository({required this.evidence, List<String>? calls})
+  _Repository({required this.evidence, List<String>? calls, this.interruptGate})
     : calls = calls ?? <String>[];
 
   final List<InterruptedRunEvidence> evidence;
@@ -136,6 +181,7 @@ final class _Repository implements RunInterruptionRepository {
   int interruptions = 0;
   bool stale = false;
   DateTime? expectedUpdatedAt;
+  final Completer<void>? interruptGate;
 
   @override
   Future<int> interruptActive({
@@ -144,6 +190,7 @@ final class _Repository implements RunInterruptionRepository {
   }) async {
     interruptions++;
     calls.add('interrupt');
+    await interruptGate?.future;
     return evidence.length;
   }
 

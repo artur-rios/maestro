@@ -210,6 +210,11 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
   );
+  try {
+    await foundation.beginStartupReconciliation();
+  } on Object {
+    // The cached foundation probe reports the same non-blocking degradation.
+  }
   Widget runStartBuilder(
     BuildContext context,
     String actorId,
@@ -271,7 +276,7 @@ Future<ProductionAppComposition> composeProductionApp({
           );
         },
         recoveryOffers: foundation.recoveryOffers,
-        loadRecoveryOffers: foundation.listRecoveryOffers,
+        loadRecoveryOffers: foundation.listRecoveryOffersAfterStartup,
         selectRecovery: foundation.selectRecovery,
       ),
     );

@@ -25,7 +25,14 @@ final class ProductionFoundation {
     String Function()? newId,
   }) : runRepository = runRepository ?? DriftRunRepository(database),
        _clock = clock ?? _utcNow,
-       _newId = newId ?? _fallbackId;
+       _newId = newId ?? _fallbackId {
+    _runReconciler = RunInterruptionReconciler(
+      repository: this.runRepository,
+      now: _clock,
+      newId: _newId,
+    );
+    _startupRecovery = StartupRunRecoveryCoordinator(_runReconciler);
+  }
 
   final ApplicationPaths paths;
   final MaestroDatabase database;
@@ -33,15 +40,19 @@ final class ProductionFoundation {
   final DriftRunRepository runRepository;
   final DateTime Function() _clock;
   final String Function() _newId;
+  late final RunInterruptionReconciler _runReconciler;
+  late final StartupRunRecoveryCoordinator _startupRecovery;
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
   Future<String>? _startupReconciliation;
 
   Future<List<RunRecoveryOffer>> listRecoveryOffers() async {
-    recoveryOffers = await RunInterruptionReconciler(
-      repository: runRepository,
-      now: _clock,
-      newId: _newId,
-    ).listOffers();
+    recoveryOffers = await _runReconciler.listOffers();
+    return recoveryOffers;
+  }
+
+  Future<List<RunRecoveryOffer>> listRecoveryOffersAfterStartup() async {
+    await beginStartupReconciliation();
+    recoveryOffers = await _startupRecovery.listOffersAfterStartup();
     return recoveryOffers;
   }
 
@@ -49,11 +60,7 @@ final class ProductionFoundation {
     RunRecoveryOffer offer,
     RecoveryAction action,
   ) async {
-    await RunInterruptionReconciler(
-      repository: runRepository,
-      now: _clock,
-      newId: _newId,
-    ).select(offer, action);
+    await _runReconciler.select(offer, action);
     recoveryOffers = recoveryOffers
         .where((value) => value.runId != offer.runId)
         .toList(growable: false);
@@ -79,7 +86,11 @@ final class ProductionFoundation {
           command: specification.command,
         ),
       ),
-    _CallbackFoundationProbe('reconciliation', false, _reconcileOnce),
+    _CallbackFoundationProbe(
+      'reconciliation',
+      false,
+      beginStartupReconciliation,
+    ),
   ];
 
   Future<String> _initializePaths() async {
@@ -123,19 +134,14 @@ final class ProductionFoundation {
           .map((resource) => resource.path),
     );
     late final ReconciliationReport report;
-    recoveryOffers =
-        await RunInterruptionReconciler(
-          repository: runRepository,
-          now: _clock,
-          newId: _newId,
-        ).reconcileBefore(() async {
-          report = await ReconcileResources(
-            store: store,
-            runActivity: runRepository,
-            cleaner: const LocalOwnedResourceCleaner(),
-            evaluatePath: policy.evaluate,
-          )();
-        });
+    recoveryOffers = await _startupRecovery.begin(() async {
+      report = await ReconcileResources(
+        store: store,
+        runActivity: runRepository,
+        cleaner: const LocalOwnedResourceCleaner(),
+        evaluatePath: policy.evaluate,
+      )();
+    });
     if (report.failures.isNotEmpty) {
       throw StateError(
         '${report.failures.length} resource cleanup(s) need review.',
@@ -144,7 +150,8 @@ final class ProductionFoundation {
     return 'Owned-resource reconciliation completed.';
   }
 
-  Future<String> _reconcileOnce() => _startupReconciliation ??= _reconcile();
+  Future<String> beginStartupReconciliation() =>
+      _startupReconciliation ??= _reconcile();
 }
 
 final class StaticFoundationProbe implements FoundationProbe {

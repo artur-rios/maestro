@@ -102,3 +102,23 @@ final class RunInterruptionReconciler {
     );
   }
 }
+
+/// Coordinates the one mutating restart pass with later read-only UI loads.
+final class StartupRunRecoveryCoordinator {
+  StartupRunRecoveryCoordinator(this.reconciler);
+
+  final RunInterruptionReconciler reconciler;
+  Future<List<RunRecoveryOffer>>? _startup;
+
+  Future<List<RunRecoveryOffer>> begin(Future<void> Function() cleanup) =>
+      _startup ??= reconciler.reconcileBefore(cleanup);
+
+  Future<List<RunRecoveryOffer>> listOffersAfterStartup() async {
+    final startup = _startup;
+    if (startup == null) {
+      throw StateError('Startup reconciliation has not begun.');
+    }
+    await startup;
+    return reconciler.listOffers();
+  }
+}
