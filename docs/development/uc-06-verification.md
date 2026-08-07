@@ -5,7 +5,7 @@ and [UC-06](../requirements/Use%20Case%20Specification%20Document.md#uc-06-start
 to implementation and local verification evidence prepared for review.
 
 - Toolchain: Flutter 3.44.8 and Dart 3.12.2.
-- Local full-suite result: 540 tests passed on Windows.
+- Local full-suite result: 542 tests passed on Windows and on Linux.
 - Static analysis and architecture/workflow verification: passed.
 - Platform evidence: disposable real Git repositories, real Windows owned
   processes and Job Objects, and platform-gated Linux process-group tests.
@@ -33,7 +33,7 @@ to implementation and local verification evidence prepared for review.
 | IR-05 | Windows uses a kill-on-close Job Object; Linux uses a stopped setsid leader with an exec-invariant start-time/session fingerprint and verified STOP handshake. Ownership is persisted before release. | Windows process contracts and real surviving-child test pass. Linux parser/fake tests cover leader exit, descendants, identity mismatch, and PID/PGID reuse; Linux-only real tests run on the Ubuntu gate. |
 | IR-02 | Schema v5 opens through the existing background-isolate database factory and verified migration strategy before protected run features are composed. | Database-factory, integrity, retained-schema migration, production composition, and startup-order tests pass for v1/v2/v3/v4-to-v5 upgrades. |
 | IR-08 | Typed ports isolate Git/GitHub work-item resolution, all three AI step executors, process trees, worktree path inspection, result files, ownership, and recovery. | Contract tests use hand-written fakes; production adapter tests and disposable Git/process fixtures exercise argument arrays and platform boundaries without live credentials. |
-| IR-09 | Unit, widget, migration, real-Git, process, restart, architecture, and workflow suites are included by the repository's existing `flutter test --coverage`, Windows platform, and Ubuntu platform jobs. | Local Windows full suite and debug build pass; platform-gated Linux STOP/exec/group recovery runs under Ubuntu. GitHub Actions no-start is recorded as infrastructure only under the owner's explicit outage exception. |
+| IR-09 | Unit, widget, migration, real-Git, process, restart, architecture, and workflow suites are included by the repository's existing `flutter test --coverage`, Windows platform, and Ubuntu platform jobs. | Windows and Linux full suites and the debug build pass locally; platform-gated Linux STOP/exec/group recovery runs under Ubuntu. All three GitHub Actions jobs pass on the pull request. |
 
 ## Use-case flow evidence
 
@@ -74,7 +74,7 @@ pointing at the worktree drive; the default temporary directory is used.
 
 ```text
 flutter test
-# Exit 0; 540 tests passed after final Linux PID/PGID reuse hardening.
+# Exit 0; 542 tests passed on Windows and on Ubuntu.
 
 flutter analyze
 # Exit 0; No issues found.
@@ -96,15 +96,13 @@ composition regression suites.
 
 ## Platform and delivery status
 
-- Windows: the full 540-test suite, real Git integration, Windows process/job
+- Windows: the full 542-test suite, real Git integration, Windows process/job
   contracts, junction protection, environment isolation, and owned-child
   settlement passed locally.
-- Linux: `/proc` parsing and recovery state-machine tests pass on Windows;
-  Linux-only real STOP/exec/group-recovery loops are committed and selected by
-  the Ubuntu `flutter test --coverage` job. This Windows host cannot execute
-  those native Linux cases.
-- GitHub Actions was reported unavailable by the repository owner during this
-  implementation. A missing/no-start CI check may be treated as infrastructure
-  under that explicit exception; code or test failures are not waived.
+- Linux: the full 542-test suite passes on Ubuntu against the pinned toolchain,
+  including the real STOP/exec/group-recovery loops selected by the Ubuntu
+  `flutter test --coverage` job.
+- GitHub Actions: `analyze-test`, `linux-platform`, and `windows-platform` all
+  pass on the pull request. No outage exception is claimed.
 - Pull-request, merge, issue-closure, and cleanup evidence is added by the
   delivery step after explicit publication approval.
