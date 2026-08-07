@@ -141,23 +141,63 @@ final class PtyTerminalPort implements TerminalCapabilityPort {
   }
 }
 
+final class PtyCommand {
+  const PtyCommand({required this.executable, required this.arguments});
+
+  final String executable;
+  final List<String> arguments;
+}
+
+/// Builds what `flutter_pty` must be handed to start [request]'s shell.
+///
+/// On Unix this is the request as written. On Windows it is not: `flutter_pty`
+/// composes the command line as `<executable> <argv…>`, and `argv[0]` is the
+/// executable again, so a shell always receives its own path as its first
+/// argument. PowerShell reads that as `-File <path>` and refuses to start an
+/// executable as a script.
+///
+/// The command therefore runs through `cmd.exe`, which ignores that duplicated
+/// leading token, and the shell is quoted inside `/c` so a path such as
+/// `C:\Program Files\PowerShell\7\pwsh.exe` survives both parsers. The extra
+/// `cmd.exe` is a process in the tree, which is why closing terminates the tree
+/// rather than the leader alone (FR-TE-05).
+PtyCommand ptyCommandFor(PtyLaunchRequest request, {required bool isWindows}) {
+  if (!isWindows) {
+    return PtyCommand(
+      executable: request.executable,
+      arguments: request.arguments,
+    );
+  }
+  final inner = <String>[
+    '"${request.executable}"',
+    ...request.arguments,
+  ].join(' ');
+  return PtyCommand(
+    executable: r'C:\Windows\System32\cmd.exe',
+    arguments: <String>['/c', '"$inner"'],
+  );
+}
+
 final class FlutterPtyLauncher implements PtyLauncher {
   const FlutterPtyLauncher();
 
   @override
-  TerminalPtyHandle start(PtyLaunchRequest request) => FlutterPtyHandle(
-    Pty.start(
-      request.executable,
-      arguments: request.arguments,
-      workingDirectory: request.workingDirectory,
-      // The user's shell should behave like their own shell, so unlike an
-      // agent step it inherits the ambient environment rather than a curated
-      // allow-list.
-      environment: Map<String, String>.of(Platform.environment),
-      columns: request.columns,
-      rows: request.rows,
-    ),
-  );
+  TerminalPtyHandle start(PtyLaunchRequest request) {
+    final command = ptyCommandFor(request, isWindows: Platform.isWindows);
+    return FlutterPtyHandle(
+      Pty.start(
+        command.executable,
+        arguments: command.arguments,
+        workingDirectory: request.workingDirectory,
+        // The user's shell should behave like their own shell, so unlike an
+        // agent step it inherits the ambient environment rather than a curated
+        // allow-list.
+        environment: Map<String, String>.of(Platform.environment),
+        columns: request.columns,
+        rows: request.rows,
+      ),
+    );
+  }
 }
 
 final class FlutterPtyHandle implements TerminalPtyHandle {

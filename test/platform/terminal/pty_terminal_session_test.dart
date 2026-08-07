@@ -118,6 +118,29 @@ void main() {
     );
 
     test(
+      'GivenALiveSession_WhenClosing_ThenTheTreeIsSignalledBeforeTheLeader',
+      () async {
+        // Given: a shell whose descendants must outlive nothing.
+        final trace = <String>[];
+        final handle = _FakePtyHandle(trace: trace)
+          ..exitOnSignal = TerminalSignal.terminate;
+        final session = PtyTerminalSession.attach(
+          handle: handle,
+          terminator: _RecordingTerminator(trace: trace),
+          terminateTimeout: _shortTimeout,
+          killTimeout: _shortTimeout,
+        );
+
+        // When: the user closes the terminal.
+        await session.close();
+
+        // Then: killing the leader first would orphan its children, so the
+        // tree is signalled first.
+        expect(trace, <String>['tree:terminate', 'leader:terminate']);
+      },
+    );
+
+    test(
       'GivenAShellThatIgnoresTermination_WhenClosing_ThenClosureIsIncomplete',
       () async {
         // Given: a shell that survives every signal.
@@ -243,6 +266,10 @@ PtyTerminalSession _session(
 }
 
 final class _FakePtyHandle implements TerminalPtyHandle {
+  _FakePtyHandle({this.trace});
+
+  /// Shared with the terminator so a test can assert the escalation order.
+  final List<String>? trace;
   final _output = StreamController<Uint8List>.broadcast();
   final _exitCode = Completer<int>();
   final written = <List<int>>[];
@@ -271,6 +298,7 @@ final class _FakePtyHandle implements TerminalPtyHandle {
   @override
   void kill(TerminalSignal signal) {
     signals.add(signal);
+    trace?.add('leader:${signal.name}');
     if (signal == exitOnSignal) exitWith(signal == TerminalSignal.kill ? -9 : 0);
   }
 
@@ -288,11 +316,16 @@ final class _FakePtyHandle implements TerminalPtyHandle {
 }
 
 final class _RecordingTerminator implements TerminalTreeTerminator {
+  _RecordingTerminator({this.trace});
+
+  final List<String>? trace;
   final signals = <TerminalSignal>[];
 
   @override
-  Future<void> terminate(int pid, TerminalSignal signal) async =>
-      signals.add(signal);
+  Future<void> terminate(int pid, TerminalSignal signal) async {
+    signals.add(signal);
+    trace?.add('tree:${signal.name}');
+  }
 }
 
 final class _FakeIdentityProvider implements ProcessIdentityProvider {

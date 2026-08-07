@@ -43,9 +43,13 @@ final class PlatformTerminalTreeTerminator implements TerminalTreeTerminator {
   Future<void> terminate(int pid, TerminalSignal signal) async {
     try {
       if (Platform.isWindows) {
+        // `/F` is used for both signals deliberately. Without it `taskkill`
+        // only asks, which a console shell ignores, and once the leader has
+        // gone its descendants can no longer be reached through the tree — a
+        // closed terminal would then leave orphans behind (FR-TE-05).
         await Process.run('taskkill', <String>[
           '/T',
-          if (signal == TerminalSignal.kill) '/F',
+          '/F',
           '/PID',
           '$pid',
         ], runInShell: false);
@@ -209,8 +213,11 @@ final class PtyTerminalSession implements TerminalSession {
   }
 
   Future<bool> _signalAndWait(TerminalSignal signal, Duration timeout) async {
-    _handle.kill(signal);
+    // The tree is signalled before the leader. Killing the leader first would
+    // orphan its descendants, and on Windows the tree can no longer be walked
+    // from a process that is already gone.
     await _terminator.terminate(_handle.pid, signal);
+    _handle.kill(signal);
     try {
       await _exit.timeout(timeout);
       return true;

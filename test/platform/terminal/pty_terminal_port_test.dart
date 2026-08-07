@@ -184,6 +184,55 @@ void main() {
       },
     );
   });
+
+  group('ptyCommandFor', () {
+    test(
+      'GivenLinux_WhenBuildingThePtyCommand_ThenTheShellIsStartedDirectly',
+      () {
+        // Given: a resolved Bash command.
+        const request = PtyLaunchRequest(
+          executable: '/bin/bash',
+          arguments: <String>['-i'],
+          workingDirectory: '/home/user/project',
+          columns: 80,
+          rows: 24,
+        );
+
+        // When: the pseudo-terminal command is built.
+        final command = ptyCommandFor(request, isWindows: false);
+
+        // Then: nothing stands between the pseudo-terminal and the shell.
+        expect(command.executable, '/bin/bash');
+        expect(command.arguments, <String>['-i']);
+      },
+    );
+
+    test(
+      'GivenWindows_WhenBuildingThePtyCommand_'
+      'ThenTheShellIsQuotedInsideACommandProcessor',
+      () {
+        // Given: PowerShell installed under a path containing a space.
+        const request = PtyLaunchRequest(
+          executable: r'C:\Program Files\PowerShell\pwsh.exe',
+          arguments: <String>['-NoLogo'],
+          workingDirectory: r'D:\project',
+          columns: 80,
+          rows: 24,
+        );
+
+        // When: the pseudo-terminal command is built.
+        final command = ptyCommandFor(request, isWindows: true);
+
+        // Then: cmd.exe absorbs flutter_pty's duplicated leading token, and
+        // the quoted shell path survives both parsers.
+        expect(command.executable, r'C:\Windows\System32\cmd.exe');
+        expect(command.arguments, <String>[
+          '/c',
+          r'""C:\Program Files\PowerShell\pwsh.exe" -NoLogo"',
+        ]);
+      },
+    );
+  });
 }
 
 PtyTerminalPort _port({

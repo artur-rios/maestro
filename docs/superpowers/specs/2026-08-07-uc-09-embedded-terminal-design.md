@@ -121,6 +121,17 @@ bookkeeping — lives in `PtyTerminalSession`, which takes a `PtyHandle` and is
 fully faked in unit tests. The pattern matches `OwnedStepProcessLauncher`, which
 separates the same way.
 
+**The Windows command line.** `flutter_pty` composes its Windows command line as
+`<executable> <argv…>`, and `argv[0]` is the executable again, so a shell always
+receives its own path as its first argument. PowerShell reads that as
+`-File <path>` and refuses to run an executable as a script — the terminal never
+starts. The command therefore goes through `cmd.exe`, which ignores the
+duplicated leading token, with the shell quoted inside `/c` so a path such as
+`C:\Program Files\PowerShell\7\pwsh.exe` survives both parsers. That is one more
+process in the tree, which is precisely why closure terminates the tree rather
+than the leader. The quirk lives in `ptyCommandFor`, a pure function with its own
+tests, rather than inside the untestable launcher.
+
 **Closure (FR-TE-05).** `close()` escalates rather than assuming a single signal
 is enough, the same shape UC-08 established for run cancellation:
 
@@ -128,11 +139,14 @@ is enough, the same shape UC-08 established for run cancellation:
 2. On timeout, kill it and wait again.
 3. Still alive → `TerminalClosure.incomplete`.
 
-On Linux, `flutter_pty` puts the shell in its own session, so signalling the
-leader reaches the descendants. On Windows, closing the ConPTY ends the shell,
-and a `taskkill /T /F /PID` escalation covers descendants that outlive it. That
-escalation is a `TerminalTreeTerminator` port with a platform implementation, so
-the escalation *policy* is testable without killing anything.
+The tree is always signalled before the leader: killing the leader first orphans
+its descendants, and on Windows a tree cannot be walked from a process that is
+already gone. On Linux, `flutter_pty` puts the shell in its own session, so
+signalling the process group reaches the descendants. On Windows, `taskkill /T`
+does — with `/F` for both steps, because without it `taskkill` only asks, which a
+console shell ignores. That termination is a `TerminalTreeTerminator` port with a
+platform implementation, so the escalation *policy* is testable without killing
+anything.
 
 `close()` is idempotent and safe after the shell has already exited: a session
 that ended on its own is already closed, and re-closing returns `closed` without
