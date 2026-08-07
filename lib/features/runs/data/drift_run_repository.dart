@@ -5,6 +5,7 @@ import 'package:maestro/core/storage/database/maestro_database.dart' as db;
 import 'package:maestro/features/foundation/application/reconcile_resources.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
@@ -49,7 +50,8 @@ final class DriftRunRepository
         RunInterruptionRepository,
         RunActivityReader,
         RunInterruptionStateReader,
-        RunObservationRepository {
+        RunObservationRepository,
+        RunControlRepository {
   const DriftRunRepository(this._database);
 
   final db.MaestroDatabase _database;
@@ -376,7 +378,7 @@ final class DriftRunRepository
       final step = await (_database.select(
         _database.runSnapshotSteps,
       )..where((table) => table.id.equals(attempt.snapshotStepId))).getSingle();
-      if (run.status != domain.RunStatus.running.name ||
+      if (!_executingStatuses.contains(run.status) ||
           run.currentStepPosition != step.position ||
           exitCode != 0) {
         throw StateError('Run state changed or success evidence is invalid.');
@@ -408,14 +410,16 @@ final class DriftRunRepository
               .map((row) => row.read(_database.runSnapshotSteps.id.count())!)
               .getSingle();
       final nextPosition = step.position + 1;
+      // A pause request survives the step that was finishing when it arrived;
+      // the orchestrator settles it into paused once this evidence is durable.
       final nextStatus = nextPosition >= stepCount
           ? domain.RunStatus.succeeded
-          : domain.RunStatus.running;
+          : domain.RunStatus.values.byName(run.status);
       final runAffected =
           await (_database.update(_database.workflowRuns)..where(
                 (table) =>
                     table.id.equals(run.id) &
-                    table.status.equals(domain.RunStatus.running.name) &
+                    table.status.equals(run.status) &
                     table.currentStepPosition.equals(step.position),
               ))
               .write(
@@ -460,7 +464,7 @@ final class DriftRunRepository
       )..where((table) => table.id.equals(attempt.runId))).getSingle();
       if (step.runId != run.id ||
           step.position != run.currentStepPosition ||
-          run.status != domain.RunStatus.running.name) {
+          !_executingStatuses.contains(run.status)) {
         throw StateError('The attempt is stale for the current run step.');
       }
       final attemptAffected =
@@ -485,7 +489,7 @@ final class DriftRunRepository
           await (_database.update(_database.workflowRuns)..where(
                 (table) =>
                     table.id.equals(run.id) &
-                    table.status.equals(domain.RunStatus.running.name) &
+                    table.status.equals(run.status) &
                     table.currentStepPosition.equals(step.position),
               ))
               .write(
@@ -505,9 +509,13 @@ final class DriftRunRepository
     required String Function() newLogId,
   }) async {
     return _database.transaction(() async {
+      // A pause request means a step really was executing, so the run is as
+      // orphaned by a restart as any other active run. A deliberately paused
+      // run is not swept: BR-14 keeps it continuable.
       final activeNames = <String>[
         domain.RunStatus.starting.name,
         domain.RunStatus.running.name,
+        domain.RunStatus.pauseRequested.name,
       ];
       final runs = await (_database.select(
         _database.workflowRuns,
@@ -784,6 +792,308 @@ final class DriftRunRepository
       await _insertRecovery(request);
     });
   }
+
+  @override
+  Future<RunControlView?> controlViewOf(String runId) async {
+    final row = await (_database.select(
+      _database.workflowRuns,
+    )..where((table) => table.id.equals(runId))).getSingleOrNull();
+    if (row == null || row.deletedAt != null) return null;
+    return RunControlView(
+      runId: row.id,
+      status: domain.RunStatus.values.byName(row.status),
+      currentStepPosition: row.currentStepPosition,
+      updatedAt: row.updatedAt.toUtc(),
+      worktreePath: row.worktreePath,
+    );
+  }
+
+  @override
+  Future<void> requestPauseRun(String runId, DateTime at) => transitionRun(
+    runId: runId,
+    expectedStatus: domain.RunStatus.running,
+    nextStatus: domain.RunStatus.pauseRequested,
+    at: at,
+  );
+
+  @override
+  Future<void> resumeRun(String runId, DateTime at) => transitionRun(
+    runId: runId,
+    expectedStatus: domain.RunStatus.paused,
+    nextStatus: domain.RunStatus.running,
+    at: at,
+  );
+
+  @override
+  Future<void> cancelRun({
+    required String runId,
+    required DateTime at,
+    required String Function() newLogId,
+  }) async {
+    await _database.transaction(() async {
+      final run = await (_database.select(
+        _database.workflowRuns,
+      )..where((table) => table.id.equals(runId))).getSingle();
+      final status = domain.RunStatus.values.byName(run.status);
+      if (!status.canTransitionTo(domain.RunStatus.canceled)) {
+        throw StateError('The run cannot be cancelled from ${run.status}.');
+      }
+      await _terminateActiveAttempts(
+        runId: runId,
+        at: at,
+        newLogId: newLogId,
+        failureCode: 'run.canceled.user_request',
+        message: 'Run canceled by the user.',
+      );
+      final affected =
+          await (_database.update(_database.workflowRuns)..where(
+                (table) =>
+                    table.id.equals(runId) & table.status.equals(run.status),
+              ))
+              .write(
+                db.WorkflowRunsCompanion(
+                  status: Value<String>(domain.RunStatus.canceled.name),
+                  updatedAt: Value<DateTime>(at.toUtc()),
+                  completedAt: Value<DateTime?>(at.toUtc()),
+                ),
+              );
+      _requireOne(affected);
+    });
+  }
+
+  @override
+  Future<void> recordCancellationIncomplete({
+    required String runId,
+    required DateTime at,
+    required String Function() newLogId,
+  }) async {
+    // Deliberately no status change: descendants are still alive, and a run
+    // whose agent is still writing files is not a cancelled run (AF-03).
+    await _database.transaction(() async {
+      await _appendSystemMessageToActiveAttempts(
+        runId: runId,
+        at: at,
+        newLogId: newLogId,
+        message:
+            'Cancellation incomplete: processes survived termination and are '
+            'still running.',
+      );
+    });
+  }
+
+  @override
+  Future<RunRecoveryEvidence?> recoveryEvidenceFor(String runId) async {
+    final run = await (_database.select(
+      _database.workflowRuns,
+    )..where((table) => table.id.equals(runId))).getSingleOrNull();
+    if (run == null || run.deletedAt != null) return null;
+    final status = domain.RunStatus.values.byName(run.status);
+    if (!status.canTransitionTo(domain.RunStatus.running)) return null;
+    final steps =
+        await (_database.select(_database.runSnapshotSteps)
+              ..where((table) => table.runId.equals(runId))
+              ..orderBy(<OrderingTerm Function(db.RunSnapshotSteps)>[
+                (table) => OrderingTerm.asc(table.position),
+              ]))
+            .get();
+    if (steps.isEmpty) return null;
+    final position = run.currentStepPosition.clamp(0, steps.length - 1);
+    final affected =
+        await (_database.select(_database.runAttempts)
+              ..where(
+                (table) =>
+                    table.runId.equals(runId) &
+                    table.snapshotStepId.equals(steps[position].id),
+              )
+              ..orderBy(<OrderingTerm Function(db.RunAttempts)>[
+                (table) => OrderingTerm.desc(table.attemptNumber),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    return RunRecoveryEvidence(
+      runId: runId,
+      status: status,
+      updatedAt: run.updatedAt.toUtc(),
+      affectedStepPosition: position,
+      affectedAttemptId: affected?.id,
+      hasPreservedContext: position > 0
+          ? await _hasReusableContext(runId, steps[position - 1].id)
+          : false,
+    );
+  }
+
+  @override
+  Future<void> beginRecovery({
+    required domain.RunRecoveryRequest request,
+    required int targetPosition,
+    required DateTime at,
+    DateTime? expectedRunUpdatedAt,
+  }) async {
+    if (targetPosition < 0) {
+      throw ArgumentError.value(targetPosition, 'targetPosition');
+    }
+    await _database.transaction(() async {
+      final run = await (_database.select(
+        _database.workflowRuns,
+      )..where((table) => table.id.equals(request.runId))).getSingle();
+      final status = domain.RunStatus.values.byName(run.status);
+      if (!status.canTransitionTo(domain.RunStatus.running)) {
+        throw StateError('The run cannot be recovered from ${run.status}.');
+      }
+      if (expectedRunUpdatedAt != null &&
+          run.updatedAt.toUtc() != expectedRunUpdatedAt.toUtc()) {
+        throw StateError('Recovery evidence is stale.');
+      }
+      if (request.attemptId case final attemptId?) {
+        final attempt = await (_database.select(
+          _database.runAttempts,
+        )..where((table) => table.id.equals(attemptId))).getSingle();
+        if (attempt.runId != request.runId) {
+          throw StateError(
+            'Recovery evidence does not belong to the recovered run.',
+          );
+        }
+      }
+      await _insertRecovery(request);
+      // Prior attempts, their logs, and the immutable snapshot are untouched:
+      // recovery adds a new attempt rather than rewriting history (FR-RC-08).
+      final affected =
+          await (_database.update(_database.workflowRuns)..where(
+                (table) =>
+                    table.id.equals(request.runId) &
+                    table.status.equals(run.status),
+              ))
+              .write(
+                db.WorkflowRunsCompanion(
+                  status: Value<String>(domain.RunStatus.running.name),
+                  currentStepPosition: Value<int>(targetPosition),
+                  updatedAt: Value<DateTime>(at.toUtc()),
+                  completedAt: const Value<DateTime?>(null),
+                ),
+              );
+      _requireOne(affected);
+    });
+  }
+
+  /// Whether [stepId] left declared context a later step could still reuse.
+  ///
+  /// A context too large to reconstitute counts as unavailable rather than
+  /// failing the read, which is exactly AF-04's corrupt-context case.
+  Future<bool> _hasReusableContext(String runId, String stepId) async {
+    final rows =
+        await (_database.select(_database.runAttempts)..where(
+              (table) =>
+                  table.runId.equals(runId) &
+                  table.snapshotStepId.equals(stepId) &
+                  table.status.equals(domain.AttemptStatus.succeeded.name) &
+                  table.declaredContext.isNotNull(),
+            ))
+            .get();
+    for (final row in rows) {
+      try {
+        domain.DeclaredContext.parse(row.declaredContext!);
+        return true;
+      } on Object {
+        continue;
+      }
+    }
+    return false;
+  }
+
+  Future<List<db.RunAttempt>> _activeAttempts(String runId) =>
+      (_database.select(_database.runAttempts)..where(
+            (table) =>
+                table.runId.equals(runId) &
+                table.status.isIn(<String>[
+                  domain.AttemptStatus.starting.name,
+                  domain.AttemptStatus.running.name,
+                ]),
+          ))
+          .get();
+
+  Future<void> _terminateActiveAttempts({
+    required String runId,
+    required DateTime at,
+    required String Function() newLogId,
+    required String failureCode,
+    required String message,
+  }) async {
+    for (final attempt in await _activeAttempts(runId)) {
+      await (_database.update(
+        _database.runAttempts,
+      )..where((table) => table.id.equals(attempt.id))).write(
+        db.RunAttemptsCompanion(
+          status: Value<String>(domain.AttemptStatus.interrupted.name),
+          completedAt: Value<DateTime?>(at.toUtc()),
+          failureCode: Value<String?>(failureCode),
+        ),
+      );
+      await _appendSystemMessage(
+        attempt: attempt,
+        at: at,
+        newLogId: newLogId,
+        message: message,
+      );
+    }
+  }
+
+  Future<void> _appendSystemMessageToActiveAttempts({
+    required String runId,
+    required DateTime at,
+    required String Function() newLogId,
+    required String message,
+  }) async {
+    for (final attempt in await _activeAttempts(runId)) {
+      await _appendSystemMessage(
+        attempt: attempt,
+        at: at,
+        newLogId: newLogId,
+        message: message,
+      );
+    }
+  }
+
+  Future<void> _appendSystemMessage({
+    required db.RunAttempt attempt,
+    required DateTime at,
+    required String Function() newLogId,
+    required String message,
+  }) async {
+    final maxSequence =
+        await (_database.selectOnly(_database.runLogSegments)
+              ..addColumns(<Expression<Object>>[
+                _database.runLogSegments.sequence.max(),
+              ])
+              ..where(_database.runLogSegments.attemptId.equals(attempt.id)))
+            .map(
+              (row) => row.read(_database.runLogSegments.sequence.max()) ?? -1,
+            )
+            .getSingle();
+    final bytes = Uint8List.fromList(utf8.encode(message));
+    await _insertLog(
+      domain.RunLogSegment(
+        id: newLogId(),
+        runId: attempt.runId,
+        attemptId: attempt.id,
+        snapshotStepId: attempt.snapshotStepId,
+        sequence: maxSequence + 1,
+        channel: domain.RunLogChannel.system,
+        bytes: bytes,
+        compression: 'none',
+        originalByteLength: bytes.length,
+        createdAt: at.toUtc(),
+      ),
+    );
+  }
+
+  /// The statuses under which a step may still be executing.
+  ///
+  /// A pause request does not stop the active step, so its evidence must still
+  /// be accepted (FR-RC-02, AF-02).
+  static final Set<String> _executingStatuses = <String>{
+    domain.RunStatus.running.name,
+    domain.RunStatus.pauseRequested.name,
+  };
 
   Future<void> _insertRecovery(domain.RunRecoveryRequest request) => _database
       .into(_database.runRecoveryRequests)
