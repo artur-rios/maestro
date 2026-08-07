@@ -125,7 +125,7 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#7](https://github.com/artur-rios/maestro/issues/7) | UC-06 — Start isolated workflow runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| ✅ [#7](https://github.com/artur-rios/maestro/issues/7) | UC-06 — Start isolated workflow runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | [#8](https://github.com/artur-rios/maestro/issues/8) | UC-07 — Observe active runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | [#9](https://github.com/artur-rios/maestro/issues/9) | UC-08 — Control and recover a run | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | [#10](https://github.com/artur-rios/maestro/issues/10) | UC-09 — Use the embedded terminal | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
