@@ -794,13 +794,15 @@ void main() {
     final childPid = int.parse(
       (await File('$resultPath.child.pid').readAsString()).trim(),
     );
-    await Future<void>.delayed(const Duration(seconds: 1));
 
+    // Settlement is asserted by the child being gone, not by outrunning it.
+    // The child would only swap the result long after this poll expires, so a
+    // surviving child fails here rather than by winning a race.
+    expect(await _waitUntilProcessExits(childPid), isTrue);
     expect(real.repository.failed, isEmpty);
     expect(real.repository.completed, <String>['attempt-1']);
     expect(await File('$resultPath.swap-marker').exists(), isFalse);
     expect(await File(resultPath).exists(), isFalse);
-    expect(await _waitUntilProcessExits(childPid), isTrue);
   });
 
   test(

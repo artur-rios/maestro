@@ -12,7 +12,12 @@ Future<void> main(List<String> arguments) async {
       // The parent process may already have closed inherited pipes.
     }
     final path = arguments[1];
-    await Future<void>.delayed(const Duration(milliseconds: 750));
+    // The delay must outlast draining, settlement, and result consumption on
+    // the slowest supported host. A short delay turned this case into a race
+    // that a loaded runner lost, reporting a swapped result instead of the
+    // settlement failure the case exists to detect. Only a genuinely
+    // unsettled child survives long enough to swap.
+    await Future<void>.delayed(const Duration(seconds: 30));
     await File(path).writeAsString('swapped-by-surviving-child');
     await File('$path.swap-marker').writeAsString('swapped');
     return;
