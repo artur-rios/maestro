@@ -782,28 +782,43 @@ void main() {
     );
   });
 
-  test('settles a surviving child before quarantining its result', () async {
-    final real = await _RealFixture.create(
-      mode: 'survivingChildSwap',
-      stepCount: 1,
-    );
-    addTearDown(real.dispose);
-    final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
+  test(
+    'settles a surviving child before quarantining its result',
+    () async {
+      final real = await _RealFixture.create(
+        mode: 'survivingChildSwap',
+        stepCount: 1,
+      );
+      addTearDown(real.dispose);
+      final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
 
-    await real.orchestrator.execute('run-1');
-    final childPid = int.parse(
-      (await File('$resultPath.child.pid').readAsString()).trim(),
-    );
+      await real.orchestrator.execute('run-1');
+      final childPid = int.parse(
+        (await File('$resultPath.child.pid').readAsString()).trim(),
+      );
 
-    // Settlement is asserted by the child being gone, not by outrunning it.
-    // The child would only swap the result long after this poll expires, so a
-    // surviving child fails here rather than by winning a race.
-    expect(await _waitUntilProcessExits(childPid), isTrue);
-    expect(real.repository.failed, isEmpty);
-    expect(real.repository.completed, <String>['attempt-1']);
-    expect(await File('$resultPath.swap-marker').exists(), isFalse);
-    expect(await File(resultPath).exists(), isFalse);
-  });
+      // Settlement is asserted by the child being gone, not by outrunning it.
+      // The child would only swap the result long after this poll expires, so a
+      // surviving child fails here rather than by winning a race. Report the
+      // recorded outcome first: a settlement that reported termination failure
+      // fails the attempt, and naming that code distinguishes an unsettled tree
+      // from a swap that landed.
+      expect(
+        real.repository.failed,
+        isEmpty,
+        reason: '${real.repository.failed}',
+      );
+      expect(real.repository.completed, <String>['attempt-1']);
+      expect(
+        await _waitUntilProcessExits(childPid),
+        isTrue,
+        reason: 'child $childPid survived settlement',
+      );
+      expect(await File('$resultPath.swap-marker').exists(), isFalse);
+      expect(await File(resultPath).exists(), isFalse);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   test(
     'two real owned processes overlap instead of serializing globally',
