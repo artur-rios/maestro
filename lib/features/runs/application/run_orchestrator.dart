@@ -8,6 +8,7 @@ import 'dart:typed_data';
 
 import 'package:maestro/core/logging/secret_redactor.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
+import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 
@@ -97,10 +98,19 @@ final class StepOutputFrame {
   final Uint8List bytes;
 }
 
+/// Whether a terminated step process actually left no descendants (AF-03).
+enum StepTermination { cancelled, incomplete }
+
 abstract interface class StepProcess {
   Stream<StepOutputFrame> get frames;
   Future<int> get exitCode;
   Future<void> settle();
+
+  /// Kills the step's complete process tree immediately (FR-RC-04).
+  ///
+  /// Reports [StepTermination.incomplete] when descendants survived platform
+  /// escalation, so the caller can refuse to record the run as cancelled.
+  Future<StepTermination> terminate();
 }
 
 final class StepProcessStart {
@@ -281,8 +291,16 @@ final class RunOrchestrator {
   final Map<String, int> _tailSizes = <String, int>{};
   final Map<String, Future<void>> _active = <String, Future<void>>{};
   final Set<String> _pauseRequested = <String>{};
+  final Set<String> _cancelRequested = <String>{};
+  final Map<String, StepProcess> _processes = <String, StepProcess>{};
 
   RunSummaryEvents get events => _events;
+
+  /// The in-flight execution of a run, or null when nothing is executing.
+  ///
+  /// Cancellation awaits this before writing terminal evidence, so the loop has
+  /// already stood down and cannot race the cancel transaction.
+  Future<void>? activeExecution(String runId) => _active[runId];
   int get retainedTailRunCount => _tails.length;
 
   /// The live tail for one run, with each fragment's channel preserved.
@@ -302,6 +320,27 @@ final class RunOrchestrator {
   /// paused (AF-02), which the flag's placement in the loop guarantees.
   void requestPause(String runId) => _pauseRequested.add(runId);
 
+  /// Terminates a run's live process tree immediately (FR-RC-04).
+  ///
+  /// The flag outlives the kill: the execute loop must know the non-zero exit
+  /// it is about to observe was the cancellation, so it writes no failure
+  /// evidence and leaves the terminal state to the cancel transaction.
+  Future<CancellationOutcome> requestCancel(String runId) async {
+    _cancelRequested.add(runId);
+    final process = _processes[runId];
+    if (process == null) return CancellationOutcome.cancelled;
+    late final StepTermination termination;
+    try {
+      termination = await process.terminate();
+    } on Object {
+      return CancellationOutcome.incomplete;
+    }
+    return switch (termination) {
+      StepTermination.cancelled => CancellationOutcome.cancelled,
+      StepTermination.incomplete => CancellationOutcome.incomplete,
+    };
+  }
+
   Future<void> execute(String runId) {
     final existing = _active[runId];
     if (existing != null) return existing;
@@ -312,8 +351,10 @@ final class RunOrchestrator {
       _tails.remove(runId);
       _tailSizes.remove(runId);
       // A request that never got honored — because the run failed, or ended —
-      // must not survive to pause a later execution of the same run.
+      // must not survive to pause or cancel a later execution of the same run.
       _pauseRequested.remove(runId);
+      _cancelRequested.remove(runId);
+      _processes.remove(runId);
     });
   }
 
@@ -409,6 +450,7 @@ final class RunOrchestrator {
         );
         return;
       }
+      _processes[runId] = process;
       var sequence = 0;
       final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
       // Batches whose durable write failed, kept in order so a recovered
@@ -507,12 +549,20 @@ final class RunOrchestrator {
           // The durable process record remains for startup reconciliation.
         }
         await _resolveIgnoringErrors(resultPath);
+        if (_cancelRequested.contains(runId)) return;
         await _failAttempt(
           attemptId,
           durabilityExhausted
               ? 'run.step.log_persist'
               : 'run.step.stream_failed',
         );
+        return;
+      }
+      // A killed step reports whatever the platform gave it. Recording that as
+      // a step failure would bury the user's cancellation under a spurious
+      // typed failure, so the cancel transaction owns the terminal state.
+      if (_cancelRequested.contains(runId)) {
+        await _resolveIgnoringErrors(resultPath);
         return;
       }
       // A transient outage gets one last chance once the stream is closed and

@@ -8,6 +8,7 @@ import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
+import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 import 'package:path/path.dart' as p;
@@ -1107,6 +1108,82 @@ void main() {
     },
   );
 
+  test(
+    'GivenCancelRequested_WhenTheProcessIsTerminated_ThenCancelledIsReported',
+    () async {
+      // Given: a run whose step process terminates on request.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the user cancels the run.
+      final outcome = await fixture.orchestrator.requestCancel('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the tree is gone, so the cancellation is complete (FR-RC-04).
+      expect(outcome, CancellationOutcome.cancelled);
+      expect(fixture.launcher.terminated, hasLength(1));
+    },
+  );
+
+  test('GivenTerminationResisted_WhenCancelling_ThenIncompleteIsReported', () {
+    // Given: a step process whose descendants survive termination (AF-03).
+    final fixture = _Fixture(stepCount: 1);
+    final gate = Completer<void>();
+    fixture.launcher.results.add(
+      _Script(gate: gate, termination: StepTermination.incomplete),
+    );
+    final execution = fixture.orchestrator.execute('run-1');
+
+    return Future<void>.delayed(Duration.zero).then((_) async {
+      // When: the user cancels.
+      final outcome = await fixture.orchestrator.requestCancel('run-1');
+
+      // Then: the caller learns the tree is still alive, so the run must not
+      // be recorded as cancelled.
+      expect(outcome, CancellationOutcome.incomplete);
+      gate.complete();
+      await execution;
+    });
+  });
+
+  test('GivenNoLiveProcess_WhenCancelling_ThenCancelledIsReported', () async {
+    // Given: a run that has not launched a step process.
+    final fixture = _Fixture(stepCount: 1);
+
+    // When: the user cancels it.
+    final outcome = await fixture.orchestrator.requestCancel('run-1');
+
+    // Then: there is nothing to kill, so cancellation is already complete.
+    expect(outcome, CancellationOutcome.cancelled);
+  });
+
+  test(
+    'GivenCancelRequested_WhenTheStepExitsNonZero_ThenNoFailureEvidenceIsWritten',
+    () async {
+      // Given: a run whose killed step will report a non-zero exit.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate, exitCode: 137));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the run is cancelled and the killed step exits non-zero.
+      await fixture.orchestrator.requestCancel('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the loop leaves the terminal state to the cancel transaction,
+      // so a cancelled run never lands as failed.
+      expect(fixture.repository.failed, isEmpty);
+      expect(fixture.repository.completed, isEmpty);
+      expect(fixture.repository.paused, isEmpty);
+    },
+  );
+
   test('two run IDs can overlap while each run remains serial', () async {
     final fixture = _Fixture(stepCount: 1);
     final first = Completer<void>();
@@ -1503,6 +1580,7 @@ final class _Script {
     this.gate,
     this.streamError = false,
     this.settlement,
+    this.termination = StepTermination.cancelled,
   });
   final List<StepOutputFrame> frames;
   final int exitCode;
@@ -1511,11 +1589,13 @@ final class _Script {
   final Completer<void>? gate;
   final bool streamError;
   final Completer<void>? settlement;
+  final StepTermination termination;
 }
 
 final class _Launcher implements StepProcessLauncher {
   final List<_Script> results = <_Script>[];
   final List<StepLaunchRequest> requests = <StepLaunchRequest>[];
+  final List<_Script> terminated = <_Script>[];
   bool throwOnStart = false;
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async {
@@ -1525,13 +1605,14 @@ final class _Launcher implements StepProcessLauncher {
     if (script.spawnFailure case final code?) {
       return StepProcessStart.failure(code);
     }
-    return StepProcessStart.started(_Process(script));
+    return StepProcessStart.started(_Process(script, terminated));
   }
 }
 
 final class _Process implements StepProcess {
-  _Process(this.script);
+  _Process(this.script, this.terminated);
   final _Script script;
+  final List<_Script> terminated;
   @override
   Stream<StepOutputFrame> get frames => script.streamError
       ? Stream<StepOutputFrame>.error(StateError('stream'))
@@ -1544,6 +1625,12 @@ final class _Process implements StepProcess {
 
   @override
   Future<void> settle() async => script.settlement?.future;
+
+  @override
+  Future<StepTermination> terminate() async {
+    terminated.add(script);
+    return script.termination;
+  }
 }
 
 final class _TimedLauncher implements StepProcessLauncher {
@@ -1569,6 +1656,9 @@ final class _TimedProcess implements StepProcess {
 
   @override
   Future<void> settle() async {}
+
+  @override
+  Future<StepTermination> terminate() async => StepTermination.cancelled;
 }
 
 final class _BoundaryLauncher implements StepProcessLauncher {
@@ -1623,6 +1713,9 @@ final class _InterleavedSecretProcess implements StepProcess {
 
   @override
   Future<void> settle() async {}
+
+  @override
+  Future<StepTermination> terminate() async => StepTermination.cancelled;
 }
 
 final class _BoundaryProcess implements StepProcess {
@@ -1646,6 +1739,9 @@ final class _BoundaryProcess implements StepProcess {
 
   @override
   Future<void> settle() async {}
+
+  @override
+  Future<StepTermination> terminate() async => StepTermination.cancelled;
 }
 
 final class _Results implements AttemptResultFiles {

@@ -300,6 +300,26 @@ final class _OwnedStreamingStepProcess implements StepProcess {
   Future<int> get exitCode => _process.exitCode;
 
   @override
+  Future<StepTermination> terminate() async {
+    // The supervisor's cancel drives the platform escalation already built
+    // into terminateTree — SIGTERM then SIGKILL on Linux, TerminateJobObject
+    // plus a wait-for-empty poll on Windows. UC-08 reports its verdict rather
+    // than inventing a second escalation ladder.
+    late final ProcessTerminalState state;
+    try {
+      state = await _supervisor.cancel();
+    } on Object {
+      return StepTermination.incomplete;
+    }
+    return switch (state) {
+      ProcessTerminalState.completed ||
+      ProcessTerminalState.cancelled => StepTermination.cancelled,
+      ProcessTerminalState.failed ||
+      ProcessTerminalState.terminationFailed => StepTermination.incomplete,
+    };
+  }
+
+  @override
   Future<void> settle() => _settlement ??= _settle();
 
   Future<void> _settle() async {
