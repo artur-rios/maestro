@@ -233,6 +233,72 @@ void main() {
     },
   );
 
+  test('GivenOwnedProcess_WhenTerminating_ThenTheTreeIsCancelled', () async {
+    // Given: a launched step whose process tree terminates cleanly.
+    final temporary = await Directory.systemTemp.createTemp(
+      'maestro-terminate-',
+    );
+    addTearDown(() => temporary.delete(recursive: true));
+    final process = _Process(File(p.join(temporary.path, 'stdin')));
+    final launcher = OwnedStepProcessLauncher(
+      processTree: _Tree(process),
+      commands: _FixtureCommands('fixture'),
+    );
+    final started = await launcher.start(
+      const StepLaunchRequest(
+        cli: 'codex',
+        model: 'fixture',
+        executable: 'executable',
+        prompt: 'prompt',
+        workingDirectory: '.',
+        environment: <String, String>{},
+      ),
+    );
+
+    // When: the run is cancelled.
+    final termination = await started.process!.terminate();
+
+    // Then: the caller learns nothing survived (FR-RC-04).
+    expect(termination, StepTermination.cancelled);
+    await process.stdin.close();
+  });
+
+  test(
+    'GivenTerminationFailure_WhenTerminating_ThenIncompleteIsReported',
+    () async {
+      // Given: a step whose descendants resist platform termination (AF-03).
+      final temporary = await Directory.systemTemp.createTemp(
+        'maestro-terminate-resist-',
+      );
+      addTearDown(() => temporary.delete(recursive: true));
+      final process = _Process(
+        File(p.join(temporary.path, 'stdin')),
+        terminalState: ProcessTerminalState.terminationFailed,
+      );
+      final launcher = OwnedStepProcessLauncher(
+        processTree: _Tree(process),
+        commands: _FixtureCommands('fixture'),
+      );
+      final started = await launcher.start(
+        const StepLaunchRequest(
+          cli: 'codex',
+          model: 'fixture',
+          executable: 'executable',
+          prompt: 'prompt',
+          workingDirectory: '.',
+          environment: <String, String>{},
+        ),
+      );
+
+      // When: the run is cancelled.
+      final termination = await started.process!.terminate();
+
+      // Then: the cancellation is reported incomplete rather than assumed done.
+      expect(termination, StepTermination.incomplete);
+      await process.stdin.close();
+    },
+  );
+
   test(
     'applies native backpressure before startup flood is listened',
     () async {
@@ -403,7 +469,11 @@ final class _IdentityProvider implements ProcessIdentityProvider {
 }
 
 final class _Process implements OwnedNativeProcess {
-  _Process(File stdinFile) : _stdin = stdinFile.openWrite();
+  _Process(
+    File stdinFile, {
+    this.terminalState = ProcessTerminalState.cancelled,
+  }) : _stdin = stdinFile.openWrite();
+  final ProcessTerminalState terminalState;
   final IOSink _stdin;
   final StreamController<List<int>> stdoutController =
       StreamController<List<int>>();
@@ -421,6 +491,5 @@ final class _Process implements OwnedNativeProcess {
   @override
   Stream<List<int>> get stderr => stderrController.stream;
   @override
-  Future<ProcessTerminalState> terminateTree() async =>
-      ProcessTerminalState.cancelled;
+  Future<ProcessTerminalState> terminateTree() async => terminalState;
 }

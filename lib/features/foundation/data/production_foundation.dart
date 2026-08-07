@@ -30,10 +30,12 @@ final class ProductionFoundation {
     String Function()? newId,
     OwnedProcessRecoveryAdapter processRecovery =
         const PlatformOwnedProcessRecovery(),
+    RunRecoveryStarter? recoveryStarter,
   }) : runRepository = runRepository ?? DriftRunRepository(database),
        _clock = clock ?? _utcNow,
        _newId = newId ?? _fallbackId,
-       _processRecovery = processRecovery {
+       _processRecovery = processRecovery,
+       _recoveryStarter = recoveryStarter {
     _runReconciler = RunInterruptionReconciler(
       repository: this.runRepository,
       now: _clock,
@@ -49,6 +51,7 @@ final class ProductionFoundation {
   final DateTime Function() _clock;
   final String Function() _newId;
   final OwnedProcessRecoveryAdapter _processRecovery;
+  final RunRecoveryStarter? _recoveryStarter;
   late final RunInterruptionReconciler _runReconciler;
   late final StartupRunRecoveryCoordinator _startupRecovery;
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
@@ -66,7 +69,14 @@ final class ProductionFoundation {
     RecoveryAction action,
   ) async {
     await beginStartupReconciliation();
-    await _runReconciler.select(offer, action);
+    final start = _recoveryStarter;
+    if (start == null) {
+      throw StateError('No recovery starter is configured.');
+    }
+    if (!offer.actions.contains(action)) {
+      throw ArgumentError.value(action, 'action', 'Recovery is not offered.');
+    }
+    await start(offer, action);
     recoveryOffers = recoveryOffers
         .where((value) => value.runId != offer.runId)
         .toList(growable: false);

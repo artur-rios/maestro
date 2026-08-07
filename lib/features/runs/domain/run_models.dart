@@ -9,6 +9,12 @@ enum RunStatus {
   queued,
   starting,
   running,
+
+  /// A pause the user asked for, recorded while the active step finishes.
+  ///
+  /// FR-RC-02 pauses *before the next step*, never mid-step, so the request and
+  /// the pause are two distinct states rather than one.
+  pauseRequested,
   paused,
   succeeded,
   failed,
@@ -21,19 +27,29 @@ enum RunStatus {
   };
 
   bool canTransitionTo(RunStatus next) => switch ((this, next)) {
-    (queued, starting) => true,
+    (queued, starting) || (queued, canceled) => true,
     (starting, running) ||
     (starting, failed) ||
-    (starting, interrupted) => true,
+    (starting, interrupted) ||
+    (starting, canceled) => true,
     (running, succeeded) ||
     (running, failed) ||
     (running, interrupted) ||
+    (running, pauseRequested) ||
     (running, paused) ||
     (running, canceled) => true,
+    (pauseRequested, paused) ||
+    (pauseRequested, succeeded) ||
+    (pauseRequested, failed) ||
+    (pauseRequested, interrupted) ||
+    (pauseRequested, canceled) => true,
     (paused, running) ||
     (paused, failed) ||
     (paused, interrupted) ||
     (paused, canceled) => true,
+    // Recovery re-entry (FR-RC-05..07). The repository adds the evidence
+    // guards; the lifecycle only says the move is possible.
+    (failed, running) || (canceled, running) || (interrupted, running) => true,
     _ => false,
   };
 }

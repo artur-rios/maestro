@@ -134,6 +134,72 @@ void main() {
     },
   );
 
+  test('GivenRunningRun_WhenRequestingPause_ThenTheTransitionIsLegal', () {
+    // Given: a run executing a step.
+    const status = RunStatus.running;
+
+    // When / Then: a pause request is a legal forward transition.
+    expect(status.canTransitionTo(RunStatus.pauseRequested), isTrue);
+    expect(RunStatus.paused.canTransitionTo(RunStatus.pauseRequested), isFalse);
+  });
+
+  test('GivenPauseRequestedRun_WhenPausing_ThenTheTransitionIsLegal', () {
+    // Given: a run whose pause request is recorded.
+    const status = RunStatus.pauseRequested;
+
+    // When / Then: it may settle into paused once the active step finishes.
+    expect(status.canTransitionTo(RunStatus.paused), isTrue);
+  });
+
+  test('GivenPauseRequestedRun_WhenTheStepFails_ThenFailedIsLegal', () {
+    // Given: a pause request recorded while the step was still running.
+    const status = RunStatus.pauseRequested;
+
+    // When / Then: AF-02 records failure rather than paused.
+    expect(status.canTransitionTo(RunStatus.failed), isTrue);
+    expect(status.canTransitionTo(RunStatus.interrupted), isTrue);
+    expect(status.canTransitionTo(RunStatus.canceled), isTrue);
+  });
+
+  test(
+    'GivenPauseRequestedRun_WhenTheLastStepSucceeds_ThenSucceededIsLegal',
+    () {
+      // Given: a pause requested during the final step.
+      const status = RunStatus.pauseRequested;
+
+      // When / Then: there is no next step to pause before.
+      expect(status.canTransitionTo(RunStatus.succeeded), isTrue);
+    },
+  );
+
+  test('GivenQueuedOrStartingRun_WhenCancelling_ThenTheTransitionIsLegal', () {
+    // Given: a run cancelled before it produced any output.
+    // When / Then: cancellation is legal from both pre-running statuses.
+    expect(RunStatus.queued.canTransitionTo(RunStatus.canceled), isTrue);
+    expect(RunStatus.starting.canTransitionTo(RunStatus.canceled), isTrue);
+  });
+
+  test('GivenTerminalRun_WhenRecovering_ThenRunningIsLegal', () {
+    // Given: the three terminal statuses UC-08 allows retry from.
+    // When / Then: recovery re-enters execution.
+    expect(RunStatus.failed.canTransitionTo(RunStatus.running), isTrue);
+    expect(RunStatus.canceled.canTransitionTo(RunStatus.running), isTrue);
+    expect(RunStatus.interrupted.canTransitionTo(RunStatus.running), isTrue);
+  });
+
+  test('GivenPauseRequestedStatus_WhenAskedIfTerminal_ThenItIsNot', () {
+    // Given: a recorded pause request.
+    // When / Then: the run is still active, so startup reconciliation sweeps it.
+    expect(RunStatus.pauseRequested.isTerminal, isFalse);
+    expect(RunStatus.paused.isTerminal, isFalse);
+  });
+
+  test('GivenSucceededRun_WhenRecovering_ThenRunningIsRejected', () {
+    // Given: a run that completed every step.
+    // When / Then: there is nothing to recover.
+    expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
+  });
+
   test(
     'GivenEmptyOrNonContiguousSteps_WhenSnapshotCreated_ThenInvalidExecutionOrderIsRejected',
     () {

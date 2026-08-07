@@ -38,11 +38,15 @@ abstract interface class RunInterruptionRepository {
     required String Function() newLogId,
   });
   Future<List<InterruptedRunEvidence>> listInterrupted();
-  Future<void> recordRecoverySelection({
-    required RunRecoveryRequest request,
-    required DateTime expectedRunUpdatedAt,
-  });
 }
+
+/// Begins recovery for a startup offer and drives the run.
+///
+/// Recording a selection and acting on it are one operation, owned by the run
+/// control service, so a scope chosen at startup actually runs instead of only
+/// being written down.
+typedef RunRecoveryStarter =
+    Future<void> Function(RunRecoveryOffer offer, RecoveryAction action);
 
 final class RunInterruptionReconciler {
   const RunInterruptionReconciler({
@@ -69,25 +73,6 @@ final class RunInterruptionReconciler {
     final offers = await reconcile();
     await cleanup();
     return offers;
-  }
-
-  Future<void> select(RunRecoveryOffer offer, RecoveryAction action) {
-    if (!offer.actions.contains(action)) {
-      throw ArgumentError.value(action, 'action', 'Recovery is not offered.');
-    }
-    return repository.recordRecoverySelection(
-      request: RunRecoveryRequest(
-        id: newId(),
-        runId: offer.runId,
-        attemptId: action == RecoveryAction.restartWorkflow
-            ? null
-            : offer.interruptedAttemptId,
-        action: action,
-        status: RecoveryRequestStatus.pending,
-        requestedAt: now().toUtc(),
-      ),
-      expectedRunUpdatedAt: offer.evidenceUpdatedAt,
-    );
   }
 
   static RunRecoveryOffer _offer(InterruptedRunEvidence evidence) {

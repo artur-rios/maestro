@@ -8,6 +8,8 @@ import 'dart:typed_data';
 
 import 'package:maestro/core/logging/secret_redactor.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
+import 'package:maestro/features/runs/application/control_run.dart';
+import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 
@@ -26,6 +28,7 @@ final class RunExecutionAggregate {
 abstract interface class RunExecutionRepository {
   Future<RunExecutionAggregate?> load(String runId);
   Future<void> markRunning(String runId, DateTime at);
+  Future<void> pauseRun(String runId, DateTime at);
   Future<void> beginAttempt(RunAttempt attempt);
   Future<void> appendLog(RunLogSegment segment);
   Future<void> completeAttemptAndAdvance({
@@ -96,10 +99,19 @@ final class StepOutputFrame {
   final Uint8List bytes;
 }
 
+/// Whether a terminated step process actually left no descendants (AF-03).
+enum StepTermination { cancelled, incomplete }
+
 abstract interface class StepProcess {
   Stream<StepOutputFrame> get frames;
   Future<int> get exitCode;
   Future<void> settle();
+
+  /// Kills the step's complete process tree immediately (FR-RC-04).
+  ///
+  /// Reports [StepTermination.incomplete] when descendants survived platform
+  /// escalation, so the caller can refuse to record the run as cancelled.
+  Future<StepTermination> terminate();
 }
 
 final class StepProcessStart {
@@ -233,7 +245,7 @@ final class RunSummarySubscription {
   }
 }
 
-final class RunOrchestrator {
+final class RunOrchestrator implements RunExecutionControl {
   RunOrchestrator({
     required RunExecutionRepository repository,
     required StepProcessLauncher launcher,
@@ -279,8 +291,18 @@ final class RunOrchestrator {
       <String, Queue<RunOutputChunk>>{};
   final Map<String, int> _tailSizes = <String, int>{};
   final Map<String, Future<void>> _active = <String, Future<void>>{};
+  final Set<String> _pauseRequested = <String>{};
+  final Set<String> _cancelRequested = <String>{};
+  final Map<String, StepProcess> _processes = <String, StepProcess>{};
 
   RunSummaryEvents get events => _events;
+
+  /// The in-flight execution of a run, or null when nothing is executing.
+  ///
+  /// Cancellation awaits this before writing terminal evidence, so the loop has
+  /// already stood down and cannot race the cancel transaction.
+  @override
+  Future<void>? activeExecution(String runId) => _active[runId];
   int get retainedTailRunCount => _tails.length;
 
   /// The live tail for one run, with each fragment's channel preserved.
@@ -293,19 +315,61 @@ final class RunOrchestrator {
         _tails[runId] ?? const <RunOutputChunk>[],
       );
 
-  Future<void> execute(String runId) {
+  /// Asks a run to pause once its active step finishes (FR-RC-01, FR-RC-02).
+  ///
+  /// The request is honored between steps, never mid-step, so the step's
+  /// evidence stays complete. A run that fails first ends failed rather than
+  /// paused (AF-02), which the flag's placement in the loop guarantees.
+  @override
+  void requestPause(String runId) => _pauseRequested.add(runId);
+
+  /// Terminates a run's live process tree immediately (FR-RC-04).
+  ///
+  /// The flag outlives the kill: the execute loop must know the non-zero exit
+  /// it is about to observe was the cancellation, so it writes no failure
+  /// evidence and leaves the terminal state to the cancel transaction.
+  @override
+  Future<CancellationOutcome> requestCancel(String runId) async {
+    _cancelRequested.add(runId);
+    final process = _processes[runId];
+    if (process == null) return CancellationOutcome.cancelled;
+    late final StepTermination termination;
+    try {
+      termination = await process.terminate();
+    } on Object {
+      return CancellationOutcome.incomplete;
+    }
+    return switch (termination) {
+      StepTermination.cancelled => CancellationOutcome.cancelled,
+      StepTermination.incomplete => CancellationOutcome.incomplete,
+    };
+  }
+
+  @override
+  Future<void> execute(
+    String runId, {
+    RecoveryContextPolicy contextPolicy = RecoveryContextPolicy.preserved,
+  }) {
     final existing = _active[runId];
     if (existing != null) return existing;
-    final future = _execute(runId);
+    final future = _execute(runId, contextPolicy);
     _active[runId] = future;
     return future.whenComplete(() {
       _active.remove(runId);
       _tails.remove(runId);
       _tailSizes.remove(runId);
+      // A request that never got honored — because the run failed, or ended —
+      // must not survive to pause or cancel a later execution of the same run.
+      _pauseRequested.remove(runId);
+      _cancelRequested.remove(runId);
+      _processes.remove(runId);
     });
   }
 
-  Future<void> _execute(String runId) async {
+  Future<void> _execute(
+    String runId,
+    RecoveryContextPolicy contextPolicy,
+  ) async {
     final aggregate = await _repository.load(runId);
     if (aggregate == null) throw StateError('Unknown run.');
     if (aggregate.run.status == RunStatus.starting) {
@@ -314,7 +378,12 @@ final class RunOrchestrator {
       throw StateError('Only active runs can execute.');
     }
     _events.add(RunLogSummary.announcement(runId));
-    DeclaredContext? priorContext = _resumedContext(aggregate);
+    // FR-RC-06 reruns a step from scratch, which means without the context the
+    // preceding step declared. Only the first step of this call is affected;
+    // steps after it are ordinary successors and inherit normally.
+    DeclaredContext? priorContext = contextPolicy == RecoveryContextPolicy.fresh
+        ? null
+        : _resumedContext(aggregate);
     for (
       var position = aggregate.run.currentStepPosition;
       position < aggregate.snapshot.steps.length;
@@ -397,6 +466,7 @@ final class RunOrchestrator {
         );
         return;
       }
+      _processes[runId] = process;
       var sequence = 0;
       final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
       // Batches whose durable write failed, kept in order so a recovered
@@ -495,12 +565,20 @@ final class RunOrchestrator {
           // The durable process record remains for startup reconciliation.
         }
         await _resolveIgnoringErrors(resultPath);
+        if (_cancelRequested.contains(runId)) return;
         await _failAttempt(
           attemptId,
           durabilityExhausted
               ? 'run.step.log_persist'
               : 'run.step.stream_failed',
         );
+        return;
+      }
+      // A killed step reports whatever the platform gave it. Recording that as
+      // a step failure would bury the user's cancellation under a spurious
+      // typed failure, so the cancel transaction owns the terminal state.
+      if (_cancelRequested.contains(runId)) {
+        await _resolveIgnoringErrors(resultPath);
         return;
       }
       // A transient outage gets one last chance once the stream is closed and
@@ -571,6 +649,14 @@ final class RunOrchestrator {
         exitCode: exitCode,
         declaredContext: priorContext,
       );
+      // The step is complete and its evidence is durable; this is the only
+      // point at which a pause can be honored without truncating a step. A
+      // pause on the final step is moot — the run has already succeeded.
+      final hasNextStep = position + 1 < aggregate.snapshot.steps.length;
+      if (hasNextStep && _pauseRequested.remove(runId)) {
+        await _repository.pauseRun(runId, _now());
+        return;
+      }
     }
   }
 

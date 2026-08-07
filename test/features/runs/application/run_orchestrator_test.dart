@@ -8,6 +8,7 @@ import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
+import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 import 'package:path/path.dart' as p;
@@ -1013,6 +1014,251 @@ void main() {
     });
   });
 
+  test(
+    'GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheRunPausesBeforeTheNextStep',
+    () async {
+      // Given: a two-step run whose first step is still executing.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.addAll(<_Script>[
+        _Script(gate: gate),
+        const _Script(),
+      ]);
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the user asks to pause, and the active step then finishes.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the run pauses and the second step never begins (FR-RC-02).
+      expect(fixture.repository.paused, <String>['run-1']);
+      expect(fixture.repository.begun, hasLength(1));
+      expect(fixture.launcher.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheStepIsNotAbandoned',
+    () async {
+      // Given: a two-step run paused during its first step.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.addAll(<_Script>[
+        _Script(gate: gate),
+        const _Script(),
+      ]);
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the pause request lands mid-step.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the active step still completes normally rather than being cut
+      // short — a pause is not a cancellation.
+      expect(fixture.repository.completed, <String>['attempt-1']);
+      expect(fixture.repository.failed, isEmpty);
+    },
+  );
+
+  test(
+    'GivenPauseRequestedOnTheLastStep_WhenItSucceeds_ThenTheRunSucceeds',
+    () async {
+      // Given: a single-step run, so there is no next step to pause before.
+      final fixture = _Fixture(stepCount: 1);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: pause is requested during the final step.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the run completes rather than parking in paused.
+      expect(fixture.repository.paused, isEmpty);
+      expect(fixture.repository.completed, <String>['attempt-1']);
+    },
+  );
+
+  test(
+    'GivenPauseRequested_WhenTheStepFails_ThenTheRunFailsRatherThanPauses',
+    () async {
+      // Given: a two-step run whose first step will exit non-zero (AF-02).
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate, exitCode: 3));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: pause is requested and the step then fails.
+      fixture.orchestrator.requestPause('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: failure is recorded, not a pause, so retry becomes the offer.
+      expect(fixture.repository.failed, <(String, String)>[
+        ('attempt-1', 'run.step.nonzero_exit'),
+      ]);
+      expect(fixture.repository.paused, isEmpty);
+    },
+  );
+
+  test(
+    'GivenCancelRequested_WhenTheProcessIsTerminated_ThenCancelledIsReported',
+    () async {
+      // Given: a run whose step process terminates on request.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the user cancels the run.
+      final outcome = await fixture.orchestrator.requestCancel('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the tree is gone, so the cancellation is complete (FR-RC-04).
+      expect(outcome, CancellationOutcome.cancelled);
+      expect(fixture.launcher.terminated, hasLength(1));
+    },
+  );
+
+  test('GivenTerminationResisted_WhenCancelling_ThenIncompleteIsReported', () {
+    // Given: a step process whose descendants survive termination (AF-03).
+    final fixture = _Fixture(stepCount: 1);
+    final gate = Completer<void>();
+    fixture.launcher.results.add(
+      _Script(gate: gate, termination: StepTermination.incomplete),
+    );
+    final execution = fixture.orchestrator.execute('run-1');
+
+    return Future<void>.delayed(Duration.zero).then((_) async {
+      // When: the user cancels.
+      final outcome = await fixture.orchestrator.requestCancel('run-1');
+
+      // Then: the caller learns the tree is still alive, so the run must not
+      // be recorded as cancelled.
+      expect(outcome, CancellationOutcome.incomplete);
+      gate.complete();
+      await execution;
+    });
+  });
+
+  test('GivenNoLiveProcess_WhenCancelling_ThenCancelledIsReported', () async {
+    // Given: a run that has not launched a step process.
+    final fixture = _Fixture(stepCount: 1);
+
+    // When: the user cancels it.
+    final outcome = await fixture.orchestrator.requestCancel('run-1');
+
+    // Then: there is nothing to kill, so cancellation is already complete.
+    expect(outcome, CancellationOutcome.cancelled);
+  });
+
+  test(
+    'GivenCancelRequested_WhenTheStepExitsNonZero_ThenNoFailureEvidenceIsWritten',
+    () async {
+      // Given: a run whose killed step will report a non-zero exit.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      fixture.launcher.results.add(_Script(gate: gate, exitCode: 137));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // When: the run is cancelled and the killed step exits non-zero.
+      await fixture.orchestrator.requestCancel('run-1');
+      gate.complete();
+      await execution;
+
+      // Then: the loop leaves the terminal state to the cancel transaction,
+      // so a cancelled run never lands as failed.
+      expect(fixture.repository.failed, isEmpty);
+      expect(fixture.repository.completed, isEmpty);
+      expect(fixture.repository.paused, isEmpty);
+    },
+  );
+
+  test(
+    'GivenPreservedContextPolicy_WhenResuming_ThenThePriorContextIsPassed',
+    () async {
+      // Given: a two-step run resuming at its second step, whose first step
+      // succeeded and declared context.
+      final fixture = _Fixture(stepCount: 2);
+      fixture.repository.aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 2,
+        worktreePath: '/tmp/run-1',
+        currentStepPosition: 1,
+        status: RunStatus.running,
+        attempts: <RunAttempt>[
+          RunAttempt(
+            id: 'attempt-0',
+            runId: 'run-1',
+            snapshotStepId: 's0',
+            attemptNumber: 1,
+            status: AttemptStatus.succeeded,
+            startedAt: DateTime.utc(2026),
+            declaredContext: DeclaredContext.parse('carried forward'),
+          ),
+        ],
+      );
+      fixture.launcher.results.add(const _Script());
+
+      // When: execution resumes with the default policy.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: the resumed step receives the prior step's declared context.
+      expect(
+        fixture.launcher.requests.single.prompt,
+        contains('carried forward'),
+      );
+    },
+  );
+
+  test(
+    'GivenFreshContextPolicy_WhenResuming_ThenThePriorContextIsNotPassed',
+    () async {
+      // Given: the same resumable run, with context available to inherit.
+      final fixture = _Fixture(stepCount: 2);
+      fixture.repository.aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 2,
+        worktreePath: '/tmp/run-1',
+        currentStepPosition: 1,
+        status: RunStatus.running,
+        attempts: <RunAttempt>[
+          RunAttempt(
+            id: 'attempt-0',
+            runId: 'run-1',
+            snapshotStepId: 's0',
+            attemptNumber: 1,
+            status: AttemptStatus.succeeded,
+            startedAt: DateTime.utc(2026),
+            declaredContext: DeclaredContext.parse('carried forward'),
+          ),
+        ],
+      );
+      fixture.launcher.results.add(const _Script());
+
+      // When: the step is rerun from scratch (FR-RC-06).
+      await fixture.orchestrator.execute(
+        'run-1',
+        contextPolicy: RecoveryContextPolicy.fresh,
+      );
+
+      // Then: the step starts without inheriting the prior context.
+      final prompt = fixture.launcher.requests.single.prompt;
+      expect(prompt, isNot(contains('carried forward')));
+      expect(prompt, contains('Previous declared context: (none)'));
+    },
+  );
+
   test('two run IDs can overlap while each run remains serial', () async {
     final fixture = _Fixture(stepCount: 1);
     final first = Completer<void>();
@@ -1310,6 +1556,7 @@ RunExecutionAggregate _aggregate(
   required int count,
   required String worktreePath,
   int currentStepPosition = 0,
+  RunStatus status = RunStatus.starting,
   Iterable<RunAttempt> attempts = const <RunAttempt>[],
 }) => RunExecutionAggregate(
   run: WorkflowRun(
@@ -1317,7 +1564,7 @@ RunExecutionAggregate _aggregate(
     projectId: 'p',
     workflowId: 'w',
     label: id,
-    status: RunStatus.starting,
+    status: status,
     currentStepPosition: currentStepPosition,
     branchName: 'feature/$id',
     worktreePath: worktreePath,
@@ -1360,6 +1607,7 @@ final class _Repository implements RunExecutionRepository {
   final List<RunLogSegment> logs = <RunLogSegment>[];
   final List<String> completed = <String>[];
   final List<(String, String)> failed = <(String, String)>[];
+  final List<String> paused = <String>[];
 
   /// The number of upcoming `appendLog` calls that fail before storage
   /// recovers.
@@ -1369,6 +1617,8 @@ final class _Repository implements RunExecutionRepository {
   Future<RunExecutionAggregate?> load(String id) async => aggregates[id];
   @override
   Future<void> markRunning(String id, DateTime at) async {}
+  @override
+  Future<void> pauseRun(String id, DateTime at) async => paused.add(id);
   @override
   Future<void> beginAttempt(RunAttempt value) async => begun.add(value);
   @override
@@ -1406,6 +1656,7 @@ final class _Script {
     this.gate,
     this.streamError = false,
     this.settlement,
+    this.termination = StepTermination.cancelled,
   });
   final List<StepOutputFrame> frames;
   final int exitCode;
@@ -1414,11 +1665,13 @@ final class _Script {
   final Completer<void>? gate;
   final bool streamError;
   final Completer<void>? settlement;
+  final StepTermination termination;
 }
 
 final class _Launcher implements StepProcessLauncher {
   final List<_Script> results = <_Script>[];
   final List<StepLaunchRequest> requests = <StepLaunchRequest>[];
+  final List<_Script> terminated = <_Script>[];
   bool throwOnStart = false;
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async {
@@ -1428,13 +1681,14 @@ final class _Launcher implements StepProcessLauncher {
     if (script.spawnFailure case final code?) {
       return StepProcessStart.failure(code);
     }
-    return StepProcessStart.started(_Process(script));
+    return StepProcessStart.started(_Process(script, terminated));
   }
 }
 
 final class _Process implements StepProcess {
-  _Process(this.script);
+  _Process(this.script, this.terminated);
   final _Script script;
+  final List<_Script> terminated;
   @override
   Stream<StepOutputFrame> get frames => script.streamError
       ? Stream<StepOutputFrame>.error(StateError('stream'))
@@ -1447,6 +1701,12 @@ final class _Process implements StepProcess {
 
   @override
   Future<void> settle() async => script.settlement?.future;
+
+  @override
+  Future<StepTermination> terminate() async {
+    terminated.add(script);
+    return script.termination;
+  }
 }
 
 final class _TimedLauncher implements StepProcessLauncher {
@@ -1472,6 +1732,9 @@ final class _TimedProcess implements StepProcess {
 
   @override
   Future<void> settle() async {}
+
+  @override
+  Future<StepTermination> terminate() async => StepTermination.cancelled;
 }
 
 final class _BoundaryLauncher implements StepProcessLauncher {
@@ -1526,6 +1789,9 @@ final class _InterleavedSecretProcess implements StepProcess {
 
   @override
   Future<void> settle() async {}
+
+  @override
+  Future<StepTermination> terminate() async => StepTermination.cancelled;
 }
 
 final class _BoundaryProcess implements StepProcess {
@@ -1549,6 +1815,9 @@ final class _BoundaryProcess implements StepProcess {
 
   @override
   Future<void> settle() async {}
+
+  @override
+  Future<StepTermination> terminate() async => StepTermination.cancelled;
 }
 
 final class _Results implements AttemptResultFiles {
