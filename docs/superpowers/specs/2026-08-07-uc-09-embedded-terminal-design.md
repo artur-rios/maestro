@@ -27,6 +27,14 @@ evidence, so nothing here touches the database.
 
 ### The port
 
+The port itself moves to `lib/features/terminal/application/terminal_port.dart`,
+following the `RunGitPort` precedent: the application layer declares the port it
+depends on, the platform implements it, and the architecture rule that forbids
+application code from importing `package:maestro/platform/` keeps holding.
+`lib/platform/terminal/terminal_port.dart` keeps its adapter role as
+`TerminalCapabilityPort` — the application port plus `CapabilityProbe`, the same
+shape `GitPort` uses.
+
 `TerminalPort` grows what an interactive session actually needs, and
 `TerminalSession` grows the rest of FR-TE-04:
 

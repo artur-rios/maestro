@@ -6,7 +6,7 @@ import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/platform/terminal/pty_terminal_session.dart';
-import 'package:maestro/platform/terminal/terminal_port.dart';
+import 'package:maestro/features/terminal/domain/terminal_models.dart';
 
 void main() {
   group('PtyTerminalSession', () {
