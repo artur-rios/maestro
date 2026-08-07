@@ -362,8 +362,7 @@ final class RunOrchestrator {
         return;
       }
       var sequence = 0;
-      _StreamingFrameRedactor? redactor;
-      RunLogChannel? redactorChannel;
+      final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
       final batcher = _LogBatcher(
         maximumBytes: maximumPersistedFrameBytes,
         maximumDelay: const Duration(milliseconds: 25),
@@ -389,22 +388,28 @@ final class RunOrchestrator {
         },
       );
       final drain = () async {
+        RunLogChannel? activeChannel;
         await for (final frame in process.frames) {
-          if (redactorChannel != null && redactorChannel != frame.channel) {
-            for (final bytes in redactor!.close()) {
-              await batcher.add(redactorChannel!, bytes);
+          if (activeChannel != null && activeChannel != frame.channel) {
+            final previous = redactors[activeChannel];
+            if (previous != null) {
+              for (final bytes in previous.resolvePendingCandidate()) {
+                await batcher.add(activeChannel, bytes);
+              }
             }
-            redactor = null;
           }
-          redactorChannel = frame.channel;
-          redactor ??= _StreamingFrameRedactor(_environment);
-          for (final bytes in redactor!.add(frame.bytes)) {
+          final redactor = redactors.putIfAbsent(
+            frame.channel,
+            () => _StreamingFrameRedactor(_environment),
+          );
+          for (final bytes in redactor.add(frame.bytes)) {
             await batcher.add(frame.channel, bytes);
           }
+          activeChannel = frame.channel;
         }
-        if (redactorChannel != null) {
-          for (final bytes in redactor!.close()) {
-            await batcher.add(redactorChannel!, bytes);
+        for (final entry in redactors.entries) {
+          for (final bytes in entry.value.close()) {
+            await batcher.add(entry.key, bytes);
           }
         }
         await batcher.close();
@@ -608,10 +613,23 @@ final class _StreamingFrameRedactor {
   final int _overlapBytes;
   final List<int> _pending = <int>[];
   final SecretRedactor _redactor = SecretRedactor();
+  List<List<int>> _suppressedExactSuffixes = <List<int>>[];
+  var _suppressedExactOffset = 0;
   var _discardPatternValue = false;
+  var _discardSwitchedPattern = false;
 
   Iterable<Uint8List> add(Uint8List bytes) sync* {
     var input = bytes;
+    if (_suppressedExactSuffixes.isNotEmpty) {
+      input = _consumeSuppressedExact(input);
+      if (input.isEmpty) return;
+    }
+    if (_discardSwitchedPattern) {
+      final delimiter = input.indexWhere(_isSwitchedPatternDelimiter);
+      if (delimiter < 0) return;
+      _discardSwitchedPattern = false;
+      input = Uint8List.sublistView(input, delimiter);
+    }
     if (_discardPatternValue) {
       final delimiter = input.indexWhere(_isPatternDelimiter);
       if (delimiter < 0) return;
@@ -642,10 +660,33 @@ final class _StreamingFrameRedactor {
         break;
       }
     }
+    while (_pending.isNotEmpty) {
+      final count = _safeImmediateFlushCount();
+      if (count == 0) break;
+      yield _redact(_take(count));
+    }
   }
 
   Iterable<Uint8List> close() sync* {
-    if (_pending.isNotEmpty) yield _redact(_take(_pending.length));
+    if (_pending.isEmpty) return;
+    if (_pendingCandidate() != null) {
+      _pending.clear();
+      yield _redactionMarker();
+      return;
+    }
+    yield _redact(_take(_pending.length));
+  }
+
+  Iterable<Uint8List> resolvePendingCandidate() sync* {
+    final candidate = _pendingCandidate();
+    if (candidate == null) return;
+    _pending.clear();
+    if (candidate.exactSuffixes.isNotEmpty) {
+      _suppressedExactSuffixes = candidate.exactSuffixes;
+      _suppressedExactOffset = 0;
+    }
+    if (candidate.pattern) _discardSwitchedPattern = true;
+    yield _redactionMarker();
   }
 
   List<int> _take(int count) {
@@ -681,19 +722,155 @@ final class _StreamingFrameRedactor {
     return safe;
   }
 
+  int _safeImmediateFlushCount() {
+    var safe = _pending.length;
+    for (final secret in _secretBytes) {
+      final maximumPrefix = (secret.length - 1).clamp(0, _pending.length);
+      for (var length = maximumPrefix; length > 0; length--) {
+        final start = _pending.length - length;
+        if (_matchesPrefixAt(_pending, secret, start, length)) {
+          if (start < safe) safe = start;
+          break;
+        }
+      }
+    }
+    final text = utf8.decode(_pending, allowMalformed: true);
+    final patternStart = _patternCandidateStart(text);
+    if (patternStart != null) {
+      final byteStart = utf8.encode(text.substring(0, patternStart)).length;
+      if (byteStart < safe) safe = byteStart;
+    }
+    return _completeUtf8PrefixLength(_pending, safe);
+  }
+
+  _PendingCandidate? _pendingCandidate() {
+    final exactSuffixes = <List<int>>[];
+    for (final secret in _secretBytes) {
+      if (_pending.isNotEmpty &&
+          _pending.length < secret.length &&
+          _matchesPrefixAt(_pending, secret, 0, _pending.length)) {
+        exactSuffixes.add(secret.sublist(_pending.length));
+      }
+    }
+    final text = utf8.decode(_pending, allowMalformed: true);
+    final pattern = _patternCandidateStart(text) == 0;
+    if (exactSuffixes.isEmpty && !pattern) return null;
+    return _PendingCandidate(exactSuffixes, pattern);
+  }
+
+  Uint8List _consumeSuppressedExact(Uint8List input) {
+    var consumed = 0;
+    while (consumed < input.length && _suppressedExactSuffixes.isNotEmpty) {
+      final byte = input[consumed];
+      final matching = _suppressedExactSuffixes
+          .where(
+            (suffix) =>
+                _suppressedExactOffset < suffix.length &&
+                suffix[_suppressedExactOffset] == byte,
+          )
+          .toList(growable: false);
+      if (matching.isEmpty) {
+        _suppressedExactSuffixes = <List<int>>[];
+        _suppressedExactOffset = 0;
+        break;
+      }
+      consumed++;
+      _suppressedExactOffset++;
+      final longer = matching
+          .where((suffix) => _suppressedExactOffset < suffix.length)
+          .toList(growable: false);
+      if (longer.isEmpty) {
+        _suppressedExactSuffixes = <List<int>>[];
+        _suppressedExactOffset = 0;
+      } else {
+        _suppressedExactSuffixes = longer;
+      }
+    }
+    return consumed == 0 ? input : Uint8List.sublistView(input, consumed);
+  }
+
   Uint8List _redact(List<int> bytes) {
     final text = utf8.decode(bytes, allowMalformed: true);
     final exactRedacted = _redactExactSecrets(text, _environmentSecrets);
     return Uint8List.fromList(utf8.encode(_redactor.redact(exactRedacted)));
   }
 
+  Uint8List _redactionMarker() => Uint8List.fromList(utf8.encode('[REDACTED]'));
+
   bool _endsInsidePatternSecret(List<int> bytes) {
     final text = utf8.decode(bytes, allowMalformed: true);
-    return RegExp(
-      r'''(?:authorization\s*:\s*(?:bearer|basic)\s+|\b(?:password|passwd|pwd|token|secret|api[_-]?key)\s*[=:]\s*)(?:"[^"]*|'[^']*'|[^\s,;]*)$''',
-      caseSensitive: false,
-    ).hasMatch(text);
+    return _patternValueAtEnd.hasMatch(text);
   }
+}
+
+final class _PendingCandidate {
+  const _PendingCandidate(this.exactSuffixes, this.pattern);
+
+  final List<List<int>> exactSuffixes;
+  final bool pattern;
+}
+
+int _completeUtf8PrefixLength(List<int> bytes, int proposed) {
+  if (proposed == 0) return 0;
+  var leader = proposed - 1;
+  while (leader > 0 && (bytes[leader] & 0xc0) == 0x80) {
+    leader--;
+  }
+  final first = bytes[leader];
+  final expected = first & 0x80 == 0
+      ? 1
+      : first & 0xe0 == 0xc0
+      ? 2
+      : first & 0xf0 == 0xe0
+      ? 3
+      : first & 0xf8 == 0xf0
+      ? 4
+      : 1;
+  return proposed - leader < expected ? leader : proposed;
+}
+
+final RegExp _patternValueAtEnd = RegExp(
+  r'''(?:authorization\s*:\s*(?:bearer|basic)\s+|\b(?:password|passwd|pwd|token|secret|api[_-]?key)\s*[=:]\s*)(?:"[^"]*|'[^']*'|[^\s,;]*)$''',
+  caseSensitive: false,
+);
+
+final RegExp _patternLeaderAtEnd = RegExp(
+  r'''(?:authorization\s*(?::\s*[a-z]*)?|\b(?:password|passwd|pwd|token|secret|api[_-]?key)\s*(?:[=:]\s*)?)$''',
+  caseSensitive: false,
+);
+
+int? _patternCandidateStart(String text) {
+  int? start;
+  for (final match in _patternValueAtEnd.allMatches(text)) {
+    start = start == null || match.start < start ? match.start : start;
+  }
+  for (final match in _patternLeaderAtEnd.allMatches(text)) {
+    start = start == null || match.start < start ? match.start : start;
+  }
+  const keywords = <String>[
+    'authorization',
+    'password',
+    'passwd',
+    'pwd',
+    'token',
+    'secret',
+    'api_key',
+    'api-key',
+  ];
+  final lower = text.toLowerCase();
+  for (final keyword in keywords) {
+    final maximum = keyword.length - 1 < lower.length
+        ? keyword.length - 1
+        : lower.length;
+    for (var length = maximum; length > 0; length--) {
+      if (lower.endsWith(keyword.substring(0, length))) {
+        final candidate = lower.length - length;
+        start = start == null || candidate < start ? candidate : start;
+        break;
+      }
+    }
+  }
+  return start;
 }
 
 bool _isPatternDelimiter(int byte) =>
@@ -706,8 +883,22 @@ bool _isPatternDelimiter(int byte) =>
     byte == 0x22 ||
     byte == 0x27;
 
+bool _isSwitchedPatternDelimiter(int byte) => byte == 0x0a || byte == 0x0d;
+
 bool _matchesAt(List<int> source, List<int> pattern, int start) {
   for (var index = 0; index < pattern.length; index++) {
+    if (source[start + index] != pattern[index]) return false;
+  }
+  return true;
+}
+
+bool _matchesPrefixAt(
+  List<int> source,
+  List<int> pattern,
+  int start,
+  int length,
+) {
+  for (var index = 0; index < length; index++) {
     if (source[start + index] != pattern[index]) return false;
   }
   return true;

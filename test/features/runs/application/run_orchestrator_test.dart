@@ -116,6 +116,233 @@ void main() {
     },
   );
 
+  test('retains an incomplete UTF-8 code point across frames', () async {
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(<int>[0x63, 0x61, 0x66, 0xc3]),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(<int>[0xa9, 0x0a]),
+          ),
+        ],
+      ),
+    );
+
+    await fixture.orchestrator.execute('run-1');
+
+    expect(
+      utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      ),
+      'café\n',
+    );
+  });
+
+  test(
+    'redacts an unresolved exact secret prefix when the stream closes',
+    () async {
+      const secret = 'split-secret';
+      final fixture = _Fixture(
+        stepCount: 1,
+        environment: const <String, String>{'OPENAI_API_KEY': secret},
+      );
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('stdout-before split-')),
+            ),
+          ],
+        ),
+      );
+
+      await fixture.orchestrator.execute('run-1');
+
+      final output = utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(output, 'stdout-before [REDACTED]');
+      expect(output, isNot(contains(secret)));
+      expect(output, isNot(contains('split-')));
+    },
+  );
+
+  test('resolves a pattern candidate before an interleaved channel', () async {
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('before token=split-')),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stderr,
+            Uint8List.fromList(utf8.encode('stderr\n')),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('secret after\n')),
+          ),
+        ],
+      ),
+    );
+
+    await fixture.orchestrator.execute('run-1');
+
+    final output = utf8.decode(
+      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(output, 'before [REDACTED]stderr\n\n');
+    expect(output, isNot(contains('split-')));
+    expect(output, isNot(contains('secret after')));
+  });
+
+  test(
+    'keeps pattern suppression when an overlapping exact suffix mismatches',
+    () async {
+      final fixture = _Fixture(
+        stepCount: 1,
+        environment: const <String, String>{
+          'OPENAI_API_KEY': 'token=split-secret',
+        },
+      );
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('before token=split-')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stderr,
+              Uint8List.fromList(utf8.encode('stderr\n')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('mismatch,still-secret\nnext\n')),
+            ),
+          ],
+        ),
+      );
+
+      await fixture.orchestrator.execute('run-1');
+
+      final output = utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(output, 'before [REDACTED]stderr\n\nnext\n');
+      expect(output, isNot(contains('token=split-')));
+      expect(output, isNot(contains('mismatch')));
+      expect(output, isNot(contains('still-secret')));
+    },
+  );
+
+  test(
+    'suppresses quoted commas and semicolons through the resumed line',
+    () async {
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('before token="quoted')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stderr,
+              Uint8List.fromList(utf8.encode('stderr\n')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(
+                utf8.encode(',comma;semicolon secret" trailing\nfollowing\n'),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      await fixture.orchestrator.execute('run-1');
+
+      final output = utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(output, 'before [REDACTED]stderr\n\nfollowing\n');
+      expect(output, isNot(contains('comma')));
+      expect(output, isNot(contains('semicolon')));
+      expect(output, isNot(contains('trailing')));
+    },
+  );
+
+  test('retains stdout redaction state across durable stderr frames', () async {
+    const secret = 'split-secret';
+    final stderrText = 'stderr-before\n${'e' * (256 * 1024)}\nstderr-after\n';
+    final repository = _Repository()
+      ..aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 1,
+        worktreePath: Directory.current.path,
+      );
+    final launcher = _InterleavedSecretLauncher(stderrText);
+    var attempt = 0;
+    var log = 0;
+    final orchestrator = RunOrchestrator(
+      repository: repository,
+      launcher: launcher,
+      resultFiles: _Results(),
+      executableFor: (cli) => cli,
+      environment: const <String, String>{'OPENAI_API_KEY': secret},
+      newAttemptId: () => 'attempt-${++attempt}',
+      newLogId: () => 'log-${++log}',
+      newNonce: () => 'nonce',
+      now: () => DateTime.now().toUtc(),
+    );
+    final firstSummary = orchestrator.events.first;
+    final execution = orchestrator.execute('run-1');
+
+    await firstSummary.timeout(const Duration(milliseconds: 100));
+    final midstream = utf8.decode(
+      repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(midstream, startsWith('stdout-before [REDACTED]stderr-before'));
+    expect(midstream, isNot(contains('split-')));
+
+    launcher.release.complete();
+    await execution;
+
+    final stdoutText = utf8.decode(
+      repository.logs
+          .where((segment) => segment.channel == RunLogChannel.stdout)
+          .expand((segment) => segment.bytes)
+          .toList(),
+    );
+    final reconstructed = utf8.decode(
+      repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(repository.logs.length, greaterThan(1));
+    expect(stdoutText, 'stdout-before [REDACTED] stdout-after\n');
+    expect(
+      utf8.decode(
+        repository.logs
+            .where((segment) => segment.channel == RunLogChannel.stderr)
+            .expand((segment) => segment.bytes)
+            .toList(),
+      ),
+      stderrText,
+    );
+    for (final forbidden in <String>[secret, 'split-', 'secret stdout']) {
+      expect(reconstructed, isNot(contains(forbidden)));
+    }
+    expect(reconstructed, 'stdout-before [REDACTED]$stderrText stdout-after\n');
+  });
+
   test(
     'forced mid-stream flush uses lookahead before cutting a secret',
     () async {
@@ -930,6 +1157,49 @@ final class _BoundaryLauncher implements StepProcessLauncher {
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async =>
       StepProcessStart.started(_BoundaryProcess(payload, release));
+}
+
+final class _InterleavedSecretLauncher implements StepProcessLauncher {
+  _InterleavedSecretLauncher(this.stderrText);
+
+  final String stderrText;
+  final Completer<void> release = Completer<void>();
+
+  @override
+  Future<StepProcessStart> start(StepLaunchRequest request) async =>
+      StepProcessStart.started(_InterleavedSecretProcess(stderrText, release));
+}
+
+final class _InterleavedSecretProcess implements StepProcess {
+  _InterleavedSecretProcess(this.stderrText, this.release);
+
+  final String stderrText;
+  final Completer<void> release;
+  final Completer<int> _exit = Completer<int>();
+
+  @override
+  Stream<StepOutputFrame> get frames async* {
+    yield StepOutputFrame(
+      RunLogChannel.stdout,
+      Uint8List.fromList(utf8.encode('stdout-before split-')),
+    );
+    yield StepOutputFrame(
+      RunLogChannel.stderr,
+      Uint8List.fromList(utf8.encode(stderrText)),
+    );
+    await release.future;
+    yield StepOutputFrame(
+      RunLogChannel.stdout,
+      Uint8List.fromList(utf8.encode('secret stdout-after\n')),
+    );
+    _exit.complete(0);
+  }
+
+  @override
+  Future<int> get exitCode => _exit.future;
+
+  @override
+  Future<void> settle() async {}
 }
 
 final class _BoundaryProcess implements StepProcess {
