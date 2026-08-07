@@ -104,7 +104,16 @@ Future<void> main(List<String> args) async {
       expect(result.succeeded, isTrue);
       expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
       final childPid = int.parse(await pidFile.readAsString());
-      expect(Process.killPid(childPid), isFalse);
+      // IR-05 bounds whole-tree cancellation to Windows job objects and Unix
+      // process groups. `detachedWithStdio` calls setsid on Unix, so the child
+      // leaves the group and is outside that boundary by design; only the
+      // Windows job object still owns it. The bounded EOF wait asserted above
+      // is what this case exists to prove on both platforms.
+      if (Platform.isWindows) {
+        expect(Process.killPid(childPid), isFalse);
+      } else {
+        addTearDown(() => Process.killPid(childPid, ProcessSignal.sigkill));
+      }
     },
   );
 }
