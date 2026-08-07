@@ -202,6 +202,14 @@ Future<ProductionAppComposition> composeProductionApp({
     newNonce: newProductionNonce,
     now: now,
   );
+  final foundation = ProductionFoundation(
+    paths: paths,
+    database: database,
+    commandRunner: commandRunner,
+    runRepository: runRepository,
+    clock: now,
+    newId: newId,
+  );
   Widget runStartBuilder(
     BuildContext context,
     String actorId,
@@ -250,8 +258,21 @@ Future<ProductionAppComposition> composeProductionApp({
         execute: runOrchestrator.execute,
         events: runOrchestrator.events,
         tailFor: runOrchestrator.tailFor,
-        statusFor: (runId) async =>
-            (await runRepository.findById(runId))?.run.status,
+        statusFor: (runId) async {
+          final aggregate = await runRepository.findById(runId);
+          if (aggregate == null) return null;
+          final position = aggregate.run.currentStepPosition.clamp(
+            0,
+            aggregate.snapshot.steps.length - 1,
+          );
+          return RunPresentationSnapshot(
+            status: aggregate.run.status,
+            currentStep: aggregate.snapshot.steps[position].name,
+          );
+        },
+        recoveryOffers: foundation.recoveryOffers,
+        loadRecoveryOffers: foundation.recoverInterruptedRuns,
+        selectRecovery: foundation.selectRecovery,
       ),
     );
   }
@@ -270,14 +291,7 @@ Future<ProductionAppComposition> composeProductionApp({
     runStartBuilder: runStartBuilder,
     activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
-    foundation: ProductionFoundation(
-      paths: paths,
-      database: database,
-      commandRunner: commandRunner,
-      runRepository: runRepository,
-      clock: now,
-      newId: newId,
-    ),
+    foundation: foundation,
     closeDatabase: closeDatabase,
   );
 }

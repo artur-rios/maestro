@@ -759,6 +759,7 @@ void main() {
         (await repository.findById('run-1'))!.recoveryRequests.single.id,
         'recovery-selection',
       );
+      expect(await repository.listInterrupted(), isEmpty);
       await expectLater(
         repository.recordRecoverySelection(
           request: domain.RunRecoveryRequest(

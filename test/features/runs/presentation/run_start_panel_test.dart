@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
+import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_panel.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
@@ -60,6 +63,96 @@ void main() {
             .text,
         'UC-06',
       );
+    },
+  );
+
+  testWidgets(
+    'GivenInterruptedRun_WhenPanelShown_ThenExactRecoveryActionsRenderAndStaleSelectionIsReported',
+    (tester) async {
+      final offer = RunRecoveryOffer(
+        runId: 'interrupted-run',
+        interruptedAttemptId: 'attempt-1',
+        evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+        actions: const <RecoveryAction>{
+          RecoveryAction.rerunStepFresh,
+          RecoveryAction.restartWorkflow,
+        },
+      );
+      final controller = RunStartController(
+        actorId: 'actor-1',
+        project: _project(),
+        loadWorkflows: () async => <WorkflowDefinition>[_workflow()],
+        starter: (_) async => const RunStartRejected(
+          code: 'unused',
+          message: 'unused',
+          remediation: 'unused',
+        ),
+        execute: (_) async {},
+        events: RunSummaryEvents(),
+        tailFor: (_) => Uint8List(0),
+        statusFor: (_) async => null,
+        recoveryOffers: <RunRecoveryOffer>[offer],
+        selectRecovery: (_, _) async => throw StateError('stale'),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RunStartPanel(controller: controller),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Interrupted run interrupted-run'), findsOneWidget);
+      expect(find.text('Retry with preserved context'), findsNothing);
+      expect(find.text('Rerun step fresh'), findsOneWidget);
+      expect(find.text('Restart workflow'), findsOneWidget);
+      await tester.tap(find.text('Restart workflow'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Recovery evidence changed'), findsOneWidget);
+      expect(find.text('Interrupted run interrupted-run'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenAcceptedSilentRun_WhenPanelShown_ThenRunningStatusAndCurrentSnapshotStepAreVisible',
+    (tester) async {
+      final completion = Completer<void>();
+      final controller = RunStartController(
+        actorId: 'actor-1',
+        project: _project(),
+        loadWorkflows: () async => <WorkflowDefinition>[_workflow()],
+        starter: (_) async => const RunStartAccepted(
+          runId: 'run-silent',
+          branchName: 'feature/run-silent',
+          worktreePath: 'worktree-silent',
+        ),
+        execute: (_) => completion.future,
+        events: RunSummaryEvents(),
+        tailFor: (_) => Uint8List(0),
+        statusFor: (_) async => null,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RunStartPanel(controller: controller),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('run-work-item')), 'UC-06');
+      await tester.tap(find.byKey(const Key('start-run')));
+      await tester.pump();
+
+      expect(find.text('Run run-silent · running'), findsOneWidget);
+      expect(find.text('Current step: Execute'), findsOneWidget);
+      completion.complete();
+      await tester.pump();
     },
   );
 }

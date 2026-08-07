@@ -635,6 +635,16 @@ final class DriftRunRepository
             .get();
     final evidence = <InterruptedRunEvidence>[];
     for (final run in runs) {
+      final pendingRecovery =
+          await (_database.select(_database.runRecoveryRequests)..where(
+                (table) =>
+                    table.runId.equals(run.id) &
+                    table.status.equals(
+                      domain.RecoveryRequestStatus.pending.name,
+                    ),
+              ))
+              .getSingleOrNull();
+      if (pendingRecovery != null) continue;
       final interrupted =
           await (_database.select(_database.runAttempts)
                 ..where(

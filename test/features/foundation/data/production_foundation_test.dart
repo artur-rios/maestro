@@ -153,7 +153,22 @@ void main() {
       );
       expect((await runs.findById('run-1'))!.logSegmentCount, 1);
       expect(await worktree.exists(), isTrue);
-      expect(foundation.recoveryOffers.single.runId, 'run-1');
+      final offer = foundation.recoveryOffers.single;
+      expect(offer.runId, 'run-1');
+      expect(offer.actions, <domain.RecoveryAction>{
+        domain.RecoveryAction.rerunStepFresh,
+        domain.RecoveryAction.restartWorkflow,
+      });
+      await foundation.selectRecovery(
+        offer,
+        domain.RecoveryAction.restartWorkflow,
+      );
+      expect(foundation.recoveryOffers, isEmpty);
+      expect(await foundation.recoverInterruptedRuns(), isEmpty);
+      expect(
+        (await runs.findById('run-1'))!.recoveryRequests.single.action,
+        domain.RecoveryAction.restartWorkflow,
+      );
     },
   );
 }

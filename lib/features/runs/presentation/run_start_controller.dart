@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
@@ -15,7 +16,18 @@ typedef WorkflowLoader = Future<List<WorkflowDefinition>> Function();
 typedef RunStarter = Future<RunStartResult> Function(StartRunRequest request);
 typedef RunExecutor = Future<void> Function(String runId);
 typedef RunTailReader = Uint8List Function(String runId);
-typedef RunStatusReader = Future<RunStatus?> Function(String runId);
+typedef RunStatusReader =
+    Future<RunPresentationSnapshot?> Function(String runId);
+typedef RecoverySelector =
+    Future<void> Function(RunRecoveryOffer offer, RecoveryAction action);
+typedef RecoveryOfferLoader = Future<List<RunRecoveryOffer>> Function();
+
+final class RunPresentationSnapshot {
+  const RunPresentationSnapshot({required this.status, this.currentStep});
+
+  final RunStatus status;
+  final String? currentStep;
+}
 
 final class RunStartFailure {
   const RunStartFailure({
@@ -35,6 +47,7 @@ final class VisibleRunSummary {
     required this.branchName,
     required this.worktreePath,
     required this.status,
+    required this.currentStep,
     this.tail = '',
   });
 
@@ -42,16 +55,21 @@ final class VisibleRunSummary {
   final String branchName;
   final String worktreePath;
   final RunStatus status;
+  final String? currentStep;
   final String tail;
 
-  VisibleRunSummary copyWith({RunStatus? status, String? tail}) =>
-      VisibleRunSummary(
-        runId: runId,
-        branchName: branchName,
-        worktreePath: worktreePath,
-        status: status ?? this.status,
-        tail: tail ?? this.tail,
-      );
+  VisibleRunSummary copyWith({
+    RunStatus? status,
+    String? currentStep,
+    String? tail,
+  }) => VisibleRunSummary(
+    runId: runId,
+    branchName: branchName,
+    worktreePath: worktreePath,
+    status: status ?? this.status,
+    currentStep: currentStep ?? this.currentStep,
+    tail: tail ?? this.tail,
+  );
 }
 
 final class RunStartState {
@@ -65,6 +83,8 @@ final class RunStartState {
     this.loading = false,
     this.starting = false,
     this.failure,
+    this.recoveryOffers = const <RunRecoveryOffer>[],
+    this.recoveringRunIds = const <String>{},
   });
 
   final List<WorkflowDefinition> workflows;
@@ -76,6 +96,8 @@ final class RunStartState {
   final bool loading;
   final bool starting;
   final RunStartFailure? failure;
+  final List<RunRecoveryOffer> recoveryOffers;
+  final Set<String> recoveringRunIds;
 
   String get workItemLabel => switch (selectedWorkflow?.unitType) {
     WorkItemType.useCase => 'Use-case identifier',
@@ -96,6 +118,8 @@ final class RunStartState {
     bool? starting,
     RunStartFailure? failure,
     bool clearFailure = false,
+    List<RunRecoveryOffer>? recoveryOffers,
+    Set<String>? recoveringRunIds,
   }) => RunStartState(
     workflows: workflows ?? this.workflows,
     selectedWorkflow: clearSelectedWorkflow
@@ -108,6 +132,8 @@ final class RunStartState {
     loading: loading ?? this.loading,
     starting: starting ?? this.starting,
     failure: clearFailure ? null : failure ?? this.failure,
+    recoveryOffers: recoveryOffers ?? this.recoveryOffers,
+    recoveringRunIds: recoveringRunIds ?? this.recoveringRunIds,
   );
 }
 
@@ -121,13 +147,23 @@ final class RunStartController extends ChangeNotifier {
     required RunSummaryEvents events,
     required RunTailReader tailFor,
     required RunStatusReader statusFor,
+    Iterable<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[],
+    RecoveryOfferLoader? loadRecoveryOffers,
+    RecoverySelector? selectRecovery,
   }) : _loadWorkflows = loadWorkflows,
        _starter = starter,
        _execute = execute,
        _tailFor = tailFor,
        _statusFor = statusFor,
+       _selectRecovery = selectRecovery ?? _unsupportedRecovery,
+       _loadRecoveryOffers =
+           loadRecoveryOffers ??
+           (() async => List<RunRecoveryOffer>.unmodifiable(recoveryOffers)),
        _events = events {
     _subscription = events.listen(_onSummary);
+    state = RunStartState(
+      recoveryOffers: List<RunRecoveryOffer>.unmodifiable(recoveryOffers),
+    );
   }
 
   final String actorId;
@@ -137,9 +173,12 @@ final class RunStartController extends ChangeNotifier {
   final RunExecutor _execute;
   final RunTailReader _tailFor;
   final RunStatusReader _statusFor;
+  final RecoverySelector _selectRecovery;
+  final RecoveryOfferLoader _loadRecoveryOffers;
   // Retaining the event owner makes the subscription lifetime explicit.
   final RunSummaryEvents _events;
   late final RunSummarySubscription _subscription;
+  final Map<String, int> _statusReadGenerations = <String, int>{};
   RunStartState state = const RunStartState();
   var _generation = 0;
   var _disposed = false;
@@ -155,6 +194,7 @@ final class RunStartController extends ChangeNotifier {
                 workflow.projectIds.contains(project.id),
           )
           .toList(growable: false);
+      final recoveryOffers = await _loadRecoveryOffers();
       if (!_owns(generation)) return;
       _publish(
         state.copyWith(
@@ -162,6 +202,7 @@ final class RunStartController extends ChangeNotifier {
           selectedWorkflow: workflows.firstOrNull,
           clearSelectedWorkflow: workflows.isEmpty,
           loading: false,
+          recoveryOffers: List<RunRecoveryOffer>.unmodifiable(recoveryOffers),
         ),
       );
     } on Object {
@@ -195,6 +236,79 @@ final class RunStartController extends ChangeNotifier {
 
   void setBranchWorkType(BranchWorkType value) =>
       _publish(state.copyWith(branchWorkType: value, clearFailure: true));
+
+  Future<void> selectRecovery(
+    RunRecoveryOffer offer,
+    RecoveryAction action,
+  ) async {
+    if (_disposed) return;
+    if (!state.recoveryOffers.contains(offer)) {
+      _publishRecoveryFailure('Recovery evidence is no longer available.');
+      return;
+    }
+    if (!offer.actions.contains(action)) {
+      _publishRecoveryFailure(
+        'That recovery action is not valid for this run.',
+        code: 'run.recovery.invalid',
+      );
+      return;
+    }
+    if (state.recoveringRunIds.contains(offer.runId)) {
+      return;
+    }
+    _publish(
+      state.copyWith(
+        recoveringRunIds: <String>{...state.recoveringRunIds, offer.runId},
+        clearFailure: true,
+      ),
+    );
+    try {
+      await _selectRecovery(offer, action);
+      if (_disposed) return;
+      _publish(
+        state.copyWith(
+          recoveryOffers: state.recoveryOffers
+              .where((value) => value.runId != offer.runId)
+              .toList(growable: false),
+          recoveringRunIds: <String>{
+            ...state.recoveringRunIds.where((id) => id != offer.runId),
+          },
+          clearFailure: true,
+        ),
+      );
+    } on Object {
+      if (_disposed) return;
+      _publish(
+        state.copyWith(
+          recoveringRunIds: <String>{
+            ...state.recoveringRunIds.where((id) => id != offer.runId),
+          },
+          failure: const RunStartFailure(
+            code: 'run.recovery.stale',
+            message: 'Recovery evidence changed or was already selected.',
+            remediation:
+                'Review the interrupted run and refresh before retrying.',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _publishRecoveryFailure(
+    String message, {
+    String code = 'run.recovery.stale',
+  }) {
+    _publish(
+      state.copyWith(
+        failure: RunStartFailure(
+          code: code,
+          message: message,
+          remediation:
+              'Review the interrupted run and refresh before retrying.',
+        ),
+      ),
+    );
+  }
 
   Future<void> start() async {
     final workflow = state.selectedWorkflow;
@@ -255,7 +369,8 @@ final class RunStartController extends ChangeNotifier {
                 runId: runId,
                 branchName: branchName,
                 worktreePath: worktreePath,
-                status: RunStatus.starting,
+                status: RunStatus.running,
+                currentStep: workflow.steps.first.name,
               ),
             ],
           ),
@@ -270,10 +385,39 @@ final class RunStartController extends ChangeNotifier {
     } on Object {
       // The execution repository owns the durable typed failure.
     }
+    await _refreshStatus(runId);
+  }
+
+  Future<void> _refreshStatus(String runId) async {
     if (_disposed) return;
-    final status = await _statusFor(runId);
-    if (_disposed || status == null) return;
-    _replaceRun(runId, (run) => run.copyWith(status: status));
+    final generation = (_statusReadGenerations[runId] ?? 0) + 1;
+    _statusReadGenerations[runId] = generation;
+    try {
+      final snapshot = await _statusFor(runId);
+      if (_disposed ||
+          _statusReadGenerations[runId] != generation ||
+          snapshot == null) {
+        return;
+      }
+      _replaceRun(
+        runId,
+        (run) => run.copyWith(
+          status: snapshot.status,
+          currentStep: snapshot.currentStep,
+        ),
+      );
+    } on Object {
+      if (_disposed || _statusReadGenerations[runId] != generation) return;
+      _publish(
+        state.copyWith(
+          failure: const RunStartFailure(
+            code: 'run.status.read',
+            message: 'Could not refresh run status.',
+            remediation: 'The run remains durable. Review it after refreshing.',
+          ),
+        ),
+      );
+    }
   }
 
   void _onSummary(RunLogSummary event) {
@@ -283,6 +427,7 @@ final class RunStartController extends ChangeNotifier {
       event.runId,
       (run) => run.copyWith(status: RunStatus.running, tail: text),
     );
+    unawaited(_refreshStatus(event.runId));
   }
 
   void _replaceRun(
@@ -312,8 +457,14 @@ final class RunStartController extends ChangeNotifier {
     _disposed = true;
     _generation++;
     _subscription.cancel();
+    _statusReadGenerations.clear();
     // Access keeps the retained owner intentional under strict analysis.
     _events.hashCode;
     super.dispose();
   }
 }
+
+Future<void> _unsupportedRecovery(
+  RunRecoveryOffer offer,
+  RecoveryAction action,
+) => Future<void>.error(StateError('Recovery selection is unavailable.'));

@@ -10,6 +10,7 @@ import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/data/drift_run_repository.dart';
+import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/common/executable_probe.dart';
@@ -33,6 +34,29 @@ final class ProductionFoundation {
   final DateTime Function() _clock;
   final String Function() _newId;
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
+
+  Future<List<RunRecoveryOffer>> recoverInterruptedRuns() async {
+    recoveryOffers = await RunInterruptionReconciler(
+      repository: runRepository,
+      now: _clock,
+      newId: _newId,
+    ).reconcile();
+    return recoveryOffers;
+  }
+
+  Future<void> selectRecovery(
+    RunRecoveryOffer offer,
+    RecoveryAction action,
+  ) async {
+    await RunInterruptionReconciler(
+      repository: runRepository,
+      now: _clock,
+      newId: _newId,
+    ).select(offer, action);
+    recoveryOffers = recoveryOffers
+        .where((value) => value.runId != offer.runId)
+        .toList(growable: false);
+  }
 
   List<FoundationProbe> get probes => <FoundationProbe>[
     _CallbackFoundationProbe('paths', true, _initializePaths),

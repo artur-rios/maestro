@@ -58,6 +58,41 @@ final class _RunStartPanelState extends State<RunStartPanel> {
               'Start workflow run',
               style: Theme.of(context).textTheme.titleLarge,
             ),
+            for (final offer in state.recoveryOffers) ...<Widget>[
+              const SizedBox(height: 12),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('Interrupted run ${offer.runId}'),
+                      Wrap(
+                        spacing: 8,
+                        children: <Widget>[
+                          for (final action in RecoveryAction.values)
+                            if (offer.actions.contains(action))
+                              OutlinedButton(
+                                onPressed:
+                                    state.recoveringRunIds.contains(offer.runId)
+                                    ? null
+                                    : () => widget.controller.selectRecovery(
+                                        offer,
+                                        action,
+                                      ),
+                                child: Text(_recoveryLabel(action)),
+                              ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               key: const Key('run-workflow'),
@@ -145,6 +180,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
             for (final run in state.runs) ...<Widget>[
               const Divider(height: 24),
               Text('Run ${run.runId} · ${run.status.name}'),
+              Text('Current step: ${run.currentStep ?? 'Unavailable'}'),
               SelectableText(run.branchName),
               SelectableText(run.worktreePath),
               if (run.tail.isNotEmpty)
@@ -161,3 +197,9 @@ final class _RunStartPanelState extends State<RunStartPanel> {
     );
   }
 }
+
+String _recoveryLabel(RecoveryAction action) => switch (action) {
+  RecoveryAction.retryWithPreservedContext => 'Retry with preserved context',
+  RecoveryAction.rerunStepFresh => 'Rerun step fresh',
+  RecoveryAction.restartWorkflow => 'Restart workflow',
+};
