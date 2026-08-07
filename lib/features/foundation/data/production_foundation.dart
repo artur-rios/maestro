@@ -8,6 +8,8 @@ import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart
 import 'package:maestro/features/foundation/data/local_owned_resource_cleaner.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
+import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
+import 'package:maestro/features/runs/data/drift_run_repository.dart';
 import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/common/executable_probe.dart';
@@ -17,11 +19,20 @@ final class ProductionFoundation {
     required this.paths,
     required this.database,
     this.commandRunner = const ProcessCommandRunner(),
-  });
+    DriftRunRepository? runRepository,
+    DateTime Function()? clock,
+    String Function()? newId,
+  }) : runRepository = runRepository ?? DriftRunRepository(database),
+       _clock = clock ?? _utcNow,
+       _newId = newId ?? _fallbackId;
 
   final ApplicationPaths paths;
   final MaestroDatabase database;
   final CommandRunner commandRunner;
+  final DriftRunRepository runRepository;
+  final DateTime Function() _clock;
+  final String Function() _newId;
+  List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
 
   List<FoundationProbe> get probes => <FoundationProbe>[
     _CallbackFoundationProbe('paths', true, _initializePaths),
@@ -86,12 +97,20 @@ final class ProductionFoundation {
           .where((resource) => resource.kind != OwnedResourceKind.process)
           .map((resource) => resource.path),
     );
-    final report = await ReconcileResources(
-      store: store,
-      runActivity: const _InactiveRunReader(),
-      cleaner: const LocalOwnedResourceCleaner(),
-      evaluatePath: policy.evaluate,
-    )();
+    late final ReconciliationReport report;
+    recoveryOffers =
+        await RunInterruptionReconciler(
+          repository: runRepository,
+          now: _clock,
+          newId: _newId,
+        ).reconcileBefore(() async {
+          report = await ReconcileResources(
+            store: store,
+            runActivity: runRepository,
+            cleaner: const LocalOwnedResourceCleaner(),
+            evaluatePath: policy.evaluate,
+          )();
+        });
     if (report.failures.isNotEmpty) {
       throw StateError(
         '${report.failures.length} resource cleanup(s) need review.',
@@ -162,9 +181,7 @@ final class _CapabilityFoundationProbe implements FoundationProbe {
   }
 }
 
-final class _InactiveRunReader implements RunActivityReader {
-  const _InactiveRunReader();
+DateTime _utcNow() => DateTime.now().toUtc();
 
-  @override
-  Future<bool> isActive(String runId) async => false;
-}
+String _fallbackId() =>
+    'foundation-${DateTime.now().toUtc().microsecondsSinceEpoch}';

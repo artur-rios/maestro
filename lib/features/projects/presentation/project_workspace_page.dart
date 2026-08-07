@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
+import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
+
+typedef RunStartWorkspaceBuilder =
+    Widget Function(
+      BuildContext context,
+      String actorId,
+      ProjectRecord project,
+    );
 
 final class ProjectWorkspacePage extends StatelessWidget {
   const ProjectWorkspacePage({
@@ -14,6 +22,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
     required this.emptyContent,
     this.workflowService,
     this.agentConfigurationService,
+    this.runStartBuilder,
     super.key,
   });
 
@@ -22,6 +31,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final Widget emptyContent;
   final WorkflowDesignService? workflowService;
   final AgentConfigurationService? agentConfigurationService;
+  final RunStartWorkspaceBuilder? runStartBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -39,15 +49,25 @@ final class ProjectWorkspacePage extends StatelessWidget {
         if (workflowService != null)
           workflowControllerProvider.overrideWith(WorkflowController.new),
       ],
-      child: _ProjectWorkspaceView(emptyContent: emptyContent),
+      child: _ProjectWorkspaceView(
+        actorId: actorId,
+        emptyContent: emptyContent,
+        runStartBuilder: runStartBuilder,
+      ),
     );
   }
 }
 
 final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
-  const _ProjectWorkspaceView({required this.emptyContent});
+  const _ProjectWorkspaceView({
+    required this.actorId,
+    required this.emptyContent,
+    required this.runStartBuilder,
+  });
 
+  final String actorId;
   final Widget emptyContent;
+  final RunStartWorkspaceBuilder? runStartBuilder;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -72,8 +92,10 @@ final class _ProjectWorkspacePageState
     final narrow = MediaQuery.sizeOf(context).width < 720;
     final projectPanel = _ProjectPanel(state: state);
     final content = _ProjectContent(
+      actorId: widget.actorId,
       state: state,
       emptyContent: widget.emptyContent,
+      runStartBuilder: widget.runStartBuilder,
     );
     final projectsBody = Row(
       children: <Widget>[
@@ -370,10 +392,17 @@ final class _RegistrationDialogState extends State<_RegistrationDialog> {
 }
 
 final class _ProjectContent extends ConsumerWidget {
-  const _ProjectContent({required this.state, required this.emptyContent});
+  const _ProjectContent({
+    required this.actorId,
+    required this.state,
+    required this.emptyContent,
+    required this.runStartBuilder,
+  });
 
+  final String actorId;
   final ProjectWorkspaceState state;
   final Widget emptyContent;
+  final RunStartWorkspaceBuilder? runStartBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -475,6 +504,10 @@ final class _ProjectContent extends ConsumerWidget {
             ),
           ),
         ),
+        if (selected.folderActionsEnabled && runStartBuilder != null) ...[
+          const SizedBox(height: 16),
+          runStartBuilder!(context, actorId, selected.record),
+        ],
       ],
     );
   }

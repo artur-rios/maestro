@@ -730,6 +730,51 @@ void main() {
       expect((await repository.findById('run-1'))!.recoveryRequests, isEmpty);
     },
   );
+
+  test(
+    'GivenInterruptedEvidence_WhenRecoverySelected_ThenSelectionIsConditionalAndSingle',
+    () async {
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.interrupted),
+        snapshot: _snapshot(),
+      );
+      final evidence = (await repository.listInterrupted()).single;
+      final request = domain.RunRecoveryRequest(
+        id: 'recovery-selection',
+        runId: 'run-1',
+        attemptId: null,
+        action: domain.RecoveryAction.restartWorkflow,
+        status: domain.RecoveryRequestStatus.pending,
+        requestedAt: DateTime.utc(2026, 8, 6, 14),
+      );
+
+      await repository.recordRecoverySelection(
+        request: request,
+        expectedRunUpdatedAt: evidence.updatedAt,
+      );
+
+      expect(await repository.isActive('run-1'), isTrue);
+      expect(
+        (await repository.findById('run-1'))!.recoveryRequests.single.id,
+        'recovery-selection',
+      );
+      await expectLater(
+        repository.recordRecoverySelection(
+          request: domain.RunRecoveryRequest(
+            id: 'recovery-duplicate',
+            runId: 'run-1',
+            attemptId: null,
+            action: domain.RecoveryAction.restartWorkflow,
+            status: domain.RecoveryRequestStatus.pending,
+            requestedAt: DateTime.utc(2026, 8, 6, 15),
+          ),
+          expectedRunUpdatedAt: evidence.updatedAt,
+        ),
+        throwsStateError,
+      );
+    },
+  );
 }
 
 ProjectRecord _project() => ProjectRecord(

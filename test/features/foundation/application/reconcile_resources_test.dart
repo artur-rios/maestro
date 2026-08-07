@@ -75,6 +75,32 @@ void main() {
     expect(report.failures.single.reason, ReconciliationReason.unsafePath);
     expect(store.failedIds, <String>['resource-1']);
   });
+
+  test(
+    'GivenBranchRecordWithoutActiveRun_WhenReconciled_ThenFilesystemCleanerIsNeverCalled',
+    () async {
+      const resource = OwnedResourceRecord(
+        id: 'branch-1',
+        kind: OwnedResourceKind.branch,
+        path: 'feature/uc-06-run-1',
+        runId: 'run-1',
+      );
+      final cleaner = _FakeCleaner();
+      final report = await ReconcileResources(
+        store: _FakeStore(<OwnedResourceRecord>[resource]),
+        runActivity: _FakeRunActivity(const <String>{}),
+        cleaner: cleaner,
+        evaluatePath: (_) => OwnershipDecision.allowed,
+      )();
+
+      expect(cleaner.removed, isEmpty);
+      expect(report.failures, isEmpty);
+      expect(
+        report.retained.single.reason,
+        ReconciliationReason.externallyManaged,
+      );
+    },
+  );
 }
 
 final class _FakeStore implements OwnedResourceStore {

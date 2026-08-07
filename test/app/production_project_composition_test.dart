@@ -124,6 +124,12 @@ void main() {
         'Shared workflow',
       );
       expect(composition.activeProjectRuns, isA<DriftRunRepository>());
+      expect(composition.runRepository, isA<DriftRunRepository>());
+      expect(
+        composition.foundation.runRepository,
+        same(composition.runRepository),
+      );
+      expect(composition.runOrchestrator.retainedTailRunCount, 0);
       expect(
         await composition.activeProjectRuns.listActiveForProject(project.id),
         isEmpty,

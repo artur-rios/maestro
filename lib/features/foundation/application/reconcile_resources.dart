@@ -58,6 +58,18 @@ final class ReconcileResources {
         );
         continue;
       }
+      if (resource.kind == OwnedResourceKind.branch ||
+          resource.kind == OwnedResourceKind.process) {
+        retained.add(
+          ReconciliationFinding(
+            resource: resource,
+            reason: ReconciliationReason.externallyManaged,
+            message:
+                'Resource requires its owning Git or process adapter for cleanup.',
+          ),
+        );
+        continue;
+      }
       if (resource.kind != OwnedResourceKind.branch &&
           resource.kind != OwnedResourceKind.process &&
           evaluatePath(resource.path) != OwnershipDecision.allowed) {

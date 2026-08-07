@@ -1,8 +1,11 @@
 import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart' as db;
+import 'package:maestro/features/foundation/application/reconcile_resources.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/runs/domain/run_models.dart' as domain;
@@ -40,7 +43,9 @@ final class DriftRunRepository
     implements
         ActiveProjectRunReader,
         RunStartRepository,
-        RunExecutionRepository {
+        RunExecutionRepository,
+        RunInterruptionRepository,
+        RunActivityReader {
   const DriftRunRepository(this._database);
 
   final db.MaestroDatabase _database;
@@ -482,6 +487,7 @@ final class DriftRunRepository
     });
   }
 
+  @override
   Future<int> interruptActive({
     required DateTime at,
     required String Function() newLogId,
@@ -495,7 +501,7 @@ final class DriftRunRepository
         _database.workflowRuns,
       )..where((table) => table.status.isIn(activeNames))).get();
       for (final run in runs) {
-        final attempts =
+        var attempts =
             await (_database.select(_database.runAttempts)..where(
                   (table) =>
                       table.runId.equals(run.id) &
@@ -505,6 +511,57 @@ final class DriftRunRepository
                       ]),
                 ))
                 .get();
+        if (attempts.isEmpty) {
+          final step =
+              await (_database.select(_database.runSnapshotSteps)
+                    ..where(
+                      (table) =>
+                          table.runId.equals(run.id) &
+                          table.position.equals(run.currentStepPosition),
+                    )
+                    ..limit(1))
+                  .getSingleOrNull();
+          if (step != null) {
+            final maxAttempt =
+                await (_database.selectOnly(_database.runAttempts)
+                      ..addColumns(<Expression<Object>>[
+                        _database.runAttempts.attemptNumber.max(),
+                      ])
+                      ..where(
+                        _database.runAttempts.runId.equals(run.id) &
+                            _database.runAttempts.snapshotStepId.equals(
+                              step.id,
+                            ),
+                      ))
+                    .map(
+                      (row) =>
+                          row.read(_database.runAttempts.attemptNumber.max()) ??
+                          0,
+                    )
+                    .getSingle();
+            await _database
+                .into(_database.runAttempts)
+                .insert(
+                  db.RunAttemptsCompanion.insert(
+                    id: newLogId(),
+                    runId: run.id,
+                    snapshotStepId: step.id,
+                    attemptNumber: maxAttempt + 1,
+                    status: domain.AttemptStatus.starting.name,
+                    startedAt: run.updatedAt.toUtc(),
+                  ),
+                );
+            attempts =
+                await (_database.select(_database.runAttempts)..where(
+                      (table) =>
+                          table.runId.equals(run.id) &
+                          table.status.equals(
+                            domain.AttemptStatus.starting.name,
+                          ),
+                    ))
+                    .get();
+          }
+        }
         for (final attempt in attempts) {
           await (_database.update(
             _database.runAttempts,
@@ -562,6 +619,126 @@ final class DriftRunRepository
     });
   }
 
+  @override
+  Future<List<InterruptedRunEvidence>> listInterrupted() async {
+    final runs =
+        await (_database.select(_database.workflowRuns)
+              ..where(
+                (table) =>
+                    table.status.equals(domain.RunStatus.interrupted.name) &
+                    table.deletedAt.isNull(),
+              )
+              ..orderBy(<OrderingTerm Function(db.WorkflowRuns)>[
+                (table) => OrderingTerm.asc(table.updatedAt),
+                (table) => OrderingTerm.asc(table.id),
+              ]))
+            .get();
+    final evidence = <InterruptedRunEvidence>[];
+    for (final run in runs) {
+      final interrupted =
+          await (_database.select(_database.runAttempts)
+                ..where(
+                  (table) =>
+                      table.runId.equals(run.id) &
+                      table.status.equals(
+                        domain.AttemptStatus.interrupted.name,
+                      ),
+                )
+                ..orderBy(<OrderingTerm Function(db.RunAttempts)>[
+                  (table) => OrderingTerm.desc(table.startedAt),
+                  (table) => OrderingTerm.desc(table.id),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      var hasPreservedContext = false;
+      if (interrupted != null) {
+        final step =
+            await (_database.select(_database.runSnapshotSteps)..where(
+                  (table) => table.id.equals(interrupted.snapshotStepId),
+                ))
+                .getSingle();
+        if (step.position > 0) {
+          final previousStep =
+              await (_database.select(_database.runSnapshotSteps)..where(
+                    (table) =>
+                        table.runId.equals(run.id) &
+                        table.position.equals(step.position - 1),
+                  ))
+                  .getSingle();
+          hasPreservedContext =
+              await (_database.select(_database.runAttempts)
+                    ..where(
+                      (table) =>
+                          table.runId.equals(run.id) &
+                          table.snapshotStepId.equals(previousStep.id) &
+                          table.status.equals(
+                            domain.AttemptStatus.succeeded.name,
+                          ) &
+                          table.declaredContext.isNotNull(),
+                    )
+                    ..limit(1))
+                  .getSingleOrNull() !=
+              null;
+        }
+      }
+      evidence.add(
+        InterruptedRunEvidence(
+          runId: run.id,
+          updatedAt: run.updatedAt.toUtc(),
+          interruptedAttemptId: interrupted?.id,
+          hasPreservedContext: hasPreservedContext,
+        ),
+      );
+    }
+    return evidence;
+  }
+
+  @override
+  Future<void> recordRecoverySelection({
+    required domain.RunRecoveryRequest request,
+    required DateTime expectedRunUpdatedAt,
+  }) async {
+    await _database.transaction(() async {
+      final run = await (_database.select(
+        _database.workflowRuns,
+      )..where((table) => table.id.equals(request.runId))).getSingle();
+      if (run.status != domain.RunStatus.interrupted.name ||
+          run.updatedAt.toUtc() != expectedRunUpdatedAt.toUtc() ||
+          request.status != domain.RecoveryRequestStatus.pending) {
+        throw StateError('Recovery evidence is stale.');
+      }
+      final pending =
+          await (_database.select(_database.runRecoveryRequests)..where(
+                (table) =>
+                    table.runId.equals(request.runId) &
+                    table.status.equals(
+                      domain.RecoveryRequestStatus.pending.name,
+                    ),
+              ))
+              .getSingleOrNull();
+      if (pending != null) throw StateError('Recovery is already selected.');
+
+      final evidence = (await listInterrupted()).singleWhere(
+        (value) => value.runId == request.runId,
+      );
+      final valid = <domain.RecoveryAction>{
+        domain.RecoveryAction.restartWorkflow,
+        if (evidence.interruptedAttemptId != null)
+          domain.RecoveryAction.rerunStepFresh,
+        if (evidence.interruptedAttemptId != null &&
+            evidence.hasPreservedContext)
+          domain.RecoveryAction.retryWithPreservedContext,
+      };
+      if (!valid.contains(request.action) ||
+          (request.action == domain.RecoveryAction.restartWorkflow
+              ? request.attemptId != null
+              : request.attemptId != evidence.interruptedAttemptId)) {
+        throw StateError('Recovery selection is not valid for the evidence.');
+      }
+      await _insertRecovery(request);
+    });
+  }
+
   Future<void> recordRecoveryRequest(domain.RunRecoveryRequest request) async {
     await _database.transaction(() async {
       final run = await (_database.select(
@@ -581,19 +758,36 @@ final class DriftRunRepository
           );
         }
       }
-      await _database
-          .into(_database.runRecoveryRequests)
-          .insert(
-            db.RunRecoveryRequestsCompanion.insert(
-              id: request.id,
-              runId: request.runId,
-              attemptId: Value<String?>(request.attemptId),
-              action: request.action.name,
-              status: request.status.name,
-              requestedAt: request.requestedAt.toUtc(),
-            ),
-          );
+      await _insertRecovery(request);
     });
+  }
+
+  Future<void> _insertRecovery(domain.RunRecoveryRequest request) => _database
+      .into(_database.runRecoveryRequests)
+      .insert(
+        db.RunRecoveryRequestsCompanion.insert(
+          id: request.id,
+          runId: request.runId,
+          attemptId: Value<String?>(request.attemptId),
+          action: request.action.name,
+          status: request.status.name,
+          requestedAt: request.requestedAt.toUtc(),
+        ),
+      );
+
+  @override
+  Future<bool> isActive(String runId) async {
+    final row = await (_database.select(
+      _database.workflowRuns,
+    )..where((table) => table.id.equals(runId))).getSingleOrNull();
+    if (row == null || row.deletedAt != null) return false;
+    return <String>{
+      domain.RunStatus.queued.name,
+      domain.RunStatus.starting.name,
+      domain.RunStatus.running.name,
+      domain.RunStatus.paused.name,
+      domain.RunStatus.interrupted.name,
+    }.contains(row.status);
   }
 
   @override

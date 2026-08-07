@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_app.dart';
@@ -11,6 +14,7 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/authentication/data/drift_authentication_repository.dart';
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
 import 'package:maestro/features/authentication/data/sodium_password_hasher.dart';
+import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
@@ -18,7 +22,17 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/data/file_selector_project_folder_picker.dart';
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/runs/application/run_orchestrator.dart';
+import 'package:maestro/features/runs/application/start_isolated_run.dart';
+import 'package:maestro/features/runs/application/work_item_resolver.dart';
 import 'package:maestro/features/runs/data/drift_run_repository.dart';
+import 'package:maestro/features/runs/data/owned_attempt_result_files.dart';
+import 'package:maestro/features/runs/data/production_run_preflight.dart';
+import 'package:maestro/features/runs/data/production_step_executor.dart';
+import 'package:maestro/features/runs/data/production_work_item_resolvers.dart';
+import 'package:maestro/features/runs/presentation/run_start_controller.dart';
+import 'package:maestro/features/runs/presentation/run_start_panel.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
@@ -29,10 +43,18 @@ import 'package:maestro/platform/agents/open_code_adapter.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
+import 'package:maestro/platform/git/local_run_worktree_path_inspector.dart';
+import 'package:maestro/platform/git/run_git_port.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 String newProductionId() => const Uuid().v7();
+
+String newProductionNonce() {
+  final random = Random.secure();
+  return base64UrlEncode(List<int>.generate(32, (_) => random.nextInt(256)));
+}
 
 typedef DatabaseCloser = Future<void> Function(MaestroDatabase database);
 
@@ -46,6 +68,9 @@ final class ProductionAppComposition {
     required this.workflowRepository,
     required this.workflowDesignService,
     required this.agentConfigurationService,
+    required this.runRepository,
+    required this.runOrchestrator,
+    required this.runStartBuilder,
     required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
@@ -60,6 +85,9 @@ final class ProductionAppComposition {
   final DriftWorkflowRepository workflowRepository;
   final WorkflowDesignService workflowDesignService;
   final AgentConfigurationService agentConfigurationService;
+  final DriftRunRepository runRepository;
+  final RunOrchestrator runOrchestrator;
+  final RunStartWorkspaceBuilder runStartBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -73,6 +101,7 @@ final class ProductionAppComposition {
     projectFolderPicker: projectFolderPicker,
     workflowDesignService: workflowDesignService,
     agentConfigurationService: agentConfigurationService,
+    runStartBuilder: runStartBuilder,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
   );
@@ -134,6 +163,7 @@ Future<ProductionAppComposition> composeProductionApp({
     newId: newId,
   );
   final workflowRepository = DriftWorkflowRepository(database);
+  final runRepository = DriftRunRepository(database);
   final workflowDesignService = WorkflowDesignService(
     repository: workflowRepository,
     projectReadiness: ProductionProjectExecutionReadiness(
@@ -151,6 +181,81 @@ Future<ProductionAppComposition> composeProductionApp({
     ],
     workflowDesignService: workflowDesignService,
   );
+  final ownership = DriftOwnedResourceStore(database);
+  final runOrchestrator = RunOrchestrator(
+    repository: runRepository,
+    launcher: OwnedStepProcessLauncher(),
+    resultFiles: OwnedAttemptResultFiles(
+      resultRoot: p.join(paths.root.path, 'run-results'),
+      ownership: ownership,
+      newResourceId: newId,
+    ),
+    executableFor: (cli) => switch (cli) {
+      'claude-code' => 'claude',
+      'codex' => 'codex',
+      'opencode' => 'opencode',
+      _ => throw ArgumentError.value(cli, 'cli'),
+    },
+    environment: Platform.environment,
+    newAttemptId: newId,
+    newLogId: newId,
+    newNonce: newProductionNonce,
+    now: now,
+  );
+  Widget runStartBuilder(
+    BuildContext context,
+    String actorId,
+    ProjectRecord project,
+  ) {
+    final starter = StartIsolatedRun(
+      projectPreflight: ProjectFolderRunPreflight(
+        LocalGitProjectValidator(
+          git: CommandRunnerGitPort(commandRunner),
+          directoryAccess: directoryAccess,
+        ),
+      ),
+      workItemResolvers: {
+        WorkItemType.useCase: DocumentedUseCaseResolver(
+          source: FileUseCaseDocumentSource(
+            p.join(
+              project.folderPath,
+              'docs',
+              'requirements',
+              'Use Case Specification Document.md',
+            ),
+          ),
+        ),
+        WorkItemType.githubIssue: GitHubIssueWorkItemResolver(
+          reader: CommandRunnerGitHubIssueReader(commandRunner),
+        ),
+        WorkItemType.freeFormTask: const FreeFormWorkItemResolver(),
+      },
+      agentPreflight: AgentConfigurationRunPreflight(agentConfigurationService),
+      repository: runRepository,
+      ownership: ownership,
+      git: CommandRunnerRunGitPort(commandRunner),
+      pathInspector: const LocalRunWorktreePathInspector(),
+      worktreesRoot: paths.worktreesDirectory.path,
+      baseBranch: 'main',
+      clock: now,
+      newId: newId,
+    );
+    return RunStartPanel(
+      key: ValueKey<String>('run-start-${project.id}'),
+      controller: RunStartController(
+        actorId: actorId,
+        project: project,
+        loadWorkflows: workflowRepository.list,
+        starter: starter.call,
+        execute: runOrchestrator.execute,
+        events: runOrchestrator.events,
+        tailFor: runOrchestrator.tailFor,
+        statusFor: (runId) async =>
+            (await runRepository.findById(runId))?.run.status,
+      ),
+    );
+  }
+
   return ProductionAppComposition._(
     database: database,
     authenticationService: authenticationService,
@@ -160,12 +265,18 @@ Future<ProductionAppComposition> composeProductionApp({
     workflowRepository: workflowRepository,
     workflowDesignService: workflowDesignService,
     agentConfigurationService: agentConfigurationService,
+    runRepository: runRepository,
+    runOrchestrator: runOrchestrator,
+    runStartBuilder: runStartBuilder,
     activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: ProductionFoundation(
       paths: paths,
       database: database,
       commandRunner: commandRunner,
+      runRepository: runRepository,
+      clock: now,
+      newId: newId,
     ),
     closeDatabase: closeDatabase,
   );

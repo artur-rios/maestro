@@ -25,6 +25,7 @@ final class OwnedResourceRecord {
 
 enum ReconciliationReason {
   activeRun,
+  externallyManaged,
   unsafePath,
   duplicateRecord,
   cleanupFailed,
