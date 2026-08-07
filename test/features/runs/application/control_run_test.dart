@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/application/control_run.dart';
+import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 
@@ -306,6 +307,81 @@ void main() {
     expect(fixture.execution.executed, isEmpty);
   });
 
+  test(
+    'GivenStartupOffer_WhenSelectingAScope_ThenRecoveryBeginsAndExecutes',
+    () async {
+      // Given: an interrupted run offered for recovery at startup.
+      final fixture = _Fixture(status: RunStatus.interrupted);
+      fixture.repository.evidence = RunRecoveryEvidence(
+        runId: 'run-1',
+        status: RunStatus.interrupted,
+        updatedAt: _updatedAt,
+        affectedStepPosition: 1,
+        affectedAttemptId: 'attempt-2',
+        hasPreservedContext: true,
+      );
+      final offer = RunRecoveryOffer(
+        runId: 'run-1',
+        projectId: 'project-1',
+        interruptedAttemptId: 'attempt-2',
+        evidenceUpdatedAt: _updatedAt,
+        actions: const <RecoveryAction>{
+          RecoveryAction.retryWithPreservedContext,
+          RecoveryAction.rerunStepFresh,
+          RecoveryAction.restartWorkflow,
+        },
+      );
+
+      // When: the user picks a scope from the startup offer.
+      final failure = await fixture.control.retryFromOffer(
+        offer,
+        RecoveryAction.retryWithPreservedContext,
+      );
+
+      // Then: the selection is recorded against the offer's evidence and the
+      // run actually executes rather than only being written down.
+      expect(failure, isNull);
+      expect(fixture.repository.expectedUpdatedAt, _updatedAt);
+      expect(fixture.repository.recoveries.single.$2, 1);
+      expect(fixture.execution.executed, <(String, RecoveryContextPolicy)>[
+        ('run-1', RecoveryContextPolicy.preserved),
+      ]);
+    },
+  );
+
+  test(
+    'GivenStaleStartupOffer_WhenSelectingAScope_ThenTheFailureIsSurfaced',
+    () async {
+      // Given: an offer whose evidence moved since it was read.
+      final fixture = _Fixture(status: RunStatus.interrupted);
+      fixture.repository.evidence = RunRecoveryEvidence(
+        runId: 'run-1',
+        status: RunStatus.interrupted,
+        updatedAt: _updatedAt,
+        affectedStepPosition: 0,
+        affectedAttemptId: 'attempt-1',
+      );
+      fixture.repository.recoveryError = true;
+      final offer = RunRecoveryOffer(
+        runId: 'run-1',
+        projectId: 'project-1',
+        interruptedAttemptId: 'attempt-1',
+        evidenceUpdatedAt: DateTime.utc(2026, 8, 7, 11),
+        actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
+      );
+
+      // When: the user picks a scope from the stale offer.
+      final failure = await fixture.control.retryFromOffer(
+        offer,
+        RecoveryAction.restartWorkflow,
+      );
+
+      // Then: the staleness is reported and nothing is driven.
+      expect(failure?.code, 'run.recovery.stale');
+      expect(fixture.execution.executed, isEmpty);
+    },
+  );
+
   test('GivenMissingRun_WhenControlling_ThenTheRejectionIsTyped', () async {
     // Given: a run id with no record behind it.
     final fixture = _Fixture(status: RunStatus.running);
@@ -361,6 +437,7 @@ final class _Repository implements RunControlRepository {
   final List<String> incompleteCancellations = <String>[];
   final List<(RunRecoveryRequest, int)> recoveries =
       <(RunRecoveryRequest, int)>[];
+  DateTime? expectedUpdatedAt;
 
   @override
   Future<RunControlView?> controlViewOf(String runId) async => view;
@@ -398,6 +475,7 @@ final class _Repository implements RunControlRepository {
     DateTime? expectedRunUpdatedAt,
   }) async {
     if (recoveryError) throw StateError('Recovery evidence is stale.');
+    expectedUpdatedAt = expectedRunUpdatedAt;
     recoveries.add((request, targetPosition));
   }
 }

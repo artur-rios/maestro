@@ -23,6 +23,7 @@ import 'package:maestro/features/projects/data/file_selector_project_folder_pick
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
@@ -47,6 +48,7 @@ import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
 import 'package:maestro/platform/git/local_run_worktree_path_inspector.dart';
+import 'package:maestro/platform/git/local_run_worktree_probe.dart';
 import 'package:maestro/platform/git/run_git_port.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -211,6 +213,13 @@ Future<ProductionAppComposition> composeProductionApp({
     newNonce: newProductionNonce,
     now: now,
   );
+  final controlRun = ControlRun(
+    repository: runRepository,
+    execution: runOrchestrator,
+    worktrees: const LocalRunWorktreeProbe(),
+    newRecoveryId: newId,
+    now: now,
+  );
   final foundation = ProductionFoundation(
     paths: paths,
     database: database,
@@ -218,6 +227,12 @@ Future<ProductionAppComposition> composeProductionApp({
     runRepository: runRepository,
     clock: now,
     newId: newId,
+    // Startup offers and in-session retries share one execution path, so a
+    // scope chosen at startup actually drives the run.
+    recoveryStarter: (offer, action) async {
+      final failure = await controlRun.retryFromOffer(offer, action);
+      if (failure != null) throw StateError(failure.message);
+    },
   );
   try {
     await foundation.beginStartupReconciliation();

@@ -160,6 +160,7 @@ void main() {
       final processRecovery = _CheckingProcessRecovery(
         () async => (await runs.findById('run-1'))!.run.status,
       );
+      final startedRecoveries = <(String, domain.RecoveryAction)>[];
       final foundation = ProductionFoundation(
         paths: paths,
         database: database,
@@ -167,6 +168,24 @@ void main() {
         clock: () => DateTime.utc(2026, 8, 6, 13),
         newId: () => 'restart-log',
         processRecovery: processRecovery,
+        // Stands in for the run control service, which owns recording the
+        // selection and driving the run as one operation.
+        recoveryStarter: (offer, action) async {
+          startedRecoveries.add((offer.runId, action));
+          await runs.beginRecovery(
+            request: domain.RunRecoveryRequest(
+              id: 'recovery-1',
+              runId: offer.runId,
+              attemptId: null,
+              action: action,
+              status: domain.RecoveryRequestStatus.accepted,
+              requestedAt: DateTime.utc(2026, 8, 6, 14),
+            ),
+            targetPosition: 0,
+            at: DateTime.utc(2026, 8, 6, 14),
+            expectedRunUpdatedAt: offer.evidenceUpdatedAt,
+          );
+        },
       );
 
       final check = await foundation.probes
@@ -201,10 +220,15 @@ void main() {
         domain.RecoveryAction.restartWorkflow,
       );
       expect(foundation.recoveryOffers, isEmpty);
+      // The selection is handed to the run control service, which owns both
+      // recording it and driving the run, so there is one recovery path.
+      expect(startedRecoveries, <(String, domain.RecoveryAction)>[
+        ('run-1', domain.RecoveryAction.restartWorkflow),
+      ]);
       expect(await foundation.listRecoveryOffersAfterStartup(), isEmpty);
       expect(
-        (await runs.findById('run-1'))!.recoveryRequests.single.action,
-        domain.RecoveryAction.restartWorkflow,
+        (await runs.findById('run-1'))!.run.status,
+        domain.RunStatus.running,
       );
 
       await runs.create(

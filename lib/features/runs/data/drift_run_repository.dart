@@ -724,52 +724,6 @@ final class DriftRunRepository
     return evidence;
   }
 
-  @override
-  Future<void> recordRecoverySelection({
-    required domain.RunRecoveryRequest request,
-    required DateTime expectedRunUpdatedAt,
-  }) async {
-    await _database.transaction(() async {
-      final run = await (_database.select(
-        _database.workflowRuns,
-      )..where((table) => table.id.equals(request.runId))).getSingle();
-      if (run.status != domain.RunStatus.interrupted.name ||
-          run.updatedAt.toUtc() != expectedRunUpdatedAt.toUtc() ||
-          request.status != domain.RecoveryRequestStatus.pending) {
-        throw StateError('Recovery evidence is stale.');
-      }
-      final pending =
-          await (_database.select(_database.runRecoveryRequests)..where(
-                (table) =>
-                    table.runId.equals(request.runId) &
-                    table.status.equals(
-                      domain.RecoveryRequestStatus.pending.name,
-                    ),
-              ))
-              .getSingleOrNull();
-      if (pending != null) throw StateError('Recovery is already selected.');
-
-      final evidence = (await listInterrupted()).singleWhere(
-        (value) => value.runId == request.runId,
-      );
-      final valid = <domain.RecoveryAction>{
-        domain.RecoveryAction.restartWorkflow,
-        if (evidence.interruptedAttemptId != null)
-          domain.RecoveryAction.rerunStepFresh,
-        if (evidence.interruptedAttemptId != null &&
-            evidence.hasPreservedContext)
-          domain.RecoveryAction.retryWithPreservedContext,
-      };
-      if (!valid.contains(request.action) ||
-          (request.action == domain.RecoveryAction.restartWorkflow
-              ? request.attemptId != null
-              : request.attemptId != evidence.interruptedAttemptId)) {
-        throw StateError('Recovery selection is not valid for the evidence.');
-      }
-      await _insertRecovery(request);
-    });
-  }
-
   Future<void> recordRecoveryRequest(domain.RunRecoveryRequest request) async {
     await _database.transaction(() async {
       final run = await (_database.select(
