@@ -290,13 +290,14 @@ final class StartIsolatedRun {
       revision: source.localRevision!,
     );
     if (branchResult is RunGitMutationFailed) {
+      var cleanupRequired = false;
       switch (branchResult.effect) {
         case RunGitMutationEffect.created:
-          await _git.deleteBranch(
+          cleanupRequired = !await _tryDeleteBranch(
             sourcePath: request.project.folderPath,
             branchName: branchName,
+            recordId: branchRecord.id,
           );
-          await _ownership.markResolved(branchRecord.id);
           break;
         case RunGitMutationEffect.absent:
           await _ownership.markResolved(branchRecord.id);
@@ -305,6 +306,7 @@ final class StartIsolatedRun {
           break;
       }
       await _markGitFailed(runId, now);
+      if (cleanupRequired) return _cleanupRequiredRejection();
       return _reject(
         'run.git.branch_create',
         'Could not create the run branch.',
@@ -327,12 +329,13 @@ final class StartIsolatedRun {
     );
     if (worktreePathCheck.code != RunWorktreePathInspectionCode.safe) {
       await _ownership.markResolved(worktreeRecord.id);
-      await _git.deleteBranch(
+      final branchRemoved = await _tryDeleteBranch(
         sourcePath: request.project.folderPath,
         branchName: branchName,
+        recordId: branchRecord.id,
       );
-      await _ownership.markResolved(branchRecord.id);
       await _markGitFailed(runId, now);
+      if (!branchRemoved) return _cleanupRequiredRejection();
       return _pathRejection(worktreePathCheck);
     }
     final worktreeResult = await _git.addWorktree(
@@ -341,31 +344,36 @@ final class StartIsolatedRun {
       worktreePath: worktreePath,
     );
     if (worktreeResult is RunGitMutationFailed) {
+      var cleanupRequired = false;
       switch (worktreeResult.effect) {
         case RunGitMutationEffect.created:
-          await _git.removeWorktree(
+          final worktreeRemoved = await _tryRemoveWorktree(
             sourcePath: request.project.folderPath,
             worktreePath: worktreePath,
+            recordId: worktreeRecord.id,
           );
-          await _ownership.markResolved(worktreeRecord.id);
-          await _git.deleteBranch(
-            sourcePath: request.project.folderPath,
-            branchName: branchName,
-          );
-          await _ownership.markResolved(branchRecord.id);
+          cleanupRequired = !worktreeRemoved;
+          if (worktreeRemoved) {
+            cleanupRequired = !await _tryDeleteBranch(
+              sourcePath: request.project.folderPath,
+              branchName: branchName,
+              recordId: branchRecord.id,
+            );
+          }
           break;
         case RunGitMutationEffect.absent:
           await _ownership.markResolved(worktreeRecord.id);
-          await _git.deleteBranch(
+          cleanupRequired = !await _tryDeleteBranch(
             sourcePath: request.project.folderPath,
             branchName: branchName,
+            recordId: branchRecord.id,
           );
-          await _ownership.markResolved(branchRecord.id);
           break;
         case RunGitMutationEffect.unknown:
           break;
       }
       await _markGitFailed(runId, now);
+      if (cleanupRequired) return _cleanupRequiredRejection();
       return _reject(
         'run.git.worktree_create',
         'Could not create the isolated worktree.',
@@ -387,6 +395,43 @@ final class StartIsolatedRun {
         nextStatus: RunStatus.failed,
         at: at,
       );
+
+  Future<bool> _tryRemoveWorktree({
+    required String sourcePath,
+    required String worktreePath,
+    required String recordId,
+  }) async {
+    try {
+      await _git.removeWorktree(
+        sourcePath: sourcePath,
+        worktreePath: worktreePath,
+      );
+      await _ownership.markResolved(recordId);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _tryDeleteBranch({
+    required String sourcePath,
+    required String branchName,
+    required String recordId,
+  }) async {
+    try {
+      await _git.deleteBranch(sourcePath: sourcePath, branchName: branchName);
+      await _ownership.markResolved(recordId);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  RunStartRejected _cleanupRequiredRejection() => _reject(
+    'run.git.cleanup_required',
+    'The run failed and isolated Git resources still require cleanup.',
+    'Review the retained worktree or branch and retry cleanup.',
+  );
 
   RunStartRejected? _validateWorkflow(StartRunRequest request) {
     final workflow = request.workflow;

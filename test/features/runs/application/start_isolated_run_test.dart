@@ -157,6 +157,40 @@ void main() {
     );
 
     test(
+      'Given worktree compensation throws_When start fails_Then run fails with cleanup required',
+      () async {
+        final fixture = _Fixture(
+          failWorktreeAfterCreation: true,
+          failRemoveWorktree: true,
+        );
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.cleanup_required');
+        expect(fixture.events.last, 'transition:starting-failed');
+        expect(fixture.events, isNot(contains('resolved:worktree')));
+        expect(fixture.events, isNot(contains('resolved:branch')));
+      },
+    );
+
+    test(
+      'Given branch compensation throws_When start fails_Then run fails with cleanup required',
+      () async {
+        final fixture = _Fixture(
+          failWorktreeAfterCreation: true,
+          failDeleteBranch: true,
+        );
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.cleanup_required');
+        expect(fixture.events.last, 'transition:starting-failed');
+        expect(fixture.events, contains('resolved:worktree'));
+        expect(fixture.events, isNot(contains('resolved:branch')));
+      },
+    );
+
+    test(
       'Given a concurrent actor creates the branch after precheck_When Maestro creation fails_Then that branch is never deleted',
       () async {
         final fixture = _Fixture(concurrentBranchConflict: true);
@@ -291,6 +325,8 @@ final class _Fixture
     this.branchMutationUnknown = false,
     this.worktreeMutationUnknown = false,
     this.unsafeOnPathInspection = 0,
+    this.failRemoveWorktree = false,
+    this.failDeleteBranch = false,
   }) : workflow = workflow ?? _workflow();
 
   final String runId;
@@ -306,6 +342,8 @@ final class _Fixture
   final bool branchMutationUnknown;
   final bool worktreeMutationUnknown;
   final int unsafeOnPathInspection;
+  final bool failRemoveWorktree;
+  final bool failDeleteBranch;
   var pathInspections = 0;
   final calls = <String>[];
   final events = <String>[];
@@ -459,6 +497,7 @@ final class _Fixture
     required String worktreePath,
   }) async {
     gitMutations.add('removeWorktree');
+    if (failRemoveWorktree) throw StateError('remove failed');
     worktrees.remove(worktreePath);
   }
 
@@ -468,6 +507,7 @@ final class _Fixture
     required String branchName,
   }) async {
     gitMutations.add('deleteBranch');
+    if (failDeleteBranch) throw StateError('delete failed');
     branches.remove(branchName);
   }
 
