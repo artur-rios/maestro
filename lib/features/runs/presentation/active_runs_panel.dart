@@ -262,6 +262,7 @@ String _runStatusLabel(RunStatus status) => switch (status) {
   RunStatus.queued => 'Queued',
   RunStatus.starting => 'Starting',
   RunStatus.running => 'Running',
+  RunStatus.pauseRequested => 'Pausing after this step',
   RunStatus.paused => 'Paused',
   RunStatus.succeeded => 'Succeeded',
   RunStatus.failed => 'Failed',
