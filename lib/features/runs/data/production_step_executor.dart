@@ -180,6 +180,9 @@ final class OwnedStepProcessLauncher implements StepProcessLauncher {
           resourceId: resourceId,
         ),
       );
+    } on ProcessGateException catch (error) {
+      await process?.terminateTree();
+      return StepProcessStart.failure(error.code);
     } on ProcessException catch (error) {
       await process?.terminateTree();
       return StepProcessStart.failure(switch (error.errorCode) {

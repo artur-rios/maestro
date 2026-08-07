@@ -7,25 +7,70 @@ import 'dart:math';
 
 import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 
+final class LinuxProcessSnapshot {
+  const LinuxProcessSnapshot({
+    required this.pid,
+    required this.state,
+    required this.processGroupId,
+    required this.sessionId,
+    required this.startTime,
+  });
+
+  final int pid;
+  final String state;
+  final int processGroupId;
+  final int sessionId;
+  final int startTime;
+
+  bool get isStoppedSessionLeader =>
+      (state == 'T' || state == 't') &&
+      processGroupId == pid &&
+      sessionId == pid;
+
+  String get fingerprint => 'linux-start:$startTime:session:$sessionId';
+
+  static Future<LinuxProcessSnapshot> read(int pid) async =>
+      parse(await File('/proc/$pid/stat').readAsString());
+
+  static LinuxProcessSnapshot parse(String source) {
+    final open = source.indexOf('(');
+    final close = source.lastIndexOf(')');
+    if (open <= 0 || close <= open || close + 2 >= source.length) {
+      throw const FormatException('Invalid /proc stat.');
+    }
+    final parsedPid = int.tryParse(source.substring(0, open).trim());
+    final fields = source.substring(close + 2).trim().split(RegExp(r'\s+'));
+    if (parsedPid == null || fields.length < 20 || fields.first.length != 1) {
+      throw const FormatException('Invalid /proc stat.');
+    }
+    final processGroupId = int.tryParse(fields[2]);
+    final sessionId = int.tryParse(fields[3]);
+    final startTime = int.tryParse(fields[19]);
+    if (processGroupId == null || sessionId == null || startTime == null) {
+      throw const FormatException('Invalid /proc stat.');
+    }
+    return LinuxProcessSnapshot(
+      pid: parsedPid,
+      state: fields.first,
+      processGroupId: processGroupId,
+      sessionId: sessionId,
+      startTime: startTime,
+    );
+  }
+}
+
 final class PlatformProcessIdentityProvider implements ProcessIdentityProvider {
   const PlatformProcessIdentityProvider();
 
   @override
   Future<DurableProcessIdentity> capture(int pid) async {
     if (Platform.isLinux) {
-      final stat = await File('/proc/$pid/stat').readAsString();
-      final close = stat.lastIndexOf(')');
-      if (close < 0) throw const FormatException('Invalid /proc stat.');
-      final fields = stat.substring(close + 2).split(' ');
-      if (fields.length < 20) {
-        throw const FormatException('Invalid /proc stat.');
-      }
-      final executable = await Link('/proc/$pid/exe').resolveSymbolicLinks();
+      final snapshot = await LinuxProcessSnapshot.read(pid);
       return DurableProcessIdentity(
         platform: 'linux-group',
         pid: pid,
-        fingerprint: '${fields[19]}:$executable',
-        groupId: pid,
+        fingerprint: snapshot.fingerprint,
+        groupId: snapshot.processGroupId,
       );
     }
     if (Platform.isWindows) {
@@ -68,11 +113,17 @@ final class PlatformOwnedProcessRecovery
         return ProcessRecoveryOutcome.retainedFailure;
       }
       Process.killPid(-identity.groupId!, ProcessSignal.sigterm);
-      if (await _waitAbsent(identity.pid, const Duration(seconds: 2))) {
+      if (await _waitGroupAbsent(
+        identity.groupId!,
+        const Duration(seconds: 2),
+      )) {
         return ProcessRecoveryOutcome.resolved;
       }
       Process.killPid(-identity.groupId!, ProcessSignal.sigkill);
-      return await _waitAbsent(identity.pid, const Duration(seconds: 3))
+      return await _waitGroupAbsent(
+            identity.groupId!,
+            const Duration(seconds: 3),
+          )
           ? ProcessRecoveryOutcome.resolved
           : ProcessRecoveryOutcome.retainedFailure;
     }
@@ -92,12 +143,17 @@ final class PlatformOwnedProcessRecovery
     return ProcessRecoveryOutcome.retainedFailure;
   }
 
-  static Future<bool> _waitAbsent(int pid, Duration timeout) async {
+  static Future<bool> _waitGroupAbsent(int groupId, Duration timeout) async {
     final deadline = DateTime.now().add(timeout);
-    while (await Directory('/proc/$pid').exists()) {
+    while (true) {
+      final probe = await Process.run('/bin/kill', <String>[
+        '-0',
+        '--',
+        '-$groupId',
+      ], runInShell: false);
+      if (probe.exitCode != 0) return true;
       if (DateTime.now().isAfter(deadline)) return false;
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
-    return true;
   }
 }

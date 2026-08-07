@@ -3,12 +3,14 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:maestro/platform/process/native_process_tree.dart';
+import 'package:maestro/platform/process/owned_process_recovery.dart';
 import 'package:maestro/platform/process/process_supervisor.dart';
 
 final class LinuxGroupProcessTree implements GatedNativeProcessTree {
   LinuxGroupProcessTree() : _bindings = _LinuxProcessBindings();
 
   final _LinuxProcessBindings _bindings;
+  static const Duration _gateTimeout = Duration(seconds: 2);
 
   @override
   Future<OwnedNativeProcess> start(ProcessStartRequest request) =>
@@ -39,13 +41,36 @@ final class LinuxGroupProcessTree implements GatedNativeProcessTree {
     );
     final owned = _LinuxOwnedProcess(process, _bindings);
     try {
+      await _waitForStoppedSessionLeader(process.pid);
       await beforeRelease(owned);
-      _bindings.signalGroup(process.pid, 18);
+      if (_bindings.signalGroup(process.pid, 18) != 0) {
+        throw const ProcessGateException('linux_gate_release_failed');
+      }
     } on Object {
+      _bindings.signalGroup(process.pid, 18);
       await owned.terminateTree();
       rethrow;
     }
     return owned;
+  }
+
+  Future<void> _waitForStoppedSessionLeader(int pid) async {
+    final deadline = DateTime.now().add(_gateTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final snapshot = await LinuxProcessSnapshot.read(pid);
+        if (snapshot.state == 'T' || snapshot.state == 't') {
+          if (!snapshot.isStoppedSessionLeader) {
+            throw const ProcessGateException('linux_gate_identity_invalid');
+          }
+          return;
+        }
+      } on FileSystemException {
+        // The child may still be entering its new session or may have exited.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    throw const ProcessGateException('linux_gate_timeout');
   }
 }
 

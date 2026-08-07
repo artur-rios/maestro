@@ -22,6 +22,15 @@ abstract interface class NativeProcessTree {
   Future<OwnedNativeProcess> start(ProcessStartRequest request);
 }
 
+final class ProcessGateException implements Exception {
+  const ProcessGateException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => 'ProcessGateException($code)';
+}
+
 abstract interface class GatedNativeProcessTree implements NativeProcessTree {
   Future<OwnedNativeProcess> startOwned(
     ProcessStartRequest request,
