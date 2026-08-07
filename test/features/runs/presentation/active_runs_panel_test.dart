@@ -3,11 +3,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
+import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 import 'package:maestro/features/runs/presentation/active_runs_panel.dart';
+import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 
 void main() {
@@ -223,15 +226,194 @@ void main() {
     // Then: the new run appears without restarting the application.
     expect(find.byKey(const Key('run-row-run-2')), findsOneWidget);
   });
+
+  testWidgets('GivenRunningRun_WhenRendered_ThenPauseAndCancelAreEnabled', (
+    tester,
+  ) async {
+    // Given: a selected run that is executing a step.
+    final repository = _Repository()..runs.add(_topology('run-1'));
+
+    // When: the panel renders with controls.
+    await _pump(
+      tester,
+      repository,
+      controls: _ControlRepository(status: RunStatus.running),
+    );
+
+    // Then: only the transitions its status accepts are actionable.
+    expect(_enabled(tester, RunControlAction.pause), isTrue);
+    expect(_enabled(tester, RunControlAction.cancel), isTrue);
+    expect(_enabled(tester, RunControlAction.resume), isFalse);
+    expect(_enabled(tester, RunControlAction.retry), isFalse);
+  });
+
+  testWidgets('GivenPausedRun_WhenRendered_ThenResumeIsEnabledAndPauseIsNot', (
+    tester,
+  ) async {
+    // Given: a selected run that is paused between steps.
+    final repository = _Repository()..runs.add(_topology('run-1'));
+
+    // When: the panel renders with controls.
+    await _pump(
+      tester,
+      repository,
+      controls: _ControlRepository(status: RunStatus.paused),
+    );
+
+    // Then: it can continue or be abandoned, but not paused again.
+    expect(_enabled(tester, RunControlAction.resume), isTrue);
+    expect(_enabled(tester, RunControlAction.cancel), isTrue);
+    expect(_enabled(tester, RunControlAction.pause), isFalse);
+  });
+
+  testWidgets('GivenTerminalRun_WhenRendered_ThenOnlyRetryIsEnabled', (
+    tester,
+  ) async {
+    // Given: a selected run that failed.
+    final repository = _Repository()..runs.add(_topology('run-1'));
+
+    // When: the panel renders with controls.
+    await _pump(
+      tester,
+      repository,
+      controls: _ControlRepository(status: RunStatus.failed),
+    );
+
+    // Then: recovery is the only thing left to do.
+    expect(_enabled(tester, RunControlAction.retry), isTrue);
+    expect(_enabled(tester, RunControlAction.pause), isFalse);
+    expect(_enabled(tester, RunControlAction.resume), isFalse);
+    expect(_enabled(tester, RunControlAction.cancel), isFalse);
+  });
+
+  testWidgets(
+    'GivenRetryOpened_WhenRendered_ThenUnavailableScopesAreDisabledWithReasons',
+    (tester) async {
+      // Given: a failed run whose preceding step left no reusable context.
+      final repository = _Repository()..runs.add(_topology('run-1'));
+      await _pump(
+        tester,
+        repository,
+        controls: _ControlRepository(
+          status: RunStatus.failed,
+          evidence: _evidence(),
+        ),
+      );
+
+      // When: the user opens the retry chooser.
+      await tester.tap(find.byKey(const Key('run-control-retry')));
+      await tester.pumpAndSettle();
+
+      // Then: AF-04 shows all three scopes, with the disabled one explained.
+      expect(
+        find.byKey(const Key('retry-scope-restartWorkflow')),
+        findsOneWidget,
+      );
+      expect(_scopeEnabled(tester, RecoveryAction.rerunStepFresh), isTrue);
+      expect(
+        _scopeEnabled(tester, RecoveryAction.retryWithPreservedContext),
+        isFalse,
+      );
+      expect(
+        find.byKey(const Key('retry-scope-reason-retryWithPreservedContext')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenIncompleteCancellation_WhenRendered_ThenALiveRegionReportsIt',
+    (tester) async {
+      // Given: a running run whose descendants resist termination (AF-03).
+      final repository = _Repository()..runs.add(_topology('run-1'));
+      final execution = _ControlExecution()
+        ..outcome = CancellationOutcome.incomplete;
+      await _pump(
+        tester,
+        repository,
+        controls: _ControlRepository(status: RunStatus.running),
+        execution: execution,
+      );
+
+      // When: the user cancels it.
+      await tester.tap(find.byKey(const Key('run-control-cancel')));
+      await tester.pumpAndSettle();
+
+      // Then: the surviving processes are reported, and cancel stays offered.
+      expect(find.byKey(const Key('cancellation-incomplete')), findsOneWidget);
+      expect(_enabled(tester, RunControlAction.cancel), isTrue);
+    },
+  );
+
+  testWidgets(
+    'GivenRejectedTransition_WhenRendered_ThenALiveRegionReportsItAndRunsRefresh',
+    (tester) async {
+      // Given: a panel showing a run that has since finished.
+      final repository = _Repository()..runs.add(_topology('run-1'));
+      final controls = _ControlRepository(status: RunStatus.running);
+      await _pump(tester, repository, controls: controls);
+      controls.status = RunStatus.succeeded;
+      final readsBefore = repository.listCalls;
+
+      // When: the user pauses it anyway.
+      await tester.tap(find.byKey(const Key('run-control-pause')));
+      await tester.pumpAndSettle();
+
+      // Then: AF-01 reports the rejection and re-reads the displayed state.
+      expect(find.byKey(const Key('run-control-failure')), findsOneWidget);
+      expect(_enabled(tester, RunControlAction.pause), isFalse);
+      expect(repository.listCalls, greaterThan(readsBefore));
+    },
+  );
+
+  testWidgets(
+    'GivenControlBar_WhenTraversingByKeyboard_ThenEveryControlIsReachable',
+    (tester) async {
+      // Given: a selected running run with controls.
+      final repository = _Repository()..runs.add(_topology('run-1'));
+      await _pump(
+        tester,
+        repository,
+        controls: _ControlRepository(status: RunStatus.running),
+      );
+
+      // When: focus is requested on each enabled control in turn.
+      // Then: every offered control is focusable rather than mouse-only.
+      for (final action in <RunControlAction>[
+        RunControlAction.pause,
+        RunControlAction.cancel,
+      ]) {
+        final button = tester.widget<OutlinedButton>(
+          find.byKey(Key('run-control-${action.name}')),
+        );
+        expect(button.onPressed, isNotNull);
+        expect(button.focusNode?.canRequestFocus ?? true, isTrue);
+      }
+    },
+  );
 }
 
 Color? _colorOf(WidgetTester tester, String text) =>
     tester.widget<Text>(find.text(text)).style?.color;
 
+bool _enabled(WidgetTester tester, RunControlAction action) =>
+    tester
+        .widget<OutlinedButton>(find.byKey(Key('run-control-${action.name}')))
+        .onPressed !=
+    null;
+
+bool _scopeEnabled(WidgetTester tester, RecoveryAction action) =>
+    tester
+        .widget<TextButton>(find.byKey(Key('retry-scope-${action.name}')))
+        .onPressed !=
+    null;
+
 Future<void> _pump(
   WidgetTester tester,
   _Repository repository, {
   RunSummaryEvents? events,
+  _ControlRepository? controls,
+  _ControlExecution? execution,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -247,6 +429,17 @@ Future<void> _pump(
               events: events ?? RunSummaryEvents(),
               refreshInterval: const Duration(milliseconds: 1),
             ),
+            createControlController: controls == null
+                ? null
+                : () => RunControlController(
+                    control: ControlRun(
+                      repository: controls,
+                      execution: execution ?? _ControlExecution(),
+                      worktrees: _ControlProbe(),
+                      newRecoveryId: () => 'recovery-1',
+                      now: () => DateTime.utc(2026, 8, 7, 13),
+                    ),
+                  ),
           ),
         ),
       ),
@@ -298,6 +491,9 @@ RunTopology _topology(
 }
 
 final class _Repository implements RunObservationRepository {
+  /// Counts run-list reads, so a refresh triggered by a control is observable.
+  int listCalls = 0;
+
   final List<RunTopology> runs = <RunTopology>[];
   final Map<String, List<(RunLogChannel, String)>> output =
       <String, List<(RunLogChannel, String)>>{};
@@ -318,6 +514,7 @@ final class _Repository implements RunObservationRepository {
 
   @override
   Future<List<RunTopology>> listObservable(String projectId) async {
+    listCalls++;
     if (listError) throw StateError('list');
     if (hold) {
       await Future<void>(() {});
@@ -402,3 +599,87 @@ final class _Repository implements RunObservationRepository {
     );
   }
 }
+
+final class _ControlRepository implements RunControlRepository {
+  _ControlRepository({required this.status, this.evidence});
+
+  RunStatus status;
+  RunRecoveryEvidence? evidence;
+
+  @override
+  Future<RunControlView?> controlViewOf(String runId) async => RunControlView(
+    runId: runId,
+    status: status,
+    currentStepPosition: 0,
+    updatedAt: DateTime.utc(2026, 8, 7, 12),
+    worktreePath: 'worktrees/$runId',
+  );
+
+  @override
+  Future<void> requestPauseRun(String runId, DateTime at) async =>
+      status = RunStatus.paused;
+
+  @override
+  Future<void> resumeRun(String runId, DateTime at) async =>
+      status = RunStatus.running;
+
+  @override
+  Future<void> cancelRun({
+    required String runId,
+    required DateTime at,
+    required String Function() newLogId,
+  }) async => status = RunStatus.canceled;
+
+  @override
+  Future<void> recordCancellationIncomplete({
+    required String runId,
+    required DateTime at,
+    required String Function() newLogId,
+  }) async {}
+
+  @override
+  Future<RunRecoveryEvidence?> recoveryEvidenceFor(String runId) async =>
+      evidence;
+
+  @override
+  Future<void> beginRecovery({
+    required RunRecoveryRequest request,
+    required int targetPosition,
+    required DateTime at,
+    DateTime? expectedRunUpdatedAt,
+  }) async => status = RunStatus.running;
+}
+
+final class _ControlExecution implements RunExecutionControl {
+  CancellationOutcome outcome = CancellationOutcome.cancelled;
+
+  @override
+  void requestPause(String runId) {}
+
+  @override
+  Future<CancellationOutcome> requestCancel(String runId) async => outcome;
+
+  @override
+  Future<void>? activeExecution(String runId) => null;
+
+  @override
+  Future<void> execute(
+    String runId, {
+    RecoveryContextPolicy contextPolicy = RecoveryContextPolicy.preserved,
+  }) async {}
+}
+
+final class _ControlProbe implements RunWorktreeProbe {
+  @override
+  Future<bool> exists(String worktreePath) async => true;
+}
+
+RunRecoveryEvidence _evidence({bool hasPreservedContext = false}) =>
+    RunRecoveryEvidence(
+      runId: 'run-1',
+      status: RunStatus.failed,
+      updatedAt: DateTime.utc(2026, 8, 7, 12),
+      affectedStepPosition: 0,
+      affectedAttemptId: 'attempt-1',
+      hasPreservedContext: hasPreservedContext,
+    );

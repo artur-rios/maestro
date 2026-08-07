@@ -70,7 +70,11 @@ final class RunControlController extends ChangeNotifier {
 
   /// Notifies the host that a run's persisted state changed, so the run list
   /// and its steps can be re-read.
-  final VoidCallback? onChanged;
+  ///
+  /// Mutable so a host that builds the controller can attach its own refresh
+  /// after construction, rather than the view having to infer a completed
+  /// command from state transitions.
+  VoidCallback? onChanged;
 
   RunControlState state = const RunControlState();
 

@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
+import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 
 /// Shows every run of the selected project, its ordered steps, and its output.
@@ -9,9 +13,17 @@ import 'package:maestro/features/runs/presentation/run_observation_controller.da
 /// hosting workspace never discards the selection, the loaded output window, or
 /// the live subscription.
 final class ActiveRunsPanel extends StatefulWidget {
-  const ActiveRunsPanel({required this.createController, super.key});
+  const ActiveRunsPanel({
+    required this.createController,
+    this.createControlController,
+    super.key,
+  });
 
   final RunObservationController Function() createController;
+
+  /// Builds the control half of the panel. Absent when a host composes
+  /// observation without the ability to act on a run.
+  final RunControlController Function()? createControlController;
 
   @override
   State<ActiveRunsPanel> createState() => _ActiveRunsPanelState();
@@ -19,12 +31,18 @@ final class ActiveRunsPanel extends StatefulWidget {
 
 final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   late final RunObservationController _controller;
+  RunControlController? _controls;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.createController();
     _controller.addListener(_changed);
+    _controls = widget.createControlController?.call()
+      ?..addListener(_changed)
+      // A finished control command changed the run's persisted state, so the
+      // list and its steps are re-read rather than left showing the old one.
+      ..onChanged = () => unawaited(_controller.load());
     _controller.load();
   }
 
@@ -32,10 +50,27 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
     if (mounted) setState(() {});
   }
 
+  /// Keeps the control half pointed at the observation view's selection.
+  ///
+  /// This runs after the frame rather than inside a listener: both controllers
+  /// publish synchronously, so acting on one from the other's notification
+  /// would re-enter `notifyListeners` while it is still dispatching.
+  void _syncControls() {
+    final controls = _controls;
+    if (!mounted || controls == null) return;
+    final selectedRunId = _controller.state.selectedRunId;
+    if (controls.state.runId != selectedRunId) {
+      unawaited(controls.selectRun(selectedRunId));
+    }
+  }
+
   @override
   void dispose() {
     _controller.removeListener(_changed);
     _controller.dispose();
+    _controls
+      ?..removeListener(_changed)
+      ..dispose();
     super.dispose();
   }
 
@@ -43,6 +78,9 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   Widget build(BuildContext context) {
     final state = _controller.state;
     final theme = Theme.of(context);
+    if (_controls != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncControls());
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -86,6 +124,10 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
               ),
             ],
             if (state.selectedRun case final selected?) ...<Widget>[
+              if (_controls case final controls?) ...<Widget>[
+                const Divider(height: 24),
+                _ControlBar(controller: controls),
+              ],
               const Divider(height: 24),
               Text('Steps', style: theme.textTheme.titleMedium),
               for (final step in selected.steps)
@@ -153,6 +195,157 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
     );
   }
 }
+
+/// Pause, resume, cancel, and retry for the selected run (UC-08).
+final class _ControlBar extends StatelessWidget {
+  const _ControlBar({required this.controller});
+
+  final RunControlController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final state = controller.state;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text('Controls', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: <Widget>[
+            _ControlButton(
+              action: RunControlAction.pause,
+              label: 'Pause',
+              state: state,
+              onPressed: controller.pause,
+            ),
+            _ControlButton(
+              action: RunControlAction.resume,
+              label: 'Resume',
+              state: state,
+              onPressed: controller.resume,
+            ),
+            _ControlButton(
+              action: RunControlAction.cancel,
+              label: 'Cancel',
+              state: state,
+              onPressed: controller.cancel,
+            ),
+            _ControlButton(
+              action: RunControlAction.retry,
+              label: 'Retry',
+              state: state,
+              onPressed: controller.openRetry,
+            ),
+          ],
+        ),
+        if (state.choosingScope) ...<Widget>[
+          const SizedBox(height: 12),
+          // FR-RC-05..07: the scope is the user's decision, never guessed, so
+          // all three are shown and an unavailable one explains itself (AF-04).
+          Text('Choose a retry scope', style: theme.textTheme.bodyMedium),
+          for (final scope in state.scopes)
+            _ScopeRow(
+              scope: scope,
+              busy: state.busy,
+              onSelected: () => controller.retry(scope.action),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const Key('close-retry'),
+              onPressed: controller.closeRetry,
+              child: const Text('Cancel retry'),
+            ),
+          ),
+        ],
+        if (state.cancellationIncomplete)
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              key: const Key('cancellation-incomplete'),
+              'Cancellation incomplete: processes started by this run are '
+              'still running.',
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ),
+        if (state.failure case final failure?)
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              key: const Key('run-control-failure'),
+              '${failure.message}\n${failure.remediation}',
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+final class _ControlButton extends StatelessWidget {
+  const _ControlButton({
+    required this.action,
+    required this.label,
+    required this.state,
+    required this.onPressed,
+  });
+
+  final RunControlAction action;
+  final String label;
+  final RunControlState state;
+  final Future<void> Function() onPressed;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+    key: Key('run-control-${action.name}'),
+    onPressed: state.offers(action) ? () => unawaited(onPressed()) : null,
+    child: Text(label),
+  );
+}
+
+final class _ScopeRow extends StatelessWidget {
+  const _ScopeRow({
+    required this.scope,
+    required this.busy,
+    required this.onSelected,
+  });
+
+  final RecoveryScope scope;
+  final bool busy;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _scopeLabel(scope.action);
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: TextButton(
+            key: Key('retry-scope-${scope.action.name}'),
+            onPressed: scope.available && !busy ? onSelected : null,
+            child: Align(alignment: Alignment.centerLeft, child: Text(label)),
+          ),
+        ),
+        if (scope.unavailableReason case final reason?)
+          Expanded(
+            child: Text(
+              key: Key('retry-scope-reason-${scope.action.name}'),
+              reason,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _scopeLabel(RecoveryAction action) => switch (action) {
+  RecoveryAction.retryWithPreservedContext =>
+    'Retry this step with its preserved context',
+  RecoveryAction.rerunStepFresh => 'Rerun this step from scratch',
+  RecoveryAction.restartWorkflow => 'Restart the complete workflow',
+};
 
 final class _RunRow extends StatelessWidget {
   const _RunRow({

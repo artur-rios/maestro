@@ -34,6 +34,7 @@ import 'package:maestro/features/runs/data/production_run_preflight.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/data/production_work_item_resolvers.dart';
 import 'package:maestro/features/runs/presentation/active_runs_panel.dart';
+import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_panel.dart';
@@ -322,6 +323,7 @@ Future<ProductionAppComposition> composeProductionApp({
       observe: observeRuns,
       events: runOrchestrator.events,
     ),
+    createControlController: () => RunControlController(control: controlRun),
   );
 
   return ProductionAppComposition._(
