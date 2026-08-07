@@ -341,10 +341,13 @@ final class RunOrchestrator {
     };
   }
 
-  Future<void> execute(String runId) {
+  Future<void> execute(
+    String runId, {
+    RecoveryContextPolicy contextPolicy = RecoveryContextPolicy.preserved,
+  }) {
     final existing = _active[runId];
     if (existing != null) return existing;
-    final future = _execute(runId);
+    final future = _execute(runId, contextPolicy);
     _active[runId] = future;
     return future.whenComplete(() {
       _active.remove(runId);
@@ -358,7 +361,10 @@ final class RunOrchestrator {
     });
   }
 
-  Future<void> _execute(String runId) async {
+  Future<void> _execute(
+    String runId,
+    RecoveryContextPolicy contextPolicy,
+  ) async {
     final aggregate = await _repository.load(runId);
     if (aggregate == null) throw StateError('Unknown run.');
     if (aggregate.run.status == RunStatus.starting) {
@@ -367,7 +373,12 @@ final class RunOrchestrator {
       throw StateError('Only active runs can execute.');
     }
     _events.add(RunLogSummary.announcement(runId));
-    DeclaredContext? priorContext = _resumedContext(aggregate);
+    // FR-RC-06 reruns a step from scratch, which means without the context the
+    // preceding step declared. Only the first step of this call is affected;
+    // steps after it are ordinary successors and inherit normally.
+    DeclaredContext? priorContext = contextPolicy == RecoveryContextPolicy.fresh
+        ? null
+        : _resumedContext(aggregate);
     for (
       var position = aggregate.run.currentStepPosition;
       position < aggregate.snapshot.steps.length;

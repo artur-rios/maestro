@@ -1184,6 +1184,81 @@ void main() {
     },
   );
 
+  test(
+    'GivenPreservedContextPolicy_WhenResuming_ThenThePriorContextIsPassed',
+    () async {
+      // Given: a two-step run resuming at its second step, whose first step
+      // succeeded and declared context.
+      final fixture = _Fixture(stepCount: 2);
+      fixture.repository.aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 2,
+        worktreePath: '/tmp/run-1',
+        currentStepPosition: 1,
+        status: RunStatus.running,
+        attempts: <RunAttempt>[
+          RunAttempt(
+            id: 'attempt-0',
+            runId: 'run-1',
+            snapshotStepId: 's0',
+            attemptNumber: 1,
+            status: AttemptStatus.succeeded,
+            startedAt: DateTime.utc(2026),
+            declaredContext: DeclaredContext.parse('carried forward'),
+          ),
+        ],
+      );
+      fixture.launcher.results.add(const _Script());
+
+      // When: execution resumes with the default policy.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: the resumed step receives the prior step's declared context.
+      expect(
+        fixture.launcher.requests.single.prompt,
+        contains('carried forward'),
+      );
+    },
+  );
+
+  test(
+    'GivenFreshContextPolicy_WhenResuming_ThenThePriorContextIsNotPassed',
+    () async {
+      // Given: the same resumable run, with context available to inherit.
+      final fixture = _Fixture(stepCount: 2);
+      fixture.repository.aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 2,
+        worktreePath: '/tmp/run-1',
+        currentStepPosition: 1,
+        status: RunStatus.running,
+        attempts: <RunAttempt>[
+          RunAttempt(
+            id: 'attempt-0',
+            runId: 'run-1',
+            snapshotStepId: 's0',
+            attemptNumber: 1,
+            status: AttemptStatus.succeeded,
+            startedAt: DateTime.utc(2026),
+            declaredContext: DeclaredContext.parse('carried forward'),
+          ),
+        ],
+      );
+      fixture.launcher.results.add(const _Script());
+
+      // When: the step is rerun from scratch (FR-RC-06).
+      await fixture.orchestrator.execute(
+        'run-1',
+        contextPolicy: RecoveryContextPolicy.fresh,
+      );
+
+      // Then: the step starts without inheriting the prior context.
+      final prompt = fixture.launcher.requests.single.prompt;
+      expect(prompt, isNot(contains('carried forward')));
+      expect(prompt, contains('Previous declared context: (none)'));
+    },
+  );
+
   test('two run IDs can overlap while each run remains serial', () async {
     final fixture = _Fixture(stepCount: 1);
     final first = Completer<void>();
@@ -1481,6 +1556,7 @@ RunExecutionAggregate _aggregate(
   required int count,
   required String worktreePath,
   int currentStepPosition = 0,
+  RunStatus status = RunStatus.starting,
   Iterable<RunAttempt> attempts = const <RunAttempt>[],
 }) => RunExecutionAggregate(
   run: WorkflowRun(
@@ -1488,7 +1564,7 @@ RunExecutionAggregate _aggregate(
     projectId: 'p',
     workflowId: 'w',
     label: id,
-    status: RunStatus.starting,
+    status: status,
     currentStepPosition: currentStepPosition,
     branchName: 'feature/$id',
     worktreePath: worktreePath,
