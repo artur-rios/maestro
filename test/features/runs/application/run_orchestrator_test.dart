@@ -9,9 +9,257 @@ import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/data/production_step_executor.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
+import 'package:maestro/features/runs/domain/run_observation.dart';
 import 'package:path/path.dart' as p;
 
+const int _unlimitedAppendFailures = 1 << 30;
+
 void main() {
+  test(
+    'GivenStdoutAndStderrFrames_WhenReadingOutputTail_ThenChannelsArePreserved',
+    () async {
+      // Given: a step that writes to standard output, error, and back again.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('building\n')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stderr,
+              Uint8List.fromList(utf8.encode('warning\n')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('done\n')),
+            ),
+          ],
+        ),
+      );
+      final tails = <List<RunOutputChunk>>[];
+      fixture.orchestrator.events.listen(
+        (_) => tails.add(fixture.orchestrator.outputTailFor('run-1')),
+      );
+
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: the tail observed during the run kept each channel distinct.
+      final observed = tails.lastWhere((tail) => tail.isNotEmpty);
+      expect(observed.map((chunk) => chunk.channel), <RunLogChannel>[
+        RunLogChannel.stdout,
+        RunLogChannel.stderr,
+        RunLogChannel.stdout,
+      ]);
+      expect(observed.map((chunk) => chunk.text), <String>[
+        'building\n',
+        'warning\n',
+        'done\n',
+      ]);
+    },
+  );
+
+  test(
+    'GivenTailOverflow_WhenReadingOutputTail_ThenOldestChunksAreDropped',
+    () async {
+      // Given: a step producing more output than the live tail may retain.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            for (var index = 0; index < 12; index++)
+              StepOutputFrame(
+                RunLogChannel.stdout,
+                Uint8List.fromList(List<int>.filled(8 * 1024, 0x79)),
+              ),
+          ],
+        ),
+      );
+      final sizes = <int>[];
+      fixture.orchestrator.events.listen(
+        (_) => sizes.add(
+          fixture.orchestrator
+              .outputTailFor('run-1')
+              .fold<int>(0, (total, chunk) => total + chunk.byteLength),
+        ),
+      );
+
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: the tail stayed bounded while every byte reached storage.
+      expect(sizes, isNotEmpty);
+      expect(
+        sizes.reduce((a, b) => a > b ? a : b),
+        lessThanOrEqualTo(64 * 1024),
+      );
+      expect(
+        fixture.repository.logs.fold<int>(
+          0,
+          (total, segment) => total + segment.bytes.length,
+        ),
+        12 * 8 * 1024,
+      );
+    },
+  );
+
+  test('GivenCompletedRun_WhenExecutionFinishes_ThenTailIsReleased', () async {
+    // Given: a run that streams output and then completes.
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('output\n')),
+          ),
+        ],
+      ),
+    );
+
+    // When: execution finishes.
+    await fixture.orchestrator.execute('run-1');
+
+    // Then: no live tail memory is retained for a finished run.
+    expect(fixture.orchestrator.outputTailFor('run-1'), isEmpty);
+    expect(fixture.orchestrator.retainedTailRunCount, 0);
+  });
+
+  test(
+    'GivenRunMarkedRunning_WhenExecuting_ThenAnAnnouncementSummaryIsPublished',
+    () async {
+      // Given: a run whose step produces no output at all.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(const _Script());
+      final summaries = <RunLogSummary>[];
+      fixture.orchestrator.events.listen(summaries.add);
+
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(Duration.zero);
+
+      // Then: the run still announced itself so observation can show it.
+      expect(summaries, isNotEmpty);
+      expect(summaries.first.isAnnouncement, isTrue);
+      expect(summaries.first.runId, 'run-1');
+      expect(summaries.first.attemptId, isEmpty);
+    },
+  );
+
+  test(
+    'GivenAppendLogFailure_WhenStreaming_ThenDurabilityIsDegraded',
+    () async {
+      // Given: storage that rejects the first durable write and then recovers.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.repository.appendFailures = 1;
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('first\n')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('second\n')),
+            ),
+          ],
+        ),
+      );
+      final summaries = <RunLogSummary>[];
+      fixture.orchestrator.events.listen(summaries.add);
+
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: degradation was reported rather than hidden or fatal.
+      expect(
+        summaries.map((summary) => summary.durability),
+        contains(OutputDurability.degraded),
+      );
+      expect(fixture.repository.failed, isEmpty);
+      expect(fixture.repository.completed, <String>['attempt-1']);
+    },
+  );
+
+  test(
+    'GivenRecoveredPersistence_WhenFlushing_ThenBufferedBatchesPersistInOrder',
+    () async {
+      // Given: storage that fails once while two ordered fragments stream.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.repository.appendFailures = 1;
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('first\n')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stderr,
+              Uint8List.fromList(utf8.encode('second\n')),
+            ),
+          ],
+        ),
+      );
+
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: no byte was lost, order held, and sequences stayed contiguous.
+      expect(
+        utf8.decode(
+          fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+        ),
+        'first\nsecond\n',
+      );
+      expect(
+        fixture.repository.logs.map((segment) => segment.channel),
+        <RunLogChannel>[RunLogChannel.stdout, RunLogChannel.stderr],
+      );
+      expect(fixture.repository.logs.map((segment) => segment.sequence), <int>[
+        0,
+        1,
+      ]);
+      expect(fixture.repository.completed, <String>['attempt-1']);
+    },
+  );
+
+  test(
+    'GivenDegradedBufferOverflow_WhenStreaming_ThenAttemptFailsWithLogPersistCode',
+    () async {
+      // Given: storage that never recovers and a step flooding past the cap.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.repository.appendFailures = _unlimitedAppendFailures;
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            for (var index = 0; index < 40; index++)
+              StepOutputFrame(
+                RunLogChannel.stdout,
+                Uint8List.fromList(List<int>.filled(16 * 1024, 0x7a)),
+              ),
+          ],
+        ),
+      );
+
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
+
+      // Then: it failed safely with a typed code before memory grew unbounded.
+      expect(fixture.repository.failed, <(String, String)>[
+        ('attempt-1', 'run.step.log_persist'),
+      ]);
+      expect(fixture.repository.completed, isEmpty);
+      expect(
+        fixture.repository.appendAttempts * 16 * 1024,
+        lessThan(40 * 16 * 1024),
+      );
+    },
+  );
+
   test(
     'runs immutable steps in order and hands off only declared context',
     () async {
@@ -77,7 +325,9 @@ void main() {
       expect(output, contains('[REDACTED]'));
       expect(output, isNot(contains('split-secret')));
       expect(
-        fixture.orchestrator.tailFor('run-1').length,
+        fixture.orchestrator
+            .outputTailFor('run-1')
+            .fold<int>(0, (total, chunk) => total + chunk.byteLength),
         lessThanOrEqualTo(64 * 1024),
       );
     },
@@ -353,7 +603,7 @@ void main() {
       newNonce: () => 'nonce',
       now: () => DateTime.now().toUtc(),
     );
-    final firstSummary = orchestrator.events.first;
+    final firstSummary = orchestrator.events.firstOutput;
     final execution = orchestrator.execute('run-1');
 
     await firstSummary.timeout(const Duration(milliseconds: 100));
@@ -416,7 +666,7 @@ void main() {
         newNonce: () => 'nonce',
         now: () => DateTime.now().toUtc(),
       );
-      final firstSummary = orchestrator.events.first;
+      final firstSummary = orchestrator.events.firstOutput;
       final execution = orchestrator.execute('run-1');
 
       await firstSummary.timeout(const Duration(milliseconds: 100));
@@ -475,7 +725,7 @@ void main() {
         newNonce: () => 'nonce',
         now: () => DateTime.now().toUtc(),
       );
-      final firstSummary = orchestrator.events.first;
+      final firstSummary = orchestrator.events.firstOutput;
       final execution = orchestrator.execute('run-1');
 
       await firstSummary.timeout(const Duration(milliseconds: 100));
@@ -689,7 +939,7 @@ void main() {
       newNonce: () => 'nonce',
       now: () => DateTime.now().toUtc(),
     );
-    final firstSummary = orchestrator.events.first;
+    final firstSummary = orchestrator.events.firstOutput;
     final execution = orchestrator.execute('run-1');
 
     await firstSummary.timeout(const Duration(milliseconds: 80));
@@ -740,8 +990,8 @@ void main() {
       fixture.results.resolveError = true;
       fixture.launcher.results.add(const _Script(streamError: true));
     });
-    await verify('run.step.stream_failed', (fixture) {
-      fixture.repository.appendError = true;
+    await verify('run.step.log_persist', (fixture) {
+      fixture.repository.appendFailures = _unlimitedAppendFailures;
       fixture.launcher.results.add(
         _Script(
           frames: <StepOutputFrame>[
@@ -1110,7 +1360,11 @@ final class _Repository implements RunExecutionRepository {
   final List<RunLogSegment> logs = <RunLogSegment>[];
   final List<String> completed = <String>[];
   final List<(String, String)> failed = <(String, String)>[];
-  bool appendError = false;
+
+  /// The number of upcoming `appendLog` calls that fail before storage
+  /// recovers.
+  int appendFailures = 0;
+  int appendAttempts = 0;
   @override
   Future<RunExecutionAggregate?> load(String id) async => aggregates[id];
   @override
@@ -1119,7 +1373,11 @@ final class _Repository implements RunExecutionRepository {
   Future<void> beginAttempt(RunAttempt value) async => begun.add(value);
   @override
   Future<void> appendLog(RunLogSegment value) async {
-    if (appendError) throw StateError('append');
+    appendAttempts++;
+    if (appendFailures > 0) {
+      appendFailures--;
+      throw StateError('append');
+    }
     logs.add(value);
   }
 

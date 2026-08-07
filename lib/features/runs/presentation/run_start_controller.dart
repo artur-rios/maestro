@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 // Public constructor names describe injected ports; stored fields stay private.
 // ignore_for_file: prefer_initializing_formals
@@ -15,7 +14,6 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 typedef WorkflowLoader = Future<List<WorkflowDefinition>> Function();
 typedef RunStarter = Future<RunStartResult> Function(StartRunRequest request);
 typedef RunExecutor = Future<void> Function(String runId);
-typedef RunTailReader = Uint8List Function(String runId);
 typedef RunStatusReader =
     Future<RunPresentationSnapshot?> Function(String runId);
 typedef RecoverySelector =
@@ -48,7 +46,6 @@ final class VisibleRunSummary {
     required this.worktreePath,
     required this.status,
     required this.currentStep,
-    this.tail = '',
   });
 
   final String runId;
@@ -56,20 +53,15 @@ final class VisibleRunSummary {
   final String worktreePath;
   final RunStatus status;
   final String? currentStep;
-  final String tail;
 
-  VisibleRunSummary copyWith({
-    RunStatus? status,
-    String? currentStep,
-    String? tail,
-  }) => VisibleRunSummary(
-    runId: runId,
-    branchName: branchName,
-    worktreePath: worktreePath,
-    status: status ?? this.status,
-    currentStep: currentStep ?? this.currentStep,
-    tail: tail ?? this.tail,
-  );
+  VisibleRunSummary copyWith({RunStatus? status, String? currentStep}) =>
+      VisibleRunSummary(
+        runId: runId,
+        branchName: branchName,
+        worktreePath: worktreePath,
+        status: status ?? this.status,
+        currentStep: currentStep ?? this.currentStep,
+      );
 }
 
 final class RunStartState {
@@ -145,7 +137,6 @@ final class RunStartController extends ChangeNotifier {
     required RunStarter starter,
     required RunExecutor execute,
     required RunSummaryEvents events,
-    required RunTailReader tailFor,
     required RunStatusReader statusFor,
     Iterable<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[],
     RecoveryOfferLoader? loadRecoveryOffers,
@@ -153,7 +144,6 @@ final class RunStartController extends ChangeNotifier {
   }) : _loadWorkflows = loadWorkflows,
        _starter = starter,
        _execute = execute,
-       _tailFor = tailFor,
        _statusFor = statusFor,
        _selectRecovery = selectRecovery ?? _unsupportedRecovery,
        _loadRecoveryOffers =
@@ -173,7 +163,6 @@ final class RunStartController extends ChangeNotifier {
   final WorkflowLoader _loadWorkflows;
   final RunStarter _starter;
   final RunExecutor _execute;
-  final RunTailReader _tailFor;
   final RunStatusReader _statusFor;
   final RecoverySelector _selectRecovery;
   final RecoveryOfferLoader _loadRecoveryOffers;
@@ -424,13 +413,15 @@ final class RunStartController extends ChangeNotifier {
     }
   }
 
+  /// Keeps the started-run rows current. Output itself belongs to the
+  /// observation view, which reads it from durable storage.
   void _onSummary(RunLogSummary event) {
-    if (_disposed || !state.runs.any((run) => run.runId == event.runId)) return;
-    final text = utf8.decode(_tailFor(event.runId), allowMalformed: true);
-    _replaceRun(
-      event.runId,
-      (run) => run.copyWith(status: RunStatus.running, tail: text),
-    );
+    if (_disposed ||
+        event.isAnnouncement ||
+        !state.runs.any((run) => run.runId == event.runId)) {
+      return;
+    }
+    _replaceRun(event.runId, (run) => run.copyWith(status: RunStatus.running));
     unawaited(_refreshStatus(event.runId));
   }
 

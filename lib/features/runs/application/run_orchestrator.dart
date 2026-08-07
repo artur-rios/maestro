@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:maestro/core/logging/secret_redactor.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
+import 'package:maestro/features/runs/domain/run_observation.dart';
 
 final class RunExecutionAggregate {
   RunExecutionAggregate({
@@ -121,11 +122,27 @@ final class RunLogSummary {
     required this.attemptId,
     required this.lastSequence,
     required this.tailBytes,
+    this.durability = OutputDurability.durable,
   });
+
+  /// Announces that a run became active before it has produced any output.
+  ///
+  /// The observation view needs to show a newly started run immediately, and a
+  /// silent run may never publish a log summary. Announcing through the same
+  /// channel keeps the start and observation controllers unaware of each other.
+  const RunLogSummary.announcement(this.runId)
+    : attemptId = '',
+      lastSequence = -1,
+      tailBytes = 0,
+      durability = OutputDurability.durable;
+
   final String runId;
   final String attemptId;
   final int lastSequence;
   final int tailBytes;
+  final OutputDurability durability;
+
+  bool get isAnnouncement => lastSequence < 0;
 }
 
 final class RunSummaryEvents {
@@ -141,11 +158,16 @@ final class RunSummaryEvents {
     return subscription;
   }
 
-  Future<RunLogSummary> get first {
+  /// Completes with the first summary that carries persisted output.
+  ///
+  /// Run announcements are skipped: they report that a run became active, not
+  /// that anything has been written yet.
+  Future<RunLogSummary> get firstOutput {
     final completer = Completer<RunLogSummary>();
     late final RunSummarySubscription subscription;
     subscription = listen((event) {
-      if (!completer.isCompleted) completer.complete(event);
+      if (event.isAnnouncement || completer.isCompleted) return;
+      completer.complete(event);
       subscription.cancel();
     });
     return completer.future;
@@ -235,6 +257,14 @@ final class RunOrchestrator {
   static const int maximumPersistedFrameBytes = 16 * 1024;
   static const int maximumTailBytes = 64 * 1024;
   static const int maximumTailRuns = 8;
+
+  /// The ceiling on output whose durable write has failed and is awaiting a
+  /// retry.
+  ///
+  /// AF-03 requires bounded buffering during a persistence outage and a safe
+  /// failure before memory becomes unbounded, so the buffer is capped and
+  /// crossing the cap ends the attempt with a typed failure.
+  static const int maximumDegradedBufferBytes = 256 * 1024;
   final RunExecutionRepository _repository;
   final StepProcessLauncher _launcher;
   final AttemptResultFiles _resultFiles;
@@ -245,18 +275,23 @@ final class RunOrchestrator {
   final String Function() _newNonce;
   final DateTime Function() _now;
   final RunSummaryEvents _events = RunSummaryEvents();
-  final Map<String, Queue<Uint8List>> _tails = <String, Queue<Uint8List>>{};
+  final Map<String, Queue<RunOutputChunk>> _tails =
+      <String, Queue<RunOutputChunk>>{};
   final Map<String, int> _tailSizes = <String, int>{};
   final Map<String, Future<void>> _active = <String, Future<void>>{};
 
   RunSummaryEvents get events => _events;
   int get retainedTailRunCount => _tails.length;
 
-  Uint8List tailFor(String runId) => Uint8List.fromList(
-    (_tails[runId] ?? Queue<Uint8List>())
-        .expand((part) => part)
-        .toList(growable: false),
-  );
+  /// The live tail for one run, with each fragment's channel preserved.
+  ///
+  /// FR-OB-05 requires stdout, stderr, and system output to stay
+  /// distinguishable, so the tail is a sequence of channel-tagged chunks rather
+  /// than a flat byte run.
+  List<RunOutputChunk> outputTailFor(String runId) =>
+      List<RunOutputChunk>.unmodifiable(
+        _tails[runId] ?? const <RunOutputChunk>[],
+      );
 
   Future<void> execute(String runId) {
     final existing = _active[runId];
@@ -278,6 +313,7 @@ final class RunOrchestrator {
     } else if (aggregate.run.status != RunStatus.running) {
       throw StateError('Only active runs can execute.');
     }
+    _events.add(RunLogSummary.announcement(runId));
     DeclaredContext? priorContext = _resumedContext(aggregate);
     for (
       var position = aggregate.run.currentStepPosition;
@@ -363,11 +399,18 @@ final class RunOrchestrator {
       }
       var sequence = 0;
       final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
-      final batcher = _LogBatcher(
-        maximumBytes: maximumPersistedFrameBytes,
-        maximumDelay: const Duration(milliseconds: 25),
-        persist: (parts) async {
-          for (final part in parts) {
+      // Batches whose durable write failed, kept in order so a recovered
+      // storage layer replays them exactly as the process produced them.
+      final unpersisted = Queue<_PendingLogPart>();
+      var unpersistedBytes = 0;
+      var durability = OutputDurability.durable;
+      var durabilityExhausted = false;
+      // Writes buffered batches oldest-first and stops at the first failure, so
+      // a partial outage never reorders a run's durable output.
+      Future<void> writeBuffered() async {
+        while (unpersisted.isNotEmpty) {
+          final part = unpersisted.first;
+          try {
             sequence = await _persist(
               runId,
               attemptId,
@@ -376,15 +419,38 @@ final class RunOrchestrator {
               sequence,
               part.bytes,
             );
+          } on Object {
+            durability = OutputDurability.degraded;
+            break;
           }
-          _events.add(
-            RunLogSummary(
-              runId: runId,
-              attemptId: attemptId,
-              lastSequence: sequence - 1,
-              tailBytes: _tailSizes[runId]!,
-            ),
-          );
+          unpersisted.removeFirst();
+          unpersistedBytes -= part.bytes.length;
+        }
+        if (unpersisted.isEmpty) durability = OutputDurability.durable;
+        _events.add(
+          RunLogSummary(
+            runId: runId,
+            attemptId: attemptId,
+            lastSequence: sequence - 1,
+            tailBytes: _tailSizes[runId] ?? 0,
+            durability: durability,
+          ),
+        );
+      }
+
+      final batcher = _LogBatcher(
+        maximumBytes: maximumPersistedFrameBytes,
+        maximumDelay: const Duration(milliseconds: 25),
+        persist: (parts) async {
+          for (final part in parts) {
+            unpersisted.add(part);
+            unpersistedBytes += part.bytes.length;
+          }
+          if (unpersistedBytes > maximumDegradedBufferBytes) {
+            durabilityExhausted = true;
+            throw const _DurabilityExhausted();
+          }
+          await writeBuffered();
         },
       );
       final drain = () async {
@@ -429,7 +495,28 @@ final class RunOrchestrator {
           // The durable process record remains for startup reconciliation.
         }
         await _resolveIgnoringErrors(resultPath);
-        await _failAttempt(attemptId, 'run.step.stream_failed');
+        await _failAttempt(
+          attemptId,
+          durabilityExhausted
+              ? 'run.step.log_persist'
+              : 'run.step.stream_failed',
+        );
+        return;
+      }
+      // A transient outage gets one last chance once the stream is closed and
+      // nothing further competes for storage.
+      if (unpersisted.isNotEmpty) {
+        await writeBuffered();
+      }
+      // Output that never reached storage must not be reported as a successful
+      // step: the run's evidence would be incomplete without anyone knowing.
+      if (unpersisted.isNotEmpty) {
+        await _resolveIgnoringErrors(resultPath);
+        await _failAttempt(
+          attemptId,
+          'run.step.log_persist',
+          exitCode: exitCode,
+        );
         return;
       }
       if (exitCode != 0) {
@@ -561,31 +648,36 @@ final class RunOrchestrator {
           createdAt: _now(),
         ),
       );
-      _appendTail(runId, part);
+      _appendTail(runId, channel, part);
       sequence++;
     }
     return sequence;
   }
 
-  void _appendTail(String runId, Uint8List bytes) {
+  void _appendTail(String runId, RunLogChannel channel, Uint8List bytes) {
     final existing = _tails.remove(runId);
-    final tail = existing ?? Queue<Uint8List>();
+    final tail = existing ?? Queue<RunOutputChunk>();
     _tails[runId] = tail;
     while (_tails.length > maximumTailRuns) {
       final oldest = _tails.keys.first;
       _tails.remove(oldest);
       _tailSizes.remove(oldest);
     }
-    tail.add(Uint8List.fromList(bytes));
+    tail.add(RunOutputChunk(channel: channel, bytes: bytes));
     var size = (_tailSizes[runId] ?? 0) + bytes.length;
     while (size > maximumTailBytes && tail.isNotEmpty) {
       final excess = size - maximumTailBytes;
       final first = tail.first;
-      if (first.length <= excess) {
-        size -= tail.removeFirst().length;
+      if (first.byteLength <= excess) {
+        size -= tail.removeFirst().byteLength;
       } else {
         tail.removeFirst();
-        tail.addFirst(Uint8List.sublistView(first, excess));
+        tail.addFirst(
+          RunOutputChunk(
+            channel: first.channel,
+            bytes: Uint8List.sublistView(first.bytes, excess),
+          ),
+        );
         size -= excess;
       }
     }
@@ -827,6 +919,11 @@ final class _StreamingFrameRedactor {
     final text = utf8.decode(bytes, allowMalformed: true);
     return _patternValueAtEnd.hasMatch(text);
   }
+}
+
+/// Signals that buffered unpersisted output reached its bounded ceiling.
+final class _DurabilityExhausted implements Exception {
+  const _DurabilityExhausted();
 }
 
 final class _PendingCandidate {

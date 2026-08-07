@@ -179,13 +179,6 @@ final class _RunStartPanelState extends State<RunStartPanel> {
               Text('Current step: ${run.currentStep ?? 'Unavailable'}'),
               SelectableText(run.branchName),
               SelectableText(run.worktreePath),
-              if (run.tail.isNotEmpty)
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 120),
-                  child: SingleChildScrollView(
-                    child: Text(run.tail, key: Key('run-tail-${run.runId}')),
-                  ),
-                ),
             ],
           ],
         ),
