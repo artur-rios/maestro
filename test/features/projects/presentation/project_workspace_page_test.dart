@@ -319,6 +319,55 @@ void main() {
   });
 
   testWidgets(
+    'GivenATerminalBuilder_WhenAnAvailableProjectIsSelected_ThenTheTerminalPanelIsShown',
+    (tester) async {
+      // Given: a workspace composed with the embedded terminal.
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, project) =>
+              Text('terminal for ${project.name}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // When: an available project is selected.
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      // Then: its terminal is offered (FR-TE-01).
+      expect(find.text('terminal for Demo'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenAnUnavailableProjectFolder_WhenItIsSelected_ThenNoTerminalPanelIsShown',
+    (tester) async {
+      // Given: a project whose folder is gone (AF-02).
+      final repository = _Repository()..records.add(_record());
+      final validator = _Validator()
+        ..availability = ProjectAvailability.missing;
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          validator: validator,
+          terminalBuilder: (_, _, project) =>
+              Text('terminal for ${project.name}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // When: it is selected.
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      // Then: a folder Maestro cannot reach roots no shell.
+      expect(find.text('terminal for Demo'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'GivenUnavailableSelection_WhenShown_ThenRefreshGuidanceAndDisabledActionsAreVisible',
     (tester) async {
       final record = _record();
@@ -554,6 +603,7 @@ Widget _app({
   ProjectFolderPicker picker = const _Picker(null),
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
+  RunStartWorkspaceBuilder? terminalBuilder,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
@@ -582,6 +632,7 @@ Widget _app({
         actorId: 'actor-1',
         lifecycleService: lifecycle,
         workflowService: workflowService,
+        terminalBuilder: terminalBuilder,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
     ),

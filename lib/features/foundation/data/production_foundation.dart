@@ -15,10 +15,13 @@ import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
 import 'package:maestro/features/runs/data/drift_run_repository.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
+import 'package:maestro/platform/agents/executable_resolver.dart';
 import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/common/executable_probe.dart';
 import 'package:maestro/platform/process/owned_process_recovery.dart';
+import 'package:maestro/platform/terminal/platform_shell.dart';
+import 'package:maestro/platform/terminal/pty_terminal_port.dart';
 
 final class ProductionFoundation {
   ProductionFoundation({
@@ -31,7 +34,11 @@ final class ProductionFoundation {
     OwnedProcessRecoveryAdapter processRecovery =
         const PlatformOwnedProcessRecovery(),
     RunRecoveryStarter? recoveryStarter,
-  }) : runRepository = runRepository ?? DriftRunRepository(database),
+    CapabilityProbe? shellProbe,
+  }) : _shellProbe =
+           shellProbe ??
+           PtyTerminalPort(shells: ShellResolver(locator: ExecutableResolver())),
+       runRepository = runRepository ?? DriftRunRepository(database),
        _clock = clock ?? _utcNow,
        _newId = newId ?? _fallbackId,
        _processRecovery = processRecovery,
@@ -52,6 +59,7 @@ final class ProductionFoundation {
   final String Function() _newId;
   final OwnedProcessRecoveryAdapter _processRecovery;
   final RunRecoveryStarter? _recoveryStarter;
+  final CapabilityProbe _shellProbe;
   late final RunInterruptionReconciler _runReconciler;
   late final StartupRunRecoveryCoordinator _startupRecovery;
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
@@ -102,6 +110,9 @@ final class ProductionFoundation {
           command: specification.command,
         ),
       ),
+    // The embedded terminal's shell is reported at startup, so AF-01 reaches
+    // the user before they open a terminal rather than after.
+    _CapabilityFoundationProbe(_shellProbe),
     _CallbackFoundationProbe(
       'reconciliation',
       false,

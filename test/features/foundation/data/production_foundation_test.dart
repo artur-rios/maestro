@@ -13,8 +13,59 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/runs/data/drift_run_repository.dart';
 import 'package:maestro/features/runs/domain/run_models.dart' as domain;
+import 'package:maestro/platform/common/capability.dart';
 
 void main() {
+  test(
+    'GivenAnAvailableShell_WhenProbingTheFoundation_ThenTheShellCheckIsReady',
+    () async {
+      // Given: a foundation whose terminal adapter reports a usable shell.
+      final root = await Directory.systemTemp.createTemp(
+        'maestro-foundation-shell-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final foundation = ProductionFoundation(
+        paths: ApplicationPaths.fromRoot(root),
+        database: database,
+        shellProbe: const _StubShellProbe(CapabilityState.available),
+      );
+
+      // When: startup probes the embedded terminal's shell.
+      final check = await _shellCheck(foundation);
+
+      // Then: the startup report carries it as a ready check.
+      expect(check.id, 'shell');
+      expect(check.health, FoundationHealth.ready);
+    },
+  );
+
+  test(
+    'GivenNoShell_WhenProbingTheFoundation_ThenTheShellCheckIsDegraded',
+    () async {
+      // Given: a foundation whose terminal adapter finds no shell (AF-01).
+      final root = await Directory.systemTemp.createTemp(
+        'maestro-foundation-no-shell-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final foundation = ProductionFoundation(
+        paths: ApplicationPaths.fromRoot(root),
+        database: database,
+        shellProbe: const _StubShellProbe(CapabilityState.missing),
+      );
+
+      // When: startup probes the embedded terminal's shell.
+      final check = await _shellCheck(foundation);
+
+      // Then: the user learns before opening a terminal, without being blocked.
+      expect(check.health, FoundationHealth.degraded);
+      expect(check.remediation, isNotNull);
+    },
+  );
+
   test(
     'GivenClosedSharedDatabase_WhenProbed_ThenDatabaseCheckIsBlocked',
     () async {
@@ -432,3 +483,30 @@ domain.RunSnapshot _snapshot(Directory root, String suffix) =>
         ),
       ],
     );
+
+
+final class _StubShellProbe implements CapabilityProbe {
+  const _StubShellProbe(this._state);
+
+  final CapabilityState _state;
+
+  @override
+  Future<Capability> probe() async => Capability(
+    id: 'shell',
+    state: _state,
+    message: 'shell probe',
+    remediation: _state == CapabilityState.available ? null : 'Install a shell.',
+  );
+}
+
+
+/// Capability probes share one probe id, so the shell check is found by the
+/// capability it reports rather than by the probe that reported it.
+Future<FoundationCheck> _shellCheck(ProductionFoundation foundation) async {
+  for (final probe in foundation.probes) {
+    if (probe.id != 'platform-capability') continue;
+    final check = await probe.probe();
+    if (check.id == 'shell') return check;
+  }
+  throw StateError('No shell capability check was produced.');
+}

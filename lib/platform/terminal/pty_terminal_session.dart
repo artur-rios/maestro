@@ -8,9 +8,9 @@ import 'dart:typed_data';
 import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
-import 'package:maestro/platform/process/owned_process_recovery.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
+import 'package:maestro/platform/process/owned_process_recovery.dart';
 
 enum TerminalSignal { terminate, kill }
 

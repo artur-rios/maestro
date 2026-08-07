@@ -38,12 +38,17 @@ import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_panel.dart';
+import 'package:maestro/features/terminal/application/open_project_terminal.dart';
+import 'package:maestro/features/terminal/data/local_terminal_project_folder.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/platform/agents/claude_code_adapter.dart';
 import 'package:maestro/platform/agents/codex_adapter.dart';
+import 'package:maestro/platform/agents/executable_resolver.dart';
 import 'package:maestro/platform/agents/open_code_adapter.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
@@ -51,6 +56,8 @@ import 'package:maestro/platform/git/git_port.dart';
 import 'package:maestro/platform/git/local_run_worktree_path_inspector.dart';
 import 'package:maestro/platform/git/local_run_worktree_probe.dart';
 import 'package:maestro/platform/git/run_git_port.dart';
+import 'package:maestro/platform/terminal/platform_shell.dart';
+import 'package:maestro/platform/terminal/pty_terminal_port.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -78,6 +85,7 @@ final class ProductionAppComposition {
     required this.runOrchestrator,
     required this.runStartBuilder,
     required this.runObservationBuilder,
+    required this.terminalBuilder,
     required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
@@ -96,6 +104,7 @@ final class ProductionAppComposition {
   final RunOrchestrator runOrchestrator;
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
+  final RunStartWorkspaceBuilder terminalBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -111,6 +120,7 @@ final class ProductionAppComposition {
     agentConfigurationService: agentConfigurationService,
     runStartBuilder: runStartBuilder,
     runObservationBuilder: runObservationBuilder,
+    terminalBuilder: terminalBuilder,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
   );
@@ -221,6 +231,14 @@ Future<ProductionAppComposition> composeProductionApp({
     newRecoveryId: newId,
     now: now,
   );
+  // One adapter serves both the startup capability report and the panel, so a
+  // degraded shell is reported the same way in both places.
+  final terminals = PtyTerminalPort(
+    shells: ShellResolver(locator: ExecutableResolver()),
+    folders: const LocalTerminalProjectFolder(),
+    ownership: ownership,
+    newResourceId: newId,
+  );
   final foundation = ProductionFoundation(
     paths: paths,
     database: database,
@@ -228,6 +246,7 @@ Future<ProductionAppComposition> composeProductionApp({
     runRepository: runRepository,
     clock: now,
     newId: newId,
+    shellProbe: terminals,
     // Startup offers and in-session retries share one execution path, so a
     // scope chosen at startup actually drives the run.
     recoveryStarter: (offer, action) async {
@@ -326,6 +345,22 @@ Future<ProductionAppComposition> composeProductionApp({
     createControlController: () => RunControlController(control: controlRun),
   );
 
+  final openProjectTerminal = OpenProjectTerminal(
+    terminals: terminals,
+    folders: const LocalTerminalProjectFolder(),
+  );
+  Widget terminalBuilder(
+    BuildContext context,
+    String actorId,
+    ProjectRecord project,
+  ) => ProjectTerminalPanel(
+    key: ValueKey<String>('project-terminal-${project.id}'),
+    createController: () => ProjectTerminalController(
+      workingDirectory: project.folderPath,
+      open: openProjectTerminal.call,
+    ),
+  );
+
   return ProductionAppComposition._(
     database: database,
     authenticationService: authenticationService,
@@ -339,6 +374,7 @@ Future<ProductionAppComposition> composeProductionApp({
     runOrchestrator: runOrchestrator,
     runStartBuilder: runStartBuilder,
     runObservationBuilder: runObservationBuilder,
+    terminalBuilder: terminalBuilder,
     activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: foundation,

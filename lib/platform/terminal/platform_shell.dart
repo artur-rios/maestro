@@ -1,3 +1,6 @@
+// Public constructor names describe ports; stored fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:io';
 
 import 'package:maestro/platform/agents/executable_resolver.dart';

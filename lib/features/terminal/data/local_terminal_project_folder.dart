@@ -1,3 +1,6 @@
+// Public constructor names describe ports; stored fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
 
