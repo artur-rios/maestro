@@ -84,21 +84,38 @@ Future<void> main(List<String> arguments) async {
     flush: true,
   );
   if (mode == 'survivingChildSwap') {
-    final script = Platform.script.toFilePath();
-    final child = Platform.isWindows
-        ? await Process.start(Platform.resolvedExecutable, <String>[
-            script,
-            'swapResultChild',
-            path,
-          ], mode: ProcessStartMode.detached)
-        : await Process.start('/bin/sh', <String>[
-            '-c',
-            'exec ${_shellQuote(Platform.resolvedExecutable)} '
-                '${_shellQuote(script)} swapResultChild ${_shellQuote(path)} '
-                '</dev/null >/dev/null 2>&1',
-          ]);
-    await File('$path.child.pid').writeAsString('${child.pid}', flush: true);
+    await File(
+      '$path.child.pid',
+    ).writeAsString(await _startSurvivingChild(path), flush: true);
   }
+}
+
+/// Starts a child that outlives this step while staying owned by it.
+///
+/// Windows gets a detached process, which the job object still owns. Unix
+/// ownership is the process group, and no Dart spawn mode produces both
+/// properties there: the detached modes call `setsid` and take the child out
+/// of the group, while every other mode keeps this process alive until the
+/// child exits, so the child would never outlive the step at all. A
+/// non-interactive shell has no job control, so a backgrounded command stays
+/// in the shell's process group while the shell exits immediately.
+Future<String> _startSurvivingChild(String path) async {
+  final script = Platform.script.toFilePath();
+  if (Platform.isWindows) {
+    final child = await Process.start(Platform.resolvedExecutable, <String>[
+      script,
+      'swapResultChild',
+      path,
+    ], mode: ProcessStartMode.detached);
+    return '${child.pid}';
+  }
+  final shell = await Process.start('/bin/sh', <String>[
+    '-c',
+    '${_shellQuote(Platform.resolvedExecutable)} '
+        '${_shellQuote(script)} swapResultChild ${_shellQuote(path)} '
+        '</dev/null >/dev/null 2>&1 & echo \$!',
+  ]);
+  return (await shell.stdout.transform(utf8.decoder).join()).trim();
 }
 
 String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
