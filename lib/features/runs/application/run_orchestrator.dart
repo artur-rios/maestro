@@ -8,6 +8,7 @@ import 'dart:typed_data';
 
 import 'package:maestro/core/logging/secret_redactor.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
+import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
@@ -244,7 +245,7 @@ final class RunSummarySubscription {
   }
 }
 
-final class RunOrchestrator {
+final class RunOrchestrator implements RunExecutionControl {
   RunOrchestrator({
     required RunExecutionRepository repository,
     required StepProcessLauncher launcher,
@@ -300,6 +301,7 @@ final class RunOrchestrator {
   ///
   /// Cancellation awaits this before writing terminal evidence, so the loop has
   /// already stood down and cannot race the cancel transaction.
+  @override
   Future<void>? activeExecution(String runId) => _active[runId];
   int get retainedTailRunCount => _tails.length;
 
@@ -318,6 +320,7 @@ final class RunOrchestrator {
   /// The request is honored between steps, never mid-step, so the step's
   /// evidence stays complete. A run that fails first ends failed rather than
   /// paused (AF-02), which the flag's placement in the loop guarantees.
+  @override
   void requestPause(String runId) => _pauseRequested.add(runId);
 
   /// Terminates a run's live process tree immediately (FR-RC-04).
@@ -325,6 +328,7 @@ final class RunOrchestrator {
   /// The flag outlives the kill: the execute loop must know the non-zero exit
   /// it is about to observe was the cancellation, so it writes no failure
   /// evidence and leaves the terminal state to the cancel transaction.
+  @override
   Future<CancellationOutcome> requestCancel(String runId) async {
     _cancelRequested.add(runId);
     final process = _processes[runId];
@@ -341,6 +345,7 @@ final class RunOrchestrator {
     };
   }
 
+  @override
   Future<void> execute(
     String runId, {
     RecoveryContextPolicy contextPolicy = RecoveryContextPolicy.preserved,
