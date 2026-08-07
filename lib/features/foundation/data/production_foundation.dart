@@ -34,13 +34,14 @@ final class ProductionFoundation {
   final DateTime Function() _clock;
   final String Function() _newId;
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
+  Future<String>? _startupReconciliation;
 
-  Future<List<RunRecoveryOffer>> recoverInterruptedRuns() async {
+  Future<List<RunRecoveryOffer>> listRecoveryOffers() async {
     recoveryOffers = await RunInterruptionReconciler(
       repository: runRepository,
       now: _clock,
       newId: _newId,
-    ).reconcile();
+    ).listOffers();
     return recoveryOffers;
   }
 
@@ -78,7 +79,7 @@ final class ProductionFoundation {
           command: specification.command,
         ),
       ),
-    _CallbackFoundationProbe('reconciliation', false, _reconcile),
+    _CallbackFoundationProbe('reconciliation', false, _reconcileOnce),
   ];
 
   Future<String> _initializePaths() async {
@@ -142,6 +143,8 @@ final class ProductionFoundation {
     }
     return 'Owned-resource reconciliation completed.';
   }
+
+  Future<String> _reconcileOnce() => _startupReconciliation ??= _reconcile();
 }
 
 final class StaticFoundationProbe implements FoundationProbe {

@@ -100,6 +100,30 @@ void main() {
       expect(repository.requests, isEmpty);
     },
   );
+
+  test(
+    'GivenLiveAndInterruptedState_WhenOffersReloaded_ThenReadOnlyQueryNeverInterruptsRuns',
+    () async {
+      final repository = _Repository(
+        evidence: <InterruptedRunEvidence>[
+          InterruptedRunEvidence(
+            runId: 'already-interrupted',
+            updatedAt: DateTime.utc(2026, 8, 6, 13),
+          ),
+        ],
+      );
+      final reconciler = RunInterruptionReconciler(
+        repository: repository,
+        now: () => DateTime.utc(2026, 8, 6, 14),
+        newId: () => 'unused',
+      );
+
+      final offers = await reconciler.listOffers();
+
+      expect(repository.interruptions, 0);
+      expect(offers.single.runId, 'already-interrupted');
+    },
+  );
 }
 
 final class _Repository implements RunInterruptionRepository {

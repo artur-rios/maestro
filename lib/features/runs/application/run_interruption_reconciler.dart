@@ -53,10 +53,11 @@ final class RunInterruptionReconciler {
 
   Future<List<RunRecoveryOffer>> reconcile() async {
     await repository.interruptActive(at: now().toUtc(), newLogId: newId);
-    return (await repository.listInterrupted())
-        .map(_offer)
-        .toList(growable: false);
+    return listOffers();
   }
+
+  Future<List<RunRecoveryOffer>> listOffers() async =>
+      (await repository.listInterrupted()).map(_offer).toList(growable: false);
 
   Future<List<RunRecoveryOffer>> reconcileBefore(
     Future<void> Function() cleanup,

@@ -271,7 +271,7 @@ Future<ProductionAppComposition> composeProductionApp({
           );
         },
         recoveryOffers: foundation.recoveryOffers,
-        loadRecoveryOffers: foundation.recoverInterruptedRuns,
+        loadRecoveryOffers: foundation.listRecoveryOffers,
         selectRecovery: foundation.selectRecovery,
       ),
     );

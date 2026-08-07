@@ -164,11 +164,76 @@ void main() {
         domain.RecoveryAction.restartWorkflow,
       );
       expect(foundation.recoveryOffers, isEmpty);
-      expect(await foundation.recoverInterruptedRuns(), isEmpty);
+      expect(await foundation.listRecoveryOffers(), isEmpty);
       expect(
         (await runs.findById('run-1'))!.recoveryRequests.single.action,
         domain.RecoveryAction.restartWorkflow,
       );
+
+      await runs.create(
+        run: _queuedRun('run-2', DateTime.utc(2026, 8, 6, 14)),
+        snapshot: _snapshot(root, 'run-2'),
+      );
+      await runs.transitionRun(
+        runId: 'run-2',
+        expectedStatus: domain.RunStatus.queued,
+        nextStatus: domain.RunStatus.starting,
+        at: DateTime.utc(2026, 8, 6, 14, 1),
+      );
+      await runs.transitionRun(
+        runId: 'run-2',
+        expectedStatus: domain.RunStatus.starting,
+        nextStatus: domain.RunStatus.running,
+        at: DateTime.utc(2026, 8, 6, 14, 2),
+      );
+
+      expect(await foundation.listRecoveryOffers(), isEmpty);
+      final secondStartupProbe = await foundation.probes
+          .singleWhere((probe) => probe.id == 'reconciliation')
+          .probe();
+      expect(secondStartupProbe.health, FoundationHealth.ready);
+      expect(
+        (await runs.findById('run-2'))!.run.status,
+        domain.RunStatus.running,
+      );
     },
   );
 }
+
+domain.WorkflowRun _queuedRun(String id, DateTime at) => domain.WorkflowRun(
+  id: id,
+  projectId: 'project-1',
+  workflowId: null,
+  label: 'UC-06 reload regression',
+  status: domain.RunStatus.queued,
+  currentStepPosition: 0,
+  createdAt: at,
+  updatedAt: at,
+);
+
+domain.RunSnapshot _snapshot(Directory root, String suffix) =>
+    domain.RunSnapshot(
+      schemaVersion: 1,
+      projectId: 'project-1',
+      projectName: 'Project',
+      canonicalSourcePath: '${root.path}/source',
+      sourceRevision: 'abc123',
+      workflowId: 'workflow-$suffix',
+      workflowRevision: 1,
+      workflowName: 'Delivery',
+      workItem: domain.UseCaseRunWorkItem(identifier: 'UC-06', title: 'Start'),
+      deliveryMode: domain.DeliveryMode.supervised,
+      branchWorkType: domain.BranchWorkType.feature,
+      steps: <domain.RunSnapshotStep>[
+        domain.RunSnapshotStep(
+          id: 'step-$suffix',
+          sourceWorkflowStepId: 'source-step-$suffix',
+          position: 0,
+          kind: 'execute',
+          name: 'Execute',
+          cli: 'codex',
+          model: 'gpt-5',
+          configuration: const <String, Object?>{},
+        ),
+      ],
+    );
