@@ -24,6 +24,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
     this.agentConfigurationService,
     this.runStartBuilder,
     this.runObservationBuilder,
+    this.terminalBuilder,
     super.key,
   });
 
@@ -34,6 +35,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final AgentConfigurationService? agentConfigurationService;
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
+  final RunStartWorkspaceBuilder? terminalBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +58,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
         emptyContent: emptyContent,
         runStartBuilder: runStartBuilder,
         runObservationBuilder: runObservationBuilder,
+        terminalBuilder: terminalBuilder,
       ),
     );
   }
@@ -67,12 +70,14 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
     required this.emptyContent,
     required this.runStartBuilder,
     required this.runObservationBuilder,
+    required this.terminalBuilder,
   });
 
   final String actorId;
   final Widget emptyContent;
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
+  final RunStartWorkspaceBuilder? terminalBuilder;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -102,6 +107,7 @@ final class _ProjectWorkspacePageState
       emptyContent: widget.emptyContent,
       runStartBuilder: widget.runStartBuilder,
       runObservationBuilder: widget.runObservationBuilder,
+      terminalBuilder: widget.terminalBuilder,
     );
     final projectsBody = Row(
       children: <Widget>[
@@ -404,6 +410,7 @@ final class _ProjectContent extends ConsumerWidget {
     required this.emptyContent,
     required this.runStartBuilder,
     required this.runObservationBuilder,
+    required this.terminalBuilder,
   });
 
   final String actorId;
@@ -411,6 +418,7 @@ final class _ProjectContent extends ConsumerWidget {
   final Widget emptyContent;
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
+  final RunStartWorkspaceBuilder? terminalBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -512,6 +520,10 @@ final class _ProjectContent extends ConsumerWidget {
         ),
         if (runObservationBuilder != null)
           runObservationBuilder!(context, actorId, selected.record),
+        // A folder Maestro cannot reach cannot root a shell, so the terminal
+        // is not offered for one (AF-02, before the fact).
+        if (terminalBuilder != null && selected.folderActionsEnabled)
+          terminalBuilder!(context, actorId, selected.record),
       ],
     );
   }

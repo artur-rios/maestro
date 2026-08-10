@@ -5,13 +5,11 @@ local software projects. A user selects a project folder, describes a task, choo
 steps, assigns an AI CLI and model to each step, and lets Maestro execute the workflow on an isolated Git
 branch in the background.
 
-> **Status:** milestones M-01 through M-03 are complete, and M-04 has delivered
-> UC-06 through UC-08. Projects can be registered and managed, workflows designed
+> **Status:** milestones M-01 through M-04 are complete. Projects can be registered and managed, workflows designed
 > with step agents assigned, workflow runs started on an isolated branch and
 > worktree, active runs observed with their ordered steps, current status, and
 > streamed output, and those runs paused, resumed, cancelled, and retried with an
-> explicit recovery scope. The embedded terminal and delivery are still in
-> progress.
+> explicit recovery scope, and project-scoped embedded terminals. Governed delivery is in progress.
 
 ## What It Does
 
@@ -100,7 +98,7 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 | [M-01 — Foundation](https://github.com/artur-rios/maestro/milestone/1) | Layered scaffold, persistence, adapters, configuration, tests, CI, packaging, and signed-release foundation covering IR-01 through IR-15 | — | 1 | 1 / 1 closed |
 | [M-02 — Secure Project Workspace](https://github.com/artur-rios/maestro/milestone/2) | Local authentication plus safe project registration, selection, restoration, and metadata deletion | M-01 | 3 | 3 / 3 closed |
 | [M-03 — Workflow Authoring](https://github.com/artur-rios/maestro/milestone/3) | Reusable and one-off workflow design with validated CLI and model assignments | M-02 | 2 | 2 / 2 closed |
-| [M-04 — Execution and Control](https://github.com/artur-rios/maestro/milestone/4) | Isolated concurrent execution, live observation, run recovery, and embedded terminals | M-03 | 4 | 3 / 4 closed |
+| [M-04 — Execution and Control](https://github.com/artur-rios/maestro/milestone/4) | Isolated concurrent execution, live observation, run recovery, and embedded terminals | M-03 | 4 | 4 / 4 closed |
 | [M-05 — Governed Delivery](https://github.com/artur-rios/maestro/milestone/5) | Supervised human-controlled and autonomous model-reviewed GitHub delivery | M-04 | 2 | 0 / 2 closed |
 | [M-06 — History, Maintenance, and Updates](https://github.com/artur-rios/maestro/milestone/6) | Searchable evidence, auditing, retention, compaction, safe deletion, and verified application updates | M-05 | 3 | 0 / 3 closed |
 
@@ -134,7 +132,7 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 | ✅ [#7](https://github.com/artur-rios/maestro/issues/7) | UC-06 — Start isolated workflow runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | ✅ [#8](https://github.com/artur-rios/maestro/issues/8) | UC-07 — Observe active runs | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | ✅ [#9](https://github.com/artur-rios/maestro/issues/9) | UC-08 — Control and recover a run | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
-| [#10](https://github.com/artur-rios/maestro/issues/10) | UC-09 — Use the embedded terminal | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| ✅ [#10](https://github.com/artur-rios/maestro/issues/10) | UC-09 — Use the embedded terminal | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 ### M-05 — Governed Delivery
 
