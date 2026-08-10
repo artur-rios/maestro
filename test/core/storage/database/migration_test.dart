@@ -436,4 +436,50 @@ void main() {
       },
     );
   }
+
+  test(
+    'GivenVersionFiveDatabase_WhenMigratedToVersionSix_ThenDeliveryRecordsAreCreated',
+    () async {
+      final verifier = SchemaVerifier(GeneratedHelper());
+      final schema = await verifier.schemaAt(5);
+      final database = MaestroDatabase(schema.newConnection());
+      await database.customStatement(
+        'INSERT INTO workflow_runs '
+        '(id, label, status, current_step_position, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        <Object>['run-1', 'UC-11', 'completed', 0, 1786003200, 1786003200],
+      );
+
+      await verifier.migrateAndValidate(database, 6);
+
+      await database.customStatement(
+        'INSERT INTO delivery_records '
+        '(run_id, repository, issue_number, branch_name, head_commit, '
+        'findings, issue_closed, branch_deleted, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        <Object>[
+          'run-1',
+          'acme/maestro',
+          12,
+          'codex/uc-11',
+          'head-commit',
+          '[]',
+          0,
+          0,
+          1786003200,
+          1786003200,
+        ],
+      );
+      expect(
+        (await database
+                .customSelect('SELECT repository FROM delivery_records')
+                .getSingle())
+            .read<String>('repository'),
+        'acme/maestro',
+      );
+
+      await database.close();
+      schema.close();
+    },
+  );
 }

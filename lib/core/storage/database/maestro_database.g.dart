@@ -7366,6 +7366,1087 @@ class RunRecoveryRequestsCompanion extends UpdateCompanion<RunRecoveryRequest> {
   }
 }
 
+class $DeliveryRecordsTable extends DeliveryRecords
+    with TableInfo<$DeliveryRecordsTable, DeliveryRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeliveryRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES workflow_runs (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _repositoryMeta = const VerificationMeta(
+    'repository',
+  );
+  @override
+  late final GeneratedColumn<String> repository = GeneratedColumn<String>(
+    'repository',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _issueNumberMeta = const VerificationMeta(
+    'issueNumber',
+  );
+  @override
+  late final GeneratedColumn<int> issueNumber = GeneratedColumn<int>(
+    'issue_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchNameMeta = const VerificationMeta(
+    'branchName',
+  );
+  @override
+  late final GeneratedColumn<String> branchName = GeneratedColumn<String>(
+    'branch_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _headCommitMeta = const VerificationMeta(
+    'headCommit',
+  );
+  @override
+  late final GeneratedColumn<String> headCommit = GeneratedColumn<String>(
+    'head_commit',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pullRequestNumberMeta = const VerificationMeta(
+    'pullRequestNumber',
+  );
+  @override
+  late final GeneratedColumn<int> pullRequestNumber = GeneratedColumn<int>(
+    'pull_request_number',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pullRequestUrlMeta = const VerificationMeta(
+    'pullRequestUrl',
+  );
+  @override
+  late final GeneratedColumn<String> pullRequestUrl = GeneratedColumn<String>(
+    'pull_request_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reviewerIdentityMeta = const VerificationMeta(
+    'reviewerIdentity',
+  );
+  @override
+  late final GeneratedColumn<String> reviewerIdentity = GeneratedColumn<String>(
+    'reviewer_identity',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reviewOutcomeMeta = const VerificationMeta(
+    'reviewOutcome',
+  );
+  @override
+  late final GeneratedColumn<String> reviewOutcome = GeneratedColumn<String>(
+    'review_outcome',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _findingsMeta = const VerificationMeta(
+    'findings',
+  );
+  @override
+  late final GeneratedColumn<String> findings = GeneratedColumn<String>(
+    'findings',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mergeCommitMeta = const VerificationMeta(
+    'mergeCommit',
+  );
+  @override
+  late final GeneratedColumn<String> mergeCommit = GeneratedColumn<String>(
+    'merge_commit',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _issueClosedMeta = const VerificationMeta(
+    'issueClosed',
+  );
+  @override
+  late final GeneratedColumn<bool> issueClosed = GeneratedColumn<bool>(
+    'issue_closed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("issue_closed" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _branchDeletedMeta = const VerificationMeta(
+    'branchDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> branchDeleted = GeneratedColumn<bool>(
+    'branch_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("branch_deleted" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _failureCodeMeta = const VerificationMeta(
+    'failureCode',
+  );
+  @override
+  late final GeneratedColumn<String> failureCode = GeneratedColumn<String>(
+    'failure_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remediationMeta = const VerificationMeta(
+    'remediation',
+  );
+  @override
+  late final GeneratedColumn<String> remediation = GeneratedColumn<String>(
+    'remediation',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    runId,
+    repository,
+    issueNumber,
+    branchName,
+    headCommit,
+    pullRequestNumber,
+    pullRequestUrl,
+    reviewerIdentity,
+    reviewOutcome,
+    findings,
+    mergeCommit,
+    issueClosed,
+    branchDeleted,
+    failureCode,
+    remediation,
+    createdAt,
+    updatedAt,
+    completedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'delivery_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DeliveryRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('repository')) {
+      context.handle(
+        _repositoryMeta,
+        repository.isAcceptableOrUnknown(data['repository']!, _repositoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_repositoryMeta);
+    }
+    if (data.containsKey('issue_number')) {
+      context.handle(
+        _issueNumberMeta,
+        issueNumber.isAcceptableOrUnknown(
+          data['issue_number']!,
+          _issueNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_issueNumberMeta);
+    }
+    if (data.containsKey('branch_name')) {
+      context.handle(
+        _branchNameMeta,
+        branchName.isAcceptableOrUnknown(data['branch_name']!, _branchNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_branchNameMeta);
+    }
+    if (data.containsKey('head_commit')) {
+      context.handle(
+        _headCommitMeta,
+        headCommit.isAcceptableOrUnknown(data['head_commit']!, _headCommitMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_headCommitMeta);
+    }
+    if (data.containsKey('pull_request_number')) {
+      context.handle(
+        _pullRequestNumberMeta,
+        pullRequestNumber.isAcceptableOrUnknown(
+          data['pull_request_number']!,
+          _pullRequestNumberMeta,
+        ),
+      );
+    }
+    if (data.containsKey('pull_request_url')) {
+      context.handle(
+        _pullRequestUrlMeta,
+        pullRequestUrl.isAcceptableOrUnknown(
+          data['pull_request_url']!,
+          _pullRequestUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reviewer_identity')) {
+      context.handle(
+        _reviewerIdentityMeta,
+        reviewerIdentity.isAcceptableOrUnknown(
+          data['reviewer_identity']!,
+          _reviewerIdentityMeta,
+        ),
+      );
+    }
+    if (data.containsKey('review_outcome')) {
+      context.handle(
+        _reviewOutcomeMeta,
+        reviewOutcome.isAcceptableOrUnknown(
+          data['review_outcome']!,
+          _reviewOutcomeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('findings')) {
+      context.handle(
+        _findingsMeta,
+        findings.isAcceptableOrUnknown(data['findings']!, _findingsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_findingsMeta);
+    }
+    if (data.containsKey('merge_commit')) {
+      context.handle(
+        _mergeCommitMeta,
+        mergeCommit.isAcceptableOrUnknown(
+          data['merge_commit']!,
+          _mergeCommitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('issue_closed')) {
+      context.handle(
+        _issueClosedMeta,
+        issueClosed.isAcceptableOrUnknown(
+          data['issue_closed']!,
+          _issueClosedMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_issueClosedMeta);
+    }
+    if (data.containsKey('branch_deleted')) {
+      context.handle(
+        _branchDeletedMeta,
+        branchDeleted.isAcceptableOrUnknown(
+          data['branch_deleted']!,
+          _branchDeletedMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_branchDeletedMeta);
+    }
+    if (data.containsKey('failure_code')) {
+      context.handle(
+        _failureCodeMeta,
+        failureCode.isAcceptableOrUnknown(
+          data['failure_code']!,
+          _failureCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remediation')) {
+      context.handle(
+        _remediationMeta,
+        remediation.isAcceptableOrUnknown(
+          data['remediation']!,
+          _remediationMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {runId};
+  @override
+  DeliveryRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeliveryRecord(
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      repository: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repository'],
+      )!,
+      issueNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}issue_number'],
+      )!,
+      branchName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_name'],
+      )!,
+      headCommit: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}head_commit'],
+      )!,
+      pullRequestNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pull_request_number'],
+      ),
+      pullRequestUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pull_request_url'],
+      ),
+      reviewerIdentity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reviewer_identity'],
+      ),
+      reviewOutcome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}review_outcome'],
+      ),
+      findings: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}findings'],
+      )!,
+      mergeCommit: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}merge_commit'],
+      ),
+      issueClosed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}issue_closed'],
+      )!,
+      branchDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}branch_deleted'],
+      )!,
+      failureCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_code'],
+      ),
+      remediation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remediation'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+    );
+  }
+
+  @override
+  $DeliveryRecordsTable createAlias(String alias) {
+    return $DeliveryRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class DeliveryRecord extends DataClass implements Insertable<DeliveryRecord> {
+  final String runId;
+  final String repository;
+  final int issueNumber;
+  final String branchName;
+  final String headCommit;
+  final int? pullRequestNumber;
+  final String? pullRequestUrl;
+  final String? reviewerIdentity;
+  final String? reviewOutcome;
+  final String findings;
+  final String? mergeCommit;
+  final bool issueClosed;
+  final bool branchDeleted;
+  final String? failureCode;
+  final String? remediation;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? completedAt;
+  const DeliveryRecord({
+    required this.runId,
+    required this.repository,
+    required this.issueNumber,
+    required this.branchName,
+    required this.headCommit,
+    this.pullRequestNumber,
+    this.pullRequestUrl,
+    this.reviewerIdentity,
+    this.reviewOutcome,
+    required this.findings,
+    this.mergeCommit,
+    required this.issueClosed,
+    required this.branchDeleted,
+    this.failureCode,
+    this.remediation,
+    required this.createdAt,
+    required this.updatedAt,
+    this.completedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['run_id'] = Variable<String>(runId);
+    map['repository'] = Variable<String>(repository);
+    map['issue_number'] = Variable<int>(issueNumber);
+    map['branch_name'] = Variable<String>(branchName);
+    map['head_commit'] = Variable<String>(headCommit);
+    if (!nullToAbsent || pullRequestNumber != null) {
+      map['pull_request_number'] = Variable<int>(pullRequestNumber);
+    }
+    if (!nullToAbsent || pullRequestUrl != null) {
+      map['pull_request_url'] = Variable<String>(pullRequestUrl);
+    }
+    if (!nullToAbsent || reviewerIdentity != null) {
+      map['reviewer_identity'] = Variable<String>(reviewerIdentity);
+    }
+    if (!nullToAbsent || reviewOutcome != null) {
+      map['review_outcome'] = Variable<String>(reviewOutcome);
+    }
+    map['findings'] = Variable<String>(findings);
+    if (!nullToAbsent || mergeCommit != null) {
+      map['merge_commit'] = Variable<String>(mergeCommit);
+    }
+    map['issue_closed'] = Variable<bool>(issueClosed);
+    map['branch_deleted'] = Variable<bool>(branchDeleted);
+    if (!nullToAbsent || failureCode != null) {
+      map['failure_code'] = Variable<String>(failureCode);
+    }
+    if (!nullToAbsent || remediation != null) {
+      map['remediation'] = Variable<String>(remediation);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    return map;
+  }
+
+  DeliveryRecordsCompanion toCompanion(bool nullToAbsent) {
+    return DeliveryRecordsCompanion(
+      runId: Value(runId),
+      repository: Value(repository),
+      issueNumber: Value(issueNumber),
+      branchName: Value(branchName),
+      headCommit: Value(headCommit),
+      pullRequestNumber: pullRequestNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pullRequestNumber),
+      pullRequestUrl: pullRequestUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pullRequestUrl),
+      reviewerIdentity: reviewerIdentity == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reviewerIdentity),
+      reviewOutcome: reviewOutcome == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reviewOutcome),
+      findings: Value(findings),
+      mergeCommit: mergeCommit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mergeCommit),
+      issueClosed: Value(issueClosed),
+      branchDeleted: Value(branchDeleted),
+      failureCode: failureCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureCode),
+      remediation: remediation == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remediation),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+    );
+  }
+
+  factory DeliveryRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeliveryRecord(
+      runId: serializer.fromJson<String>(json['runId']),
+      repository: serializer.fromJson<String>(json['repository']),
+      issueNumber: serializer.fromJson<int>(json['issueNumber']),
+      branchName: serializer.fromJson<String>(json['branchName']),
+      headCommit: serializer.fromJson<String>(json['headCommit']),
+      pullRequestNumber: serializer.fromJson<int?>(json['pullRequestNumber']),
+      pullRequestUrl: serializer.fromJson<String?>(json['pullRequestUrl']),
+      reviewerIdentity: serializer.fromJson<String?>(json['reviewerIdentity']),
+      reviewOutcome: serializer.fromJson<String?>(json['reviewOutcome']),
+      findings: serializer.fromJson<String>(json['findings']),
+      mergeCommit: serializer.fromJson<String?>(json['mergeCommit']),
+      issueClosed: serializer.fromJson<bool>(json['issueClosed']),
+      branchDeleted: serializer.fromJson<bool>(json['branchDeleted']),
+      failureCode: serializer.fromJson<String?>(json['failureCode']),
+      remediation: serializer.fromJson<String?>(json['remediation']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'runId': serializer.toJson<String>(runId),
+      'repository': serializer.toJson<String>(repository),
+      'issueNumber': serializer.toJson<int>(issueNumber),
+      'branchName': serializer.toJson<String>(branchName),
+      'headCommit': serializer.toJson<String>(headCommit),
+      'pullRequestNumber': serializer.toJson<int?>(pullRequestNumber),
+      'pullRequestUrl': serializer.toJson<String?>(pullRequestUrl),
+      'reviewerIdentity': serializer.toJson<String?>(reviewerIdentity),
+      'reviewOutcome': serializer.toJson<String?>(reviewOutcome),
+      'findings': serializer.toJson<String>(findings),
+      'mergeCommit': serializer.toJson<String?>(mergeCommit),
+      'issueClosed': serializer.toJson<bool>(issueClosed),
+      'branchDeleted': serializer.toJson<bool>(branchDeleted),
+      'failureCode': serializer.toJson<String?>(failureCode),
+      'remediation': serializer.toJson<String?>(remediation),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+    };
+  }
+
+  DeliveryRecord copyWith({
+    String? runId,
+    String? repository,
+    int? issueNumber,
+    String? branchName,
+    String? headCommit,
+    Value<int?> pullRequestNumber = const Value.absent(),
+    Value<String?> pullRequestUrl = const Value.absent(),
+    Value<String?> reviewerIdentity = const Value.absent(),
+    Value<String?> reviewOutcome = const Value.absent(),
+    String? findings,
+    Value<String?> mergeCommit = const Value.absent(),
+    bool? issueClosed,
+    bool? branchDeleted,
+    Value<String?> failureCode = const Value.absent(),
+    Value<String?> remediation = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> completedAt = const Value.absent(),
+  }) => DeliveryRecord(
+    runId: runId ?? this.runId,
+    repository: repository ?? this.repository,
+    issueNumber: issueNumber ?? this.issueNumber,
+    branchName: branchName ?? this.branchName,
+    headCommit: headCommit ?? this.headCommit,
+    pullRequestNumber: pullRequestNumber.present
+        ? pullRequestNumber.value
+        : this.pullRequestNumber,
+    pullRequestUrl: pullRequestUrl.present
+        ? pullRequestUrl.value
+        : this.pullRequestUrl,
+    reviewerIdentity: reviewerIdentity.present
+        ? reviewerIdentity.value
+        : this.reviewerIdentity,
+    reviewOutcome: reviewOutcome.present
+        ? reviewOutcome.value
+        : this.reviewOutcome,
+    findings: findings ?? this.findings,
+    mergeCommit: mergeCommit.present ? mergeCommit.value : this.mergeCommit,
+    issueClosed: issueClosed ?? this.issueClosed,
+    branchDeleted: branchDeleted ?? this.branchDeleted,
+    failureCode: failureCode.present ? failureCode.value : this.failureCode,
+    remediation: remediation.present ? remediation.value : this.remediation,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+  );
+  DeliveryRecord copyWithCompanion(DeliveryRecordsCompanion data) {
+    return DeliveryRecord(
+      runId: data.runId.present ? data.runId.value : this.runId,
+      repository: data.repository.present
+          ? data.repository.value
+          : this.repository,
+      issueNumber: data.issueNumber.present
+          ? data.issueNumber.value
+          : this.issueNumber,
+      branchName: data.branchName.present
+          ? data.branchName.value
+          : this.branchName,
+      headCommit: data.headCommit.present
+          ? data.headCommit.value
+          : this.headCommit,
+      pullRequestNumber: data.pullRequestNumber.present
+          ? data.pullRequestNumber.value
+          : this.pullRequestNumber,
+      pullRequestUrl: data.pullRequestUrl.present
+          ? data.pullRequestUrl.value
+          : this.pullRequestUrl,
+      reviewerIdentity: data.reviewerIdentity.present
+          ? data.reviewerIdentity.value
+          : this.reviewerIdentity,
+      reviewOutcome: data.reviewOutcome.present
+          ? data.reviewOutcome.value
+          : this.reviewOutcome,
+      findings: data.findings.present ? data.findings.value : this.findings,
+      mergeCommit: data.mergeCommit.present
+          ? data.mergeCommit.value
+          : this.mergeCommit,
+      issueClosed: data.issueClosed.present
+          ? data.issueClosed.value
+          : this.issueClosed,
+      branchDeleted: data.branchDeleted.present
+          ? data.branchDeleted.value
+          : this.branchDeleted,
+      failureCode: data.failureCode.present
+          ? data.failureCode.value
+          : this.failureCode,
+      remediation: data.remediation.present
+          ? data.remediation.value
+          : this.remediation,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryRecord(')
+          ..write('runId: $runId, ')
+          ..write('repository: $repository, ')
+          ..write('issueNumber: $issueNumber, ')
+          ..write('branchName: $branchName, ')
+          ..write('headCommit: $headCommit, ')
+          ..write('pullRequestNumber: $pullRequestNumber, ')
+          ..write('pullRequestUrl: $pullRequestUrl, ')
+          ..write('reviewerIdentity: $reviewerIdentity, ')
+          ..write('reviewOutcome: $reviewOutcome, ')
+          ..write('findings: $findings, ')
+          ..write('mergeCommit: $mergeCommit, ')
+          ..write('issueClosed: $issueClosed, ')
+          ..write('branchDeleted: $branchDeleted, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('remediation: $remediation, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('completedAt: $completedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runId,
+    repository,
+    issueNumber,
+    branchName,
+    headCommit,
+    pullRequestNumber,
+    pullRequestUrl,
+    reviewerIdentity,
+    reviewOutcome,
+    findings,
+    mergeCommit,
+    issueClosed,
+    branchDeleted,
+    failureCode,
+    remediation,
+    createdAt,
+    updatedAt,
+    completedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeliveryRecord &&
+          other.runId == this.runId &&
+          other.repository == this.repository &&
+          other.issueNumber == this.issueNumber &&
+          other.branchName == this.branchName &&
+          other.headCommit == this.headCommit &&
+          other.pullRequestNumber == this.pullRequestNumber &&
+          other.pullRequestUrl == this.pullRequestUrl &&
+          other.reviewerIdentity == this.reviewerIdentity &&
+          other.reviewOutcome == this.reviewOutcome &&
+          other.findings == this.findings &&
+          other.mergeCommit == this.mergeCommit &&
+          other.issueClosed == this.issueClosed &&
+          other.branchDeleted == this.branchDeleted &&
+          other.failureCode == this.failureCode &&
+          other.remediation == this.remediation &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.completedAt == this.completedAt);
+}
+
+class DeliveryRecordsCompanion extends UpdateCompanion<DeliveryRecord> {
+  final Value<String> runId;
+  final Value<String> repository;
+  final Value<int> issueNumber;
+  final Value<String> branchName;
+  final Value<String> headCommit;
+  final Value<int?> pullRequestNumber;
+  final Value<String?> pullRequestUrl;
+  final Value<String?> reviewerIdentity;
+  final Value<String?> reviewOutcome;
+  final Value<String> findings;
+  final Value<String?> mergeCommit;
+  final Value<bool> issueClosed;
+  final Value<bool> branchDeleted;
+  final Value<String?> failureCode;
+  final Value<String?> remediation;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> completedAt;
+  final Value<int> rowid;
+  const DeliveryRecordsCompanion({
+    this.runId = const Value.absent(),
+    this.repository = const Value.absent(),
+    this.issueNumber = const Value.absent(),
+    this.branchName = const Value.absent(),
+    this.headCommit = const Value.absent(),
+    this.pullRequestNumber = const Value.absent(),
+    this.pullRequestUrl = const Value.absent(),
+    this.reviewerIdentity = const Value.absent(),
+    this.reviewOutcome = const Value.absent(),
+    this.findings = const Value.absent(),
+    this.mergeCommit = const Value.absent(),
+    this.issueClosed = const Value.absent(),
+    this.branchDeleted = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.remediation = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DeliveryRecordsCompanion.insert({
+    required String runId,
+    required String repository,
+    required int issueNumber,
+    required String branchName,
+    required String headCommit,
+    this.pullRequestNumber = const Value.absent(),
+    this.pullRequestUrl = const Value.absent(),
+    this.reviewerIdentity = const Value.absent(),
+    this.reviewOutcome = const Value.absent(),
+    required String findings,
+    this.mergeCommit = const Value.absent(),
+    required bool issueClosed,
+    required bool branchDeleted,
+    this.failureCode = const Value.absent(),
+    this.remediation = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.completedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : runId = Value(runId),
+       repository = Value(repository),
+       issueNumber = Value(issueNumber),
+       branchName = Value(branchName),
+       headCommit = Value(headCommit),
+       findings = Value(findings),
+       issueClosed = Value(issueClosed),
+       branchDeleted = Value(branchDeleted),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<DeliveryRecord> custom({
+    Expression<String>? runId,
+    Expression<String>? repository,
+    Expression<int>? issueNumber,
+    Expression<String>? branchName,
+    Expression<String>? headCommit,
+    Expression<int>? pullRequestNumber,
+    Expression<String>? pullRequestUrl,
+    Expression<String>? reviewerIdentity,
+    Expression<String>? reviewOutcome,
+    Expression<String>? findings,
+    Expression<String>? mergeCommit,
+    Expression<bool>? issueClosed,
+    Expression<bool>? branchDeleted,
+    Expression<String>? failureCode,
+    Expression<String>? remediation,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? completedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (runId != null) 'run_id': runId,
+      if (repository != null) 'repository': repository,
+      if (issueNumber != null) 'issue_number': issueNumber,
+      if (branchName != null) 'branch_name': branchName,
+      if (headCommit != null) 'head_commit': headCommit,
+      if (pullRequestNumber != null) 'pull_request_number': pullRequestNumber,
+      if (pullRequestUrl != null) 'pull_request_url': pullRequestUrl,
+      if (reviewerIdentity != null) 'reviewer_identity': reviewerIdentity,
+      if (reviewOutcome != null) 'review_outcome': reviewOutcome,
+      if (findings != null) 'findings': findings,
+      if (mergeCommit != null) 'merge_commit': mergeCommit,
+      if (issueClosed != null) 'issue_closed': issueClosed,
+      if (branchDeleted != null) 'branch_deleted': branchDeleted,
+      if (failureCode != null) 'failure_code': failureCode,
+      if (remediation != null) 'remediation': remediation,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DeliveryRecordsCompanion copyWith({
+    Value<String>? runId,
+    Value<String>? repository,
+    Value<int>? issueNumber,
+    Value<String>? branchName,
+    Value<String>? headCommit,
+    Value<int?>? pullRequestNumber,
+    Value<String?>? pullRequestUrl,
+    Value<String?>? reviewerIdentity,
+    Value<String?>? reviewOutcome,
+    Value<String>? findings,
+    Value<String?>? mergeCommit,
+    Value<bool>? issueClosed,
+    Value<bool>? branchDeleted,
+    Value<String?>? failureCode,
+    Value<String?>? remediation,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? completedAt,
+    Value<int>? rowid,
+  }) {
+    return DeliveryRecordsCompanion(
+      runId: runId ?? this.runId,
+      repository: repository ?? this.repository,
+      issueNumber: issueNumber ?? this.issueNumber,
+      branchName: branchName ?? this.branchName,
+      headCommit: headCommit ?? this.headCommit,
+      pullRequestNumber: pullRequestNumber ?? this.pullRequestNumber,
+      pullRequestUrl: pullRequestUrl ?? this.pullRequestUrl,
+      reviewerIdentity: reviewerIdentity ?? this.reviewerIdentity,
+      reviewOutcome: reviewOutcome ?? this.reviewOutcome,
+      findings: findings ?? this.findings,
+      mergeCommit: mergeCommit ?? this.mergeCommit,
+      issueClosed: issueClosed ?? this.issueClosed,
+      branchDeleted: branchDeleted ?? this.branchDeleted,
+      failureCode: failureCode ?? this.failureCode,
+      remediation: remediation ?? this.remediation,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      completedAt: completedAt ?? this.completedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (repository.present) {
+      map['repository'] = Variable<String>(repository.value);
+    }
+    if (issueNumber.present) {
+      map['issue_number'] = Variable<int>(issueNumber.value);
+    }
+    if (branchName.present) {
+      map['branch_name'] = Variable<String>(branchName.value);
+    }
+    if (headCommit.present) {
+      map['head_commit'] = Variable<String>(headCommit.value);
+    }
+    if (pullRequestNumber.present) {
+      map['pull_request_number'] = Variable<int>(pullRequestNumber.value);
+    }
+    if (pullRequestUrl.present) {
+      map['pull_request_url'] = Variable<String>(pullRequestUrl.value);
+    }
+    if (reviewerIdentity.present) {
+      map['reviewer_identity'] = Variable<String>(reviewerIdentity.value);
+    }
+    if (reviewOutcome.present) {
+      map['review_outcome'] = Variable<String>(reviewOutcome.value);
+    }
+    if (findings.present) {
+      map['findings'] = Variable<String>(findings.value);
+    }
+    if (mergeCommit.present) {
+      map['merge_commit'] = Variable<String>(mergeCommit.value);
+    }
+    if (issueClosed.present) {
+      map['issue_closed'] = Variable<bool>(issueClosed.value);
+    }
+    if (branchDeleted.present) {
+      map['branch_deleted'] = Variable<bool>(branchDeleted.value);
+    }
+    if (failureCode.present) {
+      map['failure_code'] = Variable<String>(failureCode.value);
+    }
+    if (remediation.present) {
+      map['remediation'] = Variable<String>(remediation.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryRecordsCompanion(')
+          ..write('runId: $runId, ')
+          ..write('repository: $repository, ')
+          ..write('issueNumber: $issueNumber, ')
+          ..write('branchName: $branchName, ')
+          ..write('headCommit: $headCommit, ')
+          ..write('pullRequestNumber: $pullRequestNumber, ')
+          ..write('pullRequestUrl: $pullRequestUrl, ')
+          ..write('reviewerIdentity: $reviewerIdentity, ')
+          ..write('reviewOutcome: $reviewOutcome, ')
+          ..write('findings: $findings, ')
+          ..write('mergeCommit: $mergeCommit, ')
+          ..write('issueClosed: $issueClosed, ')
+          ..write('branchDeleted: $branchDeleted, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('remediation: $remediation, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$MaestroDatabase extends GeneratedDatabase {
   _$MaestroDatabase(QueryExecutor e) : super(e);
   $MaestroDatabaseManager get managers => $MaestroDatabaseManager(this);
@@ -7389,6 +8470,9 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final $RunLogSegmentsTable runLogSegments = $RunLogSegmentsTable(this);
   late final $RunRecoveryRequestsTable runRecoveryRequests =
       $RunRecoveryRequestsTable(this);
+  late final $DeliveryRecordsTable deliveryRecords = $DeliveryRecordsTable(
+    this,
+  );
   late final Index localUsersSingleOperatingSystem = Index(
     'local_users_single_operating_system',
     'CREATE UNIQUE INDEX local_users_single_operating_system ON local_users (auth_method) WHERE auth_method = \'operatingSystem\'',
@@ -7469,6 +8553,7 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     runAttempts,
     runLogSegments,
     runRecoveryRequests,
+    deliveryRecords,
     localUsersSingleOperatingSystem,
     workflowStepsWorkflowPosition,
     workflowProjectRefsProject,
@@ -7563,6 +8648,13 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('run_recovery_requests', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'workflow_runs',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('delivery_records', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -10698,6 +11790,27 @@ final class $$WorkflowRunsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$DeliveryRecordsTable, List<DeliveryRecord>>
+  _deliveryRecordsRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.deliveryRecords,
+        aliasName: 'workflow_runs__id__delivery_records__run_id',
+      );
+
+  $$DeliveryRecordsTableProcessedTableManager get deliveryRecordsRefs {
+    final manager = $$DeliveryRecordsTableTableManager(
+      $_db,
+      $_db.deliveryRecords,
+    ).filter((f) => f.runId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _deliveryRecordsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$WorkflowRunsTableFilterComposer
@@ -10926,6 +12039,31 @@ class $$WorkflowRunsTableFilterComposer
           }) => $$RunRecoveryRequestsTableFilterComposer(
             $db: $db,
             $table: $db.runRecoveryRequests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> deliveryRecordsRefs(
+    Expression<bool> Function($$DeliveryRecordsTableFilterComposer f) f,
+  ) {
+    final $$DeliveryRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.deliveryRecords,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DeliveryRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.deliveryRecords,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -11268,6 +12406,31 @@ class $$WorkflowRunsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> deliveryRecordsRefs<T extends Object>(
+    Expression<T> Function($$DeliveryRecordsTableAnnotationComposer a) f,
+  ) {
+    final $$DeliveryRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.deliveryRecords,
+      getReferencedColumn: (t) => t.runId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DeliveryRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.deliveryRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$WorkflowRunsTableTableManager
@@ -11291,6 +12454,7 @@ class $$WorkflowRunsTableTableManager
             bool runAttemptsRefs,
             bool runLogSegmentsRefs,
             bool runRecoveryRequestsRefs,
+            bool deliveryRecordsRefs,
           })
         > {
   $$WorkflowRunsTableTableManager(
@@ -11387,6 +12551,7 @@ class $$WorkflowRunsTableTableManager
                 runAttemptsRefs = false,
                 runLogSegmentsRefs = false,
                 runRecoveryRequestsRefs = false,
+                deliveryRecordsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -11396,6 +12561,7 @@ class $$WorkflowRunsTableTableManager
                     if (runAttemptsRefs) db.runAttempts,
                     if (runLogSegmentsRefs) db.runLogSegments,
                     if (runRecoveryRequestsRefs) db.runRecoveryRequests,
+                    if (deliveryRecordsRefs) db.deliveryRecords,
                   ],
                   addJoins:
                       <
@@ -11553,6 +12719,27 @@ class $$WorkflowRunsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (deliveryRecordsRefs)
+                        await $_getPrefetchedData<
+                          WorkflowRun,
+                          $WorkflowRunsTable,
+                          DeliveryRecord
+                        >(
+                          currentTable: table,
+                          referencedTable: $$WorkflowRunsTableReferences
+                              ._deliveryRecordsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WorkflowRunsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).deliveryRecordsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.runId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -11581,6 +12768,7 @@ typedef $$WorkflowRunsTableProcessedTableManager =
         bool runAttemptsRefs,
         bool runLogSegmentsRefs,
         bool runRecoveryRequestsRefs,
+        bool deliveryRecordsRefs,
       })
     >;
 typedef $$RunSnapshotsTableCreateCompanionBuilder =
@@ -14265,6 +15453,611 @@ typedef $$RunRecoveryRequestsTableProcessedTableManager =
       RunRecoveryRequest,
       PrefetchHooks Function({bool runId, bool attemptId})
     >;
+typedef $$DeliveryRecordsTableCreateCompanionBuilder =
+    DeliveryRecordsCompanion Function({
+      required String runId,
+      required String repository,
+      required int issueNumber,
+      required String branchName,
+      required String headCommit,
+      Value<int?> pullRequestNumber,
+      Value<String?> pullRequestUrl,
+      Value<String?> reviewerIdentity,
+      Value<String?> reviewOutcome,
+      required String findings,
+      Value<String?> mergeCommit,
+      required bool issueClosed,
+      required bool branchDeleted,
+      Value<String?> failureCode,
+      Value<String?> remediation,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> completedAt,
+      Value<int> rowid,
+    });
+typedef $$DeliveryRecordsTableUpdateCompanionBuilder =
+    DeliveryRecordsCompanion Function({
+      Value<String> runId,
+      Value<String> repository,
+      Value<int> issueNumber,
+      Value<String> branchName,
+      Value<String> headCommit,
+      Value<int?> pullRequestNumber,
+      Value<String?> pullRequestUrl,
+      Value<String?> reviewerIdentity,
+      Value<String?> reviewOutcome,
+      Value<String> findings,
+      Value<String?> mergeCommit,
+      Value<bool> issueClosed,
+      Value<bool> branchDeleted,
+      Value<String?> failureCode,
+      Value<String?> remediation,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> completedAt,
+      Value<int> rowid,
+    });
+
+final class $$DeliveryRecordsTableReferences
+    extends
+        BaseReferences<
+          _$MaestroDatabase,
+          $DeliveryRecordsTable,
+          DeliveryRecord
+        > {
+  $$DeliveryRecordsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $WorkflowRunsTable _runIdTable(_$MaestroDatabase db) => db.workflowRuns
+      .createAlias('delivery_records__run_id__workflow_runs__id');
+
+  $$WorkflowRunsTableProcessedTableManager get runId {
+    final $_column = $_itemColumn<String>('run_id')!;
+
+    final manager = $$WorkflowRunsTableTableManager(
+      $_db,
+      $_db.workflowRuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_runIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DeliveryRecordsTableFilterComposer
+    extends Composer<_$MaestroDatabase, $DeliveryRecordsTable> {
+  $$DeliveryRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get repository => $composableBuilder(
+    column: $table.repository,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get issueNumber => $composableBuilder(
+    column: $table.issueNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchName => $composableBuilder(
+    column: $table.branchName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get headCommit => $composableBuilder(
+    column: $table.headCommit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pullRequestNumber => $composableBuilder(
+    column: $table.pullRequestNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pullRequestUrl => $composableBuilder(
+    column: $table.pullRequestUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reviewerIdentity => $composableBuilder(
+    column: $table.reviewerIdentity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reviewOutcome => $composableBuilder(
+    column: $table.reviewOutcome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get findings => $composableBuilder(
+    column: $table.findings,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mergeCommit => $composableBuilder(
+    column: $table.mergeCommit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get issueClosed => $composableBuilder(
+    column: $table.issueClosed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get branchDeleted => $composableBuilder(
+    column: $table.branchDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remediation => $composableBuilder(
+    column: $table.remediation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WorkflowRunsTableFilterComposer get runId {
+    final $$WorkflowRunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableFilterComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DeliveryRecordsTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $DeliveryRecordsTable> {
+  $$DeliveryRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get repository => $composableBuilder(
+    column: $table.repository,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get issueNumber => $composableBuilder(
+    column: $table.issueNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchName => $composableBuilder(
+    column: $table.branchName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get headCommit => $composableBuilder(
+    column: $table.headCommit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pullRequestNumber => $composableBuilder(
+    column: $table.pullRequestNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pullRequestUrl => $composableBuilder(
+    column: $table.pullRequestUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reviewerIdentity => $composableBuilder(
+    column: $table.reviewerIdentity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reviewOutcome => $composableBuilder(
+    column: $table.reviewOutcome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get findings => $composableBuilder(
+    column: $table.findings,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mergeCommit => $composableBuilder(
+    column: $table.mergeCommit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get issueClosed => $composableBuilder(
+    column: $table.issueClosed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get branchDeleted => $composableBuilder(
+    column: $table.branchDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remediation => $composableBuilder(
+    column: $table.remediation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WorkflowRunsTableOrderingComposer get runId {
+    final $$WorkflowRunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DeliveryRecordsTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $DeliveryRecordsTable> {
+  $$DeliveryRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get repository => $composableBuilder(
+    column: $table.repository,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get issueNumber => $composableBuilder(
+    column: $table.issueNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchName => $composableBuilder(
+    column: $table.branchName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get headCommit => $composableBuilder(
+    column: $table.headCommit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get pullRequestNumber => $composableBuilder(
+    column: $table.pullRequestNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pullRequestUrl => $composableBuilder(
+    column: $table.pullRequestUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reviewerIdentity => $composableBuilder(
+    column: $table.reviewerIdentity,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reviewOutcome => $composableBuilder(
+    column: $table.reviewOutcome,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get findings =>
+      $composableBuilder(column: $table.findings, builder: (column) => column);
+
+  GeneratedColumn<String> get mergeCommit => $composableBuilder(
+    column: $table.mergeCommit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get issueClosed => $composableBuilder(
+    column: $table.issueClosed,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get branchDeleted => $composableBuilder(
+    column: $table.branchDeleted,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remediation => $composableBuilder(
+    column: $table.remediation,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  $$WorkflowRunsTableAnnotationComposer get runId {
+    final $$WorkflowRunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.runId,
+      referencedTable: $db.workflowRuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WorkflowRunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.workflowRuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DeliveryRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $DeliveryRecordsTable,
+          DeliveryRecord,
+          $$DeliveryRecordsTableFilterComposer,
+          $$DeliveryRecordsTableOrderingComposer,
+          $$DeliveryRecordsTableAnnotationComposer,
+          $$DeliveryRecordsTableCreateCompanionBuilder,
+          $$DeliveryRecordsTableUpdateCompanionBuilder,
+          (DeliveryRecord, $$DeliveryRecordsTableReferences),
+          DeliveryRecord,
+          PrefetchHooks Function({bool runId})
+        > {
+  $$DeliveryRecordsTableTableManager(
+    _$MaestroDatabase db,
+    $DeliveryRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeliveryRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeliveryRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeliveryRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> runId = const Value.absent(),
+                Value<String> repository = const Value.absent(),
+                Value<int> issueNumber = const Value.absent(),
+                Value<String> branchName = const Value.absent(),
+                Value<String> headCommit = const Value.absent(),
+                Value<int?> pullRequestNumber = const Value.absent(),
+                Value<String?> pullRequestUrl = const Value.absent(),
+                Value<String?> reviewerIdentity = const Value.absent(),
+                Value<String?> reviewOutcome = const Value.absent(),
+                Value<String> findings = const Value.absent(),
+                Value<String?> mergeCommit = const Value.absent(),
+                Value<bool> issueClosed = const Value.absent(),
+                Value<bool> branchDeleted = const Value.absent(),
+                Value<String?> failureCode = const Value.absent(),
+                Value<String?> remediation = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeliveryRecordsCompanion(
+                runId: runId,
+                repository: repository,
+                issueNumber: issueNumber,
+                branchName: branchName,
+                headCommit: headCommit,
+                pullRequestNumber: pullRequestNumber,
+                pullRequestUrl: pullRequestUrl,
+                reviewerIdentity: reviewerIdentity,
+                reviewOutcome: reviewOutcome,
+                findings: findings,
+                mergeCommit: mergeCommit,
+                issueClosed: issueClosed,
+                branchDeleted: branchDeleted,
+                failureCode: failureCode,
+                remediation: remediation,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                completedAt: completedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String runId,
+                required String repository,
+                required int issueNumber,
+                required String branchName,
+                required String headCommit,
+                Value<int?> pullRequestNumber = const Value.absent(),
+                Value<String?> pullRequestUrl = const Value.absent(),
+                Value<String?> reviewerIdentity = const Value.absent(),
+                Value<String?> reviewOutcome = const Value.absent(),
+                required String findings,
+                Value<String?> mergeCommit = const Value.absent(),
+                required bool issueClosed,
+                required bool branchDeleted,
+                Value<String?> failureCode = const Value.absent(),
+                Value<String?> remediation = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeliveryRecordsCompanion.insert(
+                runId: runId,
+                repository: repository,
+                issueNumber: issueNumber,
+                branchName: branchName,
+                headCommit: headCommit,
+                pullRequestNumber: pullRequestNumber,
+                pullRequestUrl: pullRequestUrl,
+                reviewerIdentity: reviewerIdentity,
+                reviewOutcome: reviewOutcome,
+                findings: findings,
+                mergeCommit: mergeCommit,
+                issueClosed: issueClosed,
+                branchDeleted: branchDeleted,
+                failureCode: failureCode,
+                remediation: remediation,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                completedAt: completedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DeliveryRecordsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({runId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (runId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.runId,
+                                referencedTable:
+                                    $$DeliveryRecordsTableReferences
+                                        ._runIdTable(db),
+                                referencedColumn:
+                                    $$DeliveryRecordsTableReferences
+                                        ._runIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DeliveryRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $DeliveryRecordsTable,
+      DeliveryRecord,
+      $$DeliveryRecordsTableFilterComposer,
+      $$DeliveryRecordsTableOrderingComposer,
+      $$DeliveryRecordsTableAnnotationComposer,
+      $$DeliveryRecordsTableCreateCompanionBuilder,
+      $$DeliveryRecordsTableUpdateCompanionBuilder,
+      (DeliveryRecord, $$DeliveryRecordsTableReferences),
+      DeliveryRecord,
+      PrefetchHooks Function({bool runId})
+    >;
 
 class $MaestroDatabaseManager {
   final _$MaestroDatabase _db;
@@ -14299,4 +16092,6 @@ class $MaestroDatabaseManager {
       $$RunLogSegmentsTableTableManager(_db, _db.runLogSegments);
   $$RunRecoveryRequestsTableTableManager get runRecoveryRequests =>
       $$RunRecoveryRequestsTableTableManager(_db, _db.runRecoveryRequests);
+  $$DeliveryRecordsTableTableManager get deliveryRecords =>
+      $$DeliveryRecordsTableTableManager(_db, _db.deliveryRecords);
 }
