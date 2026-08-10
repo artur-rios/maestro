@@ -4,6 +4,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/features/delivery/application/autonomous_delivery.dart';
+import 'package:maestro/features/delivery/application/autonomous_delivery_port.dart';
+import 'package:maestro/features/delivery/domain/autonomous_delivery_models.dart';
+import 'package:maestro/features/delivery/domain/delivery_models.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
 import 'package:maestro/features/runs/data/attempt_result_protocol.dart';
@@ -16,6 +20,161 @@ import 'package:path/path.dart' as p;
 const int _unlimitedAppendFailures = 1 << 30;
 
 void main() {
+  group('autonomous delivery attestation recovery', () {
+    test(
+      'GivenRejectedReviewAttestation_WhenDeliveryIsReached_ThenRunReturnsToExecute',
+      () async {
+        final fixture = _autonomousFixture();
+        fixture.launcher.results.addAll(<_Script>[
+          const _Script(context: 'execute evidence'),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
+          ),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Fix the validation."}',
+          ),
+        ]);
+
+        await fixture.orchestrator.execute('run-1');
+
+        expect(
+          fixture.repository.autonomousSettlements,
+          <(String, RunStatus, int)>[('run-1', RunStatus.running, 0)],
+        );
+      },
+    );
+
+    test(
+      'GivenMissingTestAttestation_WhenDeliveryIsReached_ThenRunReturnsToTest',
+      () async {
+        final fixture = _autonomousFixture();
+        fixture.launcher.results.addAll(<_Script>[
+          const _Script(context: 'execute evidence'),
+          const _Script(context: 'not a test attestation'),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+          ),
+        ]);
+
+        await fixture.orchestrator.execute('run-1');
+
+        expect(
+          fixture.repository.autonomousSettlements,
+          <(String, RunStatus, int)>[('run-1', RunStatus.running, 1)],
+        );
+      },
+    );
+
+    test(
+      'GivenMissingReviewConfiguration_WhenDeliveryIsReached_ThenRunFails',
+      () async {
+        final fixture = _autonomousFixture(reviewModel: '');
+        fixture.launcher.results.addAll(<_Script>[
+          const _Script(context: 'execute evidence'),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
+          ),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+          ),
+        ]);
+
+        await fixture.orchestrator.execute('run-1');
+
+        expect(
+          fixture.repository.autonomousSettlements,
+          <(String, RunStatus, int)>[('run-1', RunStatus.failed, 2)],
+        );
+      },
+    );
+  });
+
+  test(
+    'GivenRejectedReviewAttestation_WhenAutonomousRunCompletes_ThenItReturnsToExecute',
+    () async {
+      final fixture = _Fixture(
+        stepCount: 3,
+        aggregate: _autonomousAggregate(),
+        autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+      );
+      fixture.results.contexts.addAll(<String>[
+        'execute',
+        '{"schema":1,"kind":"test","headCommit":"head","passedAt":"2026-08-10T12:00:00Z"}',
+        '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Add a regression test."}',
+      ]);
+      fixture.launcher.results.addAll(const <_Script>[
+        _Script(),
+        _Script(),
+        _Script(),
+      ]);
+
+      await fixture.orchestrator.execute('run-1');
+
+      expect(
+        fixture.repository.autonomousSettlements,
+        <(String, RunStatus, int)>[('run-1', RunStatus.running, 0)],
+      );
+    },
+  );
+
+  test(
+    'GivenMissingTestAttestation_WhenAutonomousRunCompletes_ThenItReturnsToTestGate',
+    () async {
+      final fixture = _Fixture(
+        stepCount: 3,
+        aggregate: _autonomousAggregate(),
+        autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+      );
+      fixture.results.contexts.addAll(<String>[
+        'execute',
+        'not-an-attestation',
+        '{"schema":1,"kind":"review","outcome":"approved","summary":"ok"}',
+      ]);
+      fixture.launcher.results.addAll(const <_Script>[
+        _Script(),
+        _Script(),
+        _Script(),
+      ]);
+
+      await fixture.orchestrator.execute('run-1');
+
+      expect(
+        fixture.repository.autonomousSettlements,
+        <(String, RunStatus, int)>[('run-1', RunStatus.running, 1)],
+      );
+    },
+  );
+
+  test(
+    'GivenUnavailableReviewer_WhenAutonomousRunCompletes_ThenItFailsDurably',
+    () async {
+      final aggregate = _autonomousAggregate(reviewer: 'executor');
+      final fixture = _Fixture(
+        stepCount: 3,
+        aggregate: aggregate,
+        autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+      );
+      fixture.results.contexts.addAll(<String>['execute', 'test', 'review']);
+      fixture.launcher.results.addAll(const <_Script>[
+        _Script(),
+        _Script(),
+        _Script(),
+      ]);
+
+      await fixture.orchestrator.execute('run-1');
+
+      expect(
+        fixture.repository.autonomousSettlements,
+        <(String, RunStatus, int)>[('run-1', RunStatus.failed, 2)],
+      );
+    },
+  );
+
   test(
     'GivenStdoutAndStderrFrames_WhenReadingOutputTail_ThenChannelsArePreserved',
     () async {
@@ -1520,10 +1679,14 @@ final class _Fixture {
   _Fixture({
     required int stepCount,
     Map<String, String> environment = const <String, String>{},
+    RunExecutionAggregate? aggregate,
+    AutonomousDelivery? autonomousDelivery,
+    bool useScriptContexts = false,
   }) : repository = _Repository(),
        launcher = _Launcher(),
        results = _Results() {
-    repository.aggregates['run-1'] = aggregate('run-1', count: stepCount);
+    repository.aggregates['run-1'] =
+        aggregate ?? this.aggregate('run-1', count: stepCount);
     orchestrator = RunOrchestrator(
       repository: repository,
       launcher: launcher,
@@ -1537,7 +1700,11 @@ final class _Fixture {
       newLogId: () => 'log-${++_log}',
       newNonce: () => 'nonce',
       now: () => DateTime.utc(2026, 8, 6, 12, 0, _attempt),
+      autonomousDelivery: autonomousDelivery,
     );
+    if (useScriptContexts) {
+      launcher.onStarted = (script) => results.contexts.add(script.context);
+    }
   }
   final _Repository repository;
   final _Launcher launcher;
@@ -1599,6 +1766,89 @@ RunExecutionAggregate _aggregate(
   ),
   attempts: attempts,
 );
+
+RunExecutionAggregate _autonomousAggregate({String reviewer = 'reviewer'}) =>
+    RunExecutionAggregate(
+      run: WorkflowRun(
+        id: 'run-1',
+        projectId: 'p',
+        workflowId: 'w',
+        label: 'run-1',
+        status: RunStatus.starting,
+        currentStepPosition: 0,
+        branchName: 'feature/uc-11',
+        worktreePath: '/tmp/run-1',
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+      ),
+      snapshot: RunSnapshot(
+        schemaVersion: 1,
+        projectId: 'p',
+        projectName: 'project',
+        canonicalSourcePath: '/source',
+        sourceRevision: 'abc',
+        workflowId: 'w',
+        workflowRevision: 1,
+        workflowName: 'flow',
+        workItem: GitHubIssueRunWorkItem(
+          repository: 'acme/maestro',
+          number: 11,
+          title: 'Deliver',
+          url: 'https://github.com/acme/maestro/issues/11',
+        ),
+        deliveryMode: DeliveryMode.autonomous,
+        branchWorkType: BranchWorkType.feature,
+        steps: <RunSnapshotStep>[
+          _step(0, 'execute', 'executor'),
+          _step(1, 'test', 'tester'),
+          _step(2, 'review', reviewer),
+        ],
+      ),
+      attempts: const <RunAttempt>[],
+    );
+
+_Fixture _autonomousFixture({String reviewModel = 'reviewer'}) => _Fixture(
+  stepCount: 3,
+  aggregate: _autonomousAggregate(reviewer: reviewModel),
+  autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+  useScriptContexts: true,
+);
+
+RunSnapshotStep _step(int position, String kind, String model) =>
+    RunSnapshotStep(
+      id: 's$position',
+      sourceWorkflowStepId: 'ws$position',
+      position: position,
+      kind: kind,
+      name: kind,
+      cli: 'codex',
+      model: model,
+      configuration: const <String, Object?>{},
+    );
+
+final class _DeliveryPort implements AutonomousDeliveryPort {
+  @override
+  Future<AutonomousPullRequestResult> openPullRequest(
+    CompletedRunDeliveryRequest request,
+  ) async => throw UnimplementedError();
+  @override
+  Future<AutonomousReviewResult> review(
+    AutonomousPullRequest pullRequest,
+    AutonomousReviewer reviewer,
+  ) async => throw UnimplementedError();
+  @override
+  Future<AutonomousOperationResult> approveAndMerge(
+    AutonomousPullRequest pullRequest,
+  ) async => throw UnimplementedError();
+  @override
+  Future<AutonomousOperationResult> closeIssue(
+    CompletedRunDeliveryRequest request,
+  ) async => throw UnimplementedError();
+  @override
+  Future<AutonomousOperationResult> deleteBranch(
+    CompletedRunDeliveryRequest request,
+  ) async => throw UnimplementedError();
+}
 
 final class _Repository implements RunExecutionRepository {
   final Map<String, RunExecutionAggregate> aggregates =
@@ -1683,11 +1933,13 @@ final class _Launcher implements StepProcessLauncher {
   final List<StepLaunchRequest> requests = <StepLaunchRequest>[];
   final List<_Script> terminated = <_Script>[];
   bool throwOnStart = false;
+  void Function(_Script script)? onStarted;
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async {
     if (throwOnStart) throw StateError('start');
     requests.add(request);
     final script = results.removeAt(0);
+    onStarted?.call(script);
     if (script.spawnFailure case final code?) {
       return StepProcessStart.failure(code);
     }
@@ -1836,6 +2088,7 @@ final class _Results implements AttemptResultFiles {
   bool consumeError = false;
   bool resolveError = false;
   int consumeCount = 0;
+  final List<String> contexts = <String>[];
   @override
   Future<String> prepare({
     required String runId,
@@ -1853,9 +2106,10 @@ final class _Results implements AttemptResultFiles {
   }) async {
     consumeCount += 1;
     if (consumeError) throw StateError('consume');
-    return AttemptResultAccepted(
-      DeclaredContext.parse('from-${attemptId.endsWith('1') ? 'one' : 'two'}'),
-    );
+    final context = contexts.isEmpty
+        ? 'from-${attemptId.endsWith('1') ? 'one' : 'two'}'
+        : contexts.removeAt(0);
+    return AttemptResultAccepted(DeclaredContext.parse(context));
   }
 
   @override

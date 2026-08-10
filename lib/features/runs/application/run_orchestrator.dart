@@ -708,11 +708,24 @@ final class RunOrchestrator implements RunExecutionControl {
         aggregate.run.branchName == null) {
       return;
     }
-    final evidence = DeliveryAttestationSet.fromSnapshot(
+    final attestation = DeliveryAttestationSet.evaluate(
       aggregate.snapshot,
       attempts,
     );
-    if (evidence == null) return;
+    if (attestation case DeliveryAttestationBlocked(:final recovery)) {
+      final nextStatus = recovery == DeliveryAttestationRecovery.fail
+          ? RunStatus.failed
+          : RunStatus.running;
+      final stepKind = _stepKindForAttestationRecovery(recovery);
+      await _repository.settleAutonomousDelivery(
+        runId: aggregate.run.id,
+        nextStatus: nextStatus,
+        nextStepPosition: _positionFor(aggregate.snapshot, stepKind),
+        at: _now(),
+      );
+      return;
+    }
+    final evidence = (attestation as DeliveryAttestationReady).evidence;
     final request = CompletedRunDeliveryRequest(
       runId: aggregate.run.id,
       deliveryMode: aggregate.snapshot.deliveryMode,
@@ -754,23 +767,38 @@ final class RunOrchestrator implements RunExecutionControl {
       final nextStatus = recovery == AutonomousDeliveryRecovery.fail
           ? RunStatus.failed
           : RunStatus.running;
-      final stepKind = recovery == AutonomousDeliveryRecovery.returnToExecute
-          ? 'execute'
-          : 'test';
-      final position = aggregate.snapshot.steps
-          .firstWhere(
-            (step) => step.kind == stepKind,
-            orElse: () => aggregate.snapshot.steps.first,
-          )
-          .position;
+      final stepKind = _stepKindForDeliveryRecovery(recovery);
       await _repository.settleAutonomousDelivery(
         runId: aggregate.run.id,
         nextStatus: nextStatus,
-        nextStepPosition: position,
+        nextStepPosition: _positionFor(aggregate.snapshot, stepKind),
         at: _now(),
       );
     }
   }
+
+  static int _positionFor(RunSnapshot snapshot, String kind) => snapshot.steps
+      .firstWhere(
+        (step) => step.kind == kind,
+        orElse: () => snapshot.steps.first,
+      )
+      .position;
+
+  static String _stepKindForAttestationRecovery(
+    DeliveryAttestationRecovery recovery,
+  ) => switch (recovery) {
+    DeliveryAttestationRecovery.returnToExecute => 'execute',
+    DeliveryAttestationRecovery.returnToTest => 'test',
+    DeliveryAttestationRecovery.fail => 'review',
+  };
+
+  static String _stepKindForDeliveryRecovery(
+    AutonomousDeliveryRecovery recovery,
+  ) => switch (recovery) {
+    AutonomousDeliveryRecovery.returnToExecute => 'execute',
+    AutonomousDeliveryRecovery.returnToTest => 'test',
+    AutonomousDeliveryRecovery.fail => 'review',
+  };
 
   DeliveryRecord _deliveryRecord({
     required CompletedRunDeliveryRequest request,

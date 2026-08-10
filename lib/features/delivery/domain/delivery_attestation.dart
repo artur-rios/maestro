@@ -125,6 +125,14 @@ final class DeliveryAttestationSet {
   static DeliveryAttestationSet? fromSnapshot(
     RunSnapshot snapshot,
     Iterable<RunAttempt> attempts,
+  ) => switch (evaluate(snapshot, attempts)) {
+    DeliveryAttestationReady(:final evidence) => evidence,
+    DeliveryAttestationBlocked() => null,
+  };
+
+  static DeliveryAttestationEvaluation evaluate(
+    RunSnapshot snapshot,
+    Iterable<RunAttempt> attempts,
   ) {
     RunSnapshotStep? execute;
     RunSnapshotStep? test;
@@ -144,30 +152,68 @@ final class DeliveryAttestationSet {
         review == null ||
         !(execute.position < test.position &&
             test.position < review.position)) {
-      return null;
+      return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
     }
     final executeModel = execute?.model;
     final reviewerIdentity = review?.model;
-    if (!_nonBlank(executeModel) || !_nonBlank(reviewerIdentity)) return null;
+    if (!_nonBlank(executeModel) || !_nonBlank(reviewerIdentity)) {
+      return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
+    }
     final executing = executeModel!;
     final reviewer = reviewerIdentity!;
-    if (executing == reviewer) return null;
-    final testContext = _latestContext(attempts, test?.id);
-    final reviewContext = _latestContext(attempts, review?.id);
-    if (testContext == null || reviewContext == null) return null;
-    final testEvidence = DeliveryTestAttestation.parse(testContext.value);
-    final reviewEvidence = DeliveryReviewAttestation.parse(reviewContext.value);
-    if (testEvidence is! DeliveryTestAttestationValid ||
-        reviewEvidence is! DeliveryReviewAttestationApproved) {
-      return null;
+    if (executing == reviewer) {
+      return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
     }
-    return DeliveryAttestationSet._(
-      executeModel: executing,
-      reviewerIdentity: reviewer,
-      test: testEvidence,
-      review: reviewEvidence,
+    final testContext = _latestContext(attempts, test.id);
+    if (testContext == null) {
+      return const DeliveryAttestationBlocked(
+        DeliveryAttestationRecovery.returnToTest,
+      );
+    }
+    final testEvidence = DeliveryTestAttestation.parse(testContext.value);
+    if (testEvidence is! DeliveryTestAttestationValid) {
+      return const DeliveryAttestationBlocked(
+        DeliveryAttestationRecovery.returnToTest,
+      );
+    }
+    final reviewContext = _latestContext(attempts, review.id);
+    if (reviewContext == null) {
+      return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
+    }
+    final reviewEvidence = DeliveryReviewAttestation.parse(reviewContext.value);
+    if (reviewEvidence is DeliveryReviewAttestationRequestedChanges) {
+      return const DeliveryAttestationBlocked(
+        DeliveryAttestationRecovery.returnToExecute,
+      );
+    }
+    if (reviewEvidence is! DeliveryReviewAttestationApproved) {
+      return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
+    }
+    return DeliveryAttestationReady(
+      DeliveryAttestationSet._(
+        executeModel: executing,
+        reviewerIdentity: reviewer,
+        test: testEvidence,
+        review: reviewEvidence,
+      ),
     );
   }
+}
+
+enum DeliveryAttestationRecovery { returnToExecute, returnToTest, fail }
+
+sealed class DeliveryAttestationEvaluation {
+  const DeliveryAttestationEvaluation();
+}
+
+final class DeliveryAttestationReady extends DeliveryAttestationEvaluation {
+  const DeliveryAttestationReady(this.evidence);
+  final DeliveryAttestationSet evidence;
+}
+
+final class DeliveryAttestationBlocked extends DeliveryAttestationEvaluation {
+  const DeliveryAttestationBlocked(this.recovery);
+  final DeliveryAttestationRecovery recovery;
 }
 
 DeclaredContext? _latestContext(Iterable<RunAttempt> attempts, String? stepId) {
