@@ -201,6 +201,31 @@ void main() {
   });
 
   test(
+    'GivenWorkflowStepsComplete_WhenAutonomousDeliveryIsPending_ThenItCanSettleWithoutReopeningSucceeded',
+    () {
+      expect(
+        RunStatus.running.canTransitionTo(RunStatus.deliveryPending),
+        isTrue,
+      );
+      expect(
+        RunStatus.deliveryPending.canTransitionTo(RunStatus.running),
+        isTrue,
+      );
+      expect(
+        RunStatus.deliveryPending.canTransitionTo(RunStatus.succeeded),
+        isTrue,
+      );
+      expect(
+        RunStatus.deliveryPending.canTransitionTo(RunStatus.failed),
+        isTrue,
+      );
+      expect(RunStatus.deliveryPending.isTerminal, isFalse);
+      expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
+      expect(RunStatus.succeeded.canTransitionTo(RunStatus.failed), isFalse);
+    },
+  );
+
+  test(
     'GivenEmptyOrNonContiguousSteps_WhenSnapshotCreated_ThenInvalidExecutionOrderIsRejected',
     () {
       expect(

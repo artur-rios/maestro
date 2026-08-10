@@ -41,6 +41,7 @@ abstract interface class RunExecutionRepository {
     required DateTime completedAt,
     required int exitCode,
     required DeclaredContext? declaredContext,
+    RunStatus finalRunStatus = RunStatus.succeeded,
   });
   Future<void> failAttemptAndRun({
     required String attemptId,
@@ -389,6 +390,10 @@ final class RunOrchestrator implements RunExecutionControl {
   ) async {
     final aggregate = await _repository.load(runId);
     if (aggregate == null) throw StateError('Unknown run.');
+    if (aggregate.run.status == RunStatus.deliveryPending) {
+      await _deliverWhenAttested(aggregate, aggregate.attempts);
+      return;
+    }
     if (aggregate.run.status == RunStatus.starting) {
       await _repository.markRunning(runId, _now());
     } else if (aggregate.run.status != RunStatus.running) {
@@ -661,11 +666,18 @@ final class RunOrchestrator implements RunExecutionControl {
         return;
       }
       priorContext = (result as AttemptResultAccepted).context;
+      final hasNextStep = position + 1 < aggregate.snapshot.steps.length;
       await _repository.completeAttemptAndAdvance(
         attemptId: attemptId,
         completedAt: _now(),
         exitCode: exitCode,
         declaredContext: priorContext,
+        finalRunStatus:
+            !hasNextStep &&
+                _autonomousDelivery != null &&
+                _requiresAutonomousDelivery(aggregate)
+            ? RunStatus.deliveryPending
+            : RunStatus.succeeded,
       );
       completedAttempts.add(
         RunAttempt(
@@ -683,7 +695,6 @@ final class RunOrchestrator implements RunExecutionControl {
       // The step is complete and its evidence is durable; this is the only
       // point at which a pause can be honored without truncating a step. A
       // pause on the final step is moot — the run has already succeeded.
-      final hasNextStep = position + 1 < aggregate.snapshot.steps.length;
       if (hasNextStep && _pauseRequested.remove(runId)) {
         await _repository.pauseRun(runId, _now());
         return;
@@ -694,13 +705,17 @@ final class RunOrchestrator implements RunExecutionControl {
     }
   }
 
+  static bool _requiresAutonomousDelivery(RunExecutionAggregate aggregate) =>
+      aggregate.snapshot.deliveryMode == DeliveryMode.autonomous &&
+      aggregate.snapshot.workItem is GitHubIssueRunWorkItem &&
+      aggregate.run.branchName != null;
+
   Future<void> _deliverWhenAttested(
     RunExecutionAggregate aggregate,
     Iterable<RunAttempt> attempts,
   ) async {
     final delivery = _autonomousDelivery;
-    if (delivery == null ||
-        aggregate.snapshot.deliveryMode != DeliveryMode.autonomous) {
+    if (delivery == null || !_requiresAutonomousDelivery(aggregate)) {
       return;
     }
     final workItem = aggregate.snapshot.workItem;
@@ -772,6 +787,13 @@ final class RunOrchestrator implements RunExecutionControl {
         runId: aggregate.run.id,
         nextStatus: nextStatus,
         nextStepPosition: _positionFor(aggregate.snapshot, stepKind),
+        at: _now(),
+      );
+    } else if (outcome case AutonomousDeliveryCompleted()) {
+      await _repository.settleAutonomousDelivery(
+        runId: aggregate.run.id,
+        nextStatus: RunStatus.succeeded,
+        nextStepPosition: aggregate.snapshot.steps.length,
         at: _now(),
       );
     }

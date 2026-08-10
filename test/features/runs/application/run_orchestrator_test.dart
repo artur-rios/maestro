@@ -1889,6 +1889,7 @@ final class _Repository implements RunExecutionRepository {
     required DateTime completedAt,
     required int exitCode,
     required DeclaredContext? declaredContext,
+    RunStatus finalRunStatus = RunStatus.succeeded,
   }) async => completed.add(attemptId);
   @override
   Future<void> failAttemptAndRun({
