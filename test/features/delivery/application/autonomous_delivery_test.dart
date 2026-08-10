@@ -155,6 +155,31 @@ void main() {
     );
 
     test(
+      'GivenRetryProgressForAnotherHeadCommit_WhenDelivering_ThenItBlocksWithoutRemoteCalls',
+      () async {
+        final port = _FakeAutonomousDeliveryPort();
+        final outcome = await AutonomousDelivery(port: port)(
+          _request(
+            progress: const AutonomousDeliveryProgress(
+              pullRequest: AutonomousPullRequest(
+                number: 42,
+                url: 'https://github.com/acme/maestro/pull/42',
+                headCommit: 'different-head',
+              ),
+              mergeCommit: 'merge123',
+              runId: 'run-11',
+              repository: 'acme/maestro',
+              headCommit: 'different-head',
+            ),
+          ),
+        );
+
+        expect(outcome, isA<AutonomousDeliveryBlocked>());
+        expect(port.calls, isEmpty);
+      },
+    );
+
+    test(
       'GivenBranchCleanupFailureAfterMerge_WhenDelivering_ThenItRetainsCompletedIssueState',
       () async {
         final port = _FakeAutonomousDeliveryPort(

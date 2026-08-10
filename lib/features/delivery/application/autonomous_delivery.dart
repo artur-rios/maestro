@@ -28,6 +28,12 @@ final class AutonomousDelivery {
 
     late final AutonomousDeliveryProgress progress;
     if (request.progress case final saved?) {
+      if (!saved.matches(request.delivery)) {
+        return const AutonomousDeliveryBlocked(
+          remediation:
+              'Discard retry progress that does not match this run and head commit.',
+        );
+      }
       progress = saved;
     } else {
       final merge = await _merge(request);
@@ -125,6 +131,9 @@ final class AutonomousDelivery {
     return AutonomousDeliveryProgress(
       pullRequest: pullRequest,
       mergeCommit: mergeCommit,
+      runId: request.delivery.runId,
+      repository: request.delivery.repository,
+      headCommit: request.delivery.headCommit,
     );
   }
 }

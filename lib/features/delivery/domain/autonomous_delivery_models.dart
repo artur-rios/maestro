@@ -52,12 +52,18 @@ final class AutonomousDeliveryProgress {
   const AutonomousDeliveryProgress({
     required this.pullRequest,
     required this.mergeCommit,
+    required this.runId,
+    required this.repository,
+    required this.headCommit,
     this.issueClosed = false,
     this.branchDeleted = false,
   });
 
   final AutonomousPullRequest pullRequest;
   final String mergeCommit;
+  final String runId;
+  final String repository;
+  final String headCommit;
   final bool issueClosed;
   final bool branchDeleted;
 
@@ -68,9 +74,19 @@ final class AutonomousDeliveryProgress {
     return AutonomousDeliveryProgress(
       pullRequest: pullRequest,
       mergeCommit: mergeCommit,
+      runId: runId,
+      repository: repository,
+      headCommit: headCommit,
       issueClosed: issueClosed ?? this.issueClosed,
       branchDeleted: branchDeleted ?? this.branchDeleted,
     );
+  }
+
+  bool matches(CompletedRunDeliveryRequest delivery) {
+    return runId == delivery.runId &&
+        repository == delivery.repository &&
+        headCommit == delivery.headCommit &&
+        pullRequest.headCommit == delivery.headCommit;
   }
 }
 
