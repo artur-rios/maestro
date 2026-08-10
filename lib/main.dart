@@ -233,9 +233,10 @@ Future<ProductionAppComposition> composeProductionApp({
   );
   // One adapter serves both the startup capability report and the panel, so a
   // degraded shell is reported the same way in both places.
+  const terminalFolders = LocalTerminalProjectFolder();
   final terminals = PtyTerminalPort(
     shells: ShellResolver(locator: ExecutableResolver()),
-    folders: const LocalTerminalProjectFolder(),
+    folders: terminalFolders,
     ownership: ownership,
     newResourceId: newId,
   );
@@ -347,7 +348,7 @@ Future<ProductionAppComposition> composeProductionApp({
 
   final openProjectTerminal = OpenProjectTerminal(
     terminals: terminals,
-    folders: const LocalTerminalProjectFolder(),
+    folders: terminalFolders,
   );
   Widget terminalBuilder(
     BuildContext context,
@@ -358,6 +359,8 @@ Future<ProductionAppComposition> composeProductionApp({
     createController: () => ProjectTerminalController(
       workingDirectory: project.folderPath,
       open: openProjectTerminal.call,
+      folderAvailability: () =>
+          terminalFolders.availability(project.folderPath),
     ),
   );
 

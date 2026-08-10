@@ -10,20 +10,23 @@ import 'package:maestro/features/terminal/presentation/project_terminal_controll
 
 void main() {
   group('ProjectTerminalController', () {
-    test('GivenAnIdleController_WhenOpening_ThenTheStatusBecomesRunning', () async {
-      // Given: an idle terminal panel.
-      final opener = _FakeOpener();
-      final controller = _controller(opener);
+    test(
+      'GivenAnIdleController_WhenOpening_ThenTheStatusBecomesRunning',
+      () async {
+        // Given: an idle terminal panel.
+        final opener = _FakeOpener();
+        final controller = _controller(opener);
 
-      // When: the user opens the project terminal.
-      await controller.open();
+        // When: the user opens the project terminal.
+        await controller.open();
 
-      // Then: the session is live and rooted at the project folder.
-      expect(controller.state.status, TerminalSessionStatus.running);
-      expect(controller.state.canClose, isTrue);
-      expect(opener.requests.single.workingDirectory, r'D:\project');
-      controller.dispose();
-    });
+        // Then: the session is live and rooted at the project folder.
+        expect(controller.state.status, TerminalSessionStatus.running);
+        expect(controller.state.canClose, isTrue);
+        expect(opener.requests.single.workingDirectory, r'D:\project');
+        controller.dispose();
+      },
+    );
 
     test(
       'GivenARunningSession_WhenTheShellWrites_ThenTheTerminalRendersTheBytes',
@@ -40,10 +43,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         // Then: the emulator renders the text rather than replacement bytes.
-        expect(
-          controller.terminal.buffer.getText().trim(),
-          startsWith('café'),
-        );
+        expect(controller.terminal.buffer.getText().trim(), startsWith('café'));
         controller.dispose();
       },
     );
@@ -84,65 +84,65 @@ void main() {
       },
     );
 
-    test(
-      'GivenARunningSession_WhenTheShellExitsUnexpectedly_'
-      'ThenTheExitResultIsShownAndAFreshSessionIsOffered',
-      () async {
-        // Given: a running session.
-        final opener = _FakeOpener();
-        final controller = _controller(opener);
-        await controller.open();
-
-        // When: the shell dies on its own (AF-03).
-        opener.session.exitWith(137);
-        await Future<void>.delayed(Duration.zero);
-
-        // Then: the exit result is visible and a fresh session is permitted.
-        expect(controller.state.status, TerminalSessionStatus.exited);
-        expect(controller.state.exit?.exitCode, 137);
-        expect(controller.state.canOpen, isTrue);
-        controller.dispose();
-      },
-    );
-
-    test('GivenAnExitedSession_WhenOpeningAgain_ThenANewSessionStarts', () async {
-      // Given: a session that already exited.
+    test('GivenARunningSession_WhenTheShellExitsUnexpectedly_'
+        'ThenTheExitResultIsShownAndAFreshSessionIsOffered', () async {
+      // Given: a running session.
       final opener = _FakeOpener();
       final controller = _controller(opener);
       await controller.open();
-      opener.session.exitWith(1);
+
+      // When: the shell dies on its own (AF-03).
+      opener.session.exitWith(137);
       await Future<void>.delayed(Duration.zero);
 
-      // When: the user starts a fresh session.
-      await controller.open();
-
-      // Then: a second session runs, with the stale exit result cleared.
-      expect(controller.state.status, TerminalSessionStatus.running);
-      expect(controller.state.exit, isNull);
-      expect(opener.requests, hasLength(2));
+      // Then: the exit result is visible and a fresh session is permitted.
+      expect(controller.state.status, TerminalSessionStatus.exited);
+      expect(controller.state.exit?.exitCode, 137);
+      expect(controller.state.canOpen, isTrue);
       controller.dispose();
     });
 
     test(
-      'GivenARunningSession_WhenClosingLeavesProcessesAlive_'
-      'ThenIncompleteClosureIsReported',
+      'GivenAnExitedSession_WhenOpeningAgain_ThenANewSessionStarts',
       () async {
-        // Given: a session whose descendants resist termination.
-        final opener = _FakeOpener()..closure = TerminalClosure.incomplete;
+        // Given: a session that already exited.
+        final opener = _FakeOpener();
         final controller = _controller(opener);
         await controller.open();
+        opener.session.exitWith(1);
+        await Future<void>.delayed(Duration.zero);
 
-        // When: the user closes it.
-        await controller.close();
+        // When: the user starts a fresh session.
+        await controller.open();
 
-        // Then: the panel does not claim a closed terminal, and close stays
-        // available so the user can escalate.
-        expect(controller.state.failure?.code, TerminalFailure.closeIncompleteCode);
+        // Then: a second session runs, with the stale exit result cleared.
         expect(controller.state.status, TerminalSessionStatus.running);
-        expect(controller.state.canClose, isTrue);
+        expect(controller.state.exit, isNull);
+        expect(opener.requests, hasLength(2));
         controller.dispose();
       },
     );
+
+    test('GivenARunningSession_WhenClosingLeavesProcessesAlive_'
+        'ThenIncompleteClosureIsReported', () async {
+      // Given: a session whose descendants resist termination.
+      final opener = _FakeOpener()..closure = TerminalClosure.incomplete;
+      final controller = _controller(opener);
+      await controller.open();
+
+      // When: the user closes it.
+      await controller.close();
+
+      // Then: the panel does not claim a closed terminal, and close stays
+      // available so the user can escalate.
+      expect(
+        controller.state.failure?.code,
+        TerminalFailure.closeIncompleteCode,
+      );
+      expect(controller.state.status, TerminalSessionStatus.running);
+      expect(controller.state.canClose, isTrue);
+      controller.dispose();
+    });
 
     test(
       'GivenARunningSession_WhenClosingSucceeds_ThenThePanelReturnsToIdle',
@@ -162,26 +162,29 @@ void main() {
       },
     );
 
-    test('GivenAFailedOpen_WhenTheFailureIsShown_ThenItCarriesRemediation', () async {
-      // Given: no platform shell is available (AF-01).
-      final opener = _FakeOpener(
-        failure: const TerminalFailure(
-          code: TerminalFailure.shellUnavailableCode,
-          message: 'No platform shell was found on PATH.',
-          remediation: 'Install a shell and make sure it is on PATH.',
-        ),
-      );
-      final controller = _controller(opener);
+    test(
+      'GivenAFailedOpen_WhenTheFailureIsShown_ThenItCarriesRemediation',
+      () async {
+        // Given: no platform shell is available (AF-01).
+        final opener = _FakeOpener(
+          failure: const TerminalFailure(
+            code: TerminalFailure.shellUnavailableCode,
+            message: 'No platform shell was found on PATH.',
+            remediation: 'Install a shell and make sure it is on PATH.',
+          ),
+        );
+        final controller = _controller(opener);
 
-      // When: the user tries to open a terminal.
-      await controller.open();
+        // When: the user tries to open a terminal.
+        await controller.open();
 
-      // Then: the guidance reaches the panel and reopening stays possible.
-      expect(controller.state.status, TerminalSessionStatus.failed);
-      expect(controller.state.failure?.remediation, isNotEmpty);
-      expect(controller.state.canOpen, isTrue);
-      controller.dispose();
-    });
+        // Then: the guidance reaches the panel and reopening stays possible.
+        expect(controller.state.status, TerminalSessionStatus.failed);
+        expect(controller.state.failure?.remediation, isNotEmpty);
+        expect(controller.state.canOpen, isTrue);
+        controller.dispose();
+      },
+    );
 
     test(
       'GivenAnUnexpectedOpenError_WhenOpening_ThenATypedFailureIsShown',
@@ -214,7 +217,37 @@ void main() {
         expect(opener.session.closed, isTrue);
       },
     );
+
+    test('GivenARunningSession_WhenItsProjectFolderBecomesUnavailable_'
+        'ThenTheSessionIsClosedAndTheFailureExplainsHowToRecover', () async {
+      final opener = _FakeOpener();
+      final folder = _MutableFolder();
+      final controller = ProjectTerminalController(
+        workingDirectory: r'D:\project',
+        open: opener.call,
+        folderAvailability: folder.availability,
+        folderCheckInterval: const Duration(milliseconds: 1),
+      );
+      await controller.open();
+      folder.value = TerminalFolderAvailability.missing;
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(opener.session.closed, isTrue);
+      expect(controller.state.status, TerminalSessionStatus.failed);
+      expect(
+        controller.state.failure?.code,
+        TerminalFailure.folderUnavailableCode,
+      );
+      controller.dispose();
+    });
   });
+}
+
+final class _MutableFolder {
+  var value = TerminalFolderAvailability.available;
+
+  Future<TerminalFolderAvailability> availability() async => value;
 }
 
 ProjectTerminalController _controller(_FakeOpener opener) =>

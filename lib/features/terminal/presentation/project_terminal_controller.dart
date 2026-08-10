@@ -51,8 +51,12 @@ final class ProjectTerminalController extends ChangeNotifier {
     required String workingDirectory,
     required ProjectTerminalOpener open,
     Terminal? terminal,
+    Future<TerminalFolderAvailability> Function()? folderAvailability,
+    Duration folderCheckInterval = const Duration(seconds: 5),
   }) : _workingDirectory = workingDirectory,
        _open = open,
+       _folderAvailability = folderAvailability,
+       _folderCheckInterval = folderCheckInterval,
        terminal = terminal ?? Terminal(maxLines: _scrollbackLines);
 
   /// Bounded scrollback keeps a chatty shell from growing without limit
@@ -61,6 +65,8 @@ final class ProjectTerminalController extends ChangeNotifier {
 
   final String _workingDirectory;
   final ProjectTerminalOpener _open;
+  final Future<TerminalFolderAvailability> Function()? _folderAvailability;
+  final Duration _folderCheckInterval;
 
   /// The emulator the view renders. It owns selection, copy, and paste.
   final Terminal terminal;
@@ -69,13 +75,16 @@ final class ProjectTerminalController extends ChangeNotifier {
 
   TerminalSession? _session;
   StreamSubscription<String>? _output;
+  Timer? _folderMonitor;
   var _generation = 0;
   var _disposed = false;
 
   Future<void> open() async {
     if (_disposed || !state.canOpen) return;
     final generation = ++_generation;
-    _publish(const ProjectTerminalState(status: TerminalSessionStatus.starting));
+    _publish(
+      const ProjectTerminalState(status: TerminalSessionStatus.starting),
+    );
     late final TerminalOpenResult result;
     try {
       result = await _open(
@@ -138,6 +147,7 @@ final class ProjectTerminalController extends ChangeNotifier {
         unawaited(session.write(Uint8List.fromList(utf8.encode(data))));
     terminal.onResize = (width, height, _, _) =>
         unawaited(session.resize(columns: width, rows: height));
+    _startFolderMonitor(session, generation);
     unawaited(
       session.exit.then((exit) {
         if (!_owns(generation)) return;
@@ -153,12 +163,54 @@ final class ProjectTerminalController extends ChangeNotifier {
   }
 
   Future<void> _detach() async {
+    _folderMonitor?.cancel();
+    _folderMonitor = null;
     terminal.onOutput = null;
     terminal.onResize = null;
     _session = null;
     final output = _output;
     _output = null;
     await output?.cancel();
+  }
+
+  void _startFolderMonitor(TerminalSession session, int generation) {
+    if (_folderAvailability == null) return;
+    _folderMonitor = Timer.periodic(_folderCheckInterval, (_) {
+      unawaited(_closeWhenFolderUnavailable(session, generation));
+    });
+  }
+
+  Future<void> _closeWhenFolderUnavailable(
+    TerminalSession session,
+    int generation,
+  ) async {
+    final reader = _folderAvailability;
+    if (reader == null || !_owns(generation)) return;
+    final availability = await reader();
+    if (availability == TerminalFolderAvailability.available ||
+        !_owns(generation)) {
+      return;
+    }
+    final closure = await session.close();
+    if (!_owns(generation) || closure == TerminalClosure.incomplete) return;
+    // Invalidate the exit callback before detaching: the user needs the folder
+    // remediation, not an unrelated shell exit code (AF-02).
+    _generation++;
+    await _detach();
+    _publish(
+      ProjectTerminalState(
+        status: TerminalSessionStatus.failed,
+        failure: TerminalFailure(
+          code: TerminalFailure.folderUnavailableCode,
+          message: availability == TerminalFolderAvailability.missing
+              ? 'The project folder no longer exists.'
+              : 'The project folder could not be read.',
+          remediation:
+              'Restore or reconnect the folder, refresh the project, then '
+              'open the terminal again. The project record is unchanged.',
+        ),
+      ),
+    );
   }
 
   void _publishFailure(int generation, TerminalFailure failure) {

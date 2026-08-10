@@ -5,9 +5,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_pty/flutter_pty.dart';
+import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
 import 'package:maestro/platform/common/capability.dart';
+import 'package:maestro/platform/process/owned_process_recovery.dart';
 import 'package:maestro/platform/terminal/platform_shell.dart';
 import 'package:maestro/platform/terminal/pty_terminal_session.dart';
 import 'package:maestro/platform/terminal/terminal_port.dart';
@@ -44,17 +46,24 @@ final class PtyTerminalPort implements TerminalCapabilityPort {
     TerminalProjectFolder? folders,
     RunOwnedResourceStore? ownership,
     String Function()? newResourceId,
+    ProcessIdentityProvider? identityProvider,
+    TerminalTreeTerminator? terminator,
   }) : _shells = shells,
        _launcher = launcher,
        _folders = folders,
        _ownership = ownership,
-       _newResourceId = newResourceId;
+       _newResourceId = newResourceId,
+       _identityProvider =
+           identityProvider ?? const PlatformProcessIdentityProvider(),
+       _terminator = terminator ?? const PlatformTerminalTreeTerminator();
 
   final ShellResolver _shells;
   final PtyLauncher _launcher;
   final TerminalProjectFolder? _folders;
   final RunOwnedResourceStore? _ownership;
   final String Function()? _newResourceId;
+  final ProcessIdentityProvider _identityProvider;
+  final TerminalTreeTerminator _terminator;
 
   @override
   Future<TerminalSession> start({
@@ -86,11 +95,29 @@ final class PtyTerminalPort implements TerminalCapabilityPort {
             'failing, review the diagnostics log.',
       );
     }
-    return PtyTerminalSession.start(
-      handle: handle,
-      ownership: _ownership,
-      newResourceId: _newResourceId,
-    );
+    try {
+      return await PtyTerminalSession.start(
+        handle: handle,
+        ownership: _ownership,
+        newResourceId: _newResourceId,
+        identityProvider: _identityProvider,
+        terminator: _terminator,
+      );
+    } on Object {
+      // A shell was already spawned, but it cannot be handed to the user
+      // unless ownership setup completed. Close its whole tree before
+      // reporting startup failure so AF-01 never leaks a partial session.
+      await PtyTerminalSession.attach(
+        handle: handle,
+        terminator: _terminator,
+      ).close();
+      throw const TerminalStartFailure(
+        kind: TerminalStartFailureKind.ptyUnavailable,
+        message: 'The pseudo-terminal could not be initialized safely.',
+        remediation:
+            'Retry, and review the diagnostics log if the problem persists.',
+      );
+    }
   }
 
   @override
