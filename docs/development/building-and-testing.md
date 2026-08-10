@@ -41,6 +41,14 @@ flutter analyze
 flutter test
 ```
 
+On Windows, use the repository wrapper when running Flutter tests from a
+long worktree path. It gives Sodium native assets a short same-drive temporary
+directory without changing your global environment:
+
+```powershell
+pwsh -File tooling/test_windows.ps1
+```
+
 Run desktop tests separately because each command owns one native application lifecycle:
 
 ```powershell
