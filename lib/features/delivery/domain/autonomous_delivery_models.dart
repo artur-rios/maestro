@@ -6,12 +6,14 @@ final class AutonomousDeliveryRequest {
     required this.testEvidence,
     required this.executeModel,
     required this.reviewer,
+    this.progress,
   });
 
   final CompletedRunDeliveryRequest delivery;
   final DeliveryTestEvidence testEvidence;
   final String executeModel;
   final AutonomousReviewer reviewer;
+  final AutonomousDeliveryProgress? progress;
 
   bool get hasFreshTests => testEvidence.headCommit == delivery.headCommit;
   bool get hasIndependentReviewer => reviewer.identity != executeModel;
@@ -43,6 +45,33 @@ final class AutonomousPullRequest {
   final int number;
   final String url;
   final String headCommit;
+}
+
+/// Durable state from privileged delivery operations that already succeeded.
+final class AutonomousDeliveryProgress {
+  const AutonomousDeliveryProgress({
+    required this.pullRequest,
+    required this.mergeCommit,
+    this.issueClosed = false,
+    this.branchDeleted = false,
+  });
+
+  final AutonomousPullRequest pullRequest;
+  final String mergeCommit;
+  final bool issueClosed;
+  final bool branchDeleted;
+
+  AutonomousDeliveryProgress copyWith({
+    bool? issueClosed,
+    bool? branchDeleted,
+  }) {
+    return AutonomousDeliveryProgress(
+      pullRequest: pullRequest,
+      mergeCommit: mergeCommit,
+      issueClosed: issueClosed ?? this.issueClosed,
+      branchDeleted: branchDeleted ?? this.branchDeleted,
+    );
+  }
 }
 
 sealed class AutonomousPullRequestResult {
@@ -152,8 +181,10 @@ final class AutonomousDeliveryRetryableFailure
     required this.code,
     required this.remediation,
     this.pullRequest,
+    this.progress,
   });
   final String code;
   final String remediation;
   final AutonomousPullRequest? pullRequest;
+  final AutonomousDeliveryProgress? progress;
 }

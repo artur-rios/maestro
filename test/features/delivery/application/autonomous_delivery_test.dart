@@ -105,10 +105,104 @@ void main() {
 
         expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
         final failure = outcome as AutonomousDeliveryRetryableFailure;
-      expect(failure.pullRequest!.number, 42);
+        expect(failure.pullRequest!.number, 42);
         expect(port.calls, ['open', 'review', 'approveMerge']);
       },
     );
+
+    test(
+      'GivenIssueClosureFailureAfterMerge_WhenRetrying_ThenItDoesNotMergeAgain',
+      () async {
+        final firstPort = _FakeAutonomousDeliveryPort(
+          closeIssueResult: const AutonomousOperationResult.failure(
+            code: 'github.network',
+            remediation: 'Retry after GitHub is reachable.',
+          ),
+        );
+        final first = await AutonomousDelivery(port: firstPort)(_request());
+
+        expect(first, isA<AutonomousDeliveryRetryableFailure>());
+        final failure = first as AutonomousDeliveryRetryableFailure;
+        expect(failure.progress!.mergeCommit, 'merge123');
+        expect(firstPort.calls, [
+          'open',
+          'review',
+          'approveMerge',
+          'closeIssue',
+        ]);
+
+        final retryPort = _FakeAutonomousDeliveryPort();
+        final retry = await AutonomousDelivery(port: retryPort)(
+          _request(progress: failure.progress),
+        );
+
+        expect(retry, isA<AutonomousDeliveryCompleted>());
+        expect(retryPort.calls, ['closeIssue', 'deleteBranch']);
+      },
+    );
+
+    test(
+      'GivenTheExecutingModelIsAlsoTheReviewer_WhenDelivering_ThenItIsBlockedWithoutRemoteCalls',
+      () async {
+        final port = _FakeAutonomousDeliveryPort();
+        final outcome = await AutonomousDelivery(port: port)(
+          _request(executeModel: 'reviewer'),
+        );
+
+        expect(outcome, isA<AutonomousDeliveryBlocked>());
+        expect(port.calls, isEmpty);
+      },
+    );
+
+    test(
+      'GivenBranchCleanupFailureAfterMerge_WhenDelivering_ThenItRetainsCompletedIssueState',
+      () async {
+        final port = _FakeAutonomousDeliveryPort(
+          deleteBranchResult: const AutonomousOperationResult.failure(
+            code: 'github.network',
+            remediation: 'Retry branch cleanup after GitHub is reachable.',
+          ),
+        );
+
+        final outcome = await AutonomousDelivery(port: port)(_request());
+
+        expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
+        final failure = outcome as AutonomousDeliveryRetryableFailure;
+        expect(failure.progress!.mergeCommit, 'merge123');
+        expect(failure.progress!.issueClosed, isTrue);
+        expect(failure.progress!.branchDeleted, isFalse);
+        expect(port.calls, [
+          'open',
+          'review',
+          'approveMerge',
+          'closeIssue',
+          'deleteBranch',
+        ]);
+      },
+    );
+
+    for (final code in ['github.policy', 'github.conflict', 'github.network']) {
+      test(
+        'Given${code}_WhenMerging_ThenItRetainsThePullRequestWithoutCleanup',
+        () async {
+          final port = _FakeAutonomousDeliveryPort(
+            mergeResult: AutonomousOperationResult.failure(
+              code: code,
+              remediation: 'Resolve the external GitHub condition and retry.',
+            ),
+          );
+
+          final outcome = await AutonomousDelivery(port: port)(_request());
+
+          expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
+          expect(
+            (outcome as AutonomousDeliveryRetryableFailure).pullRequest,
+            isNotNull,
+          );
+          expect(port.calls, ['open', 'review', 'approveMerge']);
+        },
+      );
+    }
   });
 }
 
@@ -117,6 +211,8 @@ final _passedAt = DateTime.utc(2026, 8, 10);
 AutonomousDeliveryRequest _request({
   DeliveryMode deliveryMode = DeliveryMode.autonomous,
   DeliveryTestEvidence? testEvidence,
+  String executeModel = 'executor',
+  AutonomousDeliveryProgress? progress,
 }) => AutonomousDeliveryRequest(
   delivery: CompletedRunDeliveryRequest(
     runId: 'run-11',
@@ -130,8 +226,9 @@ AutonomousDeliveryRequest _request({
   testEvidence:
       testEvidence ??
       DeliveryTestEvidence(headCommit: 'abc123', passedAt: _passedAt),
-  executeModel: 'executor',
+  executeModel: executeModel,
   reviewer: const AutonomousReviewer(identity: 'reviewer'),
+  progress: progress,
 );
 
 final class _FakeAutonomousDeliveryPort implements AutonomousDeliveryPort {
@@ -140,10 +237,14 @@ final class _FakeAutonomousDeliveryPort implements AutonomousDeliveryPort {
     this.mergeResult = const AutonomousOperationResult.success(
       mergeCommit: 'merge123',
     ),
+    this.closeIssueResult = const AutonomousOperationResult.success(),
+    this.deleteBranchResult = const AutonomousOperationResult.success(),
   });
 
   final AutonomousReviewResult reviewResult;
   final AutonomousOperationResult mergeResult;
+  final AutonomousOperationResult closeIssueResult;
+  final AutonomousOperationResult deleteBranchResult;
   final calls = <String>[];
   static const _pullRequest = AutonomousPullRequest(
     number: 42,
@@ -181,7 +282,7 @@ final class _FakeAutonomousDeliveryPort implements AutonomousDeliveryPort {
     CompletedRunDeliveryRequest request,
   ) async {
     calls.add('closeIssue');
-    return const AutonomousOperationResult.success();
+    return closeIssueResult;
   }
 
   @override
@@ -189,6 +290,6 @@ final class _FakeAutonomousDeliveryPort implements AutonomousDeliveryPort {
     CompletedRunDeliveryRequest request,
   ) async {
     calls.add('deleteBranch');
-    return const AutonomousOperationResult.success();
+    return deleteBranchResult;
   }
 }

@@ -26,6 +26,51 @@ final class AutonomousDelivery {
       );
     }
 
+    late final AutonomousDeliveryProgress progress;
+    if (request.progress case final saved?) {
+      progress = saved;
+    } else {
+      final merge = await _merge(request);
+      if (merge is AutonomousDeliveryOutcome) return merge;
+      progress = merge as AutonomousDeliveryProgress;
+    }
+
+    if (!progress.issueClosed) {
+      final issue = await _port.closeIssue(request.delivery);
+      if (issue case AutonomousOperationFailure(
+        :final code,
+        :final remediation,
+      )) {
+        return AutonomousDeliveryRetryableFailure(
+          code: code,
+          remediation: remediation,
+          pullRequest: progress.pullRequest,
+          progress: progress,
+        );
+      }
+    }
+    final afterIssue = progress.copyWith(issueClosed: true);
+    if (!afterIssue.branchDeleted) {
+      final cleanup = await _port.deleteBranch(request.delivery);
+      if (cleanup case AutonomousOperationFailure(
+        :final code,
+        :final remediation,
+      )) {
+        return AutonomousDeliveryRetryableFailure(
+          code: code,
+          remediation: remediation,
+          pullRequest: afterIssue.pullRequest,
+          progress: afterIssue,
+        );
+      }
+    }
+    return AutonomousDeliveryCompleted(
+      pullRequest: afterIssue.pullRequest,
+      mergeCommit: afterIssue.mergeCommit,
+    );
+  }
+
+  Future<Object> _merge(AutonomousDeliveryRequest request) async {
     final opened = await _port.openPullRequest(request.delivery);
     if (opened case AutonomousPullRequestFailure(
       :final code,
@@ -44,7 +89,6 @@ final class AutonomousDelivery {
             'Refresh the pull request and rerun tests for its head commit.',
       );
     }
-
     final review = await _port.review(pullRequest, request.reviewer);
     if (review case AutonomousReviewRequestedChanges(:final findings)) {
       return AutonomousDeliveryBlocked(
@@ -59,7 +103,6 @@ final class AutonomousDelivery {
         remediation: remediation,
       );
     }
-
     final merge = await _port.approveAndMerge(pullRequest);
     if (merge case AutonomousOperationFailure(
       :final code,
@@ -79,29 +122,7 @@ final class AutonomousDelivery {
         pullRequest: pullRequest,
       );
     }
-    final issue = await _port.closeIssue(request.delivery);
-    if (issue case AutonomousOperationFailure(
-      :final code,
-      :final remediation,
-    )) {
-      return AutonomousDeliveryRetryableFailure(
-        code: code,
-        remediation: remediation,
-        pullRequest: pullRequest,
-      );
-    }
-    final cleanup = await _port.deleteBranch(request.delivery);
-    if (cleanup case AutonomousOperationFailure(
-      :final code,
-      :final remediation,
-    )) {
-      return AutonomousDeliveryRetryableFailure(
-        code: code,
-        remediation: remediation,
-        pullRequest: pullRequest,
-      );
-    }
-    return AutonomousDeliveryCompleted(
+    return AutonomousDeliveryProgress(
       pullRequest: pullRequest,
       mergeCommit: mergeCommit,
     );
