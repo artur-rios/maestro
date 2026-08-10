@@ -16,3 +16,6 @@ coverage/
 # Maestro local outputs
 .artifacts/
 dist/
+
+# Local temporary workspaces
+.tmp/

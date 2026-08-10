@@ -1,0 +1,4 @@
+# Windows native-asset compilation can leave a mapped output.dill while another
+# Flutter test worker tries to replace it. Keeping the test runner serial avoids
+# that shared-temporary-workspace race and makes `flutter test` reliable.
+concurrency: 1
