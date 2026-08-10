@@ -79,7 +79,8 @@ void main() {
       'GivenALiveSession_WhenClosing_ThenTheShellIsSignalledBeforeItIsKilled',
       () async {
         // Given: a shell that exits on the first signal.
-        final handle = _FakePtyHandle()..exitOnSignal = TerminalSignal.terminate;
+        final handle = _FakePtyHandle()
+          ..exitOnSignal = TerminalSignal.terminate;
         final terminator = _RecordingTerminator();
         final session = _session(handle, terminator: terminator);
 
@@ -156,33 +157,31 @@ void main() {
       },
     );
 
-    test(
-      'GivenAnAlreadyExitedShell_WhenClosing_'
-      'ThenNoSignalIsSentAndClosureSucceeds',
-      () async {
-        // Given: a shell that already exited (AF-03).
-        final handle = _FakePtyHandle();
-        final terminator = _RecordingTerminator();
-        final session = _session(handle, terminator: terminator);
-        handle.exitWith(0);
-        await session.exit;
+    test('GivenAnAlreadyExitedShell_WhenClosing_'
+        'ThenNoSignalIsSentAndClosureSucceeds', () async {
+      // Given: a shell that already exited (AF-03).
+      final handle = _FakePtyHandle();
+      final terminator = _RecordingTerminator();
+      final session = _session(handle, terminator: terminator);
+      handle.exitWith(0);
+      await session.exit;
 
-        // When: the panel closes the finished session.
-        final closure = await session.close();
+      // When: the panel closes the finished session.
+      final closure = await session.close();
 
-        // Then: nothing is signalled, because the operating system may have
-        // reused that process id.
-        expect(closure, TerminalClosure.closed);
-        expect(handle.signals, isEmpty);
-        expect(terminator.signals, isEmpty);
-      },
-    );
+      // Then: nothing is signalled, because the operating system may have
+      // reused that process id.
+      expect(closure, TerminalClosure.closed);
+      expect(handle.signals, isEmpty);
+      expect(terminator.signals, isEmpty);
+    });
 
     test(
       'GivenAClosedSession_WhenClosingAgain_ThenTheShellIsNotSignalledTwice',
       () async {
         // Given: an already closed session.
-        final handle = _FakePtyHandle()..exitOnSignal = TerminalSignal.terminate;
+        final handle = _FakePtyHandle()
+          ..exitOnSignal = TerminalSignal.terminate;
         final session = _session(handle);
         await session.close();
 
@@ -199,7 +198,8 @@ void main() {
       'GivenAStartedSession_WhenItCloses_ThenTheOwnedProcessRecordIsResolved',
       () async {
         // Given: a session registered as an owned process.
-        final handle = _FakePtyHandle()..exitOnSignal = TerminalSignal.terminate;
+        final handle = _FakePtyHandle()
+          ..exitOnSignal = TerminalSignal.terminate;
         final ownership = _FakeOwnership();
         final session = await PtyTerminalSession.start(
           handle: handle,
@@ -223,31 +223,28 @@ void main() {
       },
     );
 
-    test(
-      'GivenAStartedSession_WhenTheShellExitsOnItsOwn_'
-      'ThenTheOwnedProcessRecordIsResolved',
-      () async {
-        // Given: a session registered as an owned process.
-        final handle = _FakePtyHandle();
-        final ownership = _FakeOwnership();
-        final session = await PtyTerminalSession.start(
-          handle: handle,
-          terminator: _RecordingTerminator(),
-          ownership: ownership,
-          identityProvider: _FakeIdentityProvider(),
-          newResourceId: () => 'resource-1',
-          terminateTimeout: _shortTimeout,
-          killTimeout: _shortTimeout,
-        );
+    test('GivenAStartedSession_WhenTheShellExitsOnItsOwn_'
+        'ThenTheOwnedProcessRecordIsResolved', () async {
+      // Given: a session registered as an owned process.
+      final handle = _FakePtyHandle();
+      final ownership = _FakeOwnership();
+      final session = await PtyTerminalSession.start(
+        handle: handle,
+        terminator: _RecordingTerminator(),
+        ownership: ownership,
+        identityProvider: _FakeIdentityProvider(),
+        newResourceId: () => 'resource-1',
+        terminateTimeout: _shortTimeout,
+        killTimeout: _shortTimeout,
+      );
 
-        // When: the shell exits without the user closing it (AF-03).
-        handle.exitWith(1);
-        await session.exit;
+      // When: the shell exits without the user closing it (AF-03).
+      handle.exitWith(1);
+      await session.exit;
 
-        // Then: startup reconciliation is not left chasing a dead process.
-        expect(ownership.resolved, <String>['resource-1']);
-      },
-    );
+      // Then: startup reconciliation is not left chasing a dead process.
+      expect(ownership.resolved, <String>['resource-1']);
+    });
   });
 }
 
@@ -299,13 +296,17 @@ final class _FakePtyHandle implements TerminalPtyHandle {
   void kill(TerminalSignal signal) {
     signals.add(signal);
     trace?.add('leader:${signal.name}');
-    if (signal == exitOnSignal) exitWith(signal == TerminalSignal.kill ? -9 : 0);
+    if (signal == exitOnSignal) {
+      exitWith(signal == TerminalSignal.kill ? -9 : 0);
+    }
   }
 
   void emit(List<int> bytes) => _output.add(Uint8List.fromList(bytes));
 
   void exitWith(int code) {
-    if (_exitCode.isCompleted) return;
+    if (_exitCode.isCompleted) {
+      return;
+    }
     _exitCode.complete(code);
   }
 

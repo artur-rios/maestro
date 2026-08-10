@@ -17,33 +17,29 @@ import 'package:maestro/platform/terminal/pty_terminal_port.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'GivenARegisteredProjectFolder_WhenOpeningATerminal_'
-    'ThenTheShellStartsInThatFolder',
-    () async {
-      if (!Platform.isWindows && !Platform.isLinux) return;
-      final sandbox = await _sandbox();
-      final session = await _open(sandbox);
-      final output = _Transcript(session);
-      await output.waitUntilReady();
-      addTearDown(() async {
-        await session.close();
-        await output.cancel();
-      });
+  test('GivenARegisteredProjectFolder_WhenOpeningATerminal_'
+      'ThenTheShellStartsInThatFolder', () async {
+    if (!Platform.isWindows && !Platform.isLinux) return;
+    final sandbox = await _sandbox();
+    final session = await _open(sandbox);
+    final output = _Transcript(session);
+    await output.waitUntilReady();
+    addTearDown(() async {
+      await session.close();
+      await output.cancel();
+    });
 
-      // When: the shell is asked where it is.
-      await _type(session, Platform.isWindows ? '(pwd).Path' : 'pwd');
+    // When: the shell is asked where it is.
+    await _type(session, Platform.isWindows ? '(pwd).Path' : 'pwd');
 
-      // Then: it answers with the project folder (FR-TE-03).
-      final resolved = await sandbox.resolveSymbolicLinks();
-      expect(
-        await output.waitFor(resolved),
-        isTrue,
-        reason: 'The shell should be rooted at $resolved.',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    // Then: it answers with the project folder (FR-TE-03).
+    final resolved = await sandbox.resolveSymbolicLinks();
+    expect(
+      await output.waitFor(resolved),
+      isTrue,
+      reason: 'The shell should be rooted at $resolved.',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test(
     'GivenALiveTerminal_WhenACommandIsTyped_ThenItsOutputIsRendered',
@@ -110,8 +106,7 @@ void main() {
       addTearDown(output.cancel);
 
       // Given: a descendant process the shell started and did not wait out.
-      final marker =
-          'maestro-child-${DateTime.now().microsecondsSinceEpoch}';
+      final marker = 'maestro-child-${DateTime.now().microsecondsSinceEpoch}';
       await _type(session, _longLivedChild(marker));
       expect(
         await _hasProcess(marker),

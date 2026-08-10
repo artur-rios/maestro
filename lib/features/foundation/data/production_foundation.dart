@@ -37,7 +37,9 @@ final class ProductionFoundation {
     CapabilityProbe? shellProbe,
   }) : _shellProbe =
            shellProbe ??
-           PtyTerminalPort(shells: ShellResolver(locator: ExecutableResolver())),
+           PtyTerminalPort(
+             shells: ShellResolver(locator: ExecutableResolver()),
+           ),
        runRepository = runRepository ?? DriftRunRepository(database),
        _clock = clock ?? _utcNow,
        _newId = newId ?? _fallbackId,

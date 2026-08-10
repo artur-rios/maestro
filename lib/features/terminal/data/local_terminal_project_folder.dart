@@ -20,8 +20,8 @@ final class LocalTerminalProjectFolder implements TerminalProjectFolder {
       // A path that is no longer a readable directory cannot root a shell,
       // whatever it became.
       ProjectDirectoryState.notDirectory ||
-      ProjectDirectoryState.inaccessible => TerminalFolderAvailability
-          .inaccessible,
+      ProjectDirectoryState.inaccessible =>
+        TerminalFolderAvailability.inaccessible,
     };
   }
 }

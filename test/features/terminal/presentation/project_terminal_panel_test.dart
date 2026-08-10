@@ -26,23 +26,20 @@ void main() {
       },
     );
 
-    testWidgets(
-      'GivenARunningSession_WhenThePanelRenders_'
-      'ThenTheTerminalViewAndCloseActionAreShown',
-      (tester) async {
-        // Given: an idle panel.
-        await _pump(tester, _FakeOpener());
+    testWidgets('GivenARunningSession_WhenThePanelRenders_'
+        'ThenTheTerminalViewAndCloseActionAreShown', (tester) async {
+      // Given: an idle panel.
+      await _pump(tester, _FakeOpener());
 
-        // When: the user opens the terminal.
-        await tester.tap(find.byKey(const Key('open-terminal')));
-        await tester.pumpAndSettle();
+      // When: the user opens the terminal.
+      await tester.tap(find.byKey(const Key('open-terminal')));
+      await tester.pumpAndSettle();
 
-        // Then: the emulator is on screen and closing is offered.
-        expect(find.byKey(const Key('terminal-view')), findsOneWidget);
-        expect(find.byKey(const Key('close-terminal')), findsOneWidget);
-        expect(find.byKey(const Key('open-terminal')), findsNothing);
-      },
-    );
+      // Then: the emulator is on screen and closing is offered.
+      expect(find.byKey(const Key('terminal-view')), findsOneWidget);
+      expect(find.byKey(const Key('close-terminal')), findsOneWidget);
+      expect(find.byKey(const Key('open-terminal')), findsNothing);
+    });
 
     testWidgets(
       'GivenAnExitedSession_WhenThePanelRenders_ThenTheExitResultIsAnnounced',
@@ -62,87 +59,76 @@ void main() {
         expect(find.textContaining('exited with code 137'), findsOneWidget);
         expect(find.byKey(const Key('open-terminal')), findsOneWidget);
         expect(
-          tester
-              .getSemantics(find.byKey(const Key('terminal-exit')))
-              .label,
+          tester.getSemantics(find.byKey(const Key('terminal-exit'))).label,
           contains('Project terminal exited'),
         );
       },
     );
 
-    testWidgets(
-      'GivenAFailedOpen_WhenThePanelRenders_'
-      'ThenTheFailureAndRemediationAreAnnounced',
-      (tester) async {
-        // Given: no platform shell is available (AF-01).
-        await _pump(
-          tester,
-          _FakeOpener(
-            failure: const TerminalFailure(
-              code: TerminalFailure.shellUnavailableCode,
-              message: 'No platform shell was found on PATH.',
-              remediation: 'Install a shell and make sure it is on PATH.',
-            ),
+    testWidgets('GivenAFailedOpen_WhenThePanelRenders_'
+        'ThenTheFailureAndRemediationAreAnnounced', (tester) async {
+      // Given: no platform shell is available (AF-01).
+      await _pump(
+        tester,
+        _FakeOpener(
+          failure: const TerminalFailure(
+            code: TerminalFailure.shellUnavailableCode,
+            message: 'No platform shell was found on PATH.',
+            remediation: 'Install a shell and make sure it is on PATH.',
           ),
-        );
+        ),
+      );
 
-        // When: the user tries to open a terminal.
-        await tester.tap(find.byKey(const Key('open-terminal')));
-        await tester.pumpAndSettle();
+      // When: the user tries to open a terminal.
+      await tester.tap(find.byKey(const Key('open-terminal')));
+      await tester.pumpAndSettle();
 
-        // Then: the live region carries both the problem and the fix.
-        final semantics = tester.getSemantics(
-          find.byKey(const Key('terminal-failure')),
-        );
-        expect(semantics.label, contains('No platform shell'));
-        expect(semantics.label, contains('Install a shell'));
-        expect(find.byKey(const Key('terminal-view')), findsNothing);
-      },
-    );
+      // Then: the live region carries both the problem and the fix.
+      final semantics = tester.getSemantics(
+        find.byKey(const Key('terminal-failure')),
+      );
+      expect(semantics.label, contains('No platform shell'));
+      expect(semantics.label, contains('Install a shell'));
+      expect(find.byKey(const Key('terminal-view')), findsNothing);
+    });
 
-    testWidgets(
-      'GivenAnIncompleteClosure_WhenThePanelRenders_'
-      'ThenTheSessionStaysCloseable',
-      (tester) async {
-        // Given: a session whose processes resist termination.
-        final opener = _FakeOpener()..closure = TerminalClosure.incomplete;
-        await _pump(tester, opener);
-        await tester.tap(find.byKey(const Key('open-terminal')));
-        await tester.pumpAndSettle();
+    testWidgets('GivenAnIncompleteClosure_WhenThePanelRenders_'
+        'ThenTheSessionStaysCloseable', (tester) async {
+      // Given: a session whose processes resist termination.
+      final opener = _FakeOpener()..closure = TerminalClosure.incomplete;
+      await _pump(tester, opener);
+      await tester.tap(find.byKey(const Key('open-terminal')));
+      await tester.pumpAndSettle();
 
-        // When: the user closes it.
-        await tester.tap(find.byKey(const Key('close-terminal')));
-        await tester.pumpAndSettle();
+      // When: the user closes it.
+      await tester.tap(find.byKey(const Key('close-terminal')));
+      await tester.pumpAndSettle();
 
-        // Then: the panel reports the truth and keeps the escalation path.
-        expect(find.byKey(const Key('terminal-failure')), findsOneWidget);
-        expect(find.byKey(const Key('close-terminal')), findsOneWidget);
-      },
-    );
+      // Then: the panel reports the truth and keeps the escalation path.
+      expect(find.byKey(const Key('terminal-failure')), findsOneWidget);
+      expect(find.byKey(const Key('close-terminal')), findsOneWidget);
+    });
 
-    testWidgets(
-      'GivenThePanel_WhenTraversingWithTheKeyboard_'
-      'ThenTheActionsAreReachable',
-      (tester) async {
-        // Given: an idle panel.
-        await _pump(tester, _FakeOpener());
+    testWidgets('GivenThePanel_WhenTraversingWithTheKeyboard_'
+        'ThenTheActionsAreReachable', (tester) async {
+      // Given: an idle panel.
+      await _pump(tester, _FakeOpener());
 
-        // When: the user traverses to the first action.
-        expect(
-          tester
-              .widget<FilledButton>(find.byKey(const Key('open-terminal')))
-              .onPressed,
-          isNotNull,
-        );
-        primaryFocus?.unfocus();
-        await tester.pumpAndSettle();
-        expect(tester.binding.focusManager.primaryFocus?.nextFocus(), isTrue);
-        await tester.pumpAndSettle();
+      // When: the user traverses to the first action.
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('open-terminal')))
+            .onPressed,
+        isNotNull,
+      );
+      primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(tester.binding.focusManager.primaryFocus?.nextFocus(), isTrue);
+      await tester.pumpAndSettle();
 
-        // Then: focus lands inside the panel rather than nowhere.
-        expect(tester.binding.focusManager.primaryFocus, isNotNull);
-      },
-    );
+      // Then: focus lands inside the panel rather than nowhere.
+      expect(tester.binding.focusManager.primaryFocus, isNotNull);
+    });
 
     testWidgets(
       'GivenThePanel_WhenInspectingSemantics_ThenTheTerminalIsLabelled',

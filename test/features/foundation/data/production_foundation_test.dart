@@ -484,7 +484,6 @@ domain.RunSnapshot _snapshot(Directory root, String suffix) =>
       ],
     );
 
-
 final class _StubShellProbe implements CapabilityProbe {
   const _StubShellProbe(this._state);
 
@@ -495,10 +494,11 @@ final class _StubShellProbe implements CapabilityProbe {
     id: 'shell',
     state: _state,
     message: 'shell probe',
-    remediation: _state == CapabilityState.available ? null : 'Install a shell.',
+    remediation: _state == CapabilityState.available
+        ? null
+        : 'Install a shell.',
   );
 }
-
 
 /// Capability probes share one probe id, so the shell check is found by the
 /// capability it reports rather than by the probe that reported it.
