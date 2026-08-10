@@ -69,6 +69,7 @@ void main() {
         expect((outcome as AutonomousDeliveryBlocked).findings, [
           'Add regression coverage.',
         ]);
+        expect(outcome.recovery, AutonomousDeliveryRecovery.returnToExecute);
         expect(port.calls, ['open', 'review']);
       },
     );
@@ -88,6 +89,7 @@ void main() {
           (outcome as AutonomousDeliveryBlocked).remediation,
           contains('Configure'),
         );
+        expect(outcome.recovery, AutonomousDeliveryRecovery.fail);
         expect(port.calls, ['open', 'review']);
       },
     );

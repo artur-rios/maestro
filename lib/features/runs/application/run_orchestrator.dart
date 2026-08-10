@@ -48,6 +48,12 @@ abstract interface class RunExecutionRepository {
     required int? exitCode,
     required String failureCode,
   });
+  Future<void> settleAutonomousDelivery({
+    required String runId,
+    required RunStatus nextStatus,
+    required int nextStepPosition,
+    required DateTime at,
+  });
 }
 
 abstract interface class AttemptResultFiles {
@@ -716,6 +722,13 @@ final class RunOrchestrator implements RunExecutionControl {
       headCommit: evidence.test.headCommit,
       pullRequestTitle: aggregate.snapshot.workflowName ?? aggregate.run.label,
     );
+    // Retry resumes post-merge cleanup from durable evidence. In particular,
+    // it never reopens the pull request or repeats the privileged merge after
+    // GitHub has already accepted it.
+    final records = _deliveryRecords;
+    final saved = records == null
+        ? null
+        : await records.findByRunId(aggregate.run.id);
     final outcome = await delivery(
       AutonomousDeliveryRequest(
         delivery: request,
@@ -725,9 +738,9 @@ final class RunOrchestrator implements RunExecutionControl {
         ),
         executeModel: evidence.executeModel,
         reviewer: AutonomousReviewer(identity: evidence.reviewerIdentity),
+        progress: saved?.progressFor(request),
       ),
     );
-    final records = _deliveryRecords;
     if (records != null) {
       await records.save(
         _deliveryRecord(
@@ -735,6 +748,26 @@ final class RunOrchestrator implements RunExecutionControl {
           reviewer: evidence.reviewerIdentity,
           outcome: outcome,
         ),
+      );
+    }
+    if (outcome case AutonomousDeliveryBlocked(:final recovery)) {
+      final nextStatus = recovery == AutonomousDeliveryRecovery.fail
+          ? RunStatus.failed
+          : RunStatus.running;
+      final stepKind = recovery == AutonomousDeliveryRecovery.returnToExecute
+          ? 'execute'
+          : 'test';
+      final position = aggregate.snapshot.steps
+          .firstWhere(
+            (step) => step.kind == stepKind,
+            orElse: () => aggregate.snapshot.steps.first,
+          )
+          .position;
+      await _repository.settleAutonomousDelivery(
+        runId: aggregate.run.id,
+        nextStatus: nextStatus,
+        nextStepPosition: position,
+        at: _now(),
       );
     }
   }

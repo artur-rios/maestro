@@ -10,7 +10,10 @@ void main() {
     'GivenSuccessfulGitHubResponses_WhenDelivering_ThenCommandsArePromptDisabledAndTypedEvidenceIsParsed',
     () async {
       final runner = _SequenceRunner(<CommandResult>[
-        _json('{"number":42,"url":"https://github.com/acme/maestro/pull/42","headRefOid":"abc123"}'),
+        const CommandResult(exitCode: 0, stdout: '', stderr: ''),
+        _json(
+          '{"number":42,"url":"https://github.com/acme/maestro/pull/42","headRefOid":"abc123"}',
+        ),
         _json('{"reviewDecision":"APPROVED","reviews":[]}'),
         const CommandResult(exitCode: 0, stdout: '', stderr: ''),
         const CommandResult(exitCode: 0, stdout: '', stderr: ''),
@@ -42,30 +45,64 @@ void main() {
         everyElement(const <String, String>{'GH_PROMPT_DISABLED': '1'}),
       );
       expect(runner.requests[0].arguments, <String>[
-        'pr', 'create', '--repo', 'acme/maestro', '--head', 'feature/uc-11',
-        '--title', 'Deliver UC-11', '--body', 'Closes #11', '--json',
-        'number,url,headRefOid',
+        'pr',
+        'create',
+        '--repo',
+        'acme/maestro',
+        '--head',
+        'feature/uc-11',
+        '--title',
+        'Deliver UC-11',
+        '--body',
+        'Closes #11',
       ]);
       expect(runner.requests[1].arguments, <String>[
-        'pr', 'view', 'https://github.com/acme/maestro/pull/42', '--json',
-        'reviewDecision,reviews',
+        'pr',
+        'view',
+        'feature/uc-11',
+        '--repo',
+        'acme/maestro',
+        '--json',
+        'number,url,headRefOid',
       ]);
       expect(runner.requests[2].arguments, <String>[
-        'pr', 'review', 'https://github.com/acme/maestro/pull/42', '--approve',
+        'pr',
+        'view',
+        'https://github.com/acme/maestro/pull/42',
+        '--json',
+        'reviewDecision,reviews',
       ]);
       expect(runner.requests[3].arguments, <String>[
-        'pr', 'merge', 'https://github.com/acme/maestro/pull/42', '--merge',
-        '--delete-branch',
+        'pr',
+        'review',
+        'https://github.com/acme/maestro/pull/42',
+        '--approve',
       ]);
       expect(runner.requests[4].arguments, <String>[
-        'pr', 'view', 'https://github.com/acme/maestro/pull/42', '--json',
-        'mergeCommit',
+        'pr',
+        'merge',
+        'https://github.com/acme/maestro/pull/42',
+        '--merge',
       ]);
       expect(runner.requests[5].arguments, <String>[
-        'issue', 'close', '11', '--repo', 'acme/maestro',
+        'pr',
+        'view',
+        'https://github.com/acme/maestro/pull/42',
+        '--json',
+        'mergeCommit',
       ]);
       expect(runner.requests[6].arguments, <String>[
-        'api', '--method', 'DELETE', 'repos/acme/maestro/git/refs/heads/feature%2Fuc-11',
+        'issue',
+        'close',
+        '11',
+        '--repo',
+        'acme/maestro',
+      ]);
+      expect(runner.requests[7].arguments, <String>[
+        'api',
+        '--method',
+        'DELETE',
+        'repos/acme/maestro/git/refs/heads/feature%2Fuc-11',
       ]);
     },
   );
@@ -105,11 +142,8 @@ void main() {
   );
 }
 
-CommandResult _json(String value) => CommandResult(
-  exitCode: 0,
-  stdout: value,
-  stderr: '',
-);
+CommandResult _json(String value) =>
+    CommandResult(exitCode: 0, stdout: value, stderr: '');
 
 CompletedRunDeliveryRequest _delivery() => const CompletedRunDeliveryRequest(
   runId: 'run-11',

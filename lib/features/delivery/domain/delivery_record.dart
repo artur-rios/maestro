@@ -1,3 +1,6 @@
+import 'package:maestro/features/delivery/domain/autonomous_delivery_models.dart';
+import 'package:maestro/features/delivery/domain/delivery_models.dart';
+
 enum DeliveryReviewOutcome { approved, requestedChanges, unavailable }
 
 /// Durable, redacted evidence gathered while autonomously delivering a run.
@@ -41,6 +44,33 @@ final class DeliveryRecord {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? completedAt;
+
+  /// Rehydrates only post-merge progress that belongs to this exact delivery.
+  /// A partial PR or an unmatched head must be retried through the guarded
+  /// review and merge gates instead of being treated as completed work.
+  AutonomousDeliveryProgress? progressFor(CompletedRunDeliveryRequest request) {
+    if (runId != request.runId ||
+        repository != request.repository ||
+        headCommit != request.headCommit ||
+        pullRequestNumber == null ||
+        pullRequestUrl == null ||
+        mergeCommit == null) {
+      return null;
+    }
+    return AutonomousDeliveryProgress(
+      pullRequest: AutonomousPullRequest(
+        number: pullRequestNumber!,
+        url: pullRequestUrl!,
+        headCommit: headCommit,
+      ),
+      mergeCommit: mergeCommit!,
+      runId: runId,
+      repository: repository,
+      headCommit: headCommit,
+      issueClosed: issueClosed,
+      branchDeleted: branchDeleted,
+    );
+  }
 }
 
 abstract interface class DeliveryRecordRepository {

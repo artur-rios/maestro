@@ -50,6 +50,10 @@ enum RunStatus {
     // Recovery re-entry (FR-RC-05..07). The repository adds the evidence
     // guards; the lifecycle only says the move is possible.
     (failed, running) || (canceled, running) || (interrupted, running) => true,
+    // Autonomous delivery occurs after the final workflow step has durable
+    // success evidence. Its independent gates may safely re-enter a prior
+    // step or turn that provisional success into a terminal failure.
+    (succeeded, running) || (succeeded, failed) => true,
     _ => false,
   };
 }

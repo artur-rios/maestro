@@ -1608,6 +1608,8 @@ final class _Repository implements RunExecutionRepository {
   final List<String> completed = <String>[];
   final List<(String, String)> failed = <(String, String)>[];
   final List<String> paused = <String>[];
+  final List<(String, RunStatus, int)> autonomousSettlements =
+      <(String, RunStatus, int)>[];
 
   /// The number of upcoming `appendLog` calls that fail before storage
   /// recovers.
@@ -1645,6 +1647,14 @@ final class _Repository implements RunExecutionRepository {
     required int? exitCode,
     required String failureCode,
   }) async => failed.add((attemptId, failureCode));
+
+  @override
+  Future<void> settleAutonomousDelivery({
+    required String runId,
+    required RunStatus nextStatus,
+    required int nextStepPosition,
+    required DateTime at,
+  }) async => autonomousSettlements.add((runId, nextStatus, nextStepPosition));
 }
 
 final class _Script {

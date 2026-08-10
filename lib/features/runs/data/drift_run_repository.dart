@@ -439,6 +439,36 @@ final class DriftRunRepository
   }
 
   @override
+  Future<void> settleAutonomousDelivery({
+    required String runId,
+    required domain.RunStatus nextStatus,
+    required int nextStepPosition,
+    required DateTime at,
+  }) async {
+    if (nextStatus != domain.RunStatus.running &&
+        nextStatus != domain.RunStatus.failed) {
+      throw ArgumentError.value(nextStatus, 'nextStatus');
+    }
+    final affected =
+        await (_database.update(_database.workflowRuns)..where(
+              (table) =>
+                  table.id.equals(runId) &
+                  table.status.equals(domain.RunStatus.succeeded.name),
+            ))
+            .write(
+              db.WorkflowRunsCompanion(
+                status: Value<String>(nextStatus.name),
+                currentStepPosition: Value<int>(nextStepPosition),
+                updatedAt: Value<DateTime>(at.toUtc()),
+                completedAt: nextStatus == domain.RunStatus.failed
+                    ? Value<DateTime?>(at.toUtc())
+                    : const Value<DateTime?>.absent(),
+              ),
+            );
+    _requireOne(affected);
+  }
+
+  @override
   Future<void> failAttemptAndRun({
     required String attemptId,
     required DateTime completedAt,

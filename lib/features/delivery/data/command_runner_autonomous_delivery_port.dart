@@ -18,10 +18,8 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
   final SecretRedactor _redactor = SecretRedactor();
 
   @override
-  Future<CommandResult> authenticationStatus() => _run(<String>[
-    'auth',
-    'status',
-  ]);
+  Future<CommandResult> authenticationStatus() =>
+      _run(<String>['auth', 'status']);
 
   @override
   Future<Capability> probe() async {
@@ -56,12 +54,23 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
       request.pullRequestTitle,
       '--body',
       'Closes #${request.issueNumber}',
-      '--json',
-      'number,url,headRefOid',
     ]);
     final failure = _failure(result);
     if (failure != null) return failure.pullRequest;
-    final decoded = _object(result);
+    // `gh pr create` does not support --json. Query the pull request after
+    // creation so the typed evidence comes from a documented JSON command.
+    final created = await _run(<String>[
+      'pr',
+      'view',
+      request.branchName,
+      '--repo',
+      request.repository,
+      '--json',
+      'number,url,headRefOid',
+    ]);
+    final createdFailure = _failure(created);
+    if (createdFailure != null) return createdFailure.pullRequest;
+    final decoded = _object(created);
     if (decoded == null ||
         decoded['number'] is! int ||
         decoded['url'] is! String ||
@@ -118,7 +127,8 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
       );
     }
     return const AutonomousReviewResult.unavailable(
-      remediation: 'Obtain a completed GitHub review from the configured reviewer.',
+      remediation:
+          'Obtain a completed GitHub review from the configured reviewer.',
     );
   }
 
@@ -140,7 +150,6 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
       'merge',
       pullRequest.url,
       '--merge',
-      '--delete-branch',
     ]);
     final mergeFailure = _failure(merged);
     if (mergeFailure != null) return mergeFailure.operation;
@@ -170,23 +179,27 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
   @override
   Future<AutonomousOperationResult> closeIssue(
     CompletedRunDeliveryRequest request,
-  ) async => _operation(_run(<String>[
-    'issue',
-    'close',
-    '${request.issueNumber}',
-    '--repo',
-    request.repository,
-  ]));
+  ) async => _operation(
+    _run(<String>[
+      'issue',
+      'close',
+      '${request.issueNumber}',
+      '--repo',
+      request.repository,
+    ]),
+  );
 
   @override
   Future<AutonomousOperationResult> deleteBranch(
     CompletedRunDeliveryRequest request,
-  ) async => _operation(_run(<String>[
-    'api',
-    '--method',
-    'DELETE',
-    'repos/${request.repository}/git/refs/heads/${Uri.encodeComponent(request.branchName)}',
-  ]));
+  ) async => _operation(
+    _run(<String>[
+      'api',
+      '--method',
+      'DELETE',
+      'repos/${request.repository}/git/refs/heads/${Uri.encodeComponent(request.branchName)}',
+    ]),
+  );
 
   Future<CommandResult> _run(List<String> arguments) => _runner.run(
     CommandRequest(
@@ -214,7 +227,9 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
   }
 
   _GitHubFailure? _failure(CommandResult result) {
-    if (result.succeeded && !result.stdoutTruncated && !result.stderrTruncated) {
+    if (result.succeeded &&
+        !result.stdoutTruncated &&
+        !result.stderrTruncated) {
       return null;
     }
     final text = '${result.stdout}\n${result.stderr}'.toLowerCase();
@@ -235,7 +250,9 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
 
   String _redactFinding(String value) {
     final redacted = _redactor.redact(value).trim();
-    return redacted.length <= 1024 ? redacted : '${redacted.substring(0, 1024)}…';
+    return redacted.length <= 1024
+        ? redacted
+        : '${redacted.substring(0, 1024)}…';
   }
 }
 
@@ -253,10 +270,7 @@ final class _GitHubFailure {
         'Resolve the GitHub policy restriction and retry.',
       );
   const _GitHubFailure.conflict()
-    : this._(
-        'github.conflict',
-        'Resolve the GitHub merge conflict and retry.',
-      );
+    : this._('github.conflict', 'Resolve the GitHub merge conflict and retry.');
   const _GitHubFailure.retryable()
     : this._('github.remote_failure', 'Retry after GitHub is reachable.');
 

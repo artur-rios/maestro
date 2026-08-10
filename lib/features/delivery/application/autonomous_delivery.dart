@@ -24,6 +24,7 @@ final class AutonomousDelivery {
     if (!request.hasIndependentReviewer) {
       return const AutonomousDeliveryBlocked(
         remediation: 'Configure a reviewer distinct from the executing model.',
+        recovery: AutonomousDeliveryRecovery.fail,
       );
     }
 
@@ -102,12 +103,14 @@ final class AutonomousDelivery {
         pullRequest: pullRequest,
         findings: findings,
         remediation: 'Address the review findings and return to execution.',
+        recovery: AutonomousDeliveryRecovery.returnToExecute,
       );
     }
     if (review case AutonomousReviewUnavailable(:final remediation)) {
       return AutonomousDeliveryBlocked(
         pullRequest: pullRequest,
         remediation: remediation,
+        recovery: AutonomousDeliveryRecovery.fail,
       );
     }
     final merge = await _port.approveAndMerge(pullRequest);

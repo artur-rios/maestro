@@ -171,6 +171,9 @@ sealed class AutonomousDeliveryOutcome {
   const AutonomousDeliveryOutcome();
 }
 
+/// The safe workflow state to enter after a delivery gate declines to proceed.
+enum AutonomousDeliveryRecovery { returnToExecute, returnToTest, fail }
+
 final class AutonomousDeliveryCompleted extends AutonomousDeliveryOutcome {
   const AutonomousDeliveryCompleted({
     required this.pullRequest,
@@ -185,10 +188,12 @@ final class AutonomousDeliveryBlocked extends AutonomousDeliveryOutcome {
     required this.remediation,
     this.pullRequest,
     this.findings = const [],
+    this.recovery = AutonomousDeliveryRecovery.returnToTest,
   });
   final String remediation;
   final AutonomousPullRequest? pullRequest;
   final List<String> findings;
+  final AutonomousDeliveryRecovery recovery;
 }
 
 final class AutonomousDeliveryRetryableFailure
