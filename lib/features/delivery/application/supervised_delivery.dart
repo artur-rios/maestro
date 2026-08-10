@@ -4,8 +4,7 @@ import 'package:maestro/features/runs/domain/run_models.dart';
 
 /// Opens a pull request only for runs that selected supervised delivery.
 final class SupervisedDelivery {
-  const SupervisedDelivery({required DeliveryPort delivery})
-    : _delivery = delivery;
+  const SupervisedDelivery({required this._delivery});
 
   final DeliveryPort _delivery;
 
