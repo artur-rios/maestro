@@ -7,6 +7,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:maestro/core/logging/secret_redactor.dart';
+import 'package:maestro/features/delivery/application/autonomous_delivery.dart';
+import 'package:maestro/features/delivery/domain/autonomous_delivery_models.dart';
+import 'package:maestro/features/delivery/domain/delivery_attestation.dart';
+import 'package:maestro/features/delivery/domain/delivery_models.dart';
+import 'package:maestro/features/delivery/domain/delivery_record.dart';
 import 'package:maestro/features/runs/application/attempt_result_protocol.dart';
 import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/domain/run_control.dart';
@@ -256,6 +261,8 @@ final class RunOrchestrator implements RunExecutionControl {
     required String Function() newLogId,
     required String Function() newNonce,
     required DateTime Function() now,
+    AutonomousDelivery? autonomousDelivery,
+    DeliveryRecordRepository? deliveryRecords,
   }) : _repository = repository,
        _launcher = launcher,
        _resultFiles = resultFiles,
@@ -264,7 +271,9 @@ final class RunOrchestrator implements RunExecutionControl {
        _newAttemptId = newAttemptId,
        _newLogId = newLogId,
        _newNonce = newNonce,
-       _now = now;
+       _now = now,
+       _autonomousDelivery = autonomousDelivery,
+       _deliveryRecords = deliveryRecords;
 
   static const int maximumPersistedFrameBytes = 16 * 1024;
   static const int maximumTailBytes = 64 * 1024;
@@ -286,6 +295,8 @@ final class RunOrchestrator implements RunExecutionControl {
   final String Function() _newLogId;
   final String Function() _newNonce;
   final DateTime Function() _now;
+  final AutonomousDelivery? _autonomousDelivery;
+  final DeliveryRecordRepository? _deliveryRecords;
   final RunSummaryEvents _events = RunSummaryEvents();
   final Map<String, Queue<RunOutputChunk>> _tails =
       <String, Queue<RunOutputChunk>>{};
@@ -384,6 +395,7 @@ final class RunOrchestrator implements RunExecutionControl {
     DeclaredContext? priorContext = contextPolicy == RecoveryContextPolicy.fresh
         ? null
         : _resumedContext(aggregate);
+    final completedAttempts = <RunAttempt>[...aggregate.attempts];
     for (
       var position = aggregate.run.currentStepPosition;
       position < aggregate.snapshot.steps.length;
@@ -649,6 +661,19 @@ final class RunOrchestrator implements RunExecutionControl {
         exitCode: exitCode,
         declaredContext: priorContext,
       );
+      completedAttempts.add(
+        RunAttempt(
+          id: attemptId,
+          runId: runId,
+          snapshotStepId: step.id,
+          attemptNumber: attemptNumber,
+          status: AttemptStatus.succeeded,
+          startedAt: startedAt,
+          completedAt: _now(),
+          exitCode: exitCode,
+          declaredContext: priorContext,
+        ),
+      );
       // The step is complete and its evidence is durable; this is the only
       // point at which a pause can be honored without truncating a step. A
       // pause on the final step is moot — the run has already succeeded.
@@ -657,7 +682,119 @@ final class RunOrchestrator implements RunExecutionControl {
         await _repository.pauseRun(runId, _now());
         return;
       }
+      if (!hasNextStep) {
+        await _deliverWhenAttested(aggregate, completedAttempts);
+      }
     }
+  }
+
+  Future<void> _deliverWhenAttested(
+    RunExecutionAggregate aggregate,
+    Iterable<RunAttempt> attempts,
+  ) async {
+    final delivery = _autonomousDelivery;
+    if (delivery == null ||
+        aggregate.snapshot.deliveryMode != DeliveryMode.autonomous) {
+      return;
+    }
+    final workItem = aggregate.snapshot.workItem;
+    if (workItem is! GitHubIssueRunWorkItem ||
+        aggregate.run.branchName == null) {
+      return;
+    }
+    final evidence = DeliveryAttestationSet.fromSnapshot(
+      aggregate.snapshot,
+      attempts,
+    );
+    if (evidence == null) return;
+    final request = CompletedRunDeliveryRequest(
+      runId: aggregate.run.id,
+      deliveryMode: aggregate.snapshot.deliveryMode,
+      repository: workItem.repository,
+      issueNumber: workItem.number,
+      branchName: aggregate.run.branchName!,
+      headCommit: evidence.test.headCommit,
+      pullRequestTitle: aggregate.snapshot.workflowName ?? aggregate.run.label,
+    );
+    final outcome = await delivery(
+      AutonomousDeliveryRequest(
+        delivery: request,
+        testEvidence: DeliveryTestEvidence(
+          headCommit: evidence.test.headCommit,
+          passedAt: evidence.test.passedAt,
+        ),
+        executeModel: evidence.executeModel,
+        reviewer: AutonomousReviewer(identity: evidence.reviewerIdentity),
+      ),
+    );
+    final records = _deliveryRecords;
+    if (records != null) {
+      await records.save(
+        _deliveryRecord(
+          request: request,
+          reviewer: evidence.reviewerIdentity,
+          outcome: outcome,
+        ),
+      );
+    }
+  }
+
+  DeliveryRecord _deliveryRecord({
+    required CompletedRunDeliveryRequest request,
+    required String reviewer,
+    required AutonomousDeliveryOutcome outcome,
+  }) {
+    final pullRequest = switch (outcome) {
+      AutonomousDeliveryCompleted(:final pullRequest) => pullRequest,
+      AutonomousDeliveryBlocked(:final pullRequest?) => pullRequest,
+      AutonomousDeliveryRetryableFailure(:final pullRequest?) => pullRequest,
+      _ => null,
+    };
+    final review = switch (outcome) {
+      AutonomousDeliveryCompleted() => DeliveryReviewOutcome.approved,
+      AutonomousDeliveryBlocked(:final findings) when findings.isNotEmpty =>
+        DeliveryReviewOutcome.requestedChanges,
+      _ => null,
+    };
+    final now = _now();
+    return DeliveryRecord(
+      runId: request.runId,
+      repository: request.repository,
+      issueNumber: request.issueNumber,
+      branchName: request.branchName,
+      headCommit: request.headCommit,
+      pullRequestNumber: pullRequest?.number,
+      pullRequestUrl: pullRequest?.url,
+      reviewerIdentity: reviewer,
+      reviewOutcome: review,
+      findings: outcome is AutonomousDeliveryBlocked
+          ? outcome.findings
+          : const [],
+      mergeCommit: outcome is AutonomousDeliveryCompleted
+          ? outcome.mergeCommit
+          : outcome is AutonomousDeliveryRetryableFailure
+          ? outcome.progress?.mergeCommit
+          : null,
+      issueClosed:
+          outcome is AutonomousDeliveryCompleted ||
+          (outcome is AutonomousDeliveryRetryableFailure &&
+              outcome.progress?.issueClosed == true),
+      branchDeleted:
+          outcome is AutonomousDeliveryCompleted ||
+          (outcome is AutonomousDeliveryRetryableFailure &&
+              outcome.progress?.branchDeleted == true),
+      failureCode: outcome is AutonomousDeliveryRetryableFailure
+          ? outcome.code
+          : null,
+      remediation: outcome is AutonomousDeliveryBlocked
+          ? outcome.remediation
+          : outcome is AutonomousDeliveryRetryableFailure
+          ? outcome.remediation
+          : null,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: outcome is AutonomousDeliveryCompleted ? now : null,
+    );
   }
 
   /// Recovers the context the preceding step declared, for a resumed run.

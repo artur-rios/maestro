@@ -3,7 +3,8 @@ import 'package:maestro/features/delivery/domain/autonomous_delivery_models.dart
 import 'package:maestro/features/runs/domain/run_models.dart';
 
 final class AutonomousDelivery {
-  const AutonomousDelivery({required this._port});
+  const AutonomousDelivery({required AutonomousDeliveryPort port})
+    : _port = port;
 
   final AutonomousDeliveryPort _port;
 
