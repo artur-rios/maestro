@@ -10,12 +10,12 @@ import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/database_factory.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
-import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
-import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/data/drift_authentication_repository.dart';
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
 import 'package:maestro/features/authentication/data/sodium_password_hasher.dart';
+import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
+import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
@@ -84,6 +84,7 @@ final class ProductionAppComposition {
     required this.workflowDesignService,
     required this.agentConfigurationService,
     required this.runRepository,
+    required this.deliveryRepository,
     required this.runOrchestrator,
     required this.runStartBuilder,
     required this.runObservationBuilder,
@@ -348,9 +349,8 @@ Future<ProductionAppComposition> composeProductionApp({
       events: runOrchestrator.events,
     ),
     createControlController: () => RunControlController(control: controlRun),
-    createDeliveryController: () => DeliveryController(
-      repository: deliveryRepository,
-    ),
+    createDeliveryController: () =>
+        DeliveryController(repository: deliveryRepository),
   );
 
   final openProjectTerminal = OpenProjectTerminal(

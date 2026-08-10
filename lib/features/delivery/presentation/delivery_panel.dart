@@ -28,8 +28,9 @@ final class _DeliveryPanelState extends State<DeliveryPanel> {
   @override
   void didUpdateWidget(DeliveryPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.runId != widget.runId)
+    if (oldWidget.runId != widget.runId) {
       unawaited(_controller.load(widget.runId));
+    }
   }
 
   void _changed() {
@@ -79,10 +80,15 @@ final class _DeliveryPanelState extends State<DeliveryPanel> {
 }
 
 String _status(DeliveryRecord? record) {
-  if (record == null) return 'No autonomous delivery evidence yet.';
-  if (record.completedAt != null) return 'Autonomous delivery completed.';
-  if (record.reviewOutcome == DeliveryReviewOutcome.requestedChanges)
+  if (record == null) {
+    return 'No autonomous delivery evidence yet.';
+  }
+  if (record.completedAt != null) {
+    return 'Autonomous delivery completed.';
+  }
+  if (record.reviewOutcome == DeliveryReviewOutcome.requestedChanges) {
     return 'Review requested changes; returned to execution.';
+  }
   return 'Autonomous delivery needs attention.';
 }
 

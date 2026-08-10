@@ -23,6 +23,8 @@ final class DeliveryState {
 /// Loads retained autonomous-delivery evidence without exposing a privileged UI action.
 final class DeliveryController extends ChangeNotifier {
   DeliveryController({required DeliveryRecordRepository repository})
+    // Public parameter name documents the dependency while storage is private.
+    // ignore: prefer_initializing_formals
     : _repository = repository;
   final DeliveryRecordRepository _repository;
   DeliveryState state = const DeliveryState();
