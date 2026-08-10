@@ -6,6 +6,8 @@ import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
+import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
+import 'package:maestro/features/delivery/presentation/delivery_panel.dart';
 
 /// Shows every run of the selected project, its ordered steps, and its output.
 ///
@@ -16,6 +18,7 @@ final class ActiveRunsPanel extends StatefulWidget {
   const ActiveRunsPanel({
     required this.createController,
     this.createControlController,
+    this.createDeliveryController,
     super.key,
   });
 
@@ -24,6 +27,7 @@ final class ActiveRunsPanel extends StatefulWidget {
   /// Builds the control half of the panel. Absent when a host composes
   /// observation without the ability to act on a run.
   final RunControlController Function()? createControlController;
+  final DeliveryController Function()? createDeliveryController;
 
   @override
   State<ActiveRunsPanel> createState() => _ActiveRunsPanelState();
@@ -127,6 +131,15 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
               if (_controls case final controls?) ...<Widget>[
                 const Divider(height: 24),
                 _ControlBar(controller: controls),
+              ],
+              if (widget.createDeliveryController
+                  case final create?) ...<Widget>[
+                const Divider(height: 24),
+                DeliveryPanel(
+                  key: Key('delivery-${selected.runId}'),
+                  runId: selected.runId,
+                  createController: create,
+                ),
               ],
               const Divider(height: 24),
               Text('Steps', style: theme.textTheme.titleMedium),

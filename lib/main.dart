@@ -10,6 +10,8 @@ import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/database_factory.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
+import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
+import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/data/drift_authentication_repository.dart';
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
@@ -101,6 +103,7 @@ final class ProductionAppComposition {
   final WorkflowDesignService workflowDesignService;
   final AgentConfigurationService agentConfigurationService;
   final DriftRunRepository runRepository;
+  final DriftDeliveryRepository deliveryRepository;
   final RunOrchestrator runOrchestrator;
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
@@ -183,6 +186,7 @@ Future<ProductionAppComposition> composeProductionApp({
   );
   final workflowRepository = DriftWorkflowRepository(database);
   final runRepository = DriftRunRepository(database);
+  final deliveryRepository = DriftDeliveryRepository(database);
   final workflowDesignService = WorkflowDesignService(
     repository: workflowRepository,
     projectReadiness: ProductionProjectExecutionReadiness(
@@ -344,6 +348,9 @@ Future<ProductionAppComposition> composeProductionApp({
       events: runOrchestrator.events,
     ),
     createControlController: () => RunControlController(control: controlRun),
+    createDeliveryController: () => DeliveryController(
+      repository: deliveryRepository,
+    ),
   );
 
   final openProjectTerminal = OpenProjectTerminal(
@@ -374,6 +381,7 @@ Future<ProductionAppComposition> composeProductionApp({
     workflowDesignService: workflowDesignService,
     agentConfigurationService: agentConfigurationService,
     runRepository: runRepository,
+    deliveryRepository: deliveryRepository,
     runOrchestrator: runOrchestrator,
     runStartBuilder: runStartBuilder,
     runObservationBuilder: runObservationBuilder,
