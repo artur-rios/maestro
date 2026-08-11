@@ -22,8 +22,10 @@ void main() {
         windows,
         allOf(
           contains('Rollback'),
-          contains('Start-Process'),
           contains('ParentProcessId'),
+          contains('RelaunchPath'),
+          contains(r'Start-Process -FilePath $relaunch -PassThru'),
+          contains('windows-zip-update: relaunched'),
         ),
       );
       expect(

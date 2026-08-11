@@ -27,7 +27,8 @@ try {
   Expand-Archive -LiteralPath $package -DestinationPath $staging -Force
   Move-Item -LiteralPath $install -Destination $rollback
   Move-Item -LiteralPath $staging -Destination $install
-  Start-Process -FilePath $relaunch
+  $relaunchProcess = Start-Process -FilePath $relaunch -PassThru
+  Write-Output "windows-zip-update: relaunched $($relaunchProcess.Id)"
   Remove-Item -LiteralPath $rollback -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   if (-not (Test-Path -LiteralPath $install) -and (Test-Path -LiteralPath $rollback)) { Move-Item -LiteralPath $rollback -Destination $install }

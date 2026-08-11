@@ -34,8 +34,10 @@ Future<UpdateService?> createProductionUpdateService({
   final installer = switch (Platform.operatingSystem) {
     'windows' => WindowsPackageInstaller(
       runner: runner,
+      detachedLauncher: const IoDetachedProcessLauncher(),
       zipReplacementHelper:
           '$executableDirectory${Platform.pathSeparator}replace_windows_zip.ps1',
+      relaunchPath: Platform.resolvedExecutable,
     ),
     'linux' => LinuxPackageInstaller(
       runner: runner,

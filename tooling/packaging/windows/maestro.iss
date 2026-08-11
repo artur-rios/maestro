@@ -29,6 +29,7 @@ OutputDir={#OutputDir}
 OutputBaseFilename={#OutputName}
 SetupIconFile={#AppIcon}
 UninstallDisplayIcon={app}\maestro.exe
+UninstallFilesDir={app}-uninstall
 Compression=lzma2/max
 SolidCompression=yes
 CloseApplications=yes
@@ -44,3 +45,6 @@ Name: "{autoprograms}\Maestro"; Filename: "{app}\maestro.exe"; WorkingDir: "{app
 
 [Run]
 Filename: "{app}\maestro.exe"; Description: "Launch Maestro"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

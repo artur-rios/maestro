@@ -53,6 +53,25 @@ abstract interface class CommandRunner {
   Future<CommandResult> run(CommandRequest request);
 }
 
+abstract interface class DetachedProcessLauncher {
+  Future<void> launch(CommandRequest request);
+}
+
+final class IoDetachedProcessLauncher implements DetachedProcessLauncher {
+  const IoDetachedProcessLauncher();
+
+  @override
+  Future<void> launch(CommandRequest request) async {
+    await Process.start(
+      request.executable,
+      request.arguments,
+      workingDirectory: request.workingDirectory,
+      environment: request.environment,
+      mode: ProcessStartMode.detached,
+    );
+  }
+}
+
 final class CommandFrameTooLargeException implements Exception {
   const CommandFrameTooLargeException();
 }

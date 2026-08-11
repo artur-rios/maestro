@@ -66,6 +66,16 @@ jobs:
       - name: Package Windows artifacts
         shell: pwsh
         run: tooling/packaging/package_windows.ps1 -Version 0.1.0 -SkipBuild
+      - name: Build ZIP update fixture
+        shell: pwsh
+        run: |
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP 'maestro-windows-x64-update'
+          $updatePackage = Join-Path $env:RUNNER_TEMP 'maestro-windows-x64-update.zip'
+          New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+          Expand-Archive -LiteralPath dist/maestro-windows-x64.zip -DestinationPath $fixtureRoot -Force
+          Set-Content -LiteralPath (Join-Path $fixtureRoot 'zip-update-marker.txt') -Value 'zip-update'
+          Compress-Archive -Path (Join-Path $fixtureRoot '*') -DestinationPath $updatePackage -Force
+          "MAESTRO_WINDOWS_UPDATE_PACKAGE=$updatePackage" >> $env:GITHUB_ENV
       - name: Build installer upgrade fixture
         shell: pwsh
         run: |
@@ -81,6 +91,7 @@ jobs:
           tooling/smoke/windows_installer.ps1 `
             -InitialInstaller dist/maestro-windows-x64-setup.exe `
             -UpgradeInstaller "$env:RUNNER_TEMP/maestro-windows-x64-setup-0.1.1.exe" `
+            -UpdatePackage $env:MAESTRO_WINDOWS_UPDATE_PACKAGE `
             -WorkRoot "$env:RUNNER_TEMP/maestro-installer-smoke"
       - name: Smoke portable install and update staging
         shell: pwsh

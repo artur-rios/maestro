@@ -46,6 +46,8 @@ void main() {
         expect(script, contains(r'Source: "{#SourceDir}\*"'));
         expect(script, contains('recursesubdirs'));
         expect(script, contains(r'Name: "{autoprograms}\Maestro"'));
+        expect(script, contains('UninstallFilesDir={app}-uninstall'));
+        expect(script, contains('Type: filesandordirs; Name: "{app}"'));
         expect(script, isNot(contains(r'{autodesktop}')));
       },
     );
@@ -87,6 +89,12 @@ void main() {
         expect(script, contains('DisplayVersion'));
         expect(script, contains('preserve-me'));
         expect(script, contains('unins000.exe'));
+        expect(
+          script,
+          contains(r'[Parameter(Mandatory = $true)][string]$UpdatePackage'),
+        );
+        expect(script, contains(r'$uninstallRoot = "$install-uninstall"'));
+        expect(script, contains('windows-zip-update: relaunched'));
         expect(script, contains('Installer-owned install directory remains.'));
         expect(
           script,
@@ -143,7 +151,7 @@ void main() {
           finallyBlock,
         );
         final cleanup = script.indexOf(
-          r'foreach ($target in @($install, $data))',
+          r'foreach ($target in @($install, $uninstallRoot, $data))',
           finallyBlock,
         );
 
@@ -152,7 +160,9 @@ void main() {
         expect(cleanup, greaterThan(uninstall));
         expect(
           script,
-          contains(r'$validatedInstall = Get-ValidatedCleanupPath $install'),
+          contains(
+            r'$validatedUninstallRoot = Get-ValidatedCleanupPath $uninstallRoot',
+          ),
         );
       },
     );
@@ -188,6 +198,7 @@ void main() {
         }
         expect(ci, contains('windows_installer.ps1'));
         expect(ci, contains('0.1.1'));
+        expect(ci, contains('-UpdatePackage'));
         expect(release, contains('dist/maestro-windows-x64-setup.exe'));
         expect(release, isNot(contains('dist/maestro-windows-x64.*')));
       },
