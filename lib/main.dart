@@ -20,6 +20,9 @@ import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
 import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
+import 'package:maestro/features/history/data/drift_history_repository.dart';
+import 'package:maestro/features/history/presentation/history_controller.dart';
+import 'package:maestro/features/history/presentation/history_panel.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/data/drift_project_repository.dart';
@@ -90,6 +93,7 @@ final class ProductionAppComposition {
     required this.runOrchestrator,
     required this.runStartBuilder,
     required this.runObservationBuilder,
+    required this.historyBuilder,
     required this.terminalBuilder,
     required this.activeProjectRuns,
     required this.projectFolderPicker,
@@ -110,6 +114,7 @@ final class ProductionAppComposition {
   final RunOrchestrator runOrchestrator;
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
+  final RunStartWorkspaceBuilder historyBuilder;
   final RunStartWorkspaceBuilder terminalBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
@@ -126,6 +131,7 @@ final class ProductionAppComposition {
     agentConfigurationService: agentConfigurationService,
     runStartBuilder: runStartBuilder,
     runObservationBuilder: runObservationBuilder,
+    historyBuilder: historyBuilder,
     terminalBuilder: terminalBuilder,
     foundationProbes: foundation.probes,
     onDispose: () => unawaited(close()),
@@ -343,6 +349,15 @@ Future<ProductionAppComposition> composeProductionApp({
   );
 
   final observeRuns = ObserveRuns(repository: runRepository);
+  final historyRepository = DriftHistoryRepository(database);
+  Widget historyBuilder(
+    BuildContext context,
+    String actorId,
+    ProjectRecord project,
+  ) => HistoryPanel(
+    key: ValueKey<String>('history-${project.id}'),
+    createController: () => HistoryController(repository: historyRepository),
+  );
   Widget runObservationBuilder(
     BuildContext context,
     String actorId,
@@ -391,6 +406,7 @@ Future<ProductionAppComposition> composeProductionApp({
     runOrchestrator: runOrchestrator,
     runStartBuilder: runStartBuilder,
     runObservationBuilder: runObservationBuilder,
+    historyBuilder: historyBuilder,
     terminalBuilder: terminalBuilder,
     activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
