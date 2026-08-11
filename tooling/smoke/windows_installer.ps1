@@ -21,6 +21,7 @@ $staging = "$install.staging"
 $data = Join-Path $root "data-$token"
 $sentinel = Join-Path $data 'preserve.txt'
 $payloadSentinel = Join-Path $install 'pre-zip-payload.txt'
+$corruptUpdate = Join-Path $root "corrupt-update-$token.zip"
 $badFixtureRoot = Join-Path $root "bad-update-$token"
 $badUpdate = Join-Path $root "bad-update-$token.zip"
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{225850DC-6179-46A0-962C-88F3BBA6D41D}_is1'
@@ -120,6 +121,28 @@ try {
   }
 
   Set-Content -LiteralPath $payloadSentinel -Value 'pre-zip-payload'
+  [IO.File]::WriteAllBytes($corruptUpdate, [byte[]](0x4e, 0x4f, 0x54, 0x5a, 0x49, 0x50))
+  $corruptResult = Invoke-ZipHelper $corruptUpdate
+  if ($corruptResult.ExitCode -eq 0) {
+    throw 'Corrupt ZIP update unexpectedly succeeded.'
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $install 'maestro.exe') -PathType Leaf) -or
+      -not (Test-Path -LiteralPath $payloadSentinel -PathType Leaf)) {
+    throw 'Installed payload changed after pre-swap ZIP failure.'
+  }
+  if ((Test-Path -LiteralPath $rollback) -or (Test-Path -LiteralPath $staging)) {
+    throw 'ZIP rollback or staging directory remains after pre-swap failure.'
+  }
+  if (-not (Test-Path -LiteralPath $uninstallKey) -or
+      -not (Test-Path -LiteralPath $shortcut -PathType Leaf) -or
+      -not (Test-Path -LiteralPath (Join-Path $uninstallRoot 'unins000.exe') -PathType Leaf)) {
+    throw 'Installer registration changed during pre-swap ZIP failure.'
+  }
+  if ((Get-Content -Raw -LiteralPath $sentinel).Trim() -ne 'preserve-me') {
+    throw 'Application data changed during pre-swap ZIP failure.'
+  }
+  Write-Output 'windows-zip-update: pre-swap preserved'
+
   New-Item -ItemType Directory -Path $badFixtureRoot -Force | Out-Null
   Expand-Archive -LiteralPath $update -DestinationPath $badFixtureRoot -Force
   $badRelaunch = Join-Path $badFixtureRoot 'maestro.exe'
@@ -215,6 +238,7 @@ finally {
     $rollback,
     $staging,
     $data,
+    $corruptUpdate,
     $badFixtureRoot,
     $badUpdate
   )) {

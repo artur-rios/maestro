@@ -20,18 +20,26 @@ $leaf = Split-Path -Leaf $install
 # Rollback keeps the last usable installation until relaunch succeeds.
 $rollback = Join-Path $parent "$leaf.rollback"
 $staging = Join-Path $parent "$leaf.staging"
-Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $rollback -Recurse -Force -ErrorAction SilentlyContinue
+foreach ($stalePath in @($staging, $rollback)) {
+  if (Test-Path -LiteralPath $stalePath) {
+    Remove-Item -LiteralPath $stalePath -Recurse -Force
+  }
+}
+if ((Test-Path -LiteralPath $staging) -or (Test-Path -LiteralPath $rollback)) {
+  throw 'Stale ZIP transaction paths could not be removed.'
+}
+$rollbackCreated = $false
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
   Expand-Archive -LiteralPath $package -DestinationPath $staging -Force
   Move-Item -LiteralPath $install -Destination $rollback
+  $rollbackCreated = $true
   Move-Item -LiteralPath $staging -Destination $install
   $relaunchProcess = Start-Process -FilePath $relaunch -PassThru
   Write-Output "windows-zip-update: relaunched $($relaunchProcess.Id)"
   Remove-Item -LiteralPath $rollback -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
-  if (Test-Path -LiteralPath $rollback) {
+  if ($rollbackCreated) {
     if (Test-Path -LiteralPath $install) {
       Move-Item -LiteralPath $install -Destination $staging
     }

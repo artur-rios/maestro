@@ -101,6 +101,9 @@ void main() {
           ),
         );
         expect(script, contains('bad-update'));
+        expect(script, contains('corrupt-update'));
+        expect(script, contains(r'[IO.File]::WriteAllBytes($corruptUpdate'));
+        expect(script, contains('windows-zip-update: pre-swap preserved'));
         expect(script, contains('windows-zip-update: rollback restored'));
         expect(script, contains('windows-zip-update: relaunched'));
         expect(script, contains('Installer-owned install directory remains.'));
@@ -171,6 +174,7 @@ void main() {
         );
         expect(script, contains(r'$badFixtureRoot,'));
         expect(script, contains(r'$badUpdate'));
+        expect(script, contains(r'$corruptUpdate'));
       },
     );
 

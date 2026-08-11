@@ -26,7 +26,6 @@ void main() {
           contains('RelaunchPath'),
           contains(r'Start-Process -FilePath $relaunch -PassThru'),
           contains('windows-zip-update: relaunched'),
-          contains(r'if (Test-Path -LiteralPath $rollback)'),
           contains(r'Move-Item -LiteralPath $install -Destination $staging'),
           contains(r'Move-Item -LiteralPath $rollback -Destination $install'),
         ]),
@@ -37,6 +36,19 @@ void main() {
       );
       expect(windowsPackage, contains('replace_windows_zip.ps1'));
       expect(linuxPackage, contains('replace_linux_appimage.sh'));
+
+      final transactionSetup = windows.substring(
+        windows.indexOf(r'$staging ='),
+        windows.indexOf('try {'),
+      );
+      expect(transactionSetup, contains(r'$rollbackCreated = $false'));
+      expect(
+        transactionSetup,
+        contains('Stale ZIP transaction paths could not be removed.'),
+      );
+      expect(transactionSetup, isNot(contains('SilentlyContinue')));
+      expect(windows, contains(r'$rollbackCreated = $true'));
+      expect(windows, contains(r'if ($rollbackCreated)'));
     },
   );
 }
