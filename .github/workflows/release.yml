@@ -20,6 +20,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Install pinned Inno Setup compiler
+        shell: pwsh
+        run: |
+          $compiler = tooling/packaging/windows/install_inno_setup.ps1 -Destination "$env:RUNNER_TEMP/inno-setup"
+          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
       - name: Package Windows
         shell: pwsh
         run: |

@@ -49,5 +49,38 @@ void main() {
       expect(script, contains('maestro-windows-x64-setup.exe'));
       expect(script, contains('INNO_SETUP_COMPILER'));
     });
+
+    test(
+      'GivenInstallerSmoke_WhenInspected_ThenUpgradeAndDataPreservationAreCovered',
+      () async {
+        final script = await File(
+          'tooling/smoke/windows_installer.ps1',
+        ).readAsString();
+
+        expect(script, contains('InitialInstaller'));
+        expect(script, contains('UpgradeInstaller'));
+        expect(script, contains('0.1.1'));
+        expect(script, contains('DisplayVersion'));
+        expect(script, contains('preserve-me'));
+        expect(script, contains('unins000.exe'));
+      },
+    );
+
+    test(
+      'GivenWindowsWorkflows_WhenInspected_ThenSetupExeIsBuiltAndPublished',
+      () async {
+        final ci = await File('.github/workflows/ci.yml').readAsString();
+        final release = await File(
+          '.github/workflows/release.yml',
+        ).readAsString();
+
+        for (final workflow in <String>[ci, release]) {
+          expect(workflow, contains('install_inno_setup.ps1'));
+          expect(workflow, contains('maestro-windows-x64-setup.exe'));
+        }
+        expect(ci, contains('windows_installer.ps1'));
+        expect(ci, contains('0.1.1'));
+      },
+    );
   });
 }
