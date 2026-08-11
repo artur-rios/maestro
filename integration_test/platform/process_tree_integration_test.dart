@@ -54,9 +54,15 @@ ProcessStartRequest _linuxParentRequest(String pidFile) {
 }
 
 Future<int> _waitForChildPid(File file) async {
-  for (var attempt = 0; attempt < 100; attempt += 1) {
+  // A cold Windows runner can take longer than five seconds to start the
+  // nested PowerShell process. Keep polling the real readiness condition.
+  for (var attempt = 0; attempt < 300; attempt += 1) {
     if (await file.exists()) {
-      return int.parse((await file.readAsString()).trim());
+      try {
+        return int.parse((await file.readAsString()).trim());
+      } on FileSystemException {
+        // Windows may briefly lock the file while the child PID is flushed.
+      }
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }

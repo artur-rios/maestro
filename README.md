@@ -52,9 +52,29 @@ Start with the `initial/` documents for context, then use the `requirements/` do
 
 ## Installation
 
-Prerequisites are Git, the Flutter SDK, the platform desktop build toolchain, and any AI CLIs a workflow will
-use. PowerShell is required on Windows and Bash on Linux. The exact technology and version policy is defined in
-the [Technology Stack Document](docs/requirements/Technology%20Stack%20Document.md).
+### Windows
+
+The recommended Windows installation is
+`maestro-windows-x64-setup.exe`, available from
+[GitHub Releases](https://github.com/artur-rios/maestro/releases). It installs
+for the current user under `%LocalAppData%\Programs\Maestro` without
+administrator rights. Launch Maestro from the Start Menu after setup.
+
+> **Unsigned installer:** The setup EXE is currently unsigned, so Windows may
+> show a SmartScreen or unknown-publisher warning. It must not be treated as a
+> publisher-trusted installer.
+
+ZIP and MSIX packages remain available on the Releases page as alternatives.
+The ZIP package also remains the payload used by Maestro's in-application
+runtime updater; the setup EXE is for distribution and is excluded from the
+runtime update manifest.
+
+### Build from source
+
+Prerequisites are Git, the Flutter SDK, the platform desktop build toolchain,
+and any AI CLIs a workflow will use. PowerShell is required on Windows and Bash
+on Linux. The exact technology and version policy is defined in the
+[Technology Stack Document](docs/requirements/Technology%20Stack%20Document.md).
 
 ```bash
 git clone https://github.com/artur-rios/maestro.git
