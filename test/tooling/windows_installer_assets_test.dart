@@ -73,6 +73,14 @@ void main() {
         expect(script, contains('preserve-me'));
         expect(script, contains('unins000.exe'));
         expect(script, contains('Installer-owned install directory remains.'));
+        expect(
+          script,
+          contains(r'New-Item -ItemType Directory -Path $root, $data -Force'),
+        );
+        expect(
+          script,
+          isNot(contains(r'New-Item -ItemType Directory -Path $install')),
+        );
       },
     );
 

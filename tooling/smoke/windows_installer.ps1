@@ -35,7 +35,7 @@ function Invoke-Setup([string]$Path) {
 }
 
 try {
-  New-Item -ItemType Directory -Path $install, $data -Force | Out-Null
+  New-Item -ItemType Directory -Path $root, $data -Force | Out-Null
   Set-Content -LiteralPath $sentinel -Value 'preserve-me'
 
   Invoke-Setup $initial
