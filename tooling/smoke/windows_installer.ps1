@@ -62,8 +62,8 @@ try {
     '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
   ) -Wait -PassThru
   if ($process.ExitCode -ne 0) { throw "Uninstaller failed with exit code $($process.ExitCode)." }
-  if (Test-Path -LiteralPath (Join-Path $install 'maestro.exe')) {
-    throw 'Installer-owned files remain.'
+  if (Test-Path -LiteralPath $install) {
+    throw 'Installer-owned install directory remains.'
   }
   if ((Get-Content -Raw -LiteralPath $sentinel).Trim() -ne 'preserve-me') {
     throw 'Uninstall removed application data.'

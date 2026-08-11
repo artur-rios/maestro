@@ -67,6 +67,37 @@ Future<void> main() async {
         }
       }
     }
+    if (workflow.path.endsWith('release.yml')) {
+      _verifyReleaseWindowsSetupArtifact(document, workflow.path);
+    }
   }
   stdout.writeln('workflow-verification: passed');
+}
+
+void _verifyReleaseWindowsSetupArtifact(YamlMap document, String workflowPath) {
+  final jobs = document['jobs'] as YamlMap;
+  final windowsPackage = jobs['windows-package'];
+  if (windowsPackage is! YamlMap || windowsPackage['steps'] is! YamlList) {
+    throw FormatException('$workflowPath has no Windows packaging steps.');
+  }
+  final upload = (windowsPackage['steps'] as YamlList)
+      .whereType<YamlMap>()
+      .where(
+        (step) =>
+            step['uses'] is String &&
+            (step['uses'] as String).startsWith('actions/upload-artifact@') &&
+            step['with'] is YamlMap &&
+            (step['with'] as YamlMap)['name'] == 'windows-packages',
+      )
+      .firstOrNull;
+  final paths = upload?['with']?['path'];
+  if (paths is! String ||
+      !paths
+          .split(RegExp(r'\r?\n'))
+          .map((path) => path.trim())
+          .contains('dist/maestro-windows-x64-setup.exe')) {
+    throw FormatException(
+      '$workflowPath windows-packages upload must include the exact setup executable.',
+    );
+  }
 }

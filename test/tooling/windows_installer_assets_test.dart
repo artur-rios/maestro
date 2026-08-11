@@ -63,6 +63,7 @@ void main() {
         expect(script, contains('DisplayVersion'));
         expect(script, contains('preserve-me'));
         expect(script, contains('unins000.exe'));
+        expect(script, contains('Installer-owned install directory remains.'));
       },
     );
 
@@ -80,6 +81,8 @@ void main() {
         }
         expect(ci, contains('windows_installer.ps1'));
         expect(ci, contains('0.1.1'));
+        expect(release, contains('dist/maestro-windows-x64-setup.exe'));
+        expect(release, isNot(contains('dist/maestro-windows-x64.*')));
       },
     );
   });
