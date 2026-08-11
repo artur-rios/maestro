@@ -145,8 +145,8 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 
 | Issue | Work | Specification |
 | --- | --- | --- |
-| [#13](https://github.com/artur-rios/maestro/issues/13) | UC-12 — Inspect run history and audit evidence | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
-| [#14](https://github.com/artur-rios/maestro/issues/14) | UC-13 — Manage retention and record deletion | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| ✅ [#13](https://github.com/artur-rios/maestro/issues/13) | UC-12 — Inspect run history and audit evidence | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| ✅ [#14](https://github.com/artur-rios/maestro/issues/14) | UC-13 — Manage retention and record deletion | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 | [#15](https://github.com/artur-rios/maestro/issues/15) | UC-14 — Check and install an application update | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 The counts above are updated as work is delivered. GitHub milestone pages remain the live source for
