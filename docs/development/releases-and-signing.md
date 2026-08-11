@@ -1,11 +1,34 @@
 # Releases and Signing
 
-Release tags use `v<major>.<minor>.<patch>`. Matching GitHub runners build two Windows packages and two Linux packages:
+Release tags use `v<major>.<minor>.<patch>`. Matching GitHub runners build three Windows packages and two Linux packages:
 
+- `maestro-windows-x64-setup.exe`
 - `maestro-windows-x64.zip`
 - `maestro-windows-x64.msix`
 - `maestro-linux-x64.AppImage`
 - `maestro-linux-amd64.deb`
+
+> **Unsigned Windows installer:** `maestro-windows-x64-setup.exe` is currently
+> unsigned. Windows may display SmartScreen or unknown-publisher warnings. Do
+> not treat the installer as publisher-trusted.
+
+## Windows setup installer
+
+The setup EXE installs Maestro for the current user under
+`%LocalAppData%\Programs\Maestro` and does not request administrator rights or
+elevation. Launch Maestro from its Start Menu shortcut after installation. To
+remove it, open Windows Settings > Apps > Installed apps, select Maestro, and
+choose Uninstall.
+
+Installing an upgrade preserves application data. Uninstalling Maestro also
+preserves application data so that workflows, history, and settings remain
+available for recovery or a later installation. See
+[Application Data and Recovery](application-data.md) for data locations and
+manual deletion guidance.
+
+The setup EXE is a distribution artifact only. The ZIP package remains the
+payload used by Maestro's in-application runtime updater, and the setup EXE is
+not included in the runtime update manifest.
 
 ## Local packaging
 
@@ -13,8 +36,14 @@ On Windows:
 
 ```powershell
 $env:FLUTTER_ROOT = 'C:\path\to\flutter'
+$compiler = tooling/packaging/windows/install_inno_setup.ps1 `
+  -Destination build/tooling/inno-setup
+$env:INNO_SETUP_COMPILER = $compiler
 tooling/packaging/package_windows.ps1 -Version 0.1.0
 ```
+
+`install_inno_setup.ps1` downloads the pinned Inno Setup compiler, verifies its
+SHA-256 digest, and installs it for the current user before packaging begins.
 
 On Ubuntu, download the official immutable AppImageTool 1.9.1 asset, verify its pinned SHA-256, and run:
 
@@ -28,7 +57,8 @@ export APPIMAGETOOL_PATH="$PWD/appimagetool"
 bash tooling/packaging/package_linux.sh 0.1.0
 ```
 
-Create and verify release metadata after all four artifacts are together:
+Create and verify release metadata after the ZIP, MSIX, AppImage, and DEB
+runtime-update artifacts are together:
 
 ```bash
 dart run tooling/release/create_manifest.dart dist 0.1.0 \

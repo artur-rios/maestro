@@ -85,5 +85,22 @@ void main() {
         expect(release, isNot(contains('dist/maestro-windows-x64.*')));
       },
     );
+
+    test(
+      'GivenInstallerDocumentation_WhenInspected_ThenUnsignedPerUserUseIsExplicit',
+      () async {
+        final releaseDocs = await File(
+          'docs/development/releases-and-signing.md',
+        ).readAsString();
+        final readme = await File('README.md').readAsString();
+
+        expect(releaseDocs, contains('maestro-windows-x64-setup.exe'));
+        expect(releaseDocs, contains(r'%LocalAppData%\Programs\Maestro'));
+        expect(releaseDocs.toLowerCase(), contains('unsigned'));
+        expect(releaseDocs, contains('Installed apps'));
+        expect(readme, contains('maestro-windows-x64-setup.exe'));
+        expect(readme.toLowerCase(), contains('smartScreen'.toLowerCase()));
+      },
+    );
   });
 }
