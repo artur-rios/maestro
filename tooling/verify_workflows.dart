@@ -90,7 +90,8 @@ void _verifyReleaseWindowsSetupArtifact(YamlMap document, String workflowPath) {
             (step['with'] as YamlMap)['name'] == 'windows-packages',
       )
       .firstOrNull;
-  final paths = upload?['with']?['path'];
+  final uploadInputs = upload?['with'];
+  final paths = uploadInputs is YamlMap ? uploadInputs['path'] : null;
   if (paths is! String ||
       !paths
           .split(RegExp(r'\r?\n'))

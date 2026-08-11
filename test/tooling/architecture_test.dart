@@ -140,9 +140,9 @@ jobs:
 
 Future<void> _withWorkflow(
   String source,
-  Future<void> Function() verify,
-  {String fileName = 'ci.yml'}
-) async {
+  Future<void> Function() verify, {
+  String fileName = 'ci.yml',
+}) async {
   final root = await Directory.systemTemp.createTemp('maestro-workflow-');
   final originalDirectory = Directory.current;
   try {

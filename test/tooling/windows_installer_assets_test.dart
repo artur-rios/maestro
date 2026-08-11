@@ -25,20 +25,29 @@ void main() {
       },
     );
 
-    test('GivenInstallerDefinition_WhenInspected_ThenInstallIsPerUser', () async {
-      final script = await File(
-        'tooling/packaging/windows/maestro.iss',
-      ).readAsString();
+    test(
+      'GivenInstallerDefinition_WhenInspected_ThenInstallIsPerUser',
+      () async {
+        final script = await File(
+          'tooling/packaging/windows/maestro.iss',
+        ).readAsString();
 
-      expect(script, contains('AppId={{225850DC-6179-46A0-962C-88F3BBA6D41D}'));
-      expect(script, contains('PrivilegesRequired=lowest'));
-      expect(script, contains(r'DefaultDirName={localappdata}\Programs\Maestro'));
-      expect(script, contains('OutputBaseFilename={#OutputName}'));
-      expect(script, contains(r'Source: "{#SourceDir}\*"'));
-      expect(script, contains('recursesubdirs'));
-      expect(script, contains(r'Name: "{autoprograms}\Maestro"'));
-      expect(script, isNot(contains(r'{autodesktop}')));
-    });
+        expect(
+          script,
+          contains('AppId={{225850DC-6179-46A0-962C-88F3BBA6D41D}'),
+        );
+        expect(script, contains('PrivilegesRequired=lowest'));
+        expect(
+          script,
+          contains(r'DefaultDirName={localappdata}\Programs\Maestro'),
+        );
+        expect(script, contains('OutputBaseFilename={#OutputName}'));
+        expect(script, contains(r'Source: "{#SourceDir}\*"'));
+        expect(script, contains('recursesubdirs'));
+        expect(script, contains(r'Name: "{autoprograms}\Maestro"'));
+        expect(script, isNot(contains(r'{autodesktop}')));
+      },
+    );
 
     test('GivenWindowsPackager_WhenInspected_ThenSetupExeIsRequired', () async {
       final script = await File(
