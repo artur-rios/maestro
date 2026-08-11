@@ -14,6 +14,10 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/authentication/data/drift_authentication_repository.dart';
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
 import 'package:maestro/features/authentication/data/sodium_password_hasher.dart';
+import 'package:maestro/features/delivery/application/autonomous_delivery.dart';
+import 'package:maestro/features/delivery/data/command_runner_autonomous_delivery_port.dart';
+import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
+import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
@@ -82,6 +86,7 @@ final class ProductionAppComposition {
     required this.workflowDesignService,
     required this.agentConfigurationService,
     required this.runRepository,
+    required this.deliveryRepository,
     required this.runOrchestrator,
     required this.runStartBuilder,
     required this.runObservationBuilder,
@@ -101,6 +106,7 @@ final class ProductionAppComposition {
   final WorkflowDesignService workflowDesignService;
   final AgentConfigurationService agentConfigurationService;
   final DriftRunRepository runRepository;
+  final DriftDeliveryRepository deliveryRepository;
   final RunOrchestrator runOrchestrator;
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
@@ -183,6 +189,7 @@ Future<ProductionAppComposition> composeProductionApp({
   );
   final workflowRepository = DriftWorkflowRepository(database);
   final runRepository = DriftRunRepository(database);
+  final deliveryRepository = DriftDeliveryRepository(database);
   final workflowDesignService = WorkflowDesignService(
     repository: workflowRepository,
     projectReadiness: ProductionProjectExecutionReadiness(
@@ -223,6 +230,10 @@ Future<ProductionAppComposition> composeProductionApp({
     newLogId: newId,
     newNonce: newProductionNonce,
     now: now,
+    autonomousDelivery: AutonomousDelivery(
+      port: CommandRunnerAutonomousDeliveryPort(commandRunner),
+    ),
+    deliveryRecords: deliveryRepository,
   );
   final controlRun = ControlRun(
     repository: runRepository,
@@ -344,6 +355,8 @@ Future<ProductionAppComposition> composeProductionApp({
       events: runOrchestrator.events,
     ),
     createControlController: () => RunControlController(control: controlRun),
+    createDeliveryController: () =>
+        DeliveryController(repository: deliveryRepository),
   );
 
   final openProjectTerminal = OpenProjectTerminal(
@@ -374,6 +387,7 @@ Future<ProductionAppComposition> composeProductionApp({
     workflowDesignService: workflowDesignService,
     agentConfigurationService: agentConfigurationService,
     runRepository: runRepository,
+    deliveryRepository: deliveryRepository,
     runOrchestrator: runOrchestrator,
     runStartBuilder: runStartBuilder,
     runObservationBuilder: runObservationBuilder,

@@ -16,6 +16,12 @@ enum RunStatus {
   /// the pause are two distinct states rather than one.
   pauseRequested,
   paused,
+
+  /// All workflow steps have succeeded; autonomous GitHub delivery is pending.
+  ///
+  /// This deliberately remains nonterminal: a delivery gate can return the
+  /// run to a prior workflow step without reopening [succeeded].
+  deliveryPending,
   succeeded,
   failed,
   interrupted,
@@ -50,6 +56,14 @@ enum RunStatus {
     // Recovery re-entry (FR-RC-05..07). The repository adds the evidence
     // guards; the lifecycle only says the move is possible.
     (failed, running) || (canceled, running) || (interrupted, running) => true,
+    // Autonomous delivery occurs after the final workflow step, before the
+    // run is terminal. Its independent gates can safely re-enter a prior
+    // step, or settle the delivery as success or failure.
+    (running, deliveryPending) ||
+    (pauseRequested, deliveryPending) ||
+    (deliveryPending, running) ||
+    (deliveryPending, succeeded) ||
+    (deliveryPending, failed) => true,
     _ => false,
   };
 }

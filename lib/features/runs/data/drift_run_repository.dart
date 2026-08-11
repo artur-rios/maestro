@@ -363,6 +363,7 @@ final class DriftRunRepository
     required DateTime completedAt,
     required int exitCode,
     required domain.DeclaredContext? declaredContext,
+    domain.RunStatus finalRunStatus = domain.RunStatus.succeeded,
   }) async {
     await _database.transaction(() async {
       final attempt = await (_database.select(
@@ -413,7 +414,7 @@ final class DriftRunRepository
       // A pause request survives the step that was finishing when it arrived;
       // the orchestrator settles it into paused once this evidence is durable.
       final nextStatus = nextPosition >= stepCount
-          ? domain.RunStatus.succeeded
+          ? finalRunStatus
           : domain.RunStatus.values.byName(run.status);
       final runAffected =
           await (_database.update(_database.workflowRuns)..where(
@@ -436,6 +437,39 @@ final class DriftRunRepository
               );
       _requireOne(runAffected);
     });
+  }
+
+  @override
+  Future<void> settleAutonomousDelivery({
+    required String runId,
+    required domain.RunStatus nextStatus,
+    required int nextStepPosition,
+    required DateTime at,
+  }) async {
+    if (nextStatus != domain.RunStatus.running &&
+        nextStatus != domain.RunStatus.failed &&
+        nextStatus != domain.RunStatus.succeeded) {
+      throw ArgumentError.value(nextStatus, 'nextStatus');
+    }
+    final affected =
+        await (_database.update(_database.workflowRuns)..where(
+              (table) =>
+                  table.id.equals(runId) &
+                  table.status.equals(domain.RunStatus.deliveryPending.name),
+            ))
+            .write(
+              db.WorkflowRunsCompanion(
+                status: Value<String>(nextStatus.name),
+                currentStepPosition: Value<int>(nextStepPosition),
+                updatedAt: Value<DateTime>(at.toUtc()),
+                completedAt: switch (nextStatus) {
+                  domain.RunStatus.succeeded ||
+                  domain.RunStatus.failed => Value<DateTime?>(at.toUtc()),
+                  _ => const Value<DateTime?>.absent(),
+                },
+              ),
+            );
+    _requireOne(affected);
   }
 
   @override

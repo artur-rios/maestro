@@ -324,6 +324,31 @@ class RunRecoveryRequests extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
 
+class DeliveryRecords extends Table {
+  TextColumn get runId =>
+      text().references(WorkflowRuns, #id, onDelete: KeyAction.cascade)();
+  TextColumn get repository => text()();
+  IntColumn get issueNumber => integer()();
+  TextColumn get branchName => text()();
+  TextColumn get headCommit => text()();
+  IntColumn get pullRequestNumber => integer().nullable()();
+  TextColumn get pullRequestUrl => text().nullable()();
+  TextColumn get reviewerIdentity => text().nullable()();
+  TextColumn get reviewOutcome => text().nullable()();
+  TextColumn get findings => text()();
+  TextColumn get mergeCommit => text().nullable()();
+  BoolColumn get issueClosed => boolean()();
+  BoolColumn get branchDeleted => boolean()();
+  TextColumn get failureCode => text().nullable()();
+  TextColumn get remediation => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get completedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{runId};
+}
+
 @DriftDatabase(
   tables: <Type>[
     Settings,
@@ -341,6 +366,7 @@ class RunRecoveryRequests extends Table {
     RunAttempts,
     RunLogSegments,
     RunRecoveryRequests,
+    DeliveryRecords,
   ],
 )
 final class MaestroDatabase extends _$MaestroDatabase {
@@ -387,6 +413,9 @@ final class MaestroDatabase extends _$MaestroDatabase {
         await migrator.createIndex(runLogSegmentsAttemptSequence);
         await migrator.createIndex(runLogSegmentsRun);
         await migrator.createIndex(runRecoveryRequestsRunStatus);
+      }
+      if (from < 6) {
+        await migrator.createTable(deliveryRecords);
       }
     },
     beforeOpen: (_) async {

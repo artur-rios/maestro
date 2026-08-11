@@ -53,5 +53,6 @@ Set<RunControlAction> availableControls(RunStatus status) => switch (status) {
   RunStatus.failed ||
   RunStatus.canceled ||
   RunStatus.interrupted => const <RunControlAction>{RunControlAction.retry},
+  RunStatus.deliveryPending => const <RunControlAction>{},
   RunStatus.succeeded => const <RunControlAction>{},
 };

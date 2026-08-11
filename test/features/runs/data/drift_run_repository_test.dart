@@ -387,6 +387,44 @@ void main() {
   );
 
   test(
+    'GivenFinalWorkflowStep_WhenAutonomousDeliveryIsPending_ThenSuccessIsNotRecordedUntilDeliverySettles',
+    () async {
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await _completeFirstStep(repository);
+      final finalAttempt = _attempt(
+        id: 'attempt-2',
+        snapshotStepId: 'snapshot-step-2',
+      );
+      await repository.beginAttempt(finalAttempt);
+
+      await repository.completeAttemptAndAdvance(
+        attemptId: finalAttempt.id,
+        completedAt: DateTime.utc(2026, 8, 6, 12, 6),
+        exitCode: 0,
+        declaredContext: null,
+        finalRunStatus: domain.RunStatus.deliveryPending,
+      );
+
+      final pending = (await repository.findById('run-1'))!.run;
+      expect(pending.status, domain.RunStatus.deliveryPending);
+      expect(pending.completedAt, isNull);
+      await repository.settleAutonomousDelivery(
+        runId: 'run-1',
+        nextStatus: domain.RunStatus.succeeded,
+        nextStepPosition: 2,
+        at: DateTime.utc(2026, 8, 6, 12, 7),
+      );
+      final settled = (await repository.findById('run-1'))!.run;
+      expect(settled.status, domain.RunStatus.succeeded);
+      expect(settled.completedAt, DateTime.utc(2026, 8, 6, 12, 7));
+    },
+  );
+
+  test(
     'GivenAttemptAndStepFromAnotherRun_WhenLogAppended_ThenCrossRunEvidenceIsRejected',
     () async {
       await _createRun(

@@ -139,7 +139,7 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 | Issue | Work | Specification |
 | --- | --- | --- |
 | ✅ [#11](https://github.com/artur-rios/maestro/issues/11) | UC-10 — Complete supervised delivery | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
-| [#12](https://github.com/artur-rios/maestro/issues/12) | UC-11 — Complete autonomous delivery | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
+| ✅ [#12](https://github.com/artur-rios/maestro/issues/12) | UC-11 — Complete autonomous delivery | [Use Case Specification](docs/requirements/Use%20Case%20Specification%20Document.md) |
 
 ### M-06 — History, Maintenance, and Updates
 

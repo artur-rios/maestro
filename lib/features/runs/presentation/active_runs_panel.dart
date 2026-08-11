@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
+import 'package:maestro/features/delivery/presentation/delivery_panel.dart';
 import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
@@ -16,6 +18,7 @@ final class ActiveRunsPanel extends StatefulWidget {
   const ActiveRunsPanel({
     required this.createController,
     this.createControlController,
+    this.createDeliveryController,
     super.key,
   });
 
@@ -24,6 +27,7 @@ final class ActiveRunsPanel extends StatefulWidget {
   /// Builds the control half of the panel. Absent when a host composes
   /// observation without the ability to act on a run.
   final RunControlController Function()? createControlController;
+  final DeliveryController Function()? createDeliveryController;
 
   @override
   State<ActiveRunsPanel> createState() => _ActiveRunsPanelState();
@@ -127,6 +131,15 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
               if (_controls case final controls?) ...<Widget>[
                 const Divider(height: 24),
                 _ControlBar(controller: controls),
+              ],
+              if (widget.createDeliveryController
+                  case final create?) ...<Widget>[
+                const Divider(height: 24),
+                DeliveryPanel(
+                  key: Key('delivery-${selected.runId}'),
+                  runId: selected.runId,
+                  createController: create,
+                ),
               ],
               const Divider(height: 24),
               Text('Steps', style: theme.textTheme.titleMedium),
@@ -457,6 +470,7 @@ String _runStatusLabel(RunStatus status) => switch (status) {
   RunStatus.running => 'Running',
   RunStatus.pauseRequested => 'Pausing after this step',
   RunStatus.paused => 'Paused',
+  RunStatus.deliveryPending => 'Delivering',
   RunStatus.succeeded => 'Succeeded',
   RunStatus.failed => 'Failed',
   RunStatus.interrupted => 'Interrupted',
