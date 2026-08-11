@@ -107,7 +107,7 @@ DeliveryRecord _completedRecord() => DeliveryRecord(
   branchDeleted: true,
   failureCode: null,
   remediation: null,
-  createdAt: DateTime(2026, 8, 10, 9),
-  updatedAt: DateTime(2026, 8, 10, 9, 5),
-  completedAt: DateTime(2026, 8, 10, 9, 5),
+  createdAt: DateTime.utc(2026, 8, 10, 12),
+  updatedAt: DateTime.utc(2026, 8, 10, 12, 5),
+  completedAt: DateTime.utc(2026, 8, 10, 12, 5),
 );
