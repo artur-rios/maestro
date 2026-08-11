@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  [string]$InnoCompiler = $env:INNO_SETUP_COMPILER
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,5 +37,18 @@ if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging failed.' }
 $msix = Get-ChildItem -LiteralPath $distribution -Filter 'maestro-windows-x64*.msix' | Select-Object -First 1
 if ($null -eq $msix) { throw 'MSIX artifact was not produced.' }
 
+$setup = & (Join-Path $repository 'tooling\packaging\windows\build_installer.ps1') `
+  -Version $Version `
+  -Bundle $bundle `
+  -OutputDirectory $distribution `
+  -OutputName 'maestro-windows-x64-setup' `
+  -CompilerPath $InnoCompiler
+if ($LASTEXITCODE -ne 0) { throw 'Windows setup packaging failed.' }
+$expectedSetup = Join-Path $distribution 'maestro-windows-x64-setup.exe'
+if ($setup -ne [IO.Path]::GetFullPath($expectedSetup) -or -not (Test-Path -LiteralPath $expectedSetup -PathType Leaf)) {
+  throw 'Windows setup executable was not produced.'
+}
+
 Write-Output "Created $zip"
 Write-Output "Created $($msix.FullName)"
+Write-Output "Created $setup"

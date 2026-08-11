@@ -24,5 +24,30 @@ void main() {
         expect(script, contains('ISCC.exe'));
       },
     );
+
+    test('GivenInstallerDefinition_WhenInspected_ThenInstallIsPerUser', () async {
+      final script = await File(
+        'tooling/packaging/windows/maestro.iss',
+      ).readAsString();
+
+      expect(script, contains('AppId={{225850DC-6179-46A0-962C-88F3BBA6D41D}'));
+      expect(script, contains('PrivilegesRequired=lowest'));
+      expect(script, contains(r'DefaultDirName={localappdata}\Programs\Maestro'));
+      expect(script, contains('OutputBaseFilename={#OutputName}'));
+      expect(script, contains(r'Source: "{#SourceDir}\*"'));
+      expect(script, contains('recursesubdirs'));
+      expect(script, contains(r'Name: "{autoprograms}\Maestro"'));
+      expect(script, isNot(contains(r'{autodesktop}')));
+    });
+
+    test('GivenWindowsPackager_WhenInspected_ThenSetupExeIsRequired', () async {
+      final script = await File(
+        'tooling/packaging/package_windows.ps1',
+      ).readAsString();
+
+      expect(script, contains('build_installer.ps1'));
+      expect(script, contains('maestro-windows-x64-setup.exe'));
+      expect(script, contains('INNO_SETUP_COMPILER'));
+    });
   });
 }
