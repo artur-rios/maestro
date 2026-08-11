@@ -154,8 +154,8 @@ final class DeliveryAttestationSet {
             test.position < review.position)) {
       return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
     }
-    final executeModel = execute?.model;
-    final reviewerIdentity = review?.model;
+    final executeModel = execute.model;
+    final reviewerIdentity = review.model;
     if (!_nonBlank(executeModel) || !_nonBlank(reviewerIdentity)) {
       return const DeliveryAttestationBlocked(DeliveryAttestationRecovery.fail);
     }

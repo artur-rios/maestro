@@ -3,10 +3,9 @@ import 'package:maestro/features/delivery/domain/autonomous_delivery_models.dart
 import 'package:maestro/features/runs/domain/run_models.dart';
 
 final class AutonomousDelivery {
-  const AutonomousDelivery({required AutonomousDeliveryPort port})
-    : _port = port;
+  const AutonomousDelivery({required this.port});
 
-  final AutonomousDeliveryPort _port;
+  final AutonomousDeliveryPort port;
 
   Future<AutonomousDeliveryOutcome> call(
     AutonomousDeliveryRequest request,
@@ -44,7 +43,7 @@ final class AutonomousDelivery {
     }
 
     if (!progress.issueClosed) {
-      final issue = await _port.closeIssue(request.delivery);
+      final issue = await port.closeIssue(request.delivery);
       if (issue case AutonomousOperationFailure(
         :final code,
         :final remediation,
@@ -59,7 +58,7 @@ final class AutonomousDelivery {
     }
     final afterIssue = progress.copyWith(issueClosed: true);
     if (!afterIssue.branchDeleted) {
-      final cleanup = await _port.deleteBranch(request.delivery);
+      final cleanup = await port.deleteBranch(request.delivery);
       if (cleanup case AutonomousOperationFailure(
         :final code,
         :final remediation,
@@ -79,7 +78,7 @@ final class AutonomousDelivery {
   }
 
   Future<Object> _merge(AutonomousDeliveryRequest request) async {
-    final opened = await _port.openPullRequest(request.delivery);
+    final opened = await port.openPullRequest(request.delivery);
     if (opened case AutonomousPullRequestFailure(
       :final code,
       :final remediation,
@@ -97,7 +96,7 @@ final class AutonomousDelivery {
             'Refresh the pull request and rerun tests for its head commit.',
       );
     }
-    final review = await _port.review(pullRequest, request.reviewer);
+    final review = await port.review(pullRequest, request.reviewer);
     if (review case AutonomousReviewRequestedChanges(:final findings)) {
       return AutonomousDeliveryBlocked(
         pullRequest: pullRequest,
@@ -113,7 +112,7 @@ final class AutonomousDelivery {
         recovery: AutonomousDeliveryRecovery.fail,
       );
     }
-    final merge = await _port.approveAndMerge(pullRequest);
+    final merge = await port.approveAndMerge(pullRequest);
     if (merge case AutonomousOperationFailure(
       :final code,
       :final remediation,
