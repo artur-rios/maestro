@@ -5,11 +5,9 @@ local software projects. A user selects a project folder, describes a task, choo
 steps, assigns an AI CLI and model to each step, and lets Maestro execute the workflow on an isolated Git
 branch in the background.
 
-> **Status:** milestones M-01 through M-04 are complete. Projects can be registered and managed, workflows designed
-> with step agents assigned, workflow runs started on an isolated branch and
-> worktree, active runs observed with their ordered steps, current status, and
-> streamed output, and those runs paused, resumed, cancelled, and retried with an
-> explicit recovery scope, and project-scoped embedded terminals. Governed delivery is in progress.
+> **Status:** milestones M-01 through M-06 are complete. All first-release use cases, UC-01 through UC-14,
+> have been delivered, including governed delivery, searchable history and audit evidence, retention and
+> deletion controls, and signed application updates.
 
 ## What It Does
 
@@ -99,8 +97,8 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 | [M-02 — Secure Project Workspace](https://github.com/artur-rios/maestro/milestone/2) | Local authentication plus safe project registration, selection, restoration, and metadata deletion | M-01 | 3 | 3 / 3 closed |
 | [M-03 — Workflow Authoring](https://github.com/artur-rios/maestro/milestone/3) | Reusable and one-off workflow design with validated CLI and model assignments | M-02 | 2 | 2 / 2 closed |
 | [M-04 — Execution and Control](https://github.com/artur-rios/maestro/milestone/4) | Isolated concurrent execution, live observation, run recovery, and embedded terminals | M-03 | 4 | 4 / 4 closed |
-| [M-05 — Governed Delivery](https://github.com/artur-rios/maestro/milestone/5) | Supervised human-controlled and autonomous model-reviewed GitHub delivery | M-04 | 2 | 0 / 2 closed |
-| [M-06 — History, Maintenance, and Updates](https://github.com/artur-rios/maestro/milestone/6) | Searchable evidence, auditing, retention, compaction, safe deletion, and verified application updates | M-05 | 3 | 0 / 3 closed |
+| [M-05 — Governed Delivery](https://github.com/artur-rios/maestro/milestone/5) | Supervised human-controlled and autonomous model-reviewed GitHub delivery | M-04 | 2 | 2 / 2 closed |
+| [M-06 — History, Maintenance, and Updates](https://github.com/artur-rios/maestro/milestone/6) | Searchable evidence, auditing, retention, compaction, safe deletion, and verified application updates | M-05 | 3 | 3 / 3 closed |
 
 ## Backlog
 
