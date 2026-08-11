@@ -2,11 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
 
 final class HistoryPanel extends StatefulWidget {
-  const HistoryPanel({required this.createController, super.key});
+  const HistoryPanel({
+    required this.createController,
+    this.retentionService,
+    this.actorId,
+    super.key,
+  });
   final HistoryController Function() createController;
+  final RetentionService? retentionService;
+  final String? actorId;
   @override
   State<HistoryPanel> createState() => _HistoryPanelState();
 }
@@ -14,6 +22,9 @@ final class HistoryPanel extends StatefulWidget {
 final class _HistoryPanelState extends State<HistoryPanel> {
   late final HistoryController controller = widget.createController()
     ..addListener(_changed);
+  final _retentionDays = TextEditingController(text: '30');
+  final _storageLimit = TextEditingController(text: '1073741824');
+  String? _retentionFeedback;
   @override
   void initState() {
     super.initState();
@@ -28,7 +39,29 @@ final class _HistoryPanelState extends State<HistoryPanel> {
   void dispose() {
     controller.removeListener(_changed);
     controller.dispose();
+    _retentionDays.dispose();
+    _storageLimit.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveRetentionPolicy() async {
+    final service = widget.retentionService;
+    final actorId = widget.actorId;
+    if (service == null || actorId == null) return;
+    final result = await service.savePolicy(
+      actorId: actorId,
+      policy: RetentionPolicy(
+        retentionDays: int.tryParse(_retentionDays.text) ?? 0,
+        storageLimitBytes: int.tryParse(_storageLimit.text) ?? 0,
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _retentionFeedback = switch (result) {
+        RetentionSucceeded() => 'Retention settings saved.',
+        RetentionRejected(:final message) => message,
+      };
+    });
   }
 
   @override
@@ -44,6 +77,37 @@ final class _HistoryPanelState extends State<HistoryPanel> {
               'History and audit',
               style: Theme.of(context).textTheme.titleLarge,
             ),
+            if (widget.retentionService != null && widget.actorId != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Retention settings',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              TextField(
+                key: const Key('retention-days'),
+                controller: _retentionDays,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Retention age (days)',
+                ),
+              ),
+              TextField(
+                key: const Key('retention-storage-limit'),
+                controller: _storageLimit,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Storage limit (bytes)',
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: _saveRetentionPolicy,
+                  child: const Text('Save retention settings'),
+                ),
+              ),
+              if (_retentionFeedback case final feedback?) Text(feedback),
+            ],
             TextField(
               onChanged: controller.search,
               decoration: const InputDecoration(labelText: 'Search history'),

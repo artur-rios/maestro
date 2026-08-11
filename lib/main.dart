@@ -21,6 +21,7 @@ import 'package:maestro/features/delivery/presentation/delivery_controller.dart'
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/history/data/drift_history_repository.dart';
+import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
 import 'package:maestro/features/history/presentation/history_panel.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
@@ -350,6 +351,11 @@ Future<ProductionAppComposition> composeProductionApp({
 
   final observeRuns = ObserveRuns(repository: runRepository);
   final historyRepository = DriftHistoryRepository(database);
+  final retentionService = RetentionService(
+    database: database,
+    clock: now,
+    newId: newId,
+  );
   Widget historyBuilder(
     BuildContext context,
     String actorId,
@@ -357,6 +363,8 @@ Future<ProductionAppComposition> composeProductionApp({
   ) => HistoryPanel(
     key: ValueKey<String>('history-${project.id}'),
     createController: () => HistoryController(repository: historyRepository),
+    retentionService: retentionService,
+    actorId: actorId,
   );
   Widget runObservationBuilder(
     BuildContext context,
