@@ -9,6 +9,18 @@ import 'package:maestro/platform/updates/windows_package_installer.dart';
 
 void main() {
   test(
+    'GivenWindowsExecutablePath_WhenResolvedOnAnyHost_ThenWindowsParentIsUsed',
+    () {
+      expect(
+        WindowsPackageInstaller.installDirectoryFor(
+          r'C:\Program Files\Maestro\maestro.exe',
+        ),
+        r'C:\Program Files\Maestro',
+      );
+    },
+  );
+
+  test(
     'GivenWindowsZip_WhenInstalling_ThenDetachedHelperReceivesExactPath',
     () async {
       final runner = _RecordingRunner();

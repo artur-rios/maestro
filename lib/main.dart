@@ -70,6 +70,7 @@ import 'package:maestro/platform/git/run_git_port.dart';
 import 'package:maestro/platform/terminal/platform_shell.dart';
 import 'package:maestro/platform/terminal/pty_terminal_port.dart';
 import 'package:maestro/platform/updates/production_update_service.dart';
+import 'package:maestro/platform/updates/update_readiness_signal.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -495,8 +496,14 @@ final class ProductionProjectExecutionReadiness
 
 Future<void> _closeDatabase(MaestroDatabase database) => database.close();
 
-Future<void> main() async {
+Future<void> main([List<String> arguments = const <String>[]]) async {
   WidgetsFlutterBinding.ensureInitialized();
+  final readinessSignal = Platform.isWindows
+      ? UpdateReadinessSignal.parse(
+          arguments: arguments,
+          executablePath: Platform.resolvedExecutable,
+        )
+      : null;
   MaestroDatabase? database;
   ProductionAppComposition? composition;
   try {
@@ -509,6 +516,7 @@ Future<void> main() async {
       database: openedDatabase,
     );
     runApp(composition.app);
+    await readinessSignal?.write();
     database = null;
   } on Object {
     if (composition case final openedComposition?) {

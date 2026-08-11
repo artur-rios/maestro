@@ -4,6 +4,7 @@ import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/updates/package_installer.dart';
+import 'package:path/path.dart' as p;
 
 final class WindowsPackageInstaller implements PackageInstaller {
   const WindowsPackageInstaller({
@@ -46,7 +47,7 @@ final class WindowsPackageInstaller implements PackageInstaller {
             '-PackagePath',
             update.path,
             '-InstallDirectory',
-            File(relaunchPath).parent.path,
+            installDirectoryFor(relaunchPath),
             '-ParentProcessId',
             '$pid',
             '-RelaunchPath',
@@ -60,6 +61,9 @@ final class WindowsPackageInstaller implements PackageInstaller {
       ),
     };
   }
+
+  static String installDirectoryFor(String executablePath) =>
+      p.Context(style: p.Style.windows).dirname(executablePath);
 
   Future<Result<void>> _run(CommandRequest request) async {
     final result = await runner.run(request);

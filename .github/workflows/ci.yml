@@ -51,6 +51,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test integration_test/platform/process_tree_integration_test.dart -d windows
+      - run: flutter test integration_test/platform/detached_process_launcher_integration_test.dart -d windows --dart-define=MAESTRO_TEST_DART="$env:FLUTTER_ROOT\bin\cache\dart-sdk\bin\dart.exe"
       - run: flutter test integration_test/foundation_startup_integration_test.dart -d windows
       - run: flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows
       - run: flutter test integration_test/projects/git_project_validation_integration_test.dart -d windows
@@ -58,10 +59,16 @@ jobs:
       - run: flutter test integration_test/workflows/workflow_design_persistence_integration_test.dart -d windows
       - run: flutter test integration_test/workflows/step_agent_process_integration_test.dart -d windows
       - run: flutter build windows --release
-      - name: Install pinned Inno Setup compiler
+      - name: Install and recreate pinned Inno Setup compiler
         shell: pwsh
         run: |
           $compiler = tooling/packaging/windows/install_inno_setup.ps1 -Destination "$env:RUNNER_TEMP/inno-setup"
+          $trustedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $compiler).Hash
+          Set-Content -LiteralPath $compiler -Value 'corrupt compiler'
+          $compiler = tooling/packaging/windows/install_inno_setup.ps1 -Destination "$env:RUNNER_TEMP/inno-setup"
+          $recreatedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $compiler).Hash
+          if ($recreatedHash -ne $trustedHash) { throw 'Pinned Inno Setup compiler was not recreated.' }
+          Write-Output 'windows-inno-bootstrap: corrupted compiler recreated'
           "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
       - name: Package Windows artifacts
         shell: pwsh
@@ -76,21 +83,30 @@ jobs:
           Set-Content -LiteralPath (Join-Path $fixtureRoot 'zip-update-marker.txt') -Value 'zip-update'
           Compress-Archive -Path (Join-Path $fixtureRoot '*') -DestinationPath $updatePackage -Force
           "MAESTRO_WINDOWS_UPDATE_PACKAGE=$updatePackage" >> $env:GITHUB_ENV
-      - name: Build installer upgrade fixture
+      - name: Build custom-directory installer smoke fixtures
         shell: pwsh
         run: |
+          tooling/packaging/windows/build_installer.ps1 `
+            -Version 0.1.0 `
+            -Bundle build/windows/x64/runner/Release `
+            -OutputDirectory "$env:RUNNER_TEMP" `
+            -OutputName maestro-windows-x64-setup-smoke-0.1.0 `
+            -CompilerPath $env:INNO_SETUP_COMPILER `
+            -AllowCustomDirectoryForSmoke
           tooling/packaging/windows/build_installer.ps1 `
             -Version 0.1.1 `
             -Bundle build/windows/x64/runner/Release `
             -OutputDirectory "$env:RUNNER_TEMP" `
-            -OutputName maestro-windows-x64-setup-0.1.1 `
-            -CompilerPath $env:INNO_SETUP_COMPILER
+            -OutputName maestro-windows-x64-setup-smoke-0.1.1 `
+            -CompilerPath $env:INNO_SETUP_COMPILER `
+            -AllowCustomDirectoryForSmoke
       - name: Smoke per-user setup install, upgrade, and uninstall
         shell: pwsh
         run: |
           tooling/smoke/windows_installer.ps1 `
-            -InitialInstaller dist/maestro-windows-x64-setup.exe `
-            -UpgradeInstaller "$env:RUNNER_TEMP/maestro-windows-x64-setup-0.1.1.exe" `
+            -ProductionInstaller dist/maestro-windows-x64-setup.exe `
+            -InitialInstaller "$env:RUNNER_TEMP/maestro-windows-x64-setup-smoke-0.1.0.exe" `
+            -UpgradeInstaller "$env:RUNNER_TEMP/maestro-windows-x64-setup-smoke-0.1.1.exe" `
             -UpdatePackage $env:MAESTRO_WINDOWS_UPDATE_PACKAGE `
             -WorkRoot "$env:RUNNER_TEMP/maestro-installer-smoke"
       - name: Smoke portable install and update staging

@@ -48,6 +48,13 @@ void main() {
         expect(script, contains(r'Name: "{autoprograms}\Maestro"'));
         expect(script, contains('UninstallFilesDir={app}-uninstall'));
         expect(script, contains('Type: filesandordirs; Name: "{app}"'));
+        expect(script, contains('DisableDirPage=yes'));
+        expect(script, contains('PrepareToInstall'));
+        expect(script, contains('Maestro installation directory is fixed.'));
+        expect(script, contains('Existing directory is not owned by Maestro.'));
+        expect(script, contains('RegKeyExists(HKCU'));
+        expect(script, contains('FindFirst'));
+        expect(script, contains('AllowCustomDirectoryForSmoke'));
         expect(script, isNot(contains(r'{autodesktop}')));
       },
     );
@@ -73,6 +80,8 @@ void main() {
         expect(script, contains('ConvertTo-NormalizedVersion'));
         expect(script, contains('VersionInfo.ProductVersion'));
         expect(script, contains('Installer product version mismatch'));
+        expect(script, contains('AllowCustomDirectoryForSmoke'));
+        expect(script, contains('/DAllowCustomDirectoryForSmoke=1'));
       },
     );
 
@@ -105,7 +114,17 @@ void main() {
         expect(script, contains(r'[IO.File]::WriteAllBytes($corruptUpdate'));
         expect(script, contains('windows-zip-update: pre-swap preserved'));
         expect(script, contains('windows-zip-update: rollback restored'));
+        expect(script, contains('windows-zip-update: concurrent rejected'));
+        expect(script, contains('windows-zip-update: ready'));
         expect(script, contains('windows-zip-update: relaunched'));
+        expect(
+          script,
+          contains('windows-installer-ownership: custom directory rejected'),
+        );
+        expect(
+          script,
+          contains('windows-installer-ownership: unowned directory rejected'),
+        );
         expect(script, contains('Installer-owned install directory remains.'));
         expect(
           script,
@@ -210,6 +229,13 @@ void main() {
         expect(ci, contains('windows_installer.ps1'));
         expect(ci, contains('0.1.1'));
         expect(ci, contains('-UpdatePackage'));
+        expect(ci, contains('maestro-windows-x64-setup-smoke-0.1.0'));
+        expect(ci, contains('-AllowCustomDirectoryForSmoke'));
+        expect(ci, contains('detached_process_launcher_integration_test.dart'));
+        final packageScript = await File(
+          'tooling/packaging/package_windows.ps1',
+        ).readAsString();
+        expect(packageScript, isNot(contains('AllowCustomDirectoryForSmoke')));
         expect(release, contains('dist/maestro-windows-x64-setup.exe'));
         expect(release, isNot(contains('dist/maestro-windows-x64.*')));
       },
@@ -229,6 +255,30 @@ void main() {
         expect(releaseDocs, contains('Installed apps'));
         expect(readme, contains('maestro-windows-x64-setup.exe'));
         expect(readme.toLowerCase(), contains('smartScreen'.toLowerCase()));
+      },
+    );
+
+    test(
+      'GivenCompilerBootstrap_WhenCompilerExists_ThenVerifiedInstallerRecreatesIt',
+      () async {
+        final script = await File(
+          'tooling/packaging/windows/install_inno_setup.ps1',
+        ).readAsString();
+
+        expect(
+          script,
+          contains(r'$validatedInstall = Get-ValidatedInstallPath'),
+        );
+        expect(
+          script,
+          contains(
+            r'Remove-Item -LiteralPath $validatedInstall -Recurse -Force',
+          ),
+        );
+        expect(
+          script,
+          isNot(contains(r'if (-not (Test-Path -LiteralPath $compiler))')),
+        );
       },
     );
   });

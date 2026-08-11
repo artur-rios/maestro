@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Bundle,
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
   [string]$OutputName = 'maestro-windows-x64-setup',
-  [string]$CompilerPath = $env:INNO_SETUP_COMPILER
+  [string]$CompilerPath = $env:INNO_SETUP_COMPILER,
+  [switch]$AllowCustomDirectoryForSmoke
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,7 +47,18 @@ if (Test-Path -LiteralPath $installer) {
     throw 'Stale Windows setup executable could not be removed.'
   }
 }
-$compilerOutput = & $compiler "/DAppVersion=$Version" "/DSourceDir=$source" "/DOutputDir=$output" "/DOutputName=$OutputName" "/DAppIcon=$icon" $definition 2>&1
+$compilerArguments = @(
+  "/DAppVersion=$Version",
+  "/DSourceDir=$source",
+  "/DOutputDir=$output",
+  "/DOutputName=$OutputName",
+  "/DAppIcon=$icon"
+)
+if ($AllowCustomDirectoryForSmoke) {
+  $compilerArguments += '/DAllowCustomDirectoryForSmoke=1'
+}
+$compilerArguments += $definition
+$compilerOutput = & $compiler @compilerArguments 2>&1
 if ($LASTEXITCODE -ne 0) {
   throw "Inno Setup compilation failed: $($compilerOutput -join [Environment]::NewLine)"
 }
