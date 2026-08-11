@@ -21,7 +21,7 @@ if ($actualSha256 -ne $expectedSha256) {
 }
 if (-not (Test-Path -LiteralPath $compiler)) {
   $process = Start-Process -FilePath $download -ArgumentList @(
-    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER',
+    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', '/PORTABLE=1',
     ('/DIR="{0}"' -f $install)
   ) -Wait -PassThru
   if ($process.ExitCode -ne 0) {

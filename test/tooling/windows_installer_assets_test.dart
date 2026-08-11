@@ -21,6 +21,7 @@ void main() {
         expect(script, contains('Get-FileHash'));
         expect(script, contains('/VERYSILENT'));
         expect(script, contains('/CURRENTUSER'));
+        expect(script, contains('/PORTABLE=1'));
         expect(script, contains('ISCC.exe'));
       },
     );
@@ -60,6 +61,20 @@ void main() {
     });
 
     test(
+      'GivenInstallerBuilder_WhenOutputExists_ThenFreshRequestedVersionIsRequired',
+      () async {
+        final script = await File(
+          'tooling/packaging/windows/build_installer.ps1',
+        ).readAsString();
+
+        expect(script, contains(r'Remove-Item -LiteralPath $installer -Force'));
+        expect(script, contains('ConvertTo-NormalizedVersion'));
+        expect(script, contains('VersionInfo.ProductVersion'));
+        expect(script, contains('Installer product version mismatch'));
+      },
+    );
+
+    test(
       'GivenInstallerSmoke_WhenInspected_ThenUpgradeAndDataPreservationAreCovered',
       () async {
         final script = await File(
@@ -80,6 +95,81 @@ void main() {
         expect(
           script,
           isNot(contains(r'New-Item -ItemType Directory -Path $install')),
+        );
+      },
+    );
+
+    test(
+      'GivenInstallerSmoke_WhenProductionMetadataExists_ThenLifecycleFailsClosed',
+      () async {
+        final script = await File(
+          'tooling/smoke/windows_installer.ps1',
+        ).readAsString();
+
+        expect(
+          script,
+          contains(
+            r'$programs = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)',
+          ),
+        );
+        expect(
+          script,
+          contains(r"$shortcut = Join-Path $programs 'Maestro.lnk'"),
+        );
+        expect(script, contains(r'(Test-Path -LiteralPath $uninstallKey) -or'));
+        expect(script, contains(r'(Test-Path -LiteralPath $shortcut)'));
+        final installPathPreflight = script.indexOf(
+          'Smoke install directory already exists:',
+        );
+        expect(installPathPreflight, greaterThan(-1));
+        expect(installPathPreflight, lessThan(script.indexOf('try {')));
+        final preflight = script.indexOf(
+          'Existing Maestro installation prevents installer smoke testing.',
+        );
+        expect(preflight, greaterThan(-1));
+        expect(preflight, lessThan(script.indexOf('try {')));
+      },
+    );
+
+    test(
+      'GivenInstallerSmoke_WhenAssertionFails_ThenUninstallPrecedesContainedCleanup',
+      () async {
+        final script = await File(
+          'tooling/smoke/windows_installer.ps1',
+        ).readAsString();
+        final finallyBlock = script.indexOf('finally {');
+        final uninstall = script.indexOf(
+          'Invoke-TestUninstaller',
+          finallyBlock,
+        );
+        final cleanup = script.indexOf(
+          r'foreach ($target in @($install, $data))',
+          finallyBlock,
+        );
+
+        expect(finallyBlock, greaterThan(-1));
+        expect(uninstall, greaterThan(finallyBlock));
+        expect(cleanup, greaterThan(uninstall));
+        expect(
+          script,
+          contains(r'$validatedInstall = Get-ValidatedCleanupPath $install'),
+        );
+      },
+    );
+
+    test(
+      'GivenInstallerSmoke_WhenInstalled_ThenPluginAndStartMenuShortcutAreRequired',
+      () async {
+        final script = await File(
+          'tooling/smoke/windows_installer.ps1',
+        ).readAsString();
+
+        expect(script, contains('flutter_secure_storage_windows_plugin.dll'));
+        expect(
+          script,
+          contains(
+            r'if (-not (Test-Path -LiteralPath $shortcut -PathType Leaf))',
+          ),
         );
       },
     );

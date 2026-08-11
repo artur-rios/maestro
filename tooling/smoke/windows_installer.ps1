@@ -13,6 +13,8 @@ $install = Join-Path $root "install-$token"
 $data = Join-Path $root "data-$token"
 $sentinel = Join-Path $data 'preserve.txt'
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{225850DC-6179-46A0-962C-88F3BBA6D41D}_is1'
+$programs = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
+$shortcut = Join-Path $programs 'Maestro.lnk'
 
 function Get-ValidatedCleanupPath([string]$Path) {
   $target = [IO.Path]::GetFullPath($Path)
@@ -34,15 +36,44 @@ function Invoke-Setup([string]$Path) {
   }
 }
 
+function Invoke-TestUninstaller {
+  $validatedInstall = Get-ValidatedCleanupPath $install
+  $uninstaller = Join-Path $validatedInstall 'unins000.exe'
+  if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) { return }
+  $process = Start-Process -FilePath $uninstaller -ArgumentList @(
+    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+  ) -Wait -PassThru
+  if ($process.ExitCode -ne 0) {
+    throw "Uninstaller failed with exit code $($process.ExitCode)."
+  }
+}
+
+if ((Test-Path -LiteralPath $uninstallKey) -or
+    (Test-Path -LiteralPath $shortcut)) {
+  throw 'Existing Maestro installation prevents installer smoke testing.'
+}
+if (Test-Path -LiteralPath $install) {
+  throw "Smoke install directory already exists: $install"
+}
+
 try {
   New-Item -ItemType Directory -Path $root, $data -Force | Out-Null
   Set-Content -LiteralPath $sentinel -Value 'preserve-me'
 
   Invoke-Setup $initial
-  foreach ($relative in @('maestro.exe', 'flutter_windows.dll', 'data', 'replace_windows_zip.ps1')) {
+  foreach ($relative in @(
+    'maestro.exe',
+    'flutter_windows.dll',
+    'flutter_secure_storage_windows_plugin.dll',
+    'data',
+    'replace_windows_zip.ps1'
+  )) {
     if (-not (Test-Path -LiteralPath (Join-Path $install $relative))) {
       throw "Installed payload is missing: $relative"
     }
+  }
+  if (-not (Test-Path -LiteralPath $shortcut -PathType Leaf)) {
+    throw 'Maestro Start Menu shortcut is missing.'
   }
   if (-not (Test-Path -LiteralPath $uninstallKey)) { throw 'Uninstall metadata is missing.' }
   if ((Get-ItemProperty -LiteralPath $uninstallKey).DisplayVersion -ne '0.1.0') {
@@ -57,11 +88,7 @@ try {
     throw 'Application data changed during upgrade.'
   }
 
-  $uninstaller = Join-Path $install 'unins000.exe'
-  $process = Start-Process -FilePath $uninstaller -ArgumentList @(
-    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
-  ) -Wait -PassThru
-  if ($process.ExitCode -ne 0) { throw "Uninstaller failed with exit code $($process.ExitCode)." }
+  Invoke-TestUninstaller
   if (Test-Path -LiteralPath $install) {
     throw 'Installer-owned install directory remains.'
   }
@@ -72,6 +99,7 @@ try {
   Write-Output 'windows-installer-smoke: passed'
 }
 finally {
+  Invoke-TestUninstaller
   foreach ($target in @($install, $data)) {
     if (Test-Path -LiteralPath $target) {
       Remove-Item -LiteralPath (Get-ValidatedCleanupPath $target) -Recurse -Force
