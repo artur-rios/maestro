@@ -14,6 +14,8 @@ appimagetool=${APPIMAGETOOL_PATH:?APPIMAGETOOL_PATH must reference a pinned appi
 
 flutter build linux --release --build-name "$version"
 test -x "$bundle/maestro"
+cp -- "$repository/tooling/updates/replace_linux_appimage.sh" "$bundle/replace_linux_appimage.sh"
+chmod 0755 "$bundle/replace_linux_appimage.sh"
 mkdir -p "$distribution"
 
 appdir=$(mktemp -d)

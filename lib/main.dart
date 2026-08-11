@@ -50,6 +50,9 @@ import 'package:maestro/features/terminal/application/open_project_terminal.dart
 import 'package:maestro/features/terminal/data/local_terminal_project_folder.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
+import 'package:maestro/features/updates/data/drift_update_audit_recorder.dart';
+import 'package:maestro/features/updates/presentation/update_controller.dart';
+import 'package:maestro/features/updates/presentation/update_panel.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/data/drift_workflow_repository.dart';
@@ -66,6 +69,7 @@ import 'package:maestro/platform/git/local_run_worktree_probe.dart';
 import 'package:maestro/platform/git/run_git_port.dart';
 import 'package:maestro/platform/terminal/platform_shell.dart';
 import 'package:maestro/platform/terminal/pty_terminal_port.dart';
+import 'package:maestro/platform/updates/production_update_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -351,6 +355,14 @@ Future<ProductionAppComposition> composeProductionApp({
 
   final observeRuns = ObserveRuns(repository: runRepository);
   final historyRepository = DriftHistoryRepository(database);
+  final updateService = await createProductionUpdateService(
+    paths: paths,
+    installedVersion: const String.fromEnvironment(
+      'MAESTRO_INSTALLED_VERSION',
+      defaultValue: '0.1.0',
+    ),
+    runner: commandRunner,
+  );
   final retentionService = RetentionService(
     database: database,
     clock: now,
@@ -360,11 +372,28 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
-  ) => HistoryPanel(
-    key: ValueKey<String>('history-${project.id}'),
-    createController: () => HistoryController(repository: historyRepository),
-    retentionService: retentionService,
-    actorId: actorId,
+  ) => Column(
+    children: <Widget>[
+      HistoryPanel(
+        key: ValueKey<String>('history-${project.id}'),
+        createController: () =>
+            HistoryController(repository: historyRepository),
+        retentionService: retentionService,
+        actorId: actorId,
+      ),
+      UpdatePanel(
+        key: const ValueKey<String>('application-updates'),
+        createController: () => UpdateController(
+          service: updateService,
+          audits: DriftUpdateAuditRecorder(
+            database: database,
+            actorId: actorId,
+            clock: now,
+            newId: newId,
+          ),
+        ),
+      ),
+    ],
   );
   Widget runObservationBuilder(
     BuildContext context,
