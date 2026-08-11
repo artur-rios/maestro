@@ -25,6 +25,7 @@ if (-not $SkipBuild) {
 if (-not (Test-Path -LiteralPath (Join-Path $bundle 'maestro.exe'))) {
   throw 'The Windows release bundle is incomplete.'
 }
+Copy-Item -LiteralPath (Join-Path $repository 'tooling\updates\replace_windows_zip.ps1') -Destination (Join-Path $bundle 'replace_windows_zip.ps1') -Force
 New-Item -ItemType Directory -Path $distribution -Force | Out-Null
 $zip = Join-Path $distribution 'maestro-windows-x64.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
