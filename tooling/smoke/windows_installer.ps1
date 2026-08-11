@@ -16,8 +16,13 @@ $root = [IO.Path]::GetFullPath($WorkRoot)
 $token = [Guid]::NewGuid().ToString('N')
 $install = Join-Path $root "install-$token"
 $uninstallRoot = "$install-uninstall"
+$rollback = "$install.rollback"
+$staging = "$install.staging"
 $data = Join-Path $root "data-$token"
 $sentinel = Join-Path $data 'preserve.txt'
+$payloadSentinel = Join-Path $install 'pre-zip-payload.txt'
+$badFixtureRoot = Join-Path $root "bad-update-$token"
+$badUpdate = Join-Path $root "bad-update-$token.zip"
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{225850DC-6179-46A0-962C-88F3BBA6D41D}_is1'
 $programs = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
 $shortcut = Join-Path $programs 'Maestro.lnk'
@@ -52,6 +57,22 @@ function Invoke-TestUninstaller {
   ) -Wait -PassThru
   if ($process.ExitCode -ne 0) {
     throw "Uninstaller failed with exit code $($process.ExitCode)."
+  }
+}
+
+function Invoke-ZipHelper([string]$Package) {
+  $parent = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+    '-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Milliseconds 250'
+  ) -PassThru
+  $helper = Join-Path $install 'replace_windows_zip.ps1'
+  $output = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper `
+    -PackagePath $Package `
+    -InstallDirectory $install `
+    -ParentProcessId $parent.Id `
+    -RelaunchPath (Join-Path $install 'maestro.exe') 2>&1
+  return [pscustomobject]@{
+    ExitCode = $LASTEXITCODE
+    Output = @($output)
   }
 }
 
@@ -98,15 +119,43 @@ try {
     throw 'Application data changed during upgrade.'
   }
 
-  $parent = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
-    '-NoProfile', '-Command', 'Start-Sleep -Milliseconds 250'
-  ) -PassThru
-  $helper = Join-Path $install 'replace_windows_zip.ps1'
-  $helperOutput = & $helper `
-    -PackagePath $update `
-    -InstallDirectory $install `
-    -ParentProcessId $parent.Id `
-    -RelaunchPath (Join-Path $install 'maestro.exe') 2>&1
+  Set-Content -LiteralPath $payloadSentinel -Value 'pre-zip-payload'
+  New-Item -ItemType Directory -Path $badFixtureRoot -Force | Out-Null
+  Expand-Archive -LiteralPath $update -DestinationPath $badFixtureRoot -Force
+  $badRelaunch = Join-Path $badFixtureRoot 'maestro.exe'
+  if (-not (Test-Path -LiteralPath $badRelaunch -PathType Leaf)) {
+    throw 'Valid update fixture does not contain maestro.exe.'
+  }
+  Remove-Item -LiteralPath $badRelaunch -Force
+  Compress-Archive -Path (Join-Path $badFixtureRoot '*') -DestinationPath $badUpdate -Force
+  Remove-Item -LiteralPath (Get-ValidatedCleanupPath $badFixtureRoot) -Recurse -Force
+
+  $badResult = Invoke-ZipHelper $badUpdate
+  if ($badResult.ExitCode -eq 0) {
+    throw 'Bad ZIP update unexpectedly succeeded.'
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $install 'maestro.exe') -PathType Leaf) -or
+      -not (Test-Path -LiteralPath $payloadSentinel -PathType Leaf)) {
+    throw 'Prior installed payload was not restored after ZIP relaunch failure.'
+  }
+  if ((Test-Path -LiteralPath $rollback) -or (Test-Path -LiteralPath $staging)) {
+    throw 'ZIP rollback or staging directory remains after restoration.'
+  }
+  if (-not (Test-Path -LiteralPath $uninstallKey) -or
+      -not (Test-Path -LiteralPath $shortcut -PathType Leaf) -or
+      -not (Test-Path -LiteralPath (Join-Path $uninstallRoot 'unins000.exe') -PathType Leaf)) {
+    throw 'Installer registration changed during ZIP rollback.'
+  }
+  if ((Get-Content -Raw -LiteralPath $sentinel).Trim() -ne 'preserve-me') {
+    throw 'Application data changed during ZIP rollback.'
+  }
+  Write-Output 'windows-zip-update: rollback restored'
+
+  $helperResult = Invoke-ZipHelper $update
+  if ($helperResult.ExitCode -ne 0) {
+    throw "ZIP update helper failed: $($helperResult.Output | Out-String)"
+  }
+  $helperOutput = $helperResult.Output
   $markers = @($helperOutput | Where-Object {
     "$_" -match '^windows-zip-update: relaunched [0-9]+$'
   })
@@ -160,7 +209,15 @@ finally {
     Wait-Process -Id $relaunchPid -ErrorAction SilentlyContinue
   }
   Invoke-TestUninstaller
-  foreach ($target in @($install, $uninstallRoot, $data)) {
+  foreach ($target in @(
+    $install,
+    $uninstallRoot,
+    $rollback,
+    $staging,
+    $data,
+    $badFixtureRoot,
+    $badUpdate
+  )) {
     if (Test-Path -LiteralPath $target) {
       Remove-Item -LiteralPath (Get-ValidatedCleanupPath $target) -Recurse -Force
     }

@@ -94,6 +94,14 @@ void main() {
           contains(r'[Parameter(Mandatory = $true)][string]$UpdatePackage'),
         );
         expect(script, contains(r'$uninstallRoot = "$install-uninstall"'));
+        expect(
+          script,
+          contains(
+            r'& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper',
+          ),
+        );
+        expect(script, contains('bad-update'));
+        expect(script, contains('windows-zip-update: rollback restored'));
         expect(script, contains('windows-zip-update: relaunched'));
         expect(script, contains('Installer-owned install directory remains.'));
         expect(
@@ -150,10 +158,7 @@ void main() {
           'Invoke-TestUninstaller',
           finallyBlock,
         );
-        final cleanup = script.indexOf(
-          r'foreach ($target in @($install, $uninstallRoot, $data))',
-          finallyBlock,
-        );
+        final cleanup = script.indexOf(r'foreach ($target in @(', finallyBlock);
 
         expect(finallyBlock, greaterThan(-1));
         expect(uninstall, greaterThan(finallyBlock));
@@ -164,6 +169,8 @@ void main() {
             r'$validatedUninstallRoot = Get-ValidatedCleanupPath $uninstallRoot',
           ),
         );
+        expect(script, contains(r'$badFixtureRoot,'));
+        expect(script, contains(r'$badUpdate'));
       },
     );
 

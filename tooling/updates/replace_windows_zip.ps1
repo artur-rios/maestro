@@ -31,7 +31,12 @@ try {
   Write-Output "windows-zip-update: relaunched $($relaunchProcess.Id)"
   Remove-Item -LiteralPath $rollback -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
-  if (-not (Test-Path -LiteralPath $install) -and (Test-Path -LiteralPath $rollback)) { Move-Item -LiteralPath $rollback -Destination $install }
+  if (Test-Path -LiteralPath $rollback) {
+    if (Test-Path -LiteralPath $install) {
+      Move-Item -LiteralPath $install -Destination $staging
+    }
+    Move-Item -LiteralPath $rollback -Destination $install
+  }
   throw
 } finally {
   Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue

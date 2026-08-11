@@ -38,6 +38,9 @@ final class WindowsPackageInstaller implements PackageInstaller {
           executable: 'powershell.exe',
           arguments: <String>[
             '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
             '-File',
             zipReplacementHelper,
             '-PackagePath',

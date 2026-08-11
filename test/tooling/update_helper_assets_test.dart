@@ -20,13 +20,16 @@ void main() {
       ).readAsString();
       expect(
         windows,
-        allOf(
+        allOf(<Matcher>[
           contains('Rollback'),
           contains('ParentProcessId'),
           contains('RelaunchPath'),
           contains(r'Start-Process -FilePath $relaunch -PassThru'),
           contains('windows-zip-update: relaunched'),
-        ),
+          contains(r'if (Test-Path -LiteralPath $rollback)'),
+          contains(r'Move-Item -LiteralPath $install -Destination $staging'),
+          contains(r'Move-Item -LiteralPath $rollback -Destination $install'),
+        ]),
       );
       expect(
         linux,

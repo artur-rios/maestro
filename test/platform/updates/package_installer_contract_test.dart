@@ -37,17 +37,22 @@ void main() {
       expect(runner.requests, isEmpty);
       expect(detached.requests, hasLength(1));
       expect(detached.requests.single.executable, 'powershell.exe');
-      expect(
-        detached.requests.single.arguments,
-        containsAllInOrder(<String>[
-          '-InstallDirectory',
-          r'C:\Program Files\Maestro',
-          '-ParentProcessId',
-          '$pid',
-          '-RelaunchPath',
-          r'C:\Program Files\Maestro\maestro.exe',
-        ]),
-      );
+      expect(detached.requests.single.arguments, <String>[
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        r'C:\Program Files\Maestro\replace_windows_zip.ps1',
+        '-PackagePath',
+        r'C:\staged\maestro.zip',
+        '-InstallDirectory',
+        r'C:\Program Files\Maestro',
+        '-ParentProcessId',
+        '$pid',
+        '-RelaunchPath',
+        r'C:\Program Files\Maestro\maestro.exe',
+      ]);
     },
   );
 
