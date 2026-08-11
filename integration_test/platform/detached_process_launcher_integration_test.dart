@@ -13,7 +13,7 @@ void main() {
       final directory = await Directory.systemTemp.createTemp(
         'maestro-detached-',
       );
-      addTearDown(() => directory.delete(recursive: true));
+      addTearDown(() => _deleteEventually(directory));
       final marker = File(
         '${directory.path}${Platform.pathSeparator}detached.done',
       );
@@ -44,10 +44,23 @@ Future<void> main(List<String> arguments) async {
       ]);
 
       expect(parent.exitCode, 0, reason: '${parent.stdout}\n${parent.stderr}');
+      expect(await marker.exists(), isFalse);
       expect(await _waitForMarker(marker), isTrue);
       expect((await marker.readAsString()).trim(), 'detached');
     },
   );
+}
+
+Future<void> _deleteEventually(Directory directory) async {
+  for (var attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      await directory.delete(recursive: true);
+      return;
+    } on FileSystemException {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }
+  await directory.delete(recursive: true);
 }
 
 Future<bool> _waitForMarker(File marker) async {
