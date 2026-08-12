@@ -1,7 +1,7 @@
 import 'dart:collection';
 import 'dart:convert';
 
-import 'release_version.dart';
+import 'package:maestro/platform/updates/release_version.dart';
 
 final class ReleaseArtifact {
   const ReleaseArtifact({

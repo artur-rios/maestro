@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../../lib/platform/updates/release_version.dart';
+import 'package:maestro/platform/updates/release_version.dart';
 
 Future<void> main(List<String> arguments) async {
   if (arguments.length != 2) {
@@ -22,8 +22,7 @@ Future<void> main(List<String> arguments) async {
       'is_prerelease': version.isPrerelease.toString(),
     };
     await output.writeAsString(
-      values.entries.map((entry) => '${entry.key}=${entry.value}').join('\n') +
-          '\n',
+      '${values.entries.map((entry) => '${entry.key}=${entry.value}').join('\n')}\n',
       mode: FileMode.append,
     );
   } on FormatException catch (error) {
