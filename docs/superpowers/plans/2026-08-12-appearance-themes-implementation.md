@@ -352,8 +352,11 @@ testWidgets('GivenRunningApp_WhenDarkSelected_ThenThemeModeChanges',
 });
 ~~~
 
-In the production composition test, preinsert appearance.themeMode = dark and
-assert the composed controller starts Dark.
+In the production composition test, first preinsert appearance.themeMode =
+dark and assert the composed controller starts Dark. Also add the file-backed
+reopen test before production wiring exists: compose once, select Dark, close,
+reopen the same database file, compose again, and assert the new controller
+starts Dark.
 
 - [ ] **Step 2: Run focused app tests and verify RED**
 
@@ -564,53 +567,16 @@ git commit -m "feat: add global appearance selector"
 
 ---
 
-### Task 5: Restart persistence and full verification
+### Task 5: Full verification
 
 **Files:**
-- Modify: test/app/production_project_composition_test.dart
 - Modify only when a regression is demonstrated: the affected presentation file and its matching focused widget test.
 
 **Interfaces:**
 - Consumes: the complete appearance feature.
-- Produces: restart-level persistence proof and clean project-wide verification.
+- Produces: clean project-wide verification.
 
-- [ ] **Step 1: Write the failing database-reopen test**
-
-Use a temporary file-backed MaestroDatabase. Compose once, select Dark, close,
-reopen the same file, compose again, and assert Dark is loaded:
-
-~~~dart
-expect(first.appearanceController.mode, AppearanceMode.system);
-expect(
-  await first.appearanceController.select(AppearanceMode.dark),
-  isTrue,
-);
-await first.close();
-
-final reopenedDatabase = MaestroDatabase(NativeDatabase(databaseFile));
-final reopened = await composeProductionApp(
-  paths: ApplicationPaths.fromRoot(root),
-  database: reopenedDatabase,
-  passwordVerifiers: _MemoryVerifierStore(),
-  passwordHasher: const _PasswordHasher(),
-  operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-  commandRunner: _GitRootCommandRunner(root.path),
-  projectFolderPicker: _ProjectFolderPicker(root.path),
-);
-addTearDown(reopened.close);
-expect(reopened.appearanceController.mode, AppearanceMode.dark);
-~~~
-
-- [ ] **Step 2: Run the reopen test**
-
-~~~powershell
-pwsh -File tooling/test_windows.ps1 test/app/production_project_composition_test.dart
-~~~
-
-Expected: fail at the missing or incorrect persistence boundary, then pass after
-the smallest wiring correction.
-
-- [ ] **Step 3: Format and run static checks**
+- [ ] **Step 1: Format and run static checks**
 
 ~~~powershell
 dart format lib/features/appearance lib/app/maestro_app.dart lib/app/maestro_theme.dart lib/features/authentication/presentation/authentication_page.dart lib/main.dart test/features/appearance test/app/maestro_app_test.dart test/app/production_project_composition_test.dart
@@ -621,7 +587,7 @@ flutter analyze
 Expected: a second formatter run makes no edits; architecture verification and
 analyzer exit 0.
 
-- [ ] **Step 4: Run focused regressions**
+- [ ] **Step 2: Run focused regressions**
 
 ~~~powershell
 pwsh -File tooling/test_windows.ps1 test/features/appearance test/app/maestro_app_test.dart test/app/production_project_composition_test.dart test/features/authentication/presentation/authentication_page_test.dart
@@ -629,7 +595,7 @@ pwsh -File tooling/test_windows.ps1 test/features/appearance test/app/maestro_ap
 
 Expected: all focused tests pass.
 
-- [ ] **Step 5: Run the full suite**
+- [ ] **Step 3: Run the full suite**
 
 ~~~powershell
 pwsh -File tooling/test_windows.ps1
@@ -640,12 +606,9 @@ illegible fixed-color surface, replace only that fixed color with its semantic
 Theme.of(context).colorScheme role, add the matching regression assertion, and
 rerun focused plus full tests.
 
-- [ ] **Step 6: Commit restart coverage**
+- [ ] **Step 4: Commit any demonstrated regression fix**
 
-~~~powershell
-git add test/app/production_project_composition_test.dart
-git commit -m "test: verify persisted appearance"
-~~~
-
-If Task 3 already committed the reopen test and no regression fix was needed,
-verify git status --short is empty and do not create an empty commit.
+If Steps 1-3 required a targeted presentation regression fix, stage only that
+presentation file and its focused test and commit them with a lowercase
+Conventional Commit subject. If no regression fix was needed, verify
+git status --short is empty and do not create an empty commit.
