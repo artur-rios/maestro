@@ -1,9 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
+import 'package:maestro/features/appearance/domain/appearance_mode.dart';
+import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
@@ -14,12 +17,51 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
   testWidgets(
+    'GivenSystemPreference_WhenAppStarts_ThenBothThemesAreConfigured',
+    (tester) async {
+      final appearance = _appearanceController(AppearanceMode.system);
+      addTearDown(appearance.dispose);
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: appearance,
+          authenticationService: _authenticationService(),
+        ),
+      );
+
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(app.themeMode, ThemeMode.system);
+      expect(app.theme!.brightness, Brightness.light);
+      expect(app.darkTheme!.brightness, Brightness.dark);
+    },
+  );
+
+  testWidgets('GivenRunningApp_WhenDarkSelected_ThenThemeModeChanges', (
+    tester,
+  ) async {
+    final appearance = _appearanceController(AppearanceMode.system);
+    addTearDown(appearance.dispose);
+    await tester.pumpWidget(
+      MaestroApp(
+        appearanceController: appearance,
+        authenticationService: _authenticationService(),
+      ),
+    );
+
+    await appearance.select(AppearanceMode.dark);
+    await tester.pump();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+  });
+
+  testWidgets(
     'GivenAppStart_WhenUnauthenticated_ThenAuthenticationGateIsVisible',
     (tester) async {
       final semantics = tester.ensureSemantics();
       try {
         await tester.pumpWidget(
           MaestroApp(
+            appearanceController: _appearanceController(),
             authenticationService: _authenticationService(),
             projectService: _projectService(),
             projectLifecycleService: _projectLifecycleService(),
@@ -49,6 +91,7 @@ void main() {
     var disposeCount = 0;
     await tester.pumpWidget(
       MaestroApp(
+        appearanceController: _appearanceController(),
         authenticationService: service,
         projectService: _projectService(),
         projectLifecycleService: _projectLifecycleService(),
@@ -75,6 +118,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
@@ -106,6 +150,7 @@ void main() {
         ..records.add(_projectRecord());
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
           projectService: _projectService(repository: projectRepository),
           projectLifecycleService: _projectLifecycleService(
@@ -141,6 +186,7 @@ void main() {
       final store = _ProjectLifecycleStore(repository);
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
           projectService: _projectService(repository: repository),
           projectLifecycleService: _projectLifecycleService(
@@ -172,6 +218,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
           projectService: _projectService(),
           projectFolderPicker: const _ProjectFolderPicker(),
@@ -204,6 +251,7 @@ void main() {
         ..softDeleteStarted = Completer<void>();
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
           projectService: _projectService(repository: repository),
           projectLifecycleService: _projectLifecycleService(
@@ -256,6 +304,7 @@ void main() {
         ..saveStarted = Completer<void>();
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
@@ -295,6 +344,22 @@ void main() {
       expect(find.bySemanticsLabel(RegExp(r'^Workflow success')), findsNothing);
     },
   );
+}
+
+AppearanceController _appearanceController([
+  AppearanceMode initialMode = AppearanceMode.system,
+]) => AppearanceController(
+  repository: _AppearancePreferenceRepository(),
+  initialMode: initialMode,
+);
+
+final class _AppearancePreferenceRepository
+    implements AppearancePreferenceRepository {
+  @override
+  Future<AppearanceMode> load() async => AppearanceMode.system;
+
+  @override
+  Future<void> save(AppearanceMode mode) async {}
 }
 
 WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>

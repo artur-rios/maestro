@@ -10,6 +10,8 @@ import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/database_factory.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
+import 'package:maestro/features/appearance/data/drift_appearance_preference_repository.dart';
+import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/data/drift_authentication_repository.dart';
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
@@ -87,6 +89,8 @@ typedef DatabaseCloser = Future<void> Function(MaestroDatabase database);
 final class ProductionAppComposition {
   ProductionAppComposition._({
     required this.database,
+    required this.appearanceRepository,
+    required this.appearanceController,
     required this.authenticationService,
     required this.projectRepository,
     required this.projectService,
@@ -108,6 +112,8 @@ final class ProductionAppComposition {
   });
 
   final MaestroDatabase database;
+  final DriftAppearancePreferenceRepository appearanceRepository;
+  final AppearanceController appearanceController;
   final AuthenticationService authenticationService;
   final DriftProjectRepository projectRepository;
   final ProjectService projectService;
@@ -129,6 +135,7 @@ final class ProductionAppComposition {
   Future<void>? _closeFuture;
 
   Widget get app => MaestroApp(
+    appearanceController: appearanceController,
     authenticationService: authenticationService,
     projectService: projectService,
     projectLifecycleService: projectLifecycleService,
@@ -144,8 +151,11 @@ final class ProductionAppComposition {
   );
 
   Future<void> close() {
-    authenticationService.dispose();
-    return _closeFuture ??= _closeDatabase(database);
+    return _closeFuture ??= Future<void>.microtask(() async {
+      appearanceController.dispose();
+      authenticationService.dispose();
+      await _closeDatabase(database);
+    });
   }
 }
 
@@ -165,8 +175,16 @@ Future<ProductionAppComposition> composeProductionApp({
   ActiveProjectRunReader? activeProjectRuns,
   DatabaseCloser closeDatabase = _closeDatabase,
 }) async {
-  final authenticationRepository = DriftAuthenticationRepository(database);
   final now = clock ?? () => DateTime.now().toUtc();
+  final appearanceRepository = DriftAppearancePreferenceRepository(
+    database,
+    clock: now,
+  );
+  final appearanceController = AppearanceController(
+    repository: appearanceRepository,
+    initialMode: await appearanceRepository.load(),
+  );
+  final authenticationRepository = DriftAuthenticationRepository(database);
   final authenticationService = AuthenticationService(
     users: authenticationRepository,
     verifiers:
@@ -432,6 +450,8 @@ Future<ProductionAppComposition> composeProductionApp({
 
   return ProductionAppComposition._(
     database: database,
+    appearanceRepository: appearanceRepository,
+    appearanceController: appearanceController,
     authenticationService: authenticationService,
     projectRepository: projectRepository,
     projectService: projectService,

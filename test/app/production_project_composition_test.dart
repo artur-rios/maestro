@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
+import 'package:maestro/features/appearance/data/drift_appearance_preference_repository.dart';
+import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
@@ -19,6 +21,64 @@ import 'package:maestro/main.dart' as app;
 import 'package:maestro/platform/common/command_runner.dart';
 
 void main() {
+  test(
+    'GivenStoredDarkPreference_WhenProductionComposes_ThenControllerStartsDark',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'maestro-production-appearance-load-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final database = MaestroDatabase(NativeDatabase.memory());
+      await database
+          .into(database.settings)
+          .insert(
+            SettingsCompanion.insert(
+              key: DriftAppearancePreferenceRepository.preferenceKey,
+              value: 'dark',
+            ),
+          );
+
+      final composition = await _compose(root, database);
+      addTearDown(composition.close);
+
+      expect(
+        composition.appearanceRepository,
+        isA<DriftAppearancePreferenceRepository>(),
+      );
+      expect(composition.appearanceController.mode, AppearanceMode.dark);
+    },
+  );
+
+  test(
+    'GivenDarkSelection_WhenDatabaseReopens_ThenProductionRestoresDark',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'maestro-production-appearance-reopen-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final databaseFile = File(
+        '${root.path}${Platform.pathSeparator}maestro.db',
+      );
+      final firstDatabase = MaestroDatabase(NativeDatabase(databaseFile));
+      final firstComposition = await _compose(root, firstDatabase);
+
+      expect(
+        await firstComposition.appearanceController.select(AppearanceMode.dark),
+        isTrue,
+      );
+      await firstComposition.close();
+
+      final reopenedDatabase = MaestroDatabase(NativeDatabase(databaseFile));
+      final reopenedComposition = await _compose(root, reopenedDatabase);
+      addTearDown(reopenedComposition.close);
+
+      expect(
+        reopenedComposition.appearanceController.mode,
+        AppearanceMode.dark,
+      );
+    },
+  );
+
   test(
     'GivenProductionComposition_WhenAuthenticationAndProjectPersist_ThenSharedDatabaseContainsOnlySafeMetadata',
     () async {
@@ -218,6 +278,20 @@ void main() {
     },
   );
 }
+
+Future<app.ProductionAppComposition> _compose(
+  Directory root,
+  MaestroDatabase database,
+) => app.composeProductionApp(
+  paths: ApplicationPaths.fromRoot(root),
+  database: database,
+  passwordVerifiers: _MemoryVerifierStore(),
+  passwordHasher: const _PasswordHasher(),
+  operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
+  commandRunner: _GitRootCommandRunner(root.path),
+  projectFolderPicker: _ProjectFolderPicker(root.path),
+  clock: () => DateTime.utc(2026, 8, 12, 14),
+);
 
 Future<Map<String, String>> _snapshot(Directory directory) async {
   final snapshot = <String, String>{};
