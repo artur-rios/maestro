@@ -79,6 +79,66 @@ void main() {
       expect(installer.calls, hasLength(1));
     },
   );
+
+  for (final transition in <(String, String)>[
+    ('1.2.3-alpha.2', '1.2.3-beta.0'),
+    ('1.2.3-beta.0', '1.2.3-rc.0'),
+    ('1.2.3-rc.0', '1.2.3'),
+  ]) {
+    test(
+      'Given${transition.$1}_When${transition.$2}IsAvailable_ThenUpdateIsOffered',
+      () async {
+        final candidate = await _check(
+          installedVersion: transition.$1,
+          candidateVersion: transition.$2,
+          artifact: artifact,
+        );
+
+        expect(candidate, isNotNull);
+        expect(candidate!.verified.manifest.version, transition.$2);
+      },
+    );
+  }
+
+  test(
+    'GivenStableInstalled_WhenEarlierPrereleaseIsAvailable_ThenDowngradeIsNotOffered',
+    () async {
+      final candidate = await _check(
+        installedVersion: '1.2.3',
+        candidateVersion: '1.2.3-rc.0',
+        artifact: artifact,
+      );
+
+      expect(candidate, isNull);
+    },
+  );
+}
+
+Future<UpdateCandidate?> _check({
+  required String installedVersion,
+  required String candidateVersion,
+  required ReleaseArtifact artifact,
+}) async {
+  final verified = VerifiedReleaseManifest(
+    manifest: ReleaseManifest(
+      version: candidateVersion,
+      publishedAt: DateTime.utc(2026, 8, 5),
+      keyExpiresAt: DateTime.utc(2030),
+      artifacts: <ReleaseArtifact>[artifact],
+    ),
+    artifact: artifact,
+  );
+  final service = UpdateService(
+    installedVersion: installedVersion,
+    source: _FakeSource(),
+    verifier: _FakeVerifier(verified),
+    downloader: _FakeDownloader(artifact),
+    installer: _FakeInstaller(),
+  );
+
+  return (await service.check(UpdateCheckReason.manual)
+          as Success<UpdateCandidate?>)
+      .value;
 }
 
 final class _FakeSource implements UpdateManifestSource {

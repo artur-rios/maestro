@@ -1,5 +1,6 @@
 param(
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
+  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')][string]$DisplayVersion,
+  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+\.\d+$')][string]$WindowsVersion,
   [Parameter(Mandatory = $true)][string]$Bundle,
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
   [string]$OutputName = 'maestro-windows-x64-setup',
@@ -48,7 +49,8 @@ if (Test-Path -LiteralPath $installer) {
   }
 }
 $compilerArguments = @(
-  "/DAppVersion=$Version",
+  "/DDisplayVersion=$DisplayVersion",
+  "/DWindowsVersion=$WindowsVersion",
   "/DSourceDir=$source",
   "/DOutputDir=$output",
   "/DOutputName=$OutputName",
@@ -65,7 +67,7 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf) -or (Get-Item -LiteralPath $installer).Length -le 0) {
   throw 'Windows setup executable was not produced.'
 }
-$expectedProductVersion = ConvertTo-NormalizedVersion $Version
+$expectedProductVersion = ConvertTo-NormalizedVersion $WindowsVersion
 $actualProductVersion = ConvertTo-NormalizedVersion (Get-Item -LiteralPath $installer).VersionInfo.ProductVersion
 if ($actualProductVersion -ne $expectedProductVersion) {
   throw "Installer product version mismatch: expected $expectedProductVersion, found $actualProductVersion."

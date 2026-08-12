@@ -70,6 +70,42 @@ void main() {
     });
 
     test(
+      'GivenWindowsPackagers_WhenVersionProjectionIsInvalid_ThenValidationFails',
+      () async {
+        final packageResult = await Process.run('pwsh', <String>[
+          '-NoProfile',
+          '-File',
+          'tooling/packaging/package_windows.ps1',
+          '-SemanticVersion',
+          '1.2.3-rc.0',
+          '-CoreVersion',
+          '1.2.3',
+          '-WindowsVersion',
+          '1.2.3',
+          '-SkipBuild',
+        ]);
+        final installerResult = await Process.run('pwsh', <String>[
+          '-NoProfile',
+          '-File',
+          'tooling/packaging/windows/build_installer.ps1',
+          '-DisplayVersion',
+          '1.2.3-rc.0',
+          '-WindowsVersion',
+          '1.2.3',
+          '-Bundle',
+          '.',
+          '-OutputDirectory',
+          '.',
+        ]);
+
+        expect(packageResult.exitCode, isNot(0));
+        expect('${packageResult.stderr}', contains('WindowsVersion'));
+        expect(installerResult.exitCode, isNot(0));
+        expect('${installerResult.stderr}', contains('WindowsVersion'));
+      },
+    );
+
+    test(
       'GivenInstallerBuilder_WhenOutputExists_ThenFreshRequestedVersionIsRequired',
       () async {
         final script = await File(

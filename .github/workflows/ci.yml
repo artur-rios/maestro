@@ -72,7 +72,7 @@ jobs:
           "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
       - name: Package Windows artifacts
         shell: pwsh
-        run: tooling/packaging/package_windows.ps1 -Version 0.1.0 -SkipBuild
+        run: tooling/packaging/package_windows.ps1 -SemanticVersion 0.1.0 -CoreVersion 0.1.0 -WindowsVersion 0.1.0.65535 -SkipBuild
       - name: Build ZIP update fixture
         shell: pwsh
         run: |
@@ -87,14 +87,16 @@ jobs:
         shell: pwsh
         run: |
           tooling/packaging/windows/build_installer.ps1 `
-            -Version 0.1.0 `
+            -DisplayVersion 0.1.0 `
+            -WindowsVersion 0.1.0.65535 `
             -Bundle build/windows/x64/runner/Release `
             -OutputDirectory "$env:RUNNER_TEMP" `
             -OutputName maestro-windows-x64-setup-smoke-0.1.0 `
             -CompilerPath $env:INNO_SETUP_COMPILER `
             -AllowCustomDirectoryForSmoke
           tooling/packaging/windows/build_installer.ps1 `
-            -Version 0.1.1 `
+            -DisplayVersion 0.1.1 `
+            -WindowsVersion 0.1.1.65535 `
             -Bundle build/windows/x64/runner/Release `
             -OutputDirectory "$env:RUNNER_TEMP" `
             -OutputName maestro-windows-x64-setup-smoke-0.1.1 `
@@ -158,7 +160,7 @@ jobs:
           echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum --check --strict
           chmod 0755 "$RUNNER_TEMP/appimagetool"
           echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
-      - run: bash tooling/packaging/package_linux.sh 0.1.0
+      - run: bash tooling/packaging/package_linux.sh 0.1.0 0.1.0 0.1.0
       - run: bash tooling/smoke/linux_install_update.sh dist/maestro-linux-x64.AppImage dist/maestro-linux-amd64.deb
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

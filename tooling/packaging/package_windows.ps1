@@ -1,5 +1,7 @@
 param(
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
+  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')][string]$SemanticVersion,
+  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$CoreVersion,
+  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+\.\d+$')][string]$WindowsVersion,
   [switch]$SkipBuild,
   [string]$InnoCompiler = $env:INNO_SETUP_COMPILER
 )
@@ -20,7 +22,7 @@ $dart = if ($env:FLUTTER_ROOT) {
 }
 
 if (-not $SkipBuild) {
-  & $flutter build windows --release --build-name $Version
+  & $flutter build windows --release --build-name $CoreVersion "--dart-define=MAESTRO_INSTALLED_VERSION=$SemanticVersion"
   if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows release build failed.' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $bundle 'maestro.exe'))) {
@@ -32,13 +34,14 @@ $zip = Join-Path $distribution 'maestro-windows-x64.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip
 
-& $dart run msix:create --build-windows false --install-certificate false --output-path $distribution --output-name maestro-windows-x64 --version "$Version.0"
+& $dart run msix:create --build-windows false --install-certificate false --output-path $distribution --output-name maestro-windows-x64 --version $WindowsVersion
 if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging failed.' }
 $msix = Get-ChildItem -LiteralPath $distribution -Filter 'maestro-windows-x64*.msix' | Select-Object -First 1
 if ($null -eq $msix) { throw 'MSIX artifact was not produced.' }
 
 $setup = & (Join-Path $repository 'tooling\packaging\windows\build_installer.ps1') `
-  -Version $Version `
+  -DisplayVersion $SemanticVersion `
+  -WindowsVersion $WindowsVersion `
   -Bundle $bundle `
   -OutputDirectory $distribution `
   -OutputName 'maestro-windows-x64-setup' `
