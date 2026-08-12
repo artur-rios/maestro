@@ -31,10 +31,14 @@ final class ReleaseVersion implements Comparable<ReleaseVersion> {
     final channel = match[4];
     final sequence = channel == null ? null : int.parse(match[5]!);
     if (major > 65535 || minor > 65535 || patch > 65535) {
-      throw FormatException('Release version components must not exceed 65535.');
+      throw FormatException(
+        'Release version components must not exceed 65535.',
+      );
     }
     if (sequence != null && sequence > 9999) {
-      throw FormatException('Release prerelease sequence must not exceed 9999.');
+      throw FormatException(
+        'Release prerelease sequence must not exceed 9999.',
+      );
     }
 
     return ReleaseVersion._(
@@ -54,15 +58,13 @@ final class ReleaseVersion implements Comparable<ReleaseVersion> {
 
   String get coreVersion => '$major.$minor.$patch';
 
-  String get semanticVersion => isPrerelease
-      ? '$coreVersion-$channel.$sequence'
-      : coreVersion;
+  String get semanticVersion =>
+      isPrerelease ? '$coreVersion-$channel.$sequence' : coreVersion;
 
   String get windowsVersion => '$coreVersion.${_windowsBuildNumber()}';
 
-  String get debianVersion => isPrerelease
-      ? '$coreVersion~$channel.$sequence'
-      : coreVersion;
+  String get debianVersion =>
+      isPrerelease ? '$coreVersion~$channel.$sequence' : coreVersion;
 
   bool get isPrerelease => channel != null;
 
