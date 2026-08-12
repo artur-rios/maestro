@@ -7,6 +7,34 @@ import '../../tooling/release/create_manifest.dart';
 
 void main() {
   test(
+    'GivenSupportedReleaseVersions_WhenManifestParsed_ThenAcceptsThem',
+    () {
+      for (final version in <String>['1.2.3', '1.2.3-alpha.4']) {
+        final manifest = ReleaseManifest.fromJson(_manifestJson(version));
+
+        expect(manifest.version, version);
+      }
+    },
+  );
+
+  test(
+    'GivenUnsupportedReleaseVersions_WhenManifestParsed_ThenThrowsFormatException',
+    () {
+      for (final version in <String>[
+        '01.2.3',
+        '1.2.3-preview.1',
+        '1.2.3+build.1',
+        '1.2.3-beta.10000',
+      ]) {
+        expect(
+          () => ReleaseManifest.fromJson(_manifestJson(version)),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  test(
     'GivenFourArtifacts_WhenManifestCreated_ThenEveryDigestAndSizeMatches',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -47,3 +75,19 @@ void main() {
     },
   );
 }
+
+Map<String, Object?> _manifestJson(String version) => <String, Object?>{
+  'version': version,
+  'publishedAt': '2026-08-05T00:00:00.000Z',
+  'keyExpiresAt': '2030-01-01T00:00:00.000Z',
+  'artifacts': <Object?>[
+    <String, Object?>{
+      'platform': 'windows',
+      'architecture': 'x64',
+      'packageType': 'zip',
+      'url': 'https://example.test/maestro.zip',
+      'size': 1,
+      'sha256': '0' * 64,
+    },
+  ],
+};
