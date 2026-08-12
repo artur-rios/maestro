@@ -5,12 +5,34 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  validate-release:
+    runs-on: ubuntu-24.04
+    outputs:
+      semantic_version: ${{ steps.version.outputs.semantic_version }}
+      core_version: ${{ steps.version.outputs.core_version }}
+      windows_version: ${{ steps.version.outputs.windows_version }}
+      debian_version: ${{ steps.version.outputs.debian_version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - id: version
+        run: dart tooling/release/validate_release_tag.dart "$GITHUB_REF_NAME" "$GITHUB_OUTPUT"
+
   windows-package:
+    needs: validate-release
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,8 +50,10 @@ jobs:
       - name: Package Windows
         shell: pwsh
         run: |
-          $version = $env:GITHUB_REF_NAME.TrimStart('v')
-          tooling/packaging/package_windows.ps1 -Version $version
+          tooling/packaging/package_windows.ps1 `
+            -SemanticVersion "${{ needs['validate-release'].outputs.semantic_version }}" `
+            -CoreVersion "${{ needs['validate-release'].outputs.core_version }}" `
+            -WindowsVersion "${{ needs['validate-release'].outputs.windows_version }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-packages
@@ -40,6 +64,7 @@ jobs:
           if-no-files-found: error
 
   linux-package:
+    needs: validate-release
     runs-on: ubuntu-24.04
     env:
       APPIMAGE_EXTRACT_AND_RUN: '1'
@@ -61,16 +86,26 @@ jobs:
           echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum --check --strict
           chmod 0755 "$RUNNER_TEMP/appimagetool"
           echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
-      - run: bash tooling/packaging/package_linux.sh "${GITHUB_REF_NAME#v}"
+      - run: |
+          bash tooling/packaging/package_linux.sh \
+            "${{ needs['validate-release'].outputs.semantic_version }}" \
+            "${{ needs['validate-release'].outputs.core_version }}" \
+            "${{ needs['validate-release'].outputs.debian_version }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-packages
-          path: dist/maestro-linux-*
+          path: |
+            dist/maestro-linux-x64.AppImage
+            dist/maestro-linux-amd64.deb
           if-no-files-found: error
 
   release:
-    needs: [windows-package, linux-package]
+    needs: [validate-release, windows-package, linux-package]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       MAESTRO_RELEASE_SECRET_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_SECRET_KEY_BASE64 }}
       MAESTRO_RELEASE_PUBLIC_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_PUBLIC_KEY_BASE64 }}
@@ -89,12 +124,14 @@ jobs:
       - run: flutter pub get
       - name: Create and optionally sign release manifest
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          dart run tooling/release/create_manifest.dart dist "$version" "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
-          if [[ -n "$MAESTRO_RELEASE_SECRET_KEY_BASE64" ]]; then
+          dart run tooling/release/create_manifest.dart dist "${{ needs['validate-release'].outputs.semantic_version }}" "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          if [[ -n "$MAESTRO_RELEASE_SECRET_KEY_BASE64" && -n "$MAESTRO_RELEASE_PUBLIC_KEY_BASE64" ]]; then
             dart run tooling/release/sign_manifest.dart dist
-          else
+          elif [[ -z "$MAESTRO_RELEASE_SECRET_KEY_BASE64" && -z "$MAESTRO_RELEASE_PUBLIC_KEY_BASE64" ]]; then
             echo 'publisher-signing: unconfigured'
+          else
+            echo 'publisher-signing: incomplete signing material' >&2
+            exit 1
           fi
           dart run tooling/release/verify_release.dart dist
       - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
@@ -102,5 +139,8 @@ jobs:
           subject-path: dist/*
       - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ needs['validate-release'].outputs.is_prerelease }}
           files: dist/*
           fail_on_unmatched_files: true

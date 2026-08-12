@@ -3,8 +3,14 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tooling/release/release_artifacts.dart';
+import '../../tooling/verify_workflows.dart' as workflow_verifier;
 
 void main() {
+  test(
+    'GivenTagReleaseWorkflow_WhenVerified_ThenPublicationContractPasses',
+    workflow_verifier.main,
+  );
+
   test(
     'GivenFiveNonEmptyPackages_WhenValidated_ThenReturnsFilenameOrder',
     () async {

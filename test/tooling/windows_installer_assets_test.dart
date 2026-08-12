@@ -273,32 +273,22 @@ void main() {
       },
     );
 
-    test(
-      'GivenWindowsWorkflows_WhenInspected_ThenSetupExeIsBuiltAndPublished',
-      () async {
-        final ci = await File('.github/workflows/ci.yml').readAsString();
-        final release = await File(
-          '.github/workflows/release.yml',
-        ).readAsString();
+    test('GivenWindowsCi_WhenInspected_ThenSetupExeIsBuiltAndTested', () async {
+      final ci = await File('.github/workflows/ci.yml').readAsString();
 
-        for (final workflow in <String>[ci, release]) {
-          expect(workflow, contains('install_inno_setup.ps1'));
-          expect(workflow, contains('maestro-windows-x64-setup.exe'));
-        }
-        expect(ci, contains('windows_installer.ps1'));
-        expect(ci, contains('0.1.1'));
-        expect(ci, contains('-UpdatePackage'));
-        expect(ci, contains('maestro-windows-x64-setup-smoke-0.1.0'));
-        expect(ci, contains('-AllowCustomDirectoryForSmoke'));
-        expect(ci, contains('detached_process_launcher_integration_test.dart'));
-        final packageScript = await File(
-          'tooling/packaging/package_windows.ps1',
-        ).readAsString();
-        expect(packageScript, isNot(contains('AllowCustomDirectoryForSmoke')));
-        expect(release, contains('dist/maestro-windows-x64-setup.exe'));
-        expect(release, isNot(contains('dist/maestro-windows-x64.*')));
-      },
-    );
+      expect(ci, contains('install_inno_setup.ps1'));
+      expect(ci, contains('maestro-windows-x64-setup.exe'));
+      expect(ci, contains('windows_installer.ps1'));
+      expect(ci, contains('0.1.1'));
+      expect(ci, contains('-UpdatePackage'));
+      expect(ci, contains('maestro-windows-x64-setup-smoke-0.1.0'));
+      expect(ci, contains('-AllowCustomDirectoryForSmoke'));
+      expect(ci, contains('detached_process_launcher_integration_test.dart'));
+      final packageScript = await File(
+        'tooling/packaging/package_windows.ps1',
+      ).readAsString();
+      expect(packageScript, isNot(contains('AllowCustomDirectoryForSmoke')));
+    });
 
     test(
       'GivenInstallerDocumentation_WhenInspected_ThenUnsignedPerUserUseIsExplicit',
