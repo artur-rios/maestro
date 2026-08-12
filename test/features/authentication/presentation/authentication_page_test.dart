@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
+import 'package:maestro/features/appearance/domain/appearance_mode.dart';
+import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
@@ -374,15 +377,30 @@ Widget _testApp(
   AuthenticationService service, {
   WidgetBuilder? authenticatedBuilder,
 }) {
+  final appearanceController = AppearanceController(
+    repository: _AppearancePreferenceRepository(),
+    initialMode: AppearanceMode.system,
+  );
+  addTearDown(appearanceController.dispose);
   return ProviderScope(
     overrides: [authenticationServiceProvider.overrideWithValue(service)],
     child: MaterialApp(
       home: AuthenticationPage(
+        appearanceController: appearanceController,
         authenticatedBuilder:
             authenticatedBuilder ?? (_) => const Text('Foundation ready'),
       ),
     ),
   );
+}
+
+final class _AppearancePreferenceRepository
+    implements AppearancePreferenceRepository {
+  @override
+  Future<AppearanceMode> load() async => AppearanceMode.system;
+
+  @override
+  Future<void> save(AppearanceMode mode) async {}
 }
 
 AuthenticationService _authenticationService({

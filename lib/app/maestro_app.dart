@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
@@ -15,6 +17,7 @@ import 'package:maestro/features/workflows/application/workflow_design_service.d
 
 class MaestroApp extends StatefulWidget {
   const MaestroApp({
+    required this.appearanceController,
     required this.authenticationService,
     this.projectService,
     this.projectLifecycleService,
@@ -30,6 +33,7 @@ class MaestroApp extends StatefulWidget {
     super.key,
   });
 
+  final AppearanceController appearanceController;
   final AuthenticationService authenticationService;
   final ProjectService? projectService;
   final ProjectLifecycleService? projectLifecycleService;
@@ -81,38 +85,42 @@ final class _MaestroAppState extends State<MaestroApp> {
         if (projectFolderPicker != null)
           projectFolderPickerProvider.overrideWithValue(projectFolderPicker),
       ],
-      child: MaterialApp(
-        title: 'Maestro',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        ),
-        home: AuthenticationPage(
-          authenticatedBuilder: (_) {
-            if (projectService == null) return const FoundationPage();
-            final session = widget.authenticationService.currentSession;
-            if (session == null) {
-              throw StateError(
-                'Authenticated workspace requires an active session.',
+      child: AnimatedBuilder(
+        animation: widget.appearanceController,
+        builder: (context, child) => MaterialApp(
+          title: 'Maestro',
+          theme: maestroTheme(Brightness.light),
+          darkTheme: maestroTheme(Brightness.dark),
+          themeMode: flutterThemeMode(widget.appearanceController.mode),
+          home: AuthenticationPage(
+            appearanceController: widget.appearanceController,
+            authenticatedBuilder: (_) {
+              if (projectService == null) return const FoundationPage();
+              final session = widget.authenticationService.currentSession;
+              if (session == null) {
+                throw StateError(
+                  'Authenticated workspace requires an active session.',
+                );
+              }
+              if (projectLifecycleService == null) {
+                throw StateError(
+                  'Authenticated project workspace requires '
+                  'ProjectLifecycleService.',
+                );
+              }
+              return ProjectWorkspacePage(
+                actorId: session.userId,
+                lifecycleService: projectLifecycleService,
+                workflowService: widget.workflowDesignService,
+                agentConfigurationService: widget.agentConfigurationService,
+                runStartBuilder: widget.runStartBuilder,
+                runObservationBuilder: widget.runObservationBuilder,
+                historyBuilder: widget.historyBuilder,
+                terminalBuilder: widget.terminalBuilder,
+                emptyContent: const FoundationPage(),
               );
-            }
-            if (projectLifecycleService == null) {
-              throw StateError(
-                'Authenticated project workspace requires '
-                'ProjectLifecycleService.',
-              );
-            }
-            return ProjectWorkspacePage(
-              actorId: session.userId,
-              lifecycleService: projectLifecycleService,
-              workflowService: widget.workflowDesignService,
-              agentConfigurationService: widget.agentConfigurationService,
-              runStartBuilder: widget.runStartBuilder,
-              runObservationBuilder: widget.runObservationBuilder,
-              historyBuilder: widget.historyBuilder,
-              terminalBuilder: widget.terminalBuilder,
-              emptyContent: const FoundationPage(),
-            );
-          },
+            },
+          ),
         ),
       ),
     );
