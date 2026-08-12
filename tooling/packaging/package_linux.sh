@@ -4,20 +4,13 @@ set -euo pipefail
 semantic_version=${1:?semantic version is required}
 core_version=${2:?core version is required}
 debian_version=${3:?debian version is required}
-if [[ ! "$semantic_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
-  echo "semantic version is invalid" >&2
-  exit 64
-fi
-if [[ ! "$core_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "core version must use major.minor.patch" >&2
-  exit 64
-fi
-if [[ ! "$debian_version" =~ ^[0-9]+:[0-9A-Za-z.+~-]+-[0-9A-Za-z.+~]+$ && ! "$debian_version" =~ ^[0-9A-Za-z.+~-]+-[0-9A-Za-z.+~]+$ && ! "$debian_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "debian version is invalid" >&2
-  exit 64
-fi
 
 repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+projection_output=$(dart run "$repository/tooling/release/validate_release_projections.dart" "$semantic_version" --core "$core_version" --debian "$debian_version")
+if [[ ${MAESTRO_PACKAGING_PREFLIGHT_ONLY:-0} == 1 ]]; then
+  printf '%s\n' "$projection_output"
+  exit 0
+fi
 distribution="$repository/dist"
 bundle="$repository/build/linux/x64/release/bundle"
 appimagetool=${APPIMAGETOOL_PATH:?APPIMAGETOOL_PATH must reference a pinned appimagetool binary}

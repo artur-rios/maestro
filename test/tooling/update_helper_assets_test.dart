@@ -6,14 +6,8 @@ void main() {
   test(
     'GivenLinuxPackager_WhenProjectionIsMissingOrInvalid_ThenValidationFails',
     () async {
-      final temporary = await Directory.systemTemp.createTemp(
-        'maestro-linux-package-',
-      );
-      addTearDown(() => temporary.delete(recursive: true));
-      final script = File(
-        '${temporary.path}/tooling/packaging/package_linux.sh',
-      );
-      await script.parent.create(recursive: true);
+      final script = File('tooling/packaging/.package_linux_$pid.sh');
+      addTearDown(() => script.delete());
       await script.writeAsString(
         (await File(
           'tooling/packaging/package_linux.sh',
@@ -23,7 +17,7 @@ void main() {
           ? r'C:\Program Files\Git\bin\bash.exe'
           : 'bash';
       final scriptArgument = Platform.isWindows
-          ? '/${script.path[0].toLowerCase()}${script.path.substring(2).replaceAll(r'\', '/')}'
+          ? '/${script.absolute.path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
           : script.path;
       final missing = await Process.run(bash, <String>[
         scriptArgument,
@@ -39,8 +33,37 @@ void main() {
 
       expect(missing.exitCode, isNot(0));
       expect('${missing.stderr}', contains('debian version is required'));
-      expect(invalid.exitCode, 64);
-      expect('${invalid.stderr}', contains('core version'));
+      expect(invalid.exitCode, 65);
+      expect('${invalid.stderr}', contains('CoreVersion'));
+    },
+  );
+
+  test(
+    'GivenLinuxPrereleaseProjections_WhenPreflightRuns_ThenCanonicalRoutingIsReported',
+    () async {
+      final script = File(
+        'tooling/packaging/.package_linux_${pid}_positive.sh',
+      );
+      addTearDown(() => script.delete());
+      await script.writeAsString(
+        (await File(
+          'tooling/packaging/package_linux.sh',
+        ).readAsString()).replaceAll('\r\n', '\n'),
+      );
+      final environment = Map<String, String>.of(Platform.environment)
+        ..['MAESTRO_PACKAGING_PREFLIGHT_ONLY'] = '1';
+      final scriptArgument = Platform.isWindows
+          ? '/${File(script.absolute.path).path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
+          : script.path;
+      final result = await Process.run(
+        Platform.isWindows ? r'C:\Program Files\Git\bin\bash.exe' : 'bash',
+        <String>[scriptArgument, '1.2.3-rc.4', '1.2.3', '1.2.3~rc.4'],
+        environment: environment,
+      );
+
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect('${result.stdout}', contains('semantic_version=1.2.3-rc.4'));
+      expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
     },
   );
 

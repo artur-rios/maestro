@@ -1,7 +1,7 @@
 param(
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')][string]$SemanticVersion,
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$CoreVersion,
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+\.\d+$')][string]$WindowsVersion,
+  [Parameter(Mandatory = $true)][string]$SemanticVersion,
+  [Parameter(Mandatory = $true)][string]$CoreVersion,
+  [Parameter(Mandatory = $true)][string]$WindowsVersion,
   [switch]$SkipBuild,
   [string]$InnoCompiler = $env:INNO_SETUP_COMPILER
 )
@@ -19,6 +19,12 @@ $dart = if ($env:FLUTTER_ROOT) {
   Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
 } else {
   (Get-Command dart -ErrorAction Stop).Source
+}
+$projectionOutput = & $dart run (Join-Path $repository 'tooling\release\validate_release_projections.dart') $SemanticVersion --core $CoreVersion --windows $WindowsVersion 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Release projection validation failed: $($projectionOutput -join [Environment]::NewLine)" }
+if ($env:MAESTRO_PACKAGING_PREFLIGHT_ONLY -eq '1') {
+  $projectionOutput | Write-Output
+  exit 0
 }
 
 if (-not $SkipBuild) {

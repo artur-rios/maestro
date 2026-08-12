@@ -106,6 +106,29 @@ void main() {
     );
 
     test(
+      'GivenWindowsPrereleaseProjections_WhenPreflightRuns_ThenCanonicalRoutingIsReported',
+      () async {
+        final environment = Map<String, String>.of(Platform.environment)
+          ..['MAESTRO_PACKAGING_PREFLIGHT_ONLY'] = '1';
+        final result = await Process.run('pwsh', <String>[
+          '-NoProfile',
+          '-File',
+          'tooling/packaging/package_windows.ps1',
+          '-SemanticVersion',
+          '1.2.3-beta.4',
+          '-CoreVersion',
+          '1.2.3',
+          '-WindowsVersion',
+          '1.2.3.30004',
+        ], environment: environment);
+
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        expect('${result.stdout}', contains('semantic_version=1.2.3-beta.4'));
+        expect('${result.stdout}', contains('windows_version=1.2.3.30004'));
+      },
+    );
+
+    test(
       'GivenInstallerBuilder_WhenOutputExists_ThenFreshRequestedVersionIsRequired',
       () async {
         final script = await File(

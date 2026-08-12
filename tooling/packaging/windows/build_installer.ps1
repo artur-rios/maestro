@@ -1,6 +1,6 @@
 param(
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')][string]$DisplayVersion,
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+\.\d+$')][string]$WindowsVersion,
+  [Parameter(Mandatory = $true)][string]$DisplayVersion,
+  [Parameter(Mandatory = $true)][string]$WindowsVersion,
   [Parameter(Mandatory = $true)][string]$Bundle,
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
   [string]$OutputName = 'maestro-windows-x64-setup',
@@ -9,6 +9,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
+$dart = if ($env:FLUTTER_ROOT) {
+  Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
+} else {
+  (Get-Command dart -ErrorAction Stop).Source
+}
+$projectionOutput = & $dart run (Join-Path $repository 'tooling\release\validate_release_projections.dart') $DisplayVersion --windows $WindowsVersion 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Release projection validation failed: $($projectionOutput -join [Environment]::NewLine)" }
 $source = (Resolve-Path -LiteralPath $Bundle).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 $compiler = if ($CompilerPath) { [IO.Path]::GetFullPath($CompilerPath) } else { $null }

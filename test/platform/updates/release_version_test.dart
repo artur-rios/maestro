@@ -104,6 +104,60 @@ void main() {
       );
     },
   );
+
+  test(
+    'GivenMatchingPrereleaseProjections_WhenValidated_ThenReturnsCanonicalValues',
+    () async {
+      final result = await Process.run(_dartExecutable.path, <String>[
+        'tooling/release/validate_release_projections.dart',
+        '1.2.3-rc.4',
+        '--core',
+        '1.2.3',
+        '--windows',
+        '1.2.3.50004',
+        '--debian',
+        '1.2.3~rc.4',
+      ]);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect('${result.stdout}', contains('windows_version=1.2.3.50004'));
+      expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
+    },
+  );
+
+  test(
+    'GivenNoncanonicalOrMismatchedProjections_WhenValidated_ThenFailsClosed',
+    () async {
+      final cases = <List<String>>[
+        <String>['01.2.3', '--core', '1.2.3', '--windows', '1.2.3.65535'],
+        <String>[
+          '1.2.3-preview.1',
+          '--core',
+          '1.2.3',
+          '--debian',
+          '1.2.3~preview.1',
+        ],
+        <String>[
+          '1.2.3-rc.10000',
+          '--core',
+          '1.2.3',
+          '--windows',
+          '1.2.3.60000',
+        ],
+        <String>['1.2.3-rc.4', '--core', '1.2.4', '--windows', '1.2.3.50004'],
+        <String>['1.2.3-rc.4', '--core', '1.2.3', '--windows', '1.2.3.50005'],
+        <String>['1.2.3-rc.4', '--core', '1.2.3', '--debian', '1.2.3~rc.5'],
+      ];
+
+      for (final arguments in cases) {
+        final result = await Process.run(_dartExecutable.path, <String>[
+          'tooling/release/validate_release_projections.dart',
+          ...arguments,
+        ]);
+        expect(result.exitCode, 65, reason: '$arguments\n${result.stderr}');
+      }
+    },
+  );
 }
 
 File get _dartExecutable {
