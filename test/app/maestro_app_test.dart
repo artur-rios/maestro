@@ -175,7 +175,7 @@ void main() {
   );
 
   testWidgets(
-    'GivenSelectedWorkspaceDestination_WhenAppearanceChanges_ThenPresentationStateIsPreserved',
+    'GivenSelectedProjectAndWorkflowDestination_WhenAppearanceChanges_ThenPresentationStateIsPreserved',
     (tester) async {
       final appearance = _appearanceController();
       final projectRepository = _ProjectRepository()
@@ -200,7 +200,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(r'C:\projects\demo'), findsOneWidget);
-      expect(find.text('Projects'), findsOneWidget);
+      await tester.tap(find.text('Workflows'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<NavigationRail>(find.byType(NavigationRail))
+            .selectedIndex,
+        1,
+      );
+      expect(find.text('Create workflow'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Appearance'));
       await tester.pumpAndSettle();
@@ -209,8 +217,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(
+        tester
+            .widget<NavigationRail>(find.byType(NavigationRail))
+            .selectedIndex,
+        1,
+      );
+      expect(find.text('Create workflow'), findsOneWidget);
+      await tester.tap(find.text('Projects'));
+      await tester.pumpAndSettle();
       expect(find.text(r'C:\projects\demo'), findsOneWidget);
-      expect(find.text('Projects'), findsOneWidget);
     },
   );
 
