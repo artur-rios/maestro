@@ -8,9 +8,11 @@ final class AppearanceController extends ChangeNotifier {
   AppearanceController({
     required AppearancePreferenceRepository repository,
     required AppearanceMode initialMode,
-  }) : _repository = repository,
-       _mode = initialMode,
-       _persistedMode = initialMode;
+  }) : this._(repository, initialMode);
+
+  AppearanceController._(this._repository, AppearanceMode initialMode)
+    : _mode = initialMode,
+      _persistedMode = initialMode;
 
   final AppearancePreferenceRepository _repository;
   AppearanceMode _mode;
