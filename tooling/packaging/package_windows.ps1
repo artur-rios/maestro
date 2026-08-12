@@ -11,12 +11,22 @@ $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $distribution = Join-Path $repository 'dist'
 $bundle = Join-Path $repository 'build\windows\x64\runner\Release'
 $flutter = if ($env:FLUTTER_ROOT) {
-  Join-Path $env:FLUTTER_ROOT 'bin\flutter.bat'
+  $windowsFlutter = Join-Path $env:FLUTTER_ROOT 'bin\flutter.bat'
+  if (Test-Path -LiteralPath $windowsFlutter -PathType Leaf) {
+    $windowsFlutter
+  } else {
+    Join-Path $env:FLUTTER_ROOT 'bin/flutter'
+  }
 } else {
   (Get-Command flutter -ErrorAction Stop).Source
 }
 $dart = if ($env:FLUTTER_ROOT) {
-  Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
+  $windowsDart = Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
+  if (Test-Path -LiteralPath $windowsDart -PathType Leaf) {
+    $windowsDart
+  } else {
+    Join-Path $env:FLUTTER_ROOT 'bin/cache/dart-sdk/bin/dart'
+  }
 } else {
   (Get-Command dart -ErrorAction Stop).Source
 }

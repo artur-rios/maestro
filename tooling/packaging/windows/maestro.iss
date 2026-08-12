@@ -39,6 +39,7 @@ SolidCompression=yes
 CloseApplications=yes
 RestartApplications=no
 VersionInfoVersion={#WindowsVersion}
+VersionInfoProductVersion={#WindowsVersion}
 WizardStyle=modern
 
 [Files]

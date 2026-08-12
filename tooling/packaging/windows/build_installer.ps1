@@ -11,7 +11,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
 $dart = if ($env:FLUTTER_ROOT) {
-  Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
+  $windowsDart = Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
+  if (Test-Path -LiteralPath $windowsDart -PathType Leaf) {
+    $windowsDart
+  } else {
+    Join-Path $env:FLUTTER_ROOT 'bin/cache/dart-sdk/bin/dart'
+  }
 } else {
   (Get-Command dart -ErrorAction Stop).Source
 }
