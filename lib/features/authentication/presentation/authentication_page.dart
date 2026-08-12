@@ -1,25 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
+import 'package:maestro/features/appearance/presentation/appearance_selector.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 
 final class AuthenticationPage extends ConsumerWidget {
-  const AuthenticationPage({required this.authenticatedBuilder, super.key});
+  const AuthenticationPage({
+    required this.appearanceController,
+    required this.authenticatedBuilder,
+    super.key,
+  });
 
+  final AppearanceController appearanceController;
   final WidgetBuilder authenticatedBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(authenticationControllerProvider);
     if (state is AuthenticationAuthenticated) {
-      return _AuthenticatedShell(authenticatedBuilder: authenticatedBuilder);
+      return _AuthenticatedShell(
+        appearanceController: appearanceController,
+        authenticatedBuilder: authenticatedBuilder,
+      );
     }
-    return _AuthenticationForm(state: state);
+    return _AuthenticationForm(
+      appearanceController: appearanceController,
+      state: state,
+    );
   }
 }
 
 final class _AuthenticatedShell extends ConsumerWidget {
-  const _AuthenticatedShell({required this.authenticatedBuilder});
+  const _AuthenticatedShell({
+    required this.appearanceController,
+    required this.authenticatedBuilder,
+  });
 
+  final AppearanceController appearanceController;
   final WidgetBuilder authenticatedBuilder;
 
   @override
@@ -33,12 +50,18 @@ final class _AuthenticatedShell extends ConsumerWidget {
               alignment: Alignment.centerRight,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: TextButton.icon(
-                  onPressed: () => ref
-                      .read(authenticationControllerProvider.notifier)
-                      .signOut(),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sign out'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppearanceSelector(controller: appearanceController),
+                    TextButton.icon(
+                      onPressed: () => ref
+                          .read(authenticationControllerProvider.notifier)
+                          .signOut(),
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Sign out'),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -51,8 +74,12 @@ final class _AuthenticatedShell extends ConsumerWidget {
 }
 
 final class _AuthenticationForm extends ConsumerStatefulWidget {
-  const _AuthenticationForm({required this.state});
+  const _AuthenticationForm({
+    required this.appearanceController,
+    required this.state,
+  });
 
+  final AppearanceController appearanceController;
   final AuthenticationPresentationState state;
 
   @override
@@ -82,7 +109,10 @@ final class _AuthenticationFormState
       _ => null,
     };
     return Scaffold(
-      appBar: AppBar(title: const Text('Maestro')),
+      appBar: AppBar(
+        title: const Text('Maestro'),
+        actions: [AppearanceSelector(controller: widget.appearanceController)],
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
+import 'package:maestro/features/appearance/domain/appearance_mode.dart';
+import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/foundation/application/foundation_probe.dart';
@@ -15,8 +18,14 @@ void main() {
   testWidgets(
     'GivenCleanProfile_WhenMaestroStarts_ThenFoundationBecomesOperational',
     (tester) async {
+      final appearanceController = AppearanceController(
+        repository: _AppearancePreferenceRepository(),
+        initialMode: AppearanceMode.system,
+      );
+      addTearDown(appearanceController.dispose);
       await tester.pumpWidget(
         MaestroApp(
+          appearanceController: appearanceController,
           authenticationService: _authenticationService(),
           foundationProbes: <FoundationProbe>[_ReadyProbe()],
         ),
@@ -44,6 +53,15 @@ void main() {
       expect(find.bySemanticsLabel(RegExp(r'^Foundation ')), findsNothing);
     },
   );
+}
+
+final class _AppearancePreferenceRepository
+    implements AppearancePreferenceRepository {
+  @override
+  Future<AppearanceMode> load() async => AppearanceMode.system;
+
+  @override
+  Future<void> save(AppearanceMode mode) async {}
 }
 
 AuthenticationService _authenticationService() {

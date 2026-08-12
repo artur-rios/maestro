@@ -93,6 +93,7 @@ final class _MaestroAppState extends State<MaestroApp> {
           darkTheme: maestroTheme(Brightness.dark),
           themeMode: flutterThemeMode(widget.appearanceController.mode),
           home: AuthenticationPage(
+            appearanceController: widget.appearanceController,
             authenticatedBuilder: (_) {
               if (projectService == null) return const FoundationPage();
               final session = widget.authenticationService.currentSession;

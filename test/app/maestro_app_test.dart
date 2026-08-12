@@ -7,6 +7,7 @@ import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
+import 'package:maestro/features/appearance/presentation/appearance_selector.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
@@ -20,7 +21,6 @@ void main() {
     'GivenSystemPreference_WhenAppStarts_ThenBothThemesAreConfigured',
     (tester) async {
       final appearance = _appearanceController(AppearanceMode.system);
-      addTearDown(appearance.dispose);
       await tester.pumpWidget(
         MaestroApp(
           appearanceController: appearance,
@@ -39,7 +39,6 @@ void main() {
     tester,
   ) async {
     final appearance = _appearanceController(AppearanceMode.system);
-    addTearDown(appearance.dispose);
     await tester.pumpWidget(
       MaestroApp(
         appearanceController: appearance,
@@ -52,6 +51,24 @@ void main() {
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
+  });
+
+  testWidgets('GivenRunningApp_WhenLightSelected_ThenThemeModeChanges', (
+    tester,
+  ) async {
+    final appearance = _appearanceController(AppearanceMode.system);
+    await tester.pumpWidget(
+      MaestroApp(
+        appearanceController: appearance,
+        authenticationService: _authenticationService(),
+      ),
+    );
+
+    await appearance.select(AppearanceMode.light);
+    await tester.pump();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.light);
   });
 
   testWidgets(
@@ -70,6 +87,7 @@ void main() {
         );
 
         expect(find.text('Maestro'), findsOneWidget);
+        expect(find.byTooltip('Appearance'), findsOneWidget);
         expect(find.text('Sign in with your operating system'), findsOneWidget);
         expect(
           find.bySemanticsLabel(RegExp('^Foundation status')),
@@ -136,10 +154,63 @@ void main() {
       expect(find.text('Workflows'), findsOneWidget);
       expect(find.text('Foundation ready'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
+      expect(find.byTooltip('Appearance'), findsOneWidget);
+      final accountActions = tester.widget<Row>(
+        find
+            .ancestor(
+              of: find.widgetWithText(TextButton, 'Sign out'),
+              matching: find.byType(Row),
+            )
+            .first,
+      );
+      expect(accountActions.children, [
+        isA<AppearanceSelector>(),
+        isA<TextButton>(),
+      ]);
 
       await tester.tap(find.text('Workflows'));
       await tester.pumpAndSettle();
       expect(find.text('Create workflow'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedWorkspaceDestination_WhenAppearanceChanges_ThenPresentationStateIsPreserved',
+    (tester) async {
+      final appearance = _appearanceController();
+      final projectRepository = _ProjectRepository()
+        ..records.add(_projectRecord());
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: appearance,
+          authenticationService: _authenticationService(),
+          projectService: _projectService(repository: projectRepository),
+          projectLifecycleService: _projectLifecycleService(
+            repository: projectRepository,
+          ),
+          projectFolderPicker: const _ProjectFolderPicker(),
+          workflowDesignService: _workflowService(),
+        ),
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(r'C:\projects\demo'), findsOneWidget);
+      expect(find.text('Projects'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Appearance'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'Dark'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(r'C:\projects\demo'), findsOneWidget);
+      expect(find.text('Projects'), findsOneWidget);
     },
   );
 
@@ -348,10 +419,14 @@ void main() {
 
 AppearanceController _appearanceController([
   AppearanceMode initialMode = AppearanceMode.system,
-]) => AppearanceController(
-  repository: _AppearancePreferenceRepository(),
-  initialMode: initialMode,
-);
+]) {
+  final controller = AppearanceController(
+    repository: _AppearancePreferenceRepository(),
+    initialMode: initialMode,
+  );
+  addTearDown(controller.dispose);
+  return controller;
+}
 
 final class _AppearancePreferenceRepository
     implements AppearancePreferenceRepository {
