@@ -1,5 +1,6 @@
 param(
-  [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
+  [Parameter(Mandatory = $true)][string]$DisplayVersion,
+  [Parameter(Mandatory = $true)][string]$WindowsVersion,
   [Parameter(Mandatory = $true)][string]$Bundle,
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
   [string]$OutputName = 'maestro-windows-x64-setup',
@@ -8,6 +9,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
+$dart = if ($env:FLUTTER_ROOT) {
+  $windowsDart = Join-Path $env:FLUTTER_ROOT 'bin\cache\dart-sdk\bin\dart.exe'
+  if (Test-Path -LiteralPath $windowsDart -PathType Leaf) {
+    $windowsDart
+  } else {
+    Join-Path $env:FLUTTER_ROOT 'bin/cache/dart-sdk/bin/dart'
+  }
+} else {
+  (Get-Command dart -ErrorAction Stop).Source
+}
+$projectionOutput = & $dart run (Join-Path $repository 'tooling\release\validate_release_projections.dart') $DisplayVersion --windows $WindowsVersion 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Release projection validation failed: $($projectionOutput -join [Environment]::NewLine)" }
 $source = (Resolve-Path -LiteralPath $Bundle).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 $compiler = if ($CompilerPath) { [IO.Path]::GetFullPath($CompilerPath) } else { $null }
@@ -48,7 +62,8 @@ if (Test-Path -LiteralPath $installer) {
   }
 }
 $compilerArguments = @(
-  "/DAppVersion=$Version",
+  "/DDisplayVersion=$DisplayVersion",
+  "/DWindowsVersion=$WindowsVersion",
   "/DSourceDir=$source",
   "/DOutputDir=$output",
   "/DOutputName=$OutputName",
@@ -65,7 +80,7 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf) -or (Get-Item -LiteralPath $installer).Length -le 0) {
   throw 'Windows setup executable was not produced.'
 }
-$expectedProductVersion = ConvertTo-NormalizedVersion $Version
+$expectedProductVersion = ConvertTo-NormalizedVersion $WindowsVersion
 $actualProductVersion = ConvertTo-NormalizedVersion (Get-Item -LiteralPath $installer).VersionInfo.ProductVersion
 if ($actualProductVersion -ne $expectedProductVersion) {
   throw "Installer product version mismatch: expected $expectedProductVersion, found $actualProductVersion."

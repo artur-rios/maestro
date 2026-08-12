@@ -96,6 +96,16 @@ flutter run -d linux
 
 Operational prerequisites and clean-clone commands are documented in [Building and Testing](docs/development/building-and-testing.md). Release packaging and the current publisher-signing limitation are documented in [Releases and Signing](docs/development/releases-and-signing.md). Application data ownership and recovery are documented in [Application Data and Recovery](docs/development/application-data.md).
 
+### Publishing releases
+
+Pushing a supported `v<major>.<minor>.<patch>` stable, `-alpha.<sequence>`,
+`-beta.<sequence>`, or `-rc.<sequence>` tag publishes the five release
+packages (Windows ZIP, MSIX, and setup EXE; Linux AppImage and DEB). Stable
+tags create normal GitHub Releases; prerelease tags create GitHub prereleases;
+both receive generated release notes. The complete tag ranges, native version
+mappings, local packaging commands, and signing policy are in [Releases and
+Signing](docs/development/releases-and-signing.md).
+
 ## Testing
 
 Run the complete default suite described in the

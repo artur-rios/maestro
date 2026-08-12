@@ -70,6 +70,65 @@ void main() {
     });
 
     test(
+      'GivenWindowsPackagers_WhenVersionProjectionIsInvalid_ThenValidationFails',
+      () async {
+        final packageResult = await Process.run('pwsh', <String>[
+          '-NoProfile',
+          '-File',
+          'tooling/packaging/package_windows.ps1',
+          '-SemanticVersion',
+          '1.2.3-rc.0',
+          '-CoreVersion',
+          '1.2.3',
+          '-WindowsVersion',
+          '1.2.3',
+          '-SkipBuild',
+        ]);
+        final installerResult = await Process.run('pwsh', <String>[
+          '-NoProfile',
+          '-File',
+          'tooling/packaging/windows/build_installer.ps1',
+          '-DisplayVersion',
+          '1.2.3-rc.0',
+          '-WindowsVersion',
+          '1.2.3',
+          '-Bundle',
+          '.',
+          '-OutputDirectory',
+          '.',
+        ]);
+
+        expect(packageResult.exitCode, isNot(0));
+        expect('${packageResult.stderr}', contains('WindowsVersion'));
+        expect(installerResult.exitCode, isNot(0));
+        expect('${installerResult.stderr}', contains('WindowsVersion'));
+      },
+    );
+
+    test(
+      'GivenWindowsPrereleaseProjections_WhenPreflightRuns_ThenCanonicalRoutingIsReported',
+      () async {
+        final environment = Map<String, String>.of(Platform.environment)
+          ..['MAESTRO_PACKAGING_PREFLIGHT_ONLY'] = '1';
+        final result = await Process.run('pwsh', <String>[
+          '-NoProfile',
+          '-File',
+          'tooling/packaging/package_windows.ps1',
+          '-SemanticVersion',
+          '1.2.3-beta.4',
+          '-CoreVersion',
+          '1.2.3',
+          '-WindowsVersion',
+          '1.2.3.30004',
+        ], environment: environment);
+
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        expect('${result.stdout}', contains('semantic_version=1.2.3-beta.4'));
+        expect('${result.stdout}', contains('windows_version=1.2.3.30004'));
+      },
+    );
+
+    test(
       'GivenInstallerBuilder_WhenOutputExists_ThenFreshRequestedVersionIsRequired',
       () async {
         final script = await File(
@@ -214,32 +273,22 @@ void main() {
       },
     );
 
-    test(
-      'GivenWindowsWorkflows_WhenInspected_ThenSetupExeIsBuiltAndPublished',
-      () async {
-        final ci = await File('.github/workflows/ci.yml').readAsString();
-        final release = await File(
-          '.github/workflows/release.yml',
-        ).readAsString();
+    test('GivenWindowsCi_WhenInspected_ThenSetupExeIsBuiltAndTested', () async {
+      final ci = await File('.github/workflows/ci.yml').readAsString();
 
-        for (final workflow in <String>[ci, release]) {
-          expect(workflow, contains('install_inno_setup.ps1'));
-          expect(workflow, contains('maestro-windows-x64-setup.exe'));
-        }
-        expect(ci, contains('windows_installer.ps1'));
-        expect(ci, contains('0.1.1'));
-        expect(ci, contains('-UpdatePackage'));
-        expect(ci, contains('maestro-windows-x64-setup-smoke-0.1.0'));
-        expect(ci, contains('-AllowCustomDirectoryForSmoke'));
-        expect(ci, contains('detached_process_launcher_integration_test.dart'));
-        final packageScript = await File(
-          'tooling/packaging/package_windows.ps1',
-        ).readAsString();
-        expect(packageScript, isNot(contains('AllowCustomDirectoryForSmoke')));
-        expect(release, contains('dist/maestro-windows-x64-setup.exe'));
-        expect(release, isNot(contains('dist/maestro-windows-x64.*')));
-      },
-    );
+      expect(ci, contains('install_inno_setup.ps1'));
+      expect(ci, contains('maestro-windows-x64-setup.exe'));
+      expect(ci, contains('windows_installer.ps1'));
+      expect(ci, contains('0.1.1'));
+      expect(ci, contains('-UpdatePackage'));
+      expect(ci, contains('maestro-windows-x64-setup-smoke-0.1.0'));
+      expect(ci, contains('-AllowCustomDirectoryForSmoke'));
+      expect(ci, contains('detached_process_launcher_integration_test.dart'));
+      final packageScript = await File(
+        'tooling/packaging/package_windows.ps1',
+      ).readAsString();
+      expect(packageScript, isNot(contains('AllowCustomDirectoryForSmoke')));
+    });
 
     test(
       'GivenInstallerDocumentation_WhenInspected_ThenUnsignedPerUserUseIsExplicit',

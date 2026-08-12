@@ -1,5 +1,8 @@
-#ifndef AppVersion
-  #error AppVersion is required
+#ifndef DisplayVersion
+  #error DisplayVersion is required
+#endif
+#ifndef WindowsVersion
+  #error WindowsVersion is required
 #endif
 #ifndef SourceDir
   #error SourceDir is required
@@ -17,7 +20,7 @@
 [Setup]
 AppId={{225850DC-6179-46A0-962C-88F3BBA6D41D}
 AppName=Maestro
-AppVersion={#AppVersion}
+AppVersion={#DisplayVersion}
 AppPublisher=Artur Rios
 DefaultDirName={localappdata}\Programs\Maestro
 DefaultGroupName=Maestro
@@ -35,7 +38,8 @@ Compression=lzma2/max
 SolidCompression=yes
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion={#WindowsVersion}
+VersionInfoProductVersion={#WindowsVersion}
 WizardStyle=modern
 
 [Files]

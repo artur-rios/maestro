@@ -88,35 +88,7 @@ jobs:
   );
 
   test(
-    'GivenReleaseWindowsArtifactGlob_WhenVerified_ThenExactSetupAssetIsRequired',
-    () => _withWorkflow(
-      '''
-name: Release
-jobs:
-  windows-package:
-    runs-on: windows-2025
-    steps:
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: windows-packages
-          path: dist/maestro-windows-x64.*
-''',
-      () => expectLater(
-        workflow_verifier.main,
-        throwsA(
-          isA<FormatException>().having(
-            (error) => error.message,
-            'message',
-            contains('exact setup executable'),
-          ),
-        ),
-      ),
-      fileName: 'release.yml',
-    ),
-  );
-
-  test(
-    'GivenReleaseSetupAsset_WhenVerified_ThenExactSetupAssetIsAccepted',
+    'GivenReleaseWithoutValidatedVersions_WhenVerified_ThenWorkflowIsRejected',
     () => _withWorkflow(
       '''
 name: Release
@@ -132,7 +104,16 @@ jobs:
             dist/maestro-windows-x64.msix
             dist/maestro-windows-x64-setup.exe
 ''',
-      workflow_verifier.main,
+      () => expectLater(
+        workflow_verifier.main,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('validate-release'),
+          ),
+        ),
+      ),
       fileName: 'release.yml',
     ),
   );

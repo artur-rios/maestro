@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:maestro/platform/updates/release_manifest.dart';
 
+import 'release_artifacts.dart';
+
 final class ReleaseArtifactDocument {
   const ReleaseArtifactDocument({
     required this.fileName,
@@ -116,16 +118,13 @@ Future<void> main(List<String> arguments) async {
     return;
   }
   final directory = Directory(arguments[0]);
-  final files = directory
-      .listSync()
-      .whereType<File>()
-      .where(
-        (file) => RegExp(r'\.(zip|msix|AppImage|deb)$').hasMatch(file.path),
-      )
+  final distributionFiles = await validateDistributionPackages(directory);
+  final runtimeFiles = distributionFiles
+      .where((file) => runtimePackageNames.contains(file.uri.pathSegments.last))
       .toList(growable: false);
   final publishedAt = DateTime.now().toUtc();
   final document = await createReleaseManifest(
-    files: files,
+    files: runtimeFiles,
     version: arguments[1],
     downloadBase: Uri.parse(arguments[2]),
     publishedAt: publishedAt,
@@ -135,10 +134,8 @@ Future<void> main(List<String> arguments) async {
   await File(
     '${directory.path}${Platform.pathSeparator}release-manifest.json',
   ).writeAsString(manifest);
-  final sums = document.artifacts
-      .map((artifact) => '${artifact.sha256}  ${artifact.fileName}')
-      .join('\n');
+  final sums = await createSha256Sums(distributionFiles);
   await File(
     '${directory.path}${Platform.pathSeparator}SHA256SUMS',
-  ).writeAsString('$sums\n');
+  ).writeAsString(sums);
 }

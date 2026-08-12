@@ -1,6 +1,8 @@
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:maestro/platform/updates/release_version.dart';
+
 final class ReleaseArtifact {
   const ReleaseArtifact({
     required this.platform,
@@ -55,9 +57,7 @@ final class ReleaseManifest {
 
   factory ReleaseManifest.fromJson(Map<String, Object?> json) {
     final version = _requiredString(json, 'version');
-    if (!RegExp(r'^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$').hasMatch(version)) {
-      throw const FormatException('Release version is malformed.');
-    }
+    ReleaseVersion.parse(version);
     final rawArtifacts = json['artifacts'];
     if (rawArtifacts is! List<Object?> || rawArtifacts.isEmpty) {
       throw const FormatException('Release artifacts are required.');

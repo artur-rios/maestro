@@ -4,6 +4,70 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'GivenLinuxPackager_WhenProjectionIsMissingOrInvalid_ThenValidationFails',
+    () async {
+      final script = File('tooling/packaging/.package_linux_$pid.sh');
+      addTearDown(() => script.delete());
+      await script.writeAsString(
+        (await File(
+          'tooling/packaging/package_linux.sh',
+        ).readAsString()).replaceAll('\r\n', '\n'),
+      );
+      final bash = Platform.isWindows
+          ? r'C:\Program Files\Git\bin\bash.exe'
+          : 'bash';
+      final scriptArgument = Platform.isWindows
+          ? '/${script.absolute.path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
+          : script.path;
+      final missing = await Process.run(bash, <String>[
+        scriptArgument,
+        '1.2.3-rc.0',
+        '1.2.3',
+      ]);
+      final invalid = await Process.run(bash, <String>[
+        scriptArgument,
+        '1.2.3-rc.0',
+        '1.2.3-rc.0',
+        '1.2.3~rc.0-1',
+      ]);
+
+      expect(missing.exitCode, isNot(0));
+      expect('${missing.stderr}', contains('debian version is required'));
+      expect(invalid.exitCode, 65);
+      expect('${invalid.stderr}', contains('CoreVersion'));
+    },
+  );
+
+  test(
+    'GivenLinuxPrereleaseProjections_WhenPreflightRuns_ThenCanonicalRoutingIsReported',
+    () async {
+      final script = File(
+        'tooling/packaging/.package_linux_${pid}_positive.sh',
+      );
+      addTearDown(() => script.delete());
+      await script.writeAsString(
+        (await File(
+          'tooling/packaging/package_linux.sh',
+        ).readAsString()).replaceAll('\r\n', '\n'),
+      );
+      final environment = Map<String, String>.of(Platform.environment)
+        ..['MAESTRO_PACKAGING_PREFLIGHT_ONLY'] = '1';
+      final scriptArgument = Platform.isWindows
+          ? '/${File(script.absolute.path).path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
+          : script.path;
+      final result = await Process.run(
+        Platform.isWindows ? r'C:\Program Files\Git\bin\bash.exe' : 'bash',
+        <String>[scriptArgument, '1.2.3-rc.4', '1.2.3', '1.2.3~rc.4'],
+        environment: environment,
+      );
+
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect('${result.stdout}', contains('semantic_version=1.2.3-rc.4'));
+      expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
+    },
+  );
+
+  test(
     'GivenBundledUpdateHelpers_WhenInspected_ThenRollbackAndRelaunchAreDefined',
     () async {
       final windows = await File(

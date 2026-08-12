@@ -5,6 +5,7 @@ import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/platform/updates/manifest_verifier.dart';
 import 'package:maestro/platform/updates/package_installer.dart';
 import 'package:maestro/platform/updates/release_manifest.dart';
+import 'package:maestro/platform/updates/release_version.dart';
 import 'package:maestro/platform/updates/update_approval.dart';
 import 'package:maestro/platform/updates/update_downloader.dart';
 
@@ -115,23 +116,9 @@ final class UpdateService {
     };
   }
 
-  static bool _isNewer(String candidate, String installed) {
-    final candidateParts = _versionParts(candidate);
-    final installedParts = _versionParts(installed);
-    for (var index = 0; index < 3; index += 1) {
-      if (candidateParts[index] != installedParts[index]) {
-        return candidateParts[index] > installedParts[index];
-      }
-    }
-    return false;
-  }
-
-  static List<int> _versionParts(String version) {
-    final core = version.split(RegExp('[-+]')).first;
-    final parts = core.split('.').map(int.parse).toList(growable: false);
-    if (parts.length != 3) {
-      throw FormatException('Invalid semantic version: $version');
-    }
-    return parts;
-  }
+  static bool _isNewer(String candidate, String installed) =>
+      ReleaseVersion.parse(
+        candidate,
+      ).compareTo(ReleaseVersion.parse(installed)) >
+      0;
 }
