@@ -68,10 +68,15 @@ void main() {
       );
 
       await repository.save(AppearanceMode.light);
+      var row = await database.select(database.settings).getSingle();
+      expect(row.key, 'appearance.themeMode');
+      expect(row.value, 'light');
+      expect(row.updatedAt.toUtc(), now);
+
       now = DateTime.utc(2026, 8, 12, 11);
       await repository.save(AppearanceMode.dark);
 
-      final row = await database.select(database.settings).getSingle();
+      row = await database.select(database.settings).getSingle();
       expect(row.key, 'appearance.themeMode');
       expect(row.value, 'dark');
       expect(row.updatedAt.toUtc(), now);
