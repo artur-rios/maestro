@@ -15,6 +15,13 @@ typedef RunStartWorkspaceBuilder =
       BuildContext context,
       String actorId,
       ProjectRecord project,
+    );
+
+typedef ProjectTerminalWorkspaceBuilder =
+    Widget Function(
+      BuildContext context,
+      String actorId,
+      ProjectRecord project,
       ProjectTerminalDrawerController drawerController,
     );
 
@@ -40,7 +47,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final RunStartWorkspaceBuilder? terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +92,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final RunStartWorkspaceBuilder? terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -539,7 +546,7 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final RunStartWorkspaceBuilder? terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
   final ProjectTerminalDrawerController terminalDrawerController;
 
   @override
@@ -731,28 +738,13 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
               : 'Folder-dependent actions disabled',
           container: true,
           child: selected.folderActionsEnabled && runStartBuilder != null
-              ? runStartBuilder!(
-                  context,
-                  actorId,
-                  selected.record,
-                  terminalDrawerController,
-                )
+              ? runStartBuilder!(context, actorId, selected.record)
               : const SizedBox(height: 1, width: double.infinity),
         ),
         if (runObservationBuilder != null)
-          runObservationBuilder!(
-            context,
-            actorId,
-            selected.record,
-            terminalDrawerController,
-          ),
+          runObservationBuilder!(context, actorId, selected.record),
         if (historyBuilder != null)
-          historyBuilder!(
-            context,
-            actorId,
-            selected.record,
-            terminalDrawerController,
-          ),
+          historyBuilder!(context, actorId, selected.record),
       ],
     );
   }

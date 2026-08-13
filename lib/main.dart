@@ -128,7 +128,7 @@ final class ProductionAppComposition {
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
   final RunStartWorkspaceBuilder historyBuilder;
-  final RunStartWorkspaceBuilder terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder terminalBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -368,7 +368,6 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
-    ProjectTerminalDrawerController drawerController,
   ) => RunStartPanel(
     key: ValueKey<String>('run-start-${project.id}'),
     createController: () => createRunStartController(actorId, project),
@@ -393,7 +392,6 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
-    ProjectTerminalDrawerController drawerController,
   ) => Column(
     children: <Widget>[
       HistoryPanel(
@@ -421,7 +419,6 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
-    ProjectTerminalDrawerController drawerController,
   ) => ActiveRunsPanel(
     key: ValueKey<String>('run-observation-${project.id}'),
     createController: () => RunObservationController(

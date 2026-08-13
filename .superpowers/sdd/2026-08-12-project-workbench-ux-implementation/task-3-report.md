@@ -48,3 +48,16 @@ round completed runtime verification after dependency resolution succeeded.
 - GREEN: the focused project-switch regression passed after the ownership fix.
 - Regression: workspace, terminal-panel, and app suites passed with 44 tests
   and zero failures.
+
+## Compatibility fix
+
+- Restored `RunStartWorkspaceBuilder` to its original three-argument contract
+  for run-start, run-observation, and history composition. Added the separate
+  `ProjectTerminalWorkspaceBuilder` four-argument contract for the terminal,
+  which is the only workspace factory that needs drawer injection.
+- The production run-observation composition regression now explicitly names
+  the retained three-argument builder contract.
+- RED: the production run-observation composition test failed to compile with
+  `Too few positional arguments: 4 required, 3 given`.
+- GREEN: production composition plus workspace tests passed (25 tests), and
+  full `flutter analyze` completed with no issues.

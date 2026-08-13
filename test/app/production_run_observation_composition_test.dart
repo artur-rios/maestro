@@ -49,7 +49,9 @@ void main() {
     },
   );
 
-  test('GivenProductionComposition_WhenBuilt_ThenRunControlIsWired', () async {
+  test(
+    'GivenProductionComposition_WhenBuilt_ThenRunObservationRetainsThreeArgumentBuilderContract',
+    () async {
     // Given: the production composition over a temporary database.
     final root = await Directory.systemTemp.createTemp('maestro-run-control-');
     addTearDown(() => root.delete(recursive: true));

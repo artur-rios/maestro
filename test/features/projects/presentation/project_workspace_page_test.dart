@@ -744,7 +744,7 @@ Widget _app({
   ProjectFolderPicker picker = const _Picker(null),
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
-  RunStartWorkspaceBuilder? terminalBuilder,
+  ProjectTerminalWorkspaceBuilder? terminalBuilder,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
