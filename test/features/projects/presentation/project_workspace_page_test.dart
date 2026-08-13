@@ -44,14 +44,93 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Automations'), findsOneWidget);
+      expect(find.text('Health'), findsOneWidget);
       expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
       expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(
         find.text('Select a project from the sidebar to begin.'),
         findsOneWidget,
       );
-      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text('Foundation diagnostics'), findsNothing);
       expect(find.bySemanticsLabel('Register project'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenHealthDestination_WhenSelected_ThenFoundationDiagnosticsAreShown',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.byKey(const Key('workbench-empty-state')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedProject_WhenShown_ThenHistoryOpensOnlyFromProjectTools',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          historyBuilder: (_, _, project) => Text(
+            'History content for ${project.name}',
+            key: const Key('history-content-probe'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('history-content-probe')), findsNothing);
+      expect(find.text('Project lifecycle actions'), findsOneWidget);
+
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('history-content-probe')), findsOneWidget);
+      expect(find.text('Project lifecycle actions'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenHistoryPane_WhenAnotherProjectIsSelected_ThenProjectPaneIsRestored',
+    (tester) async {
+      final repository = _Repository()
+        ..records.addAll(<ProjectRecord>[
+          _record(),
+          _record(id: 'two', name: 'Second', folderPath: r'C:\projects\second'),
+        ]);
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          historyBuilder: (_, _, project) => Text(
+            'History content for ${project.name}',
+            key: const Key('history-content-probe'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Second').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('history-content-probe')), findsNothing);
+      expect(find.text('Project lifecycle actions'), findsOneWidget);
+      expect(find.text(r'C:\projects\second'), findsOneWidget);
     },
   );
 
@@ -295,7 +374,8 @@ void main() {
         _host(service: service, picker: picker, showWorkspace: true),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text('Foundation diagnostics'), findsNothing);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(find.text(r'C:\projects\demo'), findsNothing);
     },
   );
@@ -326,7 +406,8 @@ void main() {
         _host(service: service, picker: picker, showWorkspace: true),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text('Foundation diagnostics'), findsNothing);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(find.text(record.folderPath), findsNothing);
     },
   );
@@ -860,6 +941,7 @@ Widget _app({
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
   ProjectTerminalWorkspaceBuilder? terminalBuilder,
+  RunStartWorkspaceBuilder? historyBuilder,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
@@ -889,6 +971,7 @@ Widget _app({
         lifecycleService: lifecycle,
         workflowService: workflowService,
         terminalBuilder: terminalBuilder,
+        historyBuilder: historyBuilder,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
     ),

@@ -25,6 +25,10 @@ typedef ProjectTerminalWorkspaceBuilder =
       ProjectTerminalDrawerController drawerController,
     );
 
+enum _WorkbenchDestination { tasks, automations, health }
+
+enum _SelectedProjectPane { project, history, startRun }
+
 final class ProjectWorkspacePage extends StatelessWidget {
   const ProjectWorkspacePage({
     required this.actorId,
@@ -102,7 +106,8 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
 final class _ProjectWorkspacePageState
     extends ConsumerState<_ProjectWorkspaceView> {
   final _terminalDrawerController = ProjectTerminalDrawerController();
-  var _destination = 0;
+  var _destination = _WorkbenchDestination.tasks;
+  var _selectedProjectPane = _SelectedProjectPane.project;
 
   @override
   void initState() {
@@ -126,16 +131,19 @@ final class _ProjectWorkspacePageState
     final projectContent = _ProjectWorkspaceMain(
       actorId: widget.actorId,
       state: state,
-      emptyContent: widget.emptyContent,
+      pane: _selectedProjectPane,
+      onPaneSelected: _selectProjectPane,
       runStartBuilder: widget.runStartBuilder,
       runObservationBuilder: widget.runObservationBuilder,
       historyBuilder: widget.historyBuilder,
     );
     final selected = state.selected;
     final content = _WorkbenchMainPane(
-      destinationContent: _destination == 0
-          ? projectContent
-          : _workflowEditor(state),
+      destinationContent: switch (_destination) {
+        _WorkbenchDestination.tasks => projectContent,
+        _WorkbenchDestination.automations => _workflowEditor(state),
+        _WorkbenchDestination.health => widget.emptyContent,
+      },
       terminal:
           selected != null &&
               selected.folderActionsEnabled &&
@@ -151,22 +159,31 @@ final class _ProjectWorkspacePageState
     final workbench = narrow
         ? Scaffold(
             appBar: AppBar(
-              title: Text(_destination == 0 ? 'Projects' : 'Workflows'),
+              title: Text(switch (_destination) {
+                _WorkbenchDestination.tasks => 'Tasks',
+                _WorkbenchDestination.automations => 'Automations',
+                _WorkbenchDestination.health => 'Health',
+              }),
             ),
-            drawer: _destination == 0
+            drawer: _destination == _WorkbenchDestination.tasks
                 ? Drawer(child: SafeArea(child: sidebar))
                 : null,
             bottomNavigationBar: NavigationBar(
-              selectedIndex: _destination,
-              onDestinationSelected: _selectDestination,
+              selectedIndex: _destination.index,
+              onDestinationSelected: (index) =>
+                  _selectDestination(_WorkbenchDestination.values[index]),
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.folder_outlined),
-                  label: 'Projects',
+                  label: 'Tasks',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.account_tree_outlined),
-                  label: 'Workflows',
+                  label: 'Automations',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.monitor_heart_outlined),
+                  label: 'Health',
                 ),
               ],
             ),
@@ -203,14 +220,25 @@ final class _ProjectWorkspacePageState
     projectCatalogReady: state.status == ProjectWorkspaceStatus.ready,
   );
 
-  void _selectDestination(int value) {
+  void _selectDestination(_WorkbenchDestination value) {
     _terminalDrawerController.hide();
-    setState(() => _destination = value);
+    setState(() {
+      _destination = value;
+      if (value == _WorkbenchDestination.tasks) {
+        _selectedProjectPane = _SelectedProjectPane.project;
+      }
+    });
   }
 
   void _selectProject(String projectId) {
     _terminalDrawerController.hide();
+    setState(() => _selectedProjectPane = _SelectedProjectPane.project);
     ref.read(projectControllerProvider.notifier).select(projectId);
+  }
+
+  void _selectProjectPane(_SelectedProjectPane pane) {
+    _terminalDrawerController.hide();
+    setState(() => _selectedProjectPane = pane);
   }
 
   void _showTerminalSelectionFeedback() {
@@ -281,9 +309,9 @@ final class _WorkbenchSidebar extends ConsumerWidget {
   });
 
   final ProjectWorkspaceState state;
-  final int destination;
+  final _WorkbenchDestination destination;
   final bool showDestinations;
-  final ValueChanged<int> onDestinationSelected;
+  final ValueChanged<_WorkbenchDestination> onDestinationSelected;
   final ValueChanged<String> onProjectSelected;
 
   @override
@@ -300,17 +328,25 @@ final class _WorkbenchSidebar extends ConsumerWidget {
           children: <Widget>[
             if (showDestinations) ...<Widget>[
               const SizedBox(height: 12),
-              _WorkbenchDestination(
+              _WorkbenchDestinationTile(
                 label: 'Tasks',
                 icon: Icons.task_alt_outlined,
-                selected: destination == 0,
-                onTap: () => onDestinationSelected(0),
+                selected: destination == _WorkbenchDestination.tasks,
+                onTap: () => onDestinationSelected(_WorkbenchDestination.tasks),
               ),
-              _WorkbenchDestination(
+              _WorkbenchDestinationTile(
                 label: 'Automations',
                 icon: Icons.account_tree_outlined,
-                selected: destination == 1,
-                onTap: () => onDestinationSelected(1),
+                selected: destination == _WorkbenchDestination.automations,
+                onTap: () =>
+                    onDestinationSelected(_WorkbenchDestination.automations),
+              ),
+              _WorkbenchDestinationTile(
+                label: 'Health',
+                icon: Icons.monitor_heart_outlined,
+                selected: destination == _WorkbenchDestination.health,
+                onTap: () =>
+                    onDestinationSelected(_WorkbenchDestination.health),
               ),
               const Divider(height: 24),
             ],
@@ -433,8 +469,8 @@ final class _WorkbenchSidebar extends ConsumerWidget {
   }
 }
 
-final class _WorkbenchDestination extends StatelessWidget {
-  const _WorkbenchDestination({
+final class _WorkbenchDestinationTile extends StatelessWidget {
+  const _WorkbenchDestinationTile({
     required this.label,
     required this.icon,
     required this.selected,
@@ -567,7 +603,8 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
   const _ProjectWorkspaceMain({
     required this.actorId,
     required this.state,
-    required this.emptyContent,
+    required this.pane,
+    required this.onPaneSelected,
     required this.runStartBuilder,
     required this.runObservationBuilder,
     required this.historyBuilder,
@@ -575,7 +612,8 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
 
   final String actorId;
   final ProjectWorkspaceState state;
-  final Widget emptyContent;
+  final _SelectedProjectPane pane;
+  final ValueChanged<_SelectedProjectPane> onPaneSelected;
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
@@ -584,10 +622,12 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = state.selected;
     return selected == null
-        ? _WorkbenchEmptyState(state: state, emptyContent: emptyContent)
+        ? _WorkbenchEmptyState(state: state)
         : _SelectedProjectWorkspace(
             actorId: actorId,
             state: state,
+            pane: pane,
+            onPaneSelected: onPaneSelected,
             runStartBuilder: runStartBuilder,
             runObservationBuilder: runObservationBuilder,
             historyBuilder: historyBuilder,
@@ -596,10 +636,9 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
 }
 
 final class _WorkbenchEmptyState extends ConsumerWidget {
-  const _WorkbenchEmptyState({required this.state, required this.emptyContent});
+  const _WorkbenchEmptyState({required this.state});
 
   final ProjectWorkspaceState state;
-  final Widget emptyContent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -607,38 +646,29 @@ final class _WorkbenchEmptyState extends ConsumerWidget {
       key: const Key('workbench-empty-state'),
       children: <Widget>[
         Expanded(
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(child: emptyContent),
-              Center(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        const Text(
-                          'Select a project from the sidebar to begin.',
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed:
-                              state.status == ProjectWorkspaceStatus.loading
-                              ? null
-                              : () =>
-                                    _ProjectSidebarActions.showRegistrationDialog(
-                                      context,
-                                      ref,
-                                    ),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Add Project'),
-                        ),
-                      ],
+          child: Center(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Text('Select a project from the sidebar to begin.'),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: state.status == ProjectWorkspaceStatus.loading
+                          ? null
+                          : () => _ProjectSidebarActions.showRegistrationDialog(
+                              context,
+                              ref,
+                            ),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Project'),
                     ),
-                  ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
         if (state.lifecycleFeedback case final feedback?)
@@ -660,6 +690,8 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
   const _SelectedProjectWorkspace({
     required this.actorId,
     required this.state,
+    required this.pane,
+    required this.onPaneSelected,
     required this.runStartBuilder,
     required this.runObservationBuilder,
     required this.historyBuilder,
@@ -667,6 +699,8 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
 
   final String actorId;
   final ProjectWorkspaceState state;
+  final _SelectedProjectPane pane;
+  final ValueChanged<_SelectedProjectPane> onPaneSelected;
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
@@ -686,75 +720,97 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
         const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerLeft,
-          child: PopupMenuButton<SourcePreservationDecision>(
-            tooltip: 'Project lifecycle actions',
+          child: PopupMenuButton<_SelectedProjectPane>(
+            tooltip: 'Project tools',
             enabled: state.status != ProjectWorkspaceStatus.loading,
-            onSelected: (decision) =>
-                _confirmSoftDeletion(context, ref, decision),
-            itemBuilder: (_) =>
-                const <PopupMenuEntry<SourcePreservationDecision>>[
-                  PopupMenuItem<SourcePreservationDecision>(
-                    value: SourcePreservationDecision.confirmed,
-                    child: Text('Move to Deleted'),
-                  ),
-                ],
+            onSelected: onPaneSelected,
+            itemBuilder: (_) => const <PopupMenuEntry<_SelectedProjectPane>>[
+              PopupMenuItem<_SelectedProjectPane>(
+                value: _SelectedProjectPane.history,
+                child: Text('History & audit'),
+              ),
+            ],
             child: const Chip(
-              avatar: Icon(Icons.more_horiz),
-              label: Text('Project lifecycle actions'),
+              avatar: Icon(Icons.build_outlined),
+              label: Text('Project tools'),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        if (!selected.folderActionsEnabled) ...<Widget>[
-          const Text('Unavailable'),
-          Text(selected.remediation),
-          const SizedBox(height: 12),
-          Semantics(
-            label: 'Refresh selected project',
-            button: true,
-            child: OutlinedButton.icon(
-              onPressed: state.status == ProjectWorkspaceStatus.loading
-                  ? null
-                  : () => ref
-                        .read(projectControllerProvider.notifier)
-                        .refreshSelected(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
+        if (pane == _SelectedProjectPane.history) ...<Widget>[
+          if (historyBuilder != null)
+            historyBuilder!(context, actorId, selected.record),
+        ] else ...<Widget>[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PopupMenuButton<SourcePreservationDecision>(
+              tooltip: 'Project lifecycle actions',
+              enabled: state.status != ProjectWorkspaceStatus.loading,
+              onSelected: (decision) =>
+                  _confirmSoftDeletion(context, ref, decision),
+              itemBuilder: (_) =>
+                  const <PopupMenuEntry<SourcePreservationDecision>>[
+                    PopupMenuItem<SourcePreservationDecision>(
+                      value: SourcePreservationDecision.confirmed,
+                      child: Text('Move to Deleted'),
+                    ),
+                  ],
+              child: const Chip(
+                avatar: Icon(Icons.more_horiz),
+                label: Text('Project lifecycle actions'),
+              ),
             ),
           ),
-        ],
-        if (state.failure case final failure?
-            when !{
-              ProjectFailureCategory.folderMissing,
-              ProjectFailureCategory.folderInaccessible,
-              ProjectFailureCategory.notGitWorkingTree,
-              ProjectFailureCategory.notGitRoot,
-              ProjectFailureCategory.folderTransient,
-            }.contains(failure.category)) ...<Widget>[
           const SizedBox(height: 16),
-          _ProjectFailureMessage(failure: failure),
+          if (!selected.folderActionsEnabled) ...<Widget>[
+            const Text('Unavailable'),
+            Text(selected.remediation),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Refresh selected project',
+              button: true,
+              child: OutlinedButton.icon(
+                onPressed: state.status == ProjectWorkspaceStatus.loading
+                    ? null
+                    : () => ref
+                          .read(projectControllerProvider.notifier)
+                          .refreshSelected(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh'),
+              ),
+            ),
+          ],
+          if (state.failure case final failure?
+              when !{
+                ProjectFailureCategory.folderMissing,
+                ProjectFailureCategory.folderInaccessible,
+                ProjectFailureCategory.notGitWorkingTree,
+                ProjectFailureCategory.notGitRoot,
+                ProjectFailureCategory.folderTransient,
+              }.contains(failure.category)) ...<Widget>[
+            const SizedBox(height: 16),
+            _ProjectFailureMessage(failure: failure),
+          ],
+          if (state.lifecycleFeedback case final feedback?) ...<Widget>[
+            const SizedBox(height: 16),
+            _ProjectLifecycleMessage(feedback: feedback),
+          ],
+          // Announces whether the folder supports action, and carries the run
+          // workspace once one is available. It previously wrapped a placeholder
+          // button, which UC-06 made redundant by supplying the real
+          // folder-dependent action.
+          Semantics(
+            label: selected.folderActionsEnabled
+                ? 'Folder-dependent actions enabled'
+                : 'Folder-dependent actions disabled',
+            container: true,
+            child: selected.folderActionsEnabled && runStartBuilder != null
+                ? runStartBuilder!(context, actorId, selected.record)
+                : const SizedBox(height: 1, width: double.infinity),
+          ),
+          if (runObservationBuilder != null)
+            runObservationBuilder!(context, actorId, selected.record),
         ],
-        if (state.lifecycleFeedback case final feedback?) ...<Widget>[
-          const SizedBox(height: 16),
-          _ProjectLifecycleMessage(feedback: feedback),
-        ],
-        // Announces whether the folder supports action, and carries the run
-        // workspace once one is available. It previously wrapped a placeholder
-        // button, which UC-06 made redundant by supplying the real
-        // folder-dependent action.
-        Semantics(
-          label: selected.folderActionsEnabled
-              ? 'Folder-dependent actions enabled'
-              : 'Folder-dependent actions disabled',
-          container: true,
-          child: selected.folderActionsEnabled && runStartBuilder != null
-              ? runStartBuilder!(context, actorId, selected.record)
-              : const SizedBox(height: 1, width: double.infinity),
-        ),
-        if (runObservationBuilder != null)
-          runObservationBuilder!(context, actorId, selected.record),
-        if (historyBuilder != null)
-          historyBuilder!(context, actorId, selected.record),
       ],
     );
   }
