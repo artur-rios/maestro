@@ -30,6 +30,12 @@
 - A diagnostic overflow was traced to the test viewport retaining a 3x device-pixel ratio: `setSurfaceSize(500, 900)` produced a 166 px logical width and incorrectly selected the desktop 300 px sidebar layout. The geometry test now uses a 500 px physical view at DPR 1.
 - Post-fix Flutter test invocations repeatedly remained silent and were terminated rather than waiting indefinitely; the last complete pre-review focused run remains 37/37, while round 1 has confirmed RED evidence but no completed GREEN runner output.
 
+## Round 2 review fix
+
+- Aligned action density with the workbench breakpoint by deriving the branch from the actual viewport: widths below 720 px use full-width 44 px project actions.
+- Added a 700 px boundary regression test requiring both actions to use the full 652 px content width and remain at least 44 px tall.
+- The focused boundary test invocation again produced no output and timed out after 94 seconds, so no new runner result is claimed.
+
 ## Scope preservation
 
 - Existing unrelated generated Linux/Windows plugin-file changes and the pre-existing progress report were not staged or modified for this task.

@@ -728,15 +728,13 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
+            final fullWidth = MediaQuery.sizeOf(context).width < 720;
             final projectTools = _projectToolsAction(
               context,
-              fullWidth: constraints.maxWidth < 520,
+              fullWidth: fullWidth,
             );
-            final startRun = _startRunAction(
-              selected,
-              fullWidth: constraints.maxWidth < 520,
-            );
-            if (constraints.maxWidth < 520) {
+            final startRun = _startRunAction(selected, fullWidth: fullWidth);
+            if (fullWidth) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
