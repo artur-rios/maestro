@@ -123,15 +123,30 @@ final class _ProjectWorkspacePageState
       onDestinationSelected: _selectDestination,
       onProjectSelected: _selectProject,
     );
-    final content = _ProjectWorkspaceMain(
+    final projectContent = _ProjectWorkspaceMain(
       actorId: widget.actorId,
       state: state,
       emptyContent: widget.emptyContent,
       runStartBuilder: widget.runStartBuilder,
       runObservationBuilder: widget.runObservationBuilder,
       historyBuilder: widget.historyBuilder,
-      terminalBuilder: widget.terminalBuilder,
-      terminalDrawerController: _terminalDrawerController,
+    );
+    final selected = state.selected;
+    final content = _WorkbenchMainPane(
+      destinationContent: _destination == 0
+          ? projectContent
+          : _workflowEditor(state),
+      terminal:
+          selected != null &&
+              selected.folderActionsEnabled &&
+              widget.terminalBuilder != null
+          ? widget.terminalBuilder!(
+              context,
+              widget.actorId,
+              selected.record,
+              _terminalDrawerController,
+            )
+          : null,
     );
     final workbench = narrow
         ? Scaffold(
@@ -155,12 +170,9 @@ final class _ProjectWorkspacePageState
                 ),
               ],
             ),
-            body: _destination == 0 ? content : _workflowEditor(state),
+            body: content,
           )
-        : _ProjectWorkbench(
-            sidebar: sidebar,
-            content: _destination == 0 ? content : _workflowEditor(state),
-          );
+        : _ProjectWorkbench(sidebar: sidebar, content: content);
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.backquote, control: true):
@@ -230,6 +242,29 @@ final class _ProjectWorkbench extends StatelessWidget {
         children: <Widget>[
           SizedBox(width: 300, child: sidebar),
           Expanded(child: content),
+        ],
+      ),
+    );
+  }
+}
+
+final class _WorkbenchMainPane extends StatelessWidget {
+  const _WorkbenchMainPane({
+    required this.destinationContent,
+    required this.terminal,
+  });
+
+  final Widget destinationContent;
+  final Widget? terminal;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      key: const Key('workbench-main-pane'),
+      child: Column(
+        children: <Widget>[
+          Expanded(child: destinationContent),
+          ?terminal,
         ],
       ),
     );
@@ -536,8 +571,6 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
     required this.runStartBuilder,
     required this.runObservationBuilder,
     required this.historyBuilder,
-    required this.terminalBuilder,
-    required this.terminalDrawerController,
   });
 
   final String actorId;
@@ -546,40 +579,19 @@ final class _ProjectWorkspaceMain extends StatelessWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
-  final ProjectTerminalDrawerController terminalDrawerController;
 
   @override
   Widget build(BuildContext context) {
     final selected = state.selected;
-    return SizedBox.expand(
-      key: const Key('workbench-main-pane'),
-      child: Column(
-        children: <Widget>[
-          Expanded(
-            child: selected == null
-                ? _WorkbenchEmptyState(state: state, emptyContent: emptyContent)
-                : _SelectedProjectWorkspace(
-                    actorId: actorId,
-                    state: state,
-                    runStartBuilder: runStartBuilder,
-                    runObservationBuilder: runObservationBuilder,
-                    historyBuilder: historyBuilder,
-                    terminalDrawerController: terminalDrawerController,
-                  ),
-          ),
-          if (selected != null &&
-              selected.folderActionsEnabled &&
-              terminalBuilder != null)
-            terminalBuilder!(
-              context,
-              actorId,
-              selected.record,
-              terminalDrawerController,
-            ),
-        ],
-      ),
-    );
+    return selected == null
+        ? _WorkbenchEmptyState(state: state, emptyContent: emptyContent)
+        : _SelectedProjectWorkspace(
+            actorId: actorId,
+            state: state,
+            runStartBuilder: runStartBuilder,
+            runObservationBuilder: runObservationBuilder,
+            historyBuilder: historyBuilder,
+          );
   }
 }
 
@@ -651,7 +663,6 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
     required this.runStartBuilder,
     required this.runObservationBuilder,
     required this.historyBuilder,
-    required this.terminalDrawerController,
   });
 
   final String actorId;
@@ -659,7 +670,6 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final ProjectTerminalDrawerController terminalDrawerController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
@@ -57,6 +58,20 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
 
   void _toggle() => _visible ? _hide() : _show();
 
+  KeyEventResult _handleTerminalKeyEvent(FocusNode _, KeyEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.backquote &&
+        keyboard.isControlPressed &&
+        !keyboard.isAltPressed &&
+        !keyboard.isMetaPressed &&
+        !keyboard.isShiftPressed) {
+      _toggle();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   Future<void> _close() async {
     await _controller.close();
     if (mounted && !_controller.state.canClose) _hide();
@@ -97,10 +112,7 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: Text(
-                      'TERMINAL',
-                      style: theme.textTheme.labelLarge,
-                    ),
+                    child: Text('TERMINAL', style: theme.textTheme.labelLarge),
                   ),
                   if (state.canClose)
                     Semantics(
@@ -158,6 +170,7 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
                       controller: _viewController,
                       autofocus: true,
                       backgroundOpacity: 1,
+                      onKeyEvent: _handleTerminalKeyEvent,
                     ),
                   ),
                 ),

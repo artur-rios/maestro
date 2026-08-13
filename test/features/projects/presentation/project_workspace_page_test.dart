@@ -10,9 +10,15 @@ import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/terminal/application/open_project_terminal.dart';
+import 'package:maestro/features/terminal/application/terminal_port.dart';
+import 'package:maestro/features/terminal/domain/terminal_models.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
+import 'package:xterm/xterm.dart';
 
 void main() {
   testWidgets(
@@ -428,6 +434,115 @@ void main() {
   );
 
   testWidgets(
+    'GivenARealFocusedTerminal_WhenCtrlBackquotePressed_ThenTheDrawerHides',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final opener = _WorkspaceTerminalOpener();
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, project, drawerController) =>
+              ProjectTerminalPanel(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                createController: () => ProjectTerminalController(
+                  workingDirectory: project.folderPath,
+                  open: opener.call,
+                  terminal: Terminal(maxLines: 200),
+                ),
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+      final terminalView = find.byKey(const Key('terminal-view'));
+      expect(terminalView, findsOneWidget);
+      await tester.tap(terminalView);
+      await tester.pump(const Duration(milliseconds: 301));
+      final focusedContext = tester.binding.focusManager.primaryFocus?.context;
+      expect(focusedContext, isNotNull);
+      final terminalElement = terminalView.evaluate().single;
+      var terminalHasFocus = false;
+      (focusedContext! as Element).visitAncestorElements((element) {
+        terminalHasFocus = identical(element, terminalElement);
+        return !terminalHasFocus;
+      });
+      expect(terminalHasFocus, isTrue);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      final terminalKeyHandler = tester
+          .widget<TerminalView>(terminalView)
+          .onKeyEvent;
+      expect(terminalKeyHandler, isNotNull);
+      final result = terminalKeyHandler!(
+        tester.binding.focusManager.primaryFocus!,
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.backquote,
+          logicalKey: LogicalKeyboardKey.backquote,
+          timeStamp: Duration.zero,
+        ),
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(result, KeyEventResult.handled);
+      expect(find.byKey(const Key('terminal-drawer')), findsNothing);
+      expect(opener.callCount, 1);
+      expect(opener.session.closeCallCount, 0);
+    },
+  );
+
+  testWidgets(
+    'GivenARunningProjectTerminal_WhenDestinationsChange_ThenItsSessionSurvivesAndShortcutStillWorks',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final opener = _WorkspaceTerminalOpener();
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          workflowService: _workflowService(),
+          terminalBuilder: (_, _, project, drawerController) =>
+              ProjectTerminalPanel(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                createController: () => ProjectTerminalController(
+                  workingDirectory: project.folderPath,
+                  open: opener.call,
+                  terminal: Terminal(maxLines: 200),
+                ),
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Automations'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('terminal-drawer')), findsNothing);
+      expect(opener.session.closeCallCount, 0);
+
+      await _toggleTerminalShortcut(tester);
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      expect(opener.callCount, 1);
+      expect(opener.session.closeCallCount, 0);
+
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      expect(opener.callCount, 1);
+      expect(opener.session.closeCallCount, 0);
+    },
+  );
+
+  testWidgets(
     'GivenAProjectTerminal_WhenAnotherProjectIsSelected_ThenShortcutTargetsTheNewProject',
     (tester) async {
       final repository = _Repository()
@@ -832,6 +947,46 @@ final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {
   Widget build(BuildContext context) => _visible
       ? SizedBox(height: 80, child: Center(child: Text(widget.label)))
       : const SizedBox.shrink();
+}
+
+final class _WorkspaceTerminalOpener {
+  var callCount = 0;
+  late _WorkspaceTerminalSession session;
+
+  Future<TerminalOpenResult> call({
+    required String workingDirectory,
+    required int columns,
+    required int rows,
+  }) async {
+    callCount++;
+    session = _WorkspaceTerminalSession();
+    return TerminalOpenResult.opened(session);
+  }
+}
+
+final class _WorkspaceTerminalSession implements TerminalSession {
+  final _output = StreamController<Uint8List>.broadcast();
+  final _exit = Completer<TerminalExit>();
+  var closeCallCount = 0;
+
+  @override
+  Stream<Uint8List> get output => _output.stream;
+
+  @override
+  Future<TerminalExit> get exit => _exit.future;
+
+  @override
+  Future<void> write(Uint8List bytes) async {}
+
+  @override
+  Future<void> resize({required int columns, required int rows}) async {}
+
+  @override
+  Future<TerminalClosure> close() async {
+    closeCallCount++;
+    if (!_exit.isCompleted) _exit.complete(const TerminalExit(0));
+    return TerminalClosure.closed;
+  }
 }
 
 final class _WorkflowRepository implements WorkflowRepository {

@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
@@ -13,8 +13,9 @@ import 'package:xterm/xterm.dart';
 
 void main() {
   group('ProjectTerminalPanel', () {
-    testWidgets('GivenAHiddenDrawer_WhenShown_ThenItStartsAndShowsATerminal',
-        (tester) async {
+    testWidgets('GivenAHiddenDrawer_WhenShown_ThenItStartsAndShowsATerminal', (
+      tester,
+    ) async {
       final drawer = ProjectTerminalDrawerController();
 
       await _pump(tester, _FakeOpener(), drawer: drawer);
@@ -44,22 +45,23 @@ void main() {
     );
 
     testWidgets(
-        'GivenARunningDrawer_WhenHiddenAndShown_ThenTheSessionIsRetained',
-        (tester) async {
-      final drawer = ProjectTerminalDrawerController();
-      final opener = _FakeOpener();
-      await _pump(tester, opener, drawer: drawer);
+      'GivenARunningDrawer_WhenHiddenAndShown_ThenTheSessionIsRetained',
+      (tester) async {
+        final drawer = ProjectTerminalDrawerController();
+        final opener = _FakeOpener();
+        await _pump(tester, opener, drawer: drawer);
 
-      drawer.show();
-      await tester.pumpAndSettle();
-      drawer.hide();
-      await tester.pumpAndSettle();
-      drawer.show();
-      await tester.pumpAndSettle();
+        drawer.show();
+        await tester.pumpAndSettle();
+        drawer.hide();
+        await tester.pumpAndSettle();
+        drawer.show();
+        await tester.pumpAndSettle();
 
-      expect(opener.callCount, 1);
-      expect(find.byKey(const Key('terminal-view')), findsOneWidget);
-    });
+        expect(opener.callCount, 1);
+        expect(find.byKey(const Key('terminal-view')), findsOneWidget);
+      },
+    );
 
     testWidgets('GivenARunningSession_WhenThePanelRenders_'
         'ThenTheTerminalViewAndCloseActionAreShown', (tester) async {
@@ -146,6 +148,53 @@ void main() {
       expect(find.byKey(const Key('terminal-failure')), findsOneWidget);
       expect(find.byKey(const Key('close-terminal')), findsOneWidget);
     });
+
+    testWidgets(
+      'GivenARunningSession_WhenExplicitCloseSucceeds_ThenTheSessionEndsAndDrawerHides',
+      (tester) async {
+        final opener = _FakeOpener();
+        final drawer = ProjectTerminalDrawerController();
+        await _pump(tester, opener, drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('close-terminal')));
+        await tester.pumpAndSettle();
+
+        expect(opener.session.closeCallCount, 1);
+        expect(find.byKey(const Key('terminal-drawer')), findsNothing);
+        expect(find.byKey(const Key('terminal-view')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'GivenAFocusedTerminal_WhenARegularKeyIsPressed_ThenTerminalInputHandlingContinues',
+      (tester) async {
+        final opener = _FakeOpener();
+        final drawer = ProjectTerminalDrawerController();
+        await _pump(tester, opener, drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('terminal-view')));
+        await tester.pump(const Duration(milliseconds: 301));
+
+        final terminalView = tester.widget<TerminalView>(
+          find.byKey(const Key('terminal-view')),
+        );
+        final result = terminalView.onKeyEvent!(
+          tester.binding.focusManager.primaryFocus!,
+          const KeyDownEvent(
+            physicalKey: PhysicalKeyboardKey.keyA,
+            logicalKey: LogicalKeyboardKey.keyA,
+            character: 'a',
+            timeStamp: Duration.zero,
+          ),
+        );
+
+        expect(result, KeyEventResult.ignored);
+        expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      },
+    );
 
     testWidgets('GivenThePanel_WhenTraversingWithTheKeyboard_'
         'ThenTheActionsAreReachable', (tester) async {
@@ -242,6 +291,7 @@ final class _FakeSession implements TerminalSession {
   final TerminalClosure _closure;
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
+  var closeCallCount = 0;
 
   @override
   Stream<Uint8List> get output => _output.stream;
@@ -257,6 +307,7 @@ final class _FakeSession implements TerminalSession {
 
   @override
   Future<TerminalClosure> close() async {
+    closeCallCount++;
     if (_closure == TerminalClosure.closed) exitWith(0);
     return _closure;
   }
