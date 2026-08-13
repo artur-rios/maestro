@@ -19,7 +19,23 @@ void main() {
       await tester.pumpWidget(_host(database));
       await tester.pumpAndSettle();
 
-      expect(tester.getSize(find.byType(Card)).width, lessThan(1200));
+      expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(640));
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowHistoryForm_WhenRendered_ThenItUsesAvailableWidthWithoutOverflow',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+
+      await tester.pumpWidget(_host(database));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(360));
     },
   );
 

@@ -726,37 +726,33 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
         const SizedBox(height: 8),
         SelectableText(selected.record.folderPath),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            PopupMenuButton<_SelectedProjectPane>(
-              tooltip: 'Project tools',
-              enabled: state.status != ProjectWorkspaceStatus.loading,
-              onSelected: onPaneSelected,
-              itemBuilder: (_) => const <PopupMenuEntry<_SelectedProjectPane>>[
-                PopupMenuItem<_SelectedProjectPane>(
-                  value: _SelectedProjectPane.history,
-                  child: Text('History & audit'),
-                ),
-              ],
-              child: const Chip(
-                avatar: Icon(Icons.build_outlined),
-                label: Text('Project tools'),
-              ),
-            ),
-            FilledButton.icon(
-              onPressed:
-                  state.status == ProjectWorkspaceStatus.loading ||
-                      !selected.folderActionsEnabled ||
-                      runStartBuilder == null
-                  ? null
-                  : () => onPaneSelected(_SelectedProjectPane.startRun),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start run'),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final projectTools = _projectToolsAction(
+              context,
+              fullWidth: constraints.maxWidth < 520,
+            );
+            final startRun = _startRunAction(
+              selected,
+              fullWidth: constraints.maxWidth < 520,
+            );
+            if (constraints.maxWidth < 520) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  projectTools,
+                  const SizedBox(height: 8),
+                  startRun,
+                ],
+              );
+            }
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[projectTools, startRun],
+            );
+          },
         ),
         const SizedBox(height: 16),
         if (pane == _SelectedProjectPane.history) ...<Widget>[
@@ -839,6 +835,64 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
         ],
       ],
     );
+  }
+
+  Widget _projectToolsAction(BuildContext context, {required bool fullWidth}) {
+    return PopupMenuButton<_SelectedProjectPane>(
+      tooltip: 'Project tools',
+      enabled: state.status != ProjectWorkspaceStatus.loading,
+      onSelected: onPaneSelected,
+      itemBuilder: (_) => const <PopupMenuEntry<_SelectedProjectPane>>[
+        PopupMenuItem<_SelectedProjectPane>(
+          value: _SelectedProjectPane.history,
+          child: Text('History & audit'),
+        ),
+      ],
+      child: fullWidth
+          ? SizedBox(
+              height: 44,
+              width: double.infinity,
+              child: DecoratedBox(
+                decoration: ShapeDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: StadiumBorder(
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.build_outlined),
+                    SizedBox(width: 8),
+                    Text('Project tools'),
+                  ],
+                ),
+              ),
+            )
+          : const Chip(
+              avatar: Icon(Icons.build_outlined),
+              label: Text('Project tools'),
+            ),
+    );
+  }
+
+  Widget _startRunAction(ProjectSelection selected, {required bool fullWidth}) {
+    final button = FilledButton.icon(
+      onPressed:
+          state.status == ProjectWorkspaceStatus.loading ||
+              !selected.folderActionsEnabled ||
+              runStartBuilder == null
+          ? null
+          : () => onPaneSelected(_SelectedProjectPane.startRun),
+      icon: const Icon(Icons.play_arrow),
+      label: const Text('Start run'),
+    );
+    return fullWidth
+        ? SizedBox(width: double.infinity, height: 44, child: button)
+        : button;
   }
 
   Future<void> _confirmSoftDeletion(

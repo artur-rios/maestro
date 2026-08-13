@@ -38,7 +38,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(tester.getSize(find.byType(Card)).width, lessThan(1200));
+    expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(640));
     expect(
       tester.getTopLeft(find.byKey(const Key('run-delivery-mode'))).dy,
       tester.getTopLeft(find.byKey(const Key('run-branch-type'))).dy,
@@ -48,6 +48,45 @@ void main() {
       lessThan(tester.getSize(find.byType(Card)).width),
     );
   });
+
+  testWidgets(
+    'GivenNarrowRunForm_WhenRendered_ThenItUsesAvailableWidthWithoutOverflow',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = RunStartController(
+        actorId: 'actor-1',
+        project: _project(),
+        loadWorkflows: () async => <WorkflowDefinition>[_workflow()],
+        starter: (_) async => const RunStartRejected(
+          code: 'unused',
+          message: 'unused',
+          remediation: 'unused',
+        ),
+        execute: (_) async {},
+        events: RunSummaryEvents(),
+        statusFor: (_) async => null,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RunStartPanel(createController: () => controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(360));
+      expect(
+        tester.getTopLeft(find.byKey(const Key('run-branch-type'))).dy,
+        greaterThan(
+          tester.getTopLeft(find.byKey(const Key('run-delivery-mode'))).dy,
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'GivenUseCaseWorkflow_WhenStartFails_ThenSpecificFieldsAndEnteredValueRemainVisible',

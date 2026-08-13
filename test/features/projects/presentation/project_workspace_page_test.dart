@@ -127,6 +127,47 @@ void main() {
   );
 
   testWidgets(
+    'GivenNarrowSelectedProject_WhenShown_ThenProjectActionsUseFullWidthAccessibleTargets',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(500, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, project) => Text(
+            'Run workflow for ${project.name}',
+            key: const Key('run-workflow'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).openDrawer();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).closeDrawer();
+      await tester.pumpAndSettle();
+
+      final projectTools = find.byTooltip('Project tools');
+      final startRun = find.widgetWithText(FilledButton, 'Start run');
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(projectTools).width, 452);
+      expect(tester.getSize(startRun).width, 452);
+      expect(tester.getSize(projectTools).height, greaterThanOrEqualTo(40));
+      expect(tester.getSize(startRun).height, greaterThanOrEqualTo(40));
+
+      await tester.tap(startRun);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('run-workflow')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenHistoryPane_WhenAnotherProjectIsSelected_ThenProjectPaneIsRestored',
     (tester) async {
       final repository = _Repository()
