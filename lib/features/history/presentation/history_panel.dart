@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
+import 'package:maestro/features/history/presentation/storage_limit_mb.dart';
 
 final class HistoryPanel extends StatefulWidget {
   const HistoryPanel({
@@ -23,7 +24,9 @@ final class _HistoryPanelState extends State<HistoryPanel> {
   late final HistoryController controller = widget.createController()
     ..addListener(_changed);
   final _retentionDays = TextEditingController(text: '30');
-  final _storageLimit = TextEditingController(text: '1073741824');
+  final _storageLimit = TextEditingController(
+    text: StorageLimitMb.formatBytes(1073741824),
+  );
   String? _retentionFeedback;
   @override
   void initState() {
@@ -48,11 +51,16 @@ final class _HistoryPanelState extends State<HistoryPanel> {
     final service = widget.retentionService;
     final actorId = widget.actorId;
     if (service == null || actorId == null) return;
+    final storageLimit = StorageLimitMb.parse(_storageLimit.text);
+    if (storageLimit case StorageLimitMbInvalid(:final error)) {
+      setState(() => _retentionFeedback = error);
+      return;
+    }
     final result = await service.savePolicy(
       actorId: actorId,
       policy: RetentionPolicy(
         retentionDays: int.tryParse(_retentionDays.text) ?? 0,
-        storageLimitBytes: int.tryParse(_storageLimit.text) ?? 0,
+        storageLimitBytes: storageLimit.bytes!,
       ),
     );
     if (!mounted) return;
@@ -96,7 +104,7 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                 controller: _storageLimit,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Storage limit (bytes)',
+                  labelText: 'Storage limit (MB)',
                 ),
               ),
               Align(

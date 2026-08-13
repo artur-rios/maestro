@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
@@ -13,6 +15,14 @@ typedef RunStartWorkspaceBuilder =
       BuildContext context,
       String actorId,
       ProjectRecord project,
+    );
+
+typedef ProjectTerminalWorkspaceBuilder =
+    Widget Function(
+      BuildContext context,
+      String actorId,
+      ProjectRecord project,
+      ProjectTerminalDrawerController drawerController,
     );
 
 final class ProjectWorkspacePage extends StatelessWidget {
@@ -37,7 +47,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final RunStartWorkspaceBuilder? terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +92,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final RunStartWorkspaceBuilder? terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -91,6 +101,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
 
 final class _ProjectWorkspacePageState
     extends ConsumerState<_ProjectWorkspaceView> {
+  final _terminalDrawerController = ProjectTerminalDrawerController();
   var _destination = 0;
 
   @override
@@ -105,38 +116,49 @@ final class _ProjectWorkspacePageState
   Widget build(BuildContext context) {
     final state = ref.watch(projectControllerProvider);
     final narrow = MediaQuery.sizeOf(context).width < 720;
-    final projectPanel = _ProjectPanel(state: state);
-    final content = _ProjectContent(
+    final sidebar = _WorkbenchSidebar(
+      state: state,
+      destination: _destination,
+      showDestinations: !narrow,
+      onDestinationSelected: _selectDestination,
+      onProjectSelected: _selectProject,
+    );
+    final projectContent = _ProjectWorkspaceMain(
       actorId: widget.actorId,
       state: state,
       emptyContent: widget.emptyContent,
       runStartBuilder: widget.runStartBuilder,
       runObservationBuilder: widget.runObservationBuilder,
       historyBuilder: widget.historyBuilder,
-      terminalBuilder: widget.terminalBuilder,
     );
-    final projectsBody = Row(
-      children: <Widget>[
-        if (!narrow)
-          SizedBox(
-            width: 280,
-            child: Material(elevation: 1, child: projectPanel),
-          ),
-        Expanded(child: content),
-      ],
+    final selected = state.selected;
+    final content = _WorkbenchMainPane(
+      destinationContent: _destination == 0
+          ? projectContent
+          : _workflowEditor(state),
+      terminal:
+          selected != null &&
+              selected.folderActionsEnabled &&
+              widget.terminalBuilder != null
+          ? widget.terminalBuilder!(
+              context,
+              widget.actorId,
+              selected.record,
+              _terminalDrawerController,
+            )
+          : null,
     );
-    return Scaffold(
-      appBar: narrow
-          ? AppBar(title: Text(_destination == 0 ? 'Projects' : 'Workflows'))
-          : null,
-      drawer: narrow && _destination == 0
-          ? Drawer(child: SafeArea(child: projectPanel))
-          : null,
-      bottomNavigationBar: narrow
-          ? NavigationBar(
+    final workbench = narrow
+        ? Scaffold(
+            appBar: AppBar(
+              title: Text(_destination == 0 ? 'Projects' : 'Workflows'),
+            ),
+            drawer: _destination == 0
+                ? Drawer(child: SafeArea(child: sidebar))
+                : null,
+            bottomNavigationBar: NavigationBar(
               selectedIndex: _destination,
-              onDestinationSelected: (value) =>
-                  setState(() => _destination = value),
+              onDestinationSelected: _selectDestination,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.folder_outlined),
@@ -147,167 +169,299 @@ final class _ProjectWorkspacePageState
                   label: 'Workflows',
                 ),
               ],
-            )
-          : null,
-      body: Row(
-        children: [
-          if (!narrow)
-            NavigationRail(
-              selectedIndex: _destination,
-              labelType: NavigationRailLabelType.all,
-              onDestinationSelected: (value) =>
-                  setState(() => _destination = value),
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.folder_outlined),
-                  label: Text('Projects'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.account_tree_outlined),
-                  label: Text('Workflows'),
-                ),
-              ],
             ),
-          Expanded(
-            child: _destination == 0
-                ? projectsBody
-                : WorkflowEditorPage(
-                    projects: state.projects,
-                    deletedProjects: state.deletedProjects,
-                    projectCatalogReady:
-                        state.status == ProjectWorkspaceStatus.ready,
-                  ),
-          ),
+            body: content,
+          )
+        : _ProjectWorkbench(sidebar: sidebar, content: content);
+    return Shortcuts(
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.backquote, control: true):
+            _ToggleProjectTerminalIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _ToggleProjectTerminalIntent:
+              CallbackAction<_ToggleProjectTerminalIntent>(
+                onInvoke: (_) {
+                  if (state.selected?.folderActionsEnabled == true) {
+                    _terminalDrawerController.toggle();
+                  } else {
+                    _showTerminalSelectionFeedback();
+                  }
+                  return null;
+                },
+              ),
+        },
+        child: Focus(autofocus: true, child: workbench),
+      ),
+    );
+  }
+
+  Widget _workflowEditor(ProjectWorkspaceState state) => WorkflowEditorPage(
+    projects: state.projects,
+    deletedProjects: state.deletedProjects,
+    projectCatalogReady: state.status == ProjectWorkspaceStatus.ready,
+  );
+
+  void _selectDestination(int value) {
+    _terminalDrawerController.hide();
+    setState(() => _destination = value);
+  }
+
+  void _selectProject(String projectId) {
+    _terminalDrawerController.hide();
+    ref.read(projectControllerProvider.notifier).select(projectId);
+  }
+
+  void _showTerminalSelectionFeedback() {
+    const message = 'Select an available project to open its terminal.';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Semantics(liveRegion: true, child: const Text(message)),
+        ),
+      );
+  }
+}
+
+final class _ToggleProjectTerminalIntent extends Intent {
+  const _ToggleProjectTerminalIntent();
+}
+
+final class _ProjectWorkbench extends StatelessWidget {
+  const _ProjectWorkbench({required this.sidebar, required this.content});
+
+  final Widget sidebar;
+  final Widget content;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: <Widget>[
+          SizedBox(width: 300, child: sidebar),
+          Expanded(child: content),
         ],
       ),
     );
   }
 }
 
-final class _ProjectPanel extends ConsumerWidget {
-  const _ProjectPanel({required this.state});
+final class _WorkbenchMainPane extends StatelessWidget {
+  const _WorkbenchMainPane({
+    required this.destinationContent,
+    required this.terminal,
+  });
+
+  final Widget destinationContent;
+  final Widget? terminal;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      key: const Key('workbench-main-pane'),
+      child: Column(
+        children: <Widget>[
+          Expanded(child: destinationContent),
+          ?terminal,
+        ],
+      ),
+    );
+  }
+}
+
+final class _WorkbenchSidebar extends ConsumerWidget {
+  const _WorkbenchSidebar({
+    required this.state,
+    required this.destination,
+    required this.showDestinations,
+    required this.onDestinationSelected,
+    required this.onProjectSelected,
+  });
 
   final ProjectWorkspaceState state;
+  final int destination;
+  final bool showDestinations;
+  final ValueChanged<int> onDestinationSelected;
+  final ValueChanged<String> onProjectSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 8, 8),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'Registered projects',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+    final theme = Theme.of(context);
+    return Material(
+      key: const Key('workbench-sidebar'),
+      color: theme.brightness == Brightness.dark
+          ? const Color(0xFF202124)
+          : theme.colorScheme.surfaceContainerLow,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            if (showDestinations) ...<Widget>[
+              const SizedBox(height: 12),
+              _WorkbenchDestination(
+                label: 'Tasks',
+                icon: Icons.task_alt_outlined,
+                selected: destination == 0,
+                onTap: () => onDestinationSelected(0),
               ),
-              Semantics(
-                label: 'Register project',
-                button: true,
-                child: IconButton(
-                  tooltip: 'Register project',
-                  onPressed: state.status == ProjectWorkspaceStatus.loading
-                      ? null
-                      : () => _showRegistrationDialog(context, ref),
-                  icon: const Icon(Icons.create_new_folder_outlined),
-                ),
+              _WorkbenchDestination(
+                label: 'Automations',
+                icon: Icons.account_tree_outlined,
+                selected: destination == 1,
+                onTap: () => onDestinationSelected(1),
               ),
+              const Divider(height: 24),
             ],
-          ),
-        ),
-        if (state.status == ProjectWorkspaceStatus.loading)
-          const LinearProgressIndicator(),
-        Expanded(
-          child: ListView(
-            children: <Widget>[
-              if (state.projects.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No active projects.'),
-                )
-              else
-                for (final project in state.projects)
-                  ListTile(
-                    selected: state.selected?.record.id == project.record.id,
-                    title: Text(project.record.name),
-                    subtitle: project.folderActionsEnabled
-                        ? null
-                        : const Text('Unavailable'),
-                    trailing: project.folderActionsEnabled
-                        ? null
-                        : const Icon(Icons.warning_amber_rounded),
-                    onTap: state.status == ProjectWorkspaceStatus.loading
-                        ? null
-                        : () => ref
-                              .read(projectControllerProvider.notifier)
-                              .select(project.record.id),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text('PROJECTS', style: theme.textTheme.labelLarge),
                   ),
-              const Divider(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Text(
-                  'Deleted projects',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              if (state.deletedProjects.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  child: Text('No deleted projects.'),
-                )
-              else
-                for (final project in state.deletedProjects)
-                  ListTile(
-                    title: Text(project.name),
-                    subtitle: const Text('Maestro metadata retained'),
-                    trailing: Wrap(
-                      spacing: 0,
-                      children: <Widget>[
-                        Semantics(
-                          label: 'Restore ${project.name}',
-                          button: true,
-                          child: IconButton(
-                            tooltip: 'Restore ${project.name}',
-                            onPressed:
-                                state.status == ProjectWorkspaceStatus.loading
-                                ? null
-                                : () => ref
-                                      .read(projectControllerProvider.notifier)
-                                      .restore(project.id),
-                            icon: const Icon(Icons.restore),
-                          ),
-                        ),
-                        Semantics(
-                          label: 'Permanently delete ${project.name}',
-                          button: true,
-                          child: IconButton(
-                            tooltip: 'Permanently delete ${project.name}',
-                            onPressed:
-                                state.status == ProjectWorkspaceStatus.loading
-                                ? null
-                                : () => _confirmPermanentDeletion(
-                                    context,
-                                    ref,
-                                    project.id,
-                                    project.name,
-                                  ),
-                            icon: const Icon(Icons.delete_forever_outlined),
-                          ),
-                        ),
-                      ],
+                  Semantics(
+                    label: 'Register project',
+                    button: true,
+                    child: IconButton(
+                      tooltip: 'Register project',
+                      onPressed: state.status == ProjectWorkspaceStatus.loading
+                          ? null
+                          : () => _ProjectSidebarActions.showRegistrationDialog(
+                              context,
+                              ref,
+                            ),
+                      icon: const Icon(Icons.add),
                     ),
                   ),
-            ],
-          ),
+                ],
+              ),
+            ),
+            if (state.status == ProjectWorkspaceStatus.loading)
+              const LinearProgressIndicator(),
+            Expanded(
+              child: ListView(
+                children: <Widget>[
+                  if (state.projects.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('No active projects.'),
+                    )
+                  else
+                    for (final project in state.projects)
+                      ListTile(
+                        selected:
+                            state.selected?.record.id == project.record.id,
+                        title: Text(project.record.name),
+                        subtitle: project.folderActionsEnabled
+                            ? null
+                            : const Text('Unavailable'),
+                        trailing: project.folderActionsEnabled
+                            ? null
+                            : const Icon(Icons.warning_amber_rounded),
+                        onTap: state.status == ProjectWorkspaceStatus.loading
+                            ? null
+                            : () => onProjectSelected(project.record.id),
+                      ),
+                  const Divider(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Text('Deleted projects'),
+                  ),
+                  if (state.deletedProjects.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: Text('No deleted projects.'),
+                    )
+                  else
+                    for (final project in state.deletedProjects)
+                      ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        title: Text(project.name),
+                        subtitle: const Text('Maestro metadata retained'),
+                        trailing: Wrap(
+                          spacing: 0,
+                          children: <Widget>[
+                            Semantics(
+                              label: 'Restore ${project.name}',
+                              button: true,
+                              child: IconButton(
+                                tooltip: 'Restore ${project.name}',
+                                onPressed:
+                                    state.status ==
+                                        ProjectWorkspaceStatus.loading
+                                    ? null
+                                    : () => ref
+                                          .read(
+                                            projectControllerProvider.notifier,
+                                          )
+                                          .restore(project.id),
+                                icon: const Icon(Icons.restore),
+                              ),
+                            ),
+                            Semantics(
+                              label: 'Permanently delete ${project.name}',
+                              button: true,
+                              child: IconButton(
+                                tooltip: 'Permanently delete ${project.name}',
+                                onPressed:
+                                    state.status ==
+                                        ProjectWorkspaceStatus.loading
+                                    ? null
+                                    : () =>
+                                          _ProjectSidebarActions.confirmPermanentDeletion(
+                                            context,
+                                            ref,
+                                            project.id,
+                                            project.name,
+                                          ),
+                                icon: const Icon(Icons.delete_forever_outlined),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
+}
 
-  Future<void> _confirmPermanentDeletion(
+final class _WorkbenchDestination extends StatelessWidget {
+  const _WorkbenchDestination({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      selected: selected,
+      leading: Icon(icon),
+      title: Text(label),
+      onTap: onTap,
+    );
+  }
+}
+
+final class _ProjectSidebarActions {
+  const _ProjectSidebarActions._();
+
+  static Future<void> confirmPermanentDeletion(
     BuildContext context,
     WidgetRef ref,
     String projectId,
@@ -346,7 +500,7 @@ final class _ProjectPanel extends ConsumerWidget {
         );
   }
 
-  Future<void> _showRegistrationDialog(
+  static Future<void> showRegistrationDialog(
     BuildContext context,
     WidgetRef ref,
   ) async {
@@ -409,15 +563,14 @@ final class _RegistrationDialogState extends State<_RegistrationDialog> {
   }
 }
 
-final class _ProjectContent extends ConsumerWidget {
-  const _ProjectContent({
+final class _ProjectWorkspaceMain extends StatelessWidget {
+  const _ProjectWorkspaceMain({
     required this.actorId,
     required this.state,
     required this.emptyContent,
     required this.runStartBuilder,
     required this.runObservationBuilder,
     required this.historyBuilder,
-    required this.terminalBuilder,
   });
 
   final String actorId;
@@ -426,29 +579,101 @@ final class _ProjectContent extends ConsumerWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final RunStartWorkspaceBuilder? terminalBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = state.selected;
+    return selected == null
+        ? _WorkbenchEmptyState(state: state, emptyContent: emptyContent)
+        : _SelectedProjectWorkspace(
+            actorId: actorId,
+            state: state,
+            runStartBuilder: runStartBuilder,
+            runObservationBuilder: runObservationBuilder,
+            historyBuilder: historyBuilder,
+          );
+  }
+}
+
+final class _WorkbenchEmptyState extends ConsumerWidget {
+  const _WorkbenchEmptyState({required this.state, required this.emptyContent});
+
+  final ProjectWorkspaceState state;
+  final Widget emptyContent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = state.selected;
-    if (selected == null) {
-      final failure = state.failure;
-      return Column(
-        children: <Widget>[
-          Expanded(child: emptyContent),
-          if (state.lifecycleFeedback case final feedback?)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: _ProjectLifecycleMessage(feedback: feedback),
-            ),
-          if (failure != null)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: _ProjectFailureMessage(failure: failure),
-            ),
-        ],
-      );
-    }
+    return Column(
+      key: const Key('workbench-empty-state'),
+      children: <Widget>[
+        Expanded(
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(child: emptyContent),
+              Center(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Text(
+                          'Select a project from the sidebar to begin.',
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed:
+                              state.status == ProjectWorkspaceStatus.loading
+                              ? null
+                              : () =>
+                                    _ProjectSidebarActions.showRegistrationDialog(
+                                      context,
+                                      ref,
+                                    ),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add Project'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (state.lifecycleFeedback case final feedback?)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _ProjectLifecycleMessage(feedback: feedback),
+          ),
+        if (state.failure case final failure?)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _ProjectFailureMessage(failure: failure),
+          ),
+      ],
+    );
+  }
+}
+
+final class _SelectedProjectWorkspace extends ConsumerWidget {
+  const _SelectedProjectWorkspace({
+    required this.actorId,
+    required this.state,
+    required this.runStartBuilder,
+    required this.runObservationBuilder,
+    required this.historyBuilder,
+  });
+
+  final String actorId;
+  final ProjectWorkspaceState state;
+  final RunStartWorkspaceBuilder? runStartBuilder;
+  final RunStartWorkspaceBuilder? runObservationBuilder;
+  final RunStartWorkspaceBuilder? historyBuilder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = state.selected!;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: <Widget>[
@@ -530,10 +755,6 @@ final class _ProjectContent extends ConsumerWidget {
           runObservationBuilder!(context, actorId, selected.record),
         if (historyBuilder != null)
           historyBuilder!(context, actorId, selected.record),
-        // A folder Maestro cannot reach cannot root a shell, so the terminal
-        // is not offered for one (AF-02, before the fact).
-        if (terminalBuilder != null && selected.folderActionsEnabled)
-          terminalBuilder!(context, actorId, selected.record),
       ],
     );
   }

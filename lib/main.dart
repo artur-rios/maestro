@@ -51,6 +51,7 @@ import 'package:maestro/features/runs/presentation/run_start_panel.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/data/local_terminal_project_folder.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
 import 'package:maestro/features/updates/data/drift_update_audit_recorder.dart';
 import 'package:maestro/features/updates/presentation/update_controller.dart';
@@ -127,7 +128,7 @@ final class ProductionAppComposition {
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
   final RunStartWorkspaceBuilder historyBuilder;
-  final RunStartWorkspaceBuilder terminalBuilder;
+  final ProjectTerminalWorkspaceBuilder terminalBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -438,8 +439,10 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
+    ProjectTerminalDrawerController drawerController,
   ) => ProjectTerminalPanel(
     key: ValueKey<String>('project-terminal-${project.id}'),
+    drawerController: drawerController,
     createController: () => ProjectTerminalController(
       workingDirectory: project.folderPath,
       open: openProjectTerminal.call,

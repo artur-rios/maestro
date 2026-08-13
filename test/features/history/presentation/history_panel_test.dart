@@ -19,7 +19,7 @@ void main() {
       await tester.enterText(find.byKey(const Key('retention-days')), '45');
       await tester.enterText(
         find.byKey(const Key('retention-storage-limit')),
-        '8192',
+        '1024',
       );
       await tester.tap(find.text('Save retention settings'));
       await tester.pumpAndSettle();
@@ -27,7 +27,7 @@ void main() {
       final values = await database.select(database.settings).get();
       expect(
         values.map((setting) => setting.value),
-        containsAll(<String>['45', '8192']),
+        containsAll(<String>['45', '1024000000']),
       );
     },
   );

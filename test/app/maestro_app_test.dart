@@ -150,8 +150,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Projects'), findsOneWidget);
-      expect(find.text('Workflows'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
+      expect(find.text('Automations'), findsOneWidget);
+      expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
+      expect(
+        find.text('Select a project from the sidebar to begin.'),
+        findsOneWidget,
+      );
       expect(find.text('Foundation ready'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
       expect(find.byTooltip('Appearance'), findsOneWidget);
@@ -168,9 +174,39 @@ void main() {
         isA<TextButton>(),
       ]);
 
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       expect(find.text('Create workflow'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenDarkAppearance_WhenAuthenticated_ThenWorkbenchUsesDarkSurfaces',
+    (tester) async {
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: _appearanceController(AppearanceMode.dark),
+          authenticationService: _authenticationService(),
+          projectService: _projectService(),
+          projectLifecycleService: _projectLifecycleService(),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      final sidebar = tester.widget<Material>(
+        find.byKey(const Key('workbench-sidebar')),
+      );
+      final theme = Theme.of(
+        tester.element(find.byKey(const Key('workbench-empty-state'))),
+      );
+      expect(sidebar.color, isNot(equals(Colors.white)));
+      expect(theme.scaffoldBackgroundColor, const Color(0xFF111318));
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
     },
   );
 
@@ -200,14 +236,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(r'C:\projects\demo'), findsOneWidget);
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<NavigationRail>(find.byType(NavigationRail))
-            .selectedIndex,
-        1,
-      );
       expect(find.text('Create workflow'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Appearance'));
@@ -217,14 +247,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        tester
-            .widget<NavigationRail>(find.byType(NavigationRail))
-            .selectedIndex,
-        1,
-      );
       expect(find.text('Create workflow'), findsOneWidget);
-      await tester.tap(find.text('Projects'));
+      await tester.tap(find.text('Tasks'));
       await tester.pumpAndSettle();
       expect(find.text(r'C:\projects\demo'), findsOneWidget);
     },
@@ -403,7 +427,7 @@ void main() {
         find.bySemanticsLabel('Sign in with your operating system'),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
       await tester.pumpAndSettle();

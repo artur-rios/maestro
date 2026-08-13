@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/result.dart';
@@ -9,8 +10,15 @@ import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
+import 'package:maestro/features/terminal/application/open_project_terminal.dart';
+import 'package:maestro/features/terminal/application/terminal_port.dart';
+import 'package:maestro/features/terminal/domain/terminal_models.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
+import 'package:xterm/xterm.dart';
 
 void main() {
   testWidgets(
@@ -18,7 +26,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(_app(workflowService: _workflowService()));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       expect(find.text('Create workflow'), findsOneWidget);
       expect(find.text('Plan'), findsOneWidget);
@@ -30,13 +38,38 @@ void main() {
   );
 
   testWidgets(
-    'GivenEmptyWorkspace_WhenShown_ThenFoundationDiagnosticsRemainMainContent',
+    'GivenAnEmptyWorkbench_WhenShown_ThenSidebarAndEmptyStateAreVisible',
     (tester) async {
       await tester.pumpWidget(_app());
       await tester.pumpAndSettle();
-      expect(find.text('Projects'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
+      expect(find.text('Automations'), findsOneWidget);
+      expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
+      expect(
+        find.text('Select a project from the sidebar to begin.'),
+        findsOneWidget,
+      );
       expect(find.text('Foundation diagnostics'), findsOneWidget);
       expect(find.bySemanticsLabel('Register project'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenNoSelectedProject_WhenCtrlBackquotePressed_ThenFeedbackIsAnnounced',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(
+        find.text('Select an available project to open its terminal.'),
+        findsOneWidget,
+      );
     },
   );
 
@@ -59,7 +92,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
       await tester.pumpAndSettle();
@@ -76,7 +109,7 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(find.text('Projects'));
+      await tester.tap(find.text('Tasks'));
       await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
       await tester.pumpAndSettle();
@@ -92,7 +125,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(lifecycleStore.sourceMutationCalls, 0);
 
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
@@ -132,7 +165,7 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pump();
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
@@ -188,7 +221,7 @@ void main() {
         _app(workflowService: _workflowService(workflows)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Workflows'));
+      await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
       await tester.pumpAndSettle();
@@ -326,7 +359,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           repository: repository,
-          terminalBuilder: (_, _, project) =>
+          terminalBuilder: (_, _, project, _) =>
               Text('terminal for ${project.name}'),
         ),
       );
@@ -352,7 +385,7 @@ void main() {
         _app(
           repository: repository,
           validator: validator,
-          terminalBuilder: (_, _, project) =>
+          terminalBuilder: (_, _, project, _) =>
               Text('terminal for ${project.name}'),
         ),
       );
@@ -364,6 +397,222 @@ void main() {
 
       // Then: a folder Maestro cannot reach roots no shell.
       expect(find.text('terminal for Demo'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenASelectedAvailableProject_WhenCtrlBackquotePressed_ThenItsTerminalToggles',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, project, drawerController) =>
+              _ToggleTerminalProbe(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                label: 'terminal for ${project.name}',
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(find.text('terminal for Demo'), findsOneWidget);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(find.text('terminal for Demo'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenARealFocusedTerminal_WhenCtrlBackquotePressed_ThenTheDrawerHides',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final opener = _WorkspaceTerminalOpener();
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, project, drawerController) =>
+              ProjectTerminalPanel(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                createController: () => ProjectTerminalController(
+                  workingDirectory: project.folderPath,
+                  open: opener.call,
+                  terminal: Terminal(maxLines: 200),
+                ),
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+      final terminalView = find.byKey(const Key('terminal-view'));
+      expect(terminalView, findsOneWidget);
+      await tester.tap(terminalView);
+      await tester.pump(const Duration(milliseconds: 301));
+      final focusedContext = tester.binding.focusManager.primaryFocus?.context;
+      expect(focusedContext, isNotNull);
+      final terminalElement = terminalView.evaluate().single;
+      var terminalHasFocus = false;
+      (focusedContext! as Element).visitAncestorElements((element) {
+        terminalHasFocus = identical(element, terminalElement);
+        return !terminalHasFocus;
+      });
+      expect(terminalHasFocus, isTrue);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      final terminalKeyHandler = tester
+          .widget<TerminalView>(terminalView)
+          .onKeyEvent;
+      expect(terminalKeyHandler, isNotNull);
+      final result = terminalKeyHandler!(
+        tester.binding.focusManager.primaryFocus!,
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.backquote,
+          logicalKey: LogicalKeyboardKey.backquote,
+          timeStamp: Duration.zero,
+        ),
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(result, KeyEventResult.handled);
+      expect(find.byKey(const Key('terminal-drawer')), findsNothing);
+      expect(opener.callCount, 1);
+      expect(opener.session.closeCallCount, 0);
+    },
+  );
+
+  testWidgets(
+    'GivenARunningProjectTerminal_WhenDestinationsChange_ThenItsSessionSurvivesAndShortcutStillWorks',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final opener = _WorkspaceTerminalOpener();
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          workflowService: _workflowService(),
+          terminalBuilder: (_, _, project, drawerController) =>
+              ProjectTerminalPanel(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                createController: () => ProjectTerminalController(
+                  workingDirectory: project.folderPath,
+                  open: opener.call,
+                  terminal: Terminal(maxLines: 200),
+                ),
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Automations'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('terminal-drawer')), findsNothing);
+      expect(opener.session.closeCallCount, 0);
+
+      await _toggleTerminalShortcut(tester);
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      expect(opener.callCount, 1);
+      expect(opener.session.closeCallCount, 0);
+
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      expect(opener.callCount, 1);
+      expect(opener.session.closeCallCount, 0);
+    },
+  );
+
+  testWidgets(
+    'GivenAProjectTerminal_WhenAnotherProjectIsSelected_ThenShortcutTargetsTheNewProject',
+    (tester) async {
+      final repository = _Repository()
+        ..records.addAll(<ProjectRecord>[
+          _record(),
+          _record(id: 'two', name: 'Second', folderPath: r'C:\projects\second'),
+        ]);
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, project, drawerController) =>
+              _ToggleTerminalProbe(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                label: 'terminal for ${project.name}',
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      expect(find.text('terminal for Demo'), findsOneWidget);
+
+      await tester.tap(find.text('Second').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+
+      expect(find.text('terminal for Demo'), findsNothing);
+      expect(find.text('terminal for Second'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenASelectedProject_WhenTerminalIsBuilt_ThenItIsBottomDockedOutsideProjectScrolling',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, _, _) => const SizedBox(
+            key: Key('terminal-dock-probe'),
+            width: double.infinity,
+            height: 80,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      final mainPane = find.byKey(const Key('workbench-main-pane'));
+      final terminal = find.byKey(const Key('terminal-dock-probe'));
+      expect(mainPane, findsOneWidget);
+      expect(terminal, findsOneWidget);
+      expect(
+        find.ancestor(of: terminal, matching: find.byType(Scrollable)),
+        findsNothing,
+      );
+      expect(
+        tester.getBottomRight(terminal).dy,
+        tester.getBottomRight(mainPane).dy,
+      );
+      expect(tester.getTopLeft(terminal).dx, tester.getTopLeft(mainPane).dx);
+      expect(
+        tester.getBottomRight(terminal).dx,
+        tester.getBottomRight(mainPane).dx,
+      );
     },
   );
 
@@ -588,6 +837,13 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   throw TestFailure('Could not reveal the requested widget: $finder.');
 }
 
+Future<void> _toggleTerminalShortcut(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pump();
+}
+
 Future<void> _register(WidgetTester tester, String name) async {
   await tester.tap(find.bySemanticsLabel('Register project'));
   await tester.pumpAndSettle();
@@ -603,7 +859,7 @@ Widget _app({
   ProjectFolderPicker picker = const _Picker(null),
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
-  RunStartWorkspaceBuilder? terminalBuilder,
+  ProjectTerminalWorkspaceBuilder? terminalBuilder,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
@@ -646,6 +902,92 @@ WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
       clock: () => DateTime.utc(2026, 8, 6),
       newId: () => 'workflow-id',
     );
+
+final class _ToggleTerminalProbe extends StatefulWidget {
+  const _ToggleTerminalProbe({
+    required this.drawerController,
+    required this.label,
+    super.key,
+  });
+
+  final ProjectTerminalDrawerController drawerController;
+  final String label;
+
+  @override
+  State<_ToggleTerminalProbe> createState() => _ToggleTerminalProbeState();
+}
+
+final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {
+  late final ProjectTerminalDrawerAttachment _drawerAttachment;
+  var _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _drawerAttachment = widget.drawerController.attach(
+      show: _show,
+      hide: _hide,
+      toggle: _toggle,
+    );
+  }
+
+  void _show() => setState(() => _visible = true);
+
+  void _hide() => setState(() => _visible = false);
+
+  void _toggle() => _visible ? _hide() : _show();
+
+  @override
+  void dispose() {
+    widget.drawerController.detach(_drawerAttachment);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _visible
+      ? SizedBox(height: 80, child: Center(child: Text(widget.label)))
+      : const SizedBox.shrink();
+}
+
+final class _WorkspaceTerminalOpener {
+  var callCount = 0;
+  late _WorkspaceTerminalSession session;
+
+  Future<TerminalOpenResult> call({
+    required String workingDirectory,
+    required int columns,
+    required int rows,
+  }) async {
+    callCount++;
+    session = _WorkspaceTerminalSession();
+    return TerminalOpenResult.opened(session);
+  }
+}
+
+final class _WorkspaceTerminalSession implements TerminalSession {
+  final _output = StreamController<Uint8List>.broadcast();
+  final _exit = Completer<TerminalExit>();
+  var closeCallCount = 0;
+
+  @override
+  Stream<Uint8List> get output => _output.stream;
+
+  @override
+  Future<TerminalExit> get exit => _exit.future;
+
+  @override
+  Future<void> write(Uint8List bytes) async {}
+
+  @override
+  Future<void> resize({required int columns, required int rows}) async {}
+
+  @override
+  Future<TerminalClosure> close() async {
+    closeCallCount++;
+    if (!_exit.isCompleted) _exit.complete(const TerminalExit(0));
+    return TerminalClosure.closed;
+  }
+}
 
 final class _WorkflowRepository implements WorkflowRepository {
   final definitions = <WorkflowDefinition>[];
@@ -836,11 +1178,15 @@ final class _Repository implements ProjectRepository {
   }
 }
 
-ProjectRecord _record() => ProjectRecord(
-  id: 'one',
-  name: 'Demo',
-  normalizedName: 'demo',
-  folderPath: r'C:\missing\demo',
+ProjectRecord _record({
+  String id = 'one',
+  String name = 'Demo',
+  String folderPath = r'C:\missing\demo',
+}) => ProjectRecord(
+  id: id,
+  name: name,
+  normalizedName: name.toLowerCase(),
+  folderPath: folderPath,
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6),
   deletedAt: null,

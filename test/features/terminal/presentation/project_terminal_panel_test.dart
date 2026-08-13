@@ -1,44 +1,81 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
   group('ProjectTerminalPanel', () {
-    testWidgets(
-      'GivenAClosedPanel_WhenItRenders_ThenOnlyTheOpenActionIsOffered',
-      (tester) async {
-        // Given: a project whose terminal has not been opened.
-        await _pump(tester, _FakeOpener());
+    testWidgets('GivenAHiddenDrawer_WhenShown_ThenItStartsAndShowsATerminal', (
+      tester,
+    ) async {
+      final drawer = ProjectTerminalDrawerController();
 
-        // Then: the panel invites the user in without starting a shell.
-        expect(find.byKey(const Key('open-terminal')), findsOneWidget);
-        expect(find.byKey(const Key('close-terminal')), findsNothing);
-        expect(find.byKey(const Key('terminal-idle')), findsOneWidget);
-        expect(find.byKey(const Key('terminal-view')), findsNothing);
+      await _pump(tester, _FakeOpener(), drawer: drawer);
+      drawer.show();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      expect(find.byKey(const Key('terminal-view')), findsOneWidget);
+    });
+
+    testWidgets(
+      'GivenARunningDrawer_WhenShown_ThenItUsesTheFullWidthBottomDock',
+      (tester) async {
+        final drawer = ProjectTerminalDrawerController();
+
+        await _pump(tester, _FakeOpener(), drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        final drawerSize = tester.getSize(
+          find.byKey(const Key('terminal-drawer')),
+        );
+        final workspaceSize = tester.getSize(find.byType(Scaffold));
+        expect(drawerSize.width, workspaceSize.width);
+        expect(drawerSize.height, 300);
+      },
+    );
+
+    testWidgets(
+      'GivenARunningDrawer_WhenHiddenAndShown_ThenTheSessionIsRetained',
+      (tester) async {
+        final drawer = ProjectTerminalDrawerController();
+        final opener = _FakeOpener();
+        await _pump(tester, opener, drawer: drawer);
+
+        drawer.show();
+        await tester.pumpAndSettle();
+        drawer.hide();
+        await tester.pumpAndSettle();
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        expect(opener.callCount, 1);
+        expect(find.byKey(const Key('terminal-view')), findsOneWidget);
       },
     );
 
     testWidgets('GivenARunningSession_WhenThePanelRenders_'
         'ThenTheTerminalViewAndCloseActionAreShown', (tester) async {
       // Given: an idle panel.
-      await _pump(tester, _FakeOpener());
+      final drawer = ProjectTerminalDrawerController();
+      await _pump(tester, _FakeOpener(), drawer: drawer);
 
-      // When: the user opens the terminal.
-      await tester.tap(find.byKey(const Key('open-terminal')));
+      // When: the terminal drawer is revealed.
+      drawer.show();
       await tester.pumpAndSettle();
 
       // Then: the emulator is on screen and closing is offered.
       expect(find.byKey(const Key('terminal-view')), findsOneWidget);
       expect(find.byKey(const Key('close-terminal')), findsOneWidget);
-      expect(find.byKey(const Key('open-terminal')), findsNothing);
     });
 
     testWidgets(
@@ -46,8 +83,9 @@ void main() {
       (tester) async {
         // Given: a running session.
         final opener = _FakeOpener();
-        await _pump(tester, opener);
-        await tester.tap(find.byKey(const Key('open-terminal')));
+        final drawer = ProjectTerminalDrawerController();
+        await _pump(tester, opener, drawer: drawer);
+        drawer.show();
         await tester.pumpAndSettle();
 
         // When: the shell exits on its own (AF-03).
@@ -57,7 +95,6 @@ void main() {
         // Then: the exit result is announced and a fresh session is offered.
         expect(find.byKey(const Key('terminal-exit')), findsOneWidget);
         expect(find.textContaining('exited with code 137'), findsOneWidget);
-        expect(find.byKey(const Key('open-terminal')), findsOneWidget);
         expect(
           tester.getSemantics(find.byKey(const Key('terminal-exit'))).label,
           contains('Project terminal exited'),
@@ -68,6 +105,7 @@ void main() {
     testWidgets('GivenAFailedOpen_WhenThePanelRenders_'
         'ThenTheFailureAndRemediationAreAnnounced', (tester) async {
       // Given: no platform shell is available (AF-01).
+      final drawer = ProjectTerminalDrawerController();
       await _pump(
         tester,
         _FakeOpener(
@@ -77,10 +115,11 @@ void main() {
             remediation: 'Install a shell and make sure it is on PATH.',
           ),
         ),
+        drawer: drawer,
       );
 
-      // When: the user tries to open a terminal.
-      await tester.tap(find.byKey(const Key('open-terminal')));
+      // When: the terminal drawer is revealed.
+      drawer.show();
       await tester.pumpAndSettle();
 
       // Then: the live region carries both the problem and the fix.
@@ -96,8 +135,9 @@ void main() {
         'ThenTheSessionStaysCloseable', (tester) async {
       // Given: a session whose processes resist termination.
       final opener = _FakeOpener()..closure = TerminalClosure.incomplete;
-      await _pump(tester, opener);
-      await tester.tap(find.byKey(const Key('open-terminal')));
+      final drawer = ProjectTerminalDrawerController();
+      await _pump(tester, opener, drawer: drawer);
+      drawer.show();
       await tester.pumpAndSettle();
 
       // When: the user closes it.
@@ -109,15 +149,65 @@ void main() {
       expect(find.byKey(const Key('close-terminal')), findsOneWidget);
     });
 
+    testWidgets(
+      'GivenARunningSession_WhenExplicitCloseSucceeds_ThenTheSessionEndsAndDrawerHides',
+      (tester) async {
+        final opener = _FakeOpener();
+        final drawer = ProjectTerminalDrawerController();
+        await _pump(tester, opener, drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('close-terminal')));
+        await tester.pumpAndSettle();
+
+        expect(opener.session.closeCallCount, 1);
+        expect(find.byKey(const Key('terminal-drawer')), findsNothing);
+        expect(find.byKey(const Key('terminal-view')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'GivenAFocusedTerminal_WhenARegularKeyIsPressed_ThenTerminalInputHandlingContinues',
+      (tester) async {
+        final opener = _FakeOpener();
+        final drawer = ProjectTerminalDrawerController();
+        await _pump(tester, opener, drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('terminal-view')));
+        await tester.pump(const Duration(milliseconds: 301));
+
+        final terminalView = tester.widget<TerminalView>(
+          find.byKey(const Key('terminal-view')),
+        );
+        final result = terminalView.onKeyEvent!(
+          tester.binding.focusManager.primaryFocus!,
+          const KeyDownEvent(
+            physicalKey: PhysicalKeyboardKey.keyA,
+            logicalKey: LogicalKeyboardKey.keyA,
+            character: 'a',
+            timeStamp: Duration.zero,
+          ),
+        );
+
+        expect(result, KeyEventResult.ignored);
+        expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      },
+    );
+
     testWidgets('GivenThePanel_WhenTraversingWithTheKeyboard_'
         'ThenTheActionsAreReachable', (tester) async {
       // Given: an idle panel.
-      await _pump(tester, _FakeOpener());
+      final drawer = ProjectTerminalDrawerController();
+      await _pump(tester, _FakeOpener(), drawer: drawer);
 
-      // When: the user traverses to the first action.
+      // When: the drawer opens a terminal.
+      drawer.show();
+      await tester.pumpAndSettle();
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('open-terminal')))
+            .widget<IconButton>(find.byKey(const Key('close-terminal')))
             .onPressed,
         isNotNull,
       );
@@ -134,8 +224,9 @@ void main() {
       'GivenThePanel_WhenInspectingSemantics_ThenTheTerminalIsLabelled',
       (tester) async {
         // Given: a running session.
-        await _pump(tester, _FakeOpener());
-        await tester.tap(find.byKey(const Key('open-terminal')));
+        final drawer = ProjectTerminalDrawerController();
+        await _pump(tester, _FakeOpener(), drawer: drawer);
+        drawer.show();
         await tester.pumpAndSettle();
 
         // Then: the session region and both actions carry semantic labels.
@@ -152,11 +243,16 @@ void main() {
   });
 }
 
-Future<void> _pump(WidgetTester tester, _FakeOpener opener) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _FakeOpener opener, {
+  required ProjectTerminalDrawerController drawer,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: ProjectTerminalPanel(
+          drawerController: drawer,
           createController: () => ProjectTerminalController(
             workingDirectory: r'D:\project',
             open: opener.call,
@@ -174,6 +270,7 @@ final class _FakeOpener {
 
   final TerminalFailure? failure;
   TerminalClosure closure = TerminalClosure.closed;
+  var callCount = 0;
   late _FakeSession session;
 
   Future<TerminalOpenResult> call({
@@ -181,6 +278,7 @@ final class _FakeOpener {
     required int columns,
     required int rows,
   }) async {
+    callCount++;
     if (failure case final value?) return TerminalOpenResult.rejected(value);
     session = _FakeSession(closure);
     return TerminalOpenResult.opened(session);
@@ -193,6 +291,7 @@ final class _FakeSession implements TerminalSession {
   final TerminalClosure _closure;
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
+  var closeCallCount = 0;
 
   @override
   Stream<Uint8List> get output => _output.stream;
@@ -208,6 +307,7 @@ final class _FakeSession implements TerminalSession {
 
   @override
   Future<TerminalClosure> close() async {
+    closeCallCount++;
     if (_closure == TerminalClosure.closed) exitWith(0);
     return _closure;
   }
