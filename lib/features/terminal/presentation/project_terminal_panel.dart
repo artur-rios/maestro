@@ -7,6 +7,13 @@ import 'package:maestro/features/terminal/presentation/project_terminal_controll
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:xterm/xterm.dart';
 
+const _terminalTextStyle = TerminalStyle(
+  fontFamily: 'CaskaydiaCove Nerd Font',
+  fontFamilyFallback: <String>['JetBrainsMono Nerd Font', 'monospace'],
+  fontSize: 13,
+  height: 1.2,
+);
+
 /// Hosts one project's embedded terminal (FR-TE-01).
 ///
 /// The session is opened on request rather than with the panel: a shell per
@@ -170,6 +177,7 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
                       controller: _viewController,
                       autofocus: true,
                       backgroundOpacity: 1,
+                      textStyle: _terminalTextStyle,
                       onKeyEvent: _handleTerminalKeyEvent,
                     ),
                   ),
