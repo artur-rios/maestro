@@ -9,7 +9,7 @@ abstract interface class WindowManagerGateway {
   Future<void> minimize();
   Future<bool> isMaximized();
   Future<void> maximize();
-  Future<void> restore();
+  Future<void> unmaximize();
   Future<void> close();
 }
 
@@ -36,7 +36,7 @@ final class ProductionWindowManagerGateway implements WindowManagerGateway {
   Future<void> maximize() => windowManager.maximize();
 
   @override
-  Future<void> restore() => windowManager.restore();
+  Future<void> unmaximize() => windowManager.unmaximize();
 
   @override
   Future<void> close() => windowManager.close();
@@ -72,7 +72,7 @@ final class WindowManagerDesktopWindow implements DesktopWindowPort {
 
   @override
   Future<void> toggleMaximize() async =>
-      await gateway.isMaximized() ? gateway.restore() : gateway.maximize();
+      await gateway.isMaximized() ? gateway.unmaximize() : gateway.maximize();
 
   @override
   Future<void> close() => gateway.close();

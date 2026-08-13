@@ -31,19 +31,19 @@ void main() {
       await window.toggleMaximize();
 
       expect(gateway.maximizeCalls, 1);
-      expect(gateway.restoreCalls, 0);
+      expect(gateway.unmaximizeCalls, 0);
     },
   );
 
   test(
-    'GivenMaximizedWindow_WhenToggleMaximize_ThenWindowIsRestored',
+    'GivenMaximizedWindow_WhenToggleMaximize_ThenWindowIsUnmaximized',
     () async {
       final gateway = FakeWindowManagerGateway(isMaximized: true);
       final window = WindowManagerDesktopWindow(gateway);
 
       await window.toggleMaximize();
 
-      expect(gateway.restoreCalls, 1);
+      expect(gateway.unmaximizeCalls, 1);
       expect(gateway.maximizeCalls, 0);
     },
   );
@@ -75,7 +75,7 @@ final class FakeWindowManagerGateway implements WindowManagerGateway {
   int startDraggingCalls = 0;
   int minimizeCalls = 0;
   int maximizeCalls = 0;
-  int restoreCalls = 0;
+  int unmaximizeCalls = 0;
   int closeCalls = 0;
 
   @override
@@ -102,7 +102,7 @@ final class FakeWindowManagerGateway implements WindowManagerGateway {
   Future<void> maximize() async => maximizeCalls++;
 
   @override
-  Future<void> restore() async => restoreCalls++;
+  Future<void> unmaximize() async => unmaximizeCalls++;
 
   @override
   Future<void> close() async => closeCalls++;
