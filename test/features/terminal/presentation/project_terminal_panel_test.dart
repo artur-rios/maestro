@@ -26,6 +26,24 @@ void main() {
     });
 
     testWidgets(
+      'GivenARunningDrawer_WhenShown_ThenItUsesTheFullWidthBottomDock',
+      (tester) async {
+        final drawer = ProjectTerminalDrawerController();
+
+        await _pump(tester, _FakeOpener(), drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        final drawerSize = tester.getSize(
+          find.byKey(const Key('terminal-drawer')),
+        );
+        final workspaceSize = tester.getSize(find.byType(Scaffold));
+        expect(drawerSize.width, workspaceSize.width);
+        expect(drawerSize.height, 300);
+      },
+    );
+
+    testWidgets(
         'GivenARunningDrawer_WhenHiddenAndShown_ThenTheSessionIsRetained',
         (tester) async {
       final drawer = ProjectTerminalDrawerController();

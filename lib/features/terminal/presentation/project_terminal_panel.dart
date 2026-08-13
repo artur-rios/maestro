@@ -77,7 +77,8 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
       container: true,
       child: Container(
         key: const Key('terminal-drawer'),
-        width: 300,
+        width: double.infinity,
+        height: 300,
         decoration: BoxDecoration(
           color: const Color(0xFF1C1C1C),
           border: Border.all(color: theme.colorScheme.outlineVariant),
@@ -142,11 +143,10 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
               ],
               if (state.status == TerminalSessionStatus.running) ...<Widget>[
                 const SizedBox(height: 12),
-                Semantics(
-                  label: 'Project terminal session',
-                  container: true,
-                  child: SizedBox(
-                    height: 320,
+                Expanded(
+                  child: Semantics(
+                    label: 'Project terminal session',
+                    container: true,
                     child: TerminalView(
                       _controller.terminal,
                       key: const Key('terminal-view'),
