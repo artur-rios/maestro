@@ -108,6 +108,7 @@ final class _ProjectWorkspacePageState
   final _terminalDrawerController = ProjectTerminalDrawerController();
   var _destination = _WorkbenchDestination.tasks;
   var _selectedProjectPane = _SelectedProjectPane.project;
+  String? _selectedProjectId;
 
   @override
   void initState() {
@@ -120,6 +121,7 @@ final class _ProjectWorkspacePageState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(projectControllerProvider);
+    _resetProjectPaneWhenSelectionChanges(state.selected?.record.id);
     final narrow = MediaQuery.sizeOf(context).width < 720;
     final sidebar = _WorkbenchSidebar(
       state: state,
@@ -234,6 +236,12 @@ final class _ProjectWorkspacePageState
     _terminalDrawerController.hide();
     setState(() => _selectedProjectPane = _SelectedProjectPane.project);
     ref.read(projectControllerProvider.notifier).select(projectId);
+  }
+
+  void _resetProjectPaneWhenSelectionChanges(String? selectedProjectId) {
+    if (_selectedProjectId == selectedProjectId) return;
+    _selectedProjectId = selectedProjectId;
+    _selectedProjectPane = _SelectedProjectPane.project;
   }
 
   void _selectProjectPane(_SelectedProjectPane pane) {

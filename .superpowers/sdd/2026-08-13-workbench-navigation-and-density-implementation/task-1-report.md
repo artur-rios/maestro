@@ -40,3 +40,13 @@
 - Focused widget tests require a fresh run after the shared Flutter runner
   process is released; no green Flutter test result was available in this
   worker session.
+
+## Review fix round 1
+
+- Added a selected-project ID guard so every provider-driven selection change,
+  including successful registration, restores the normal project pane.
+- Added `GivenHistoryPane_WhenAnotherProjectIsRegistered_ThenProjectPaneIsRestored`.
+- Mutation check: removing the ID guard made the regression fail because
+  `History content for Second` remained visible.
+- Restored implementation: the focused regression passed (1/1), and the full
+  project workspace widget-test file passed (29/29).

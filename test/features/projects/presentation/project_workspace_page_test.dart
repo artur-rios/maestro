@@ -135,6 +135,36 @@ void main() {
   );
 
   testWidgets(
+    'GivenHistoryPane_WhenAnotherProjectIsRegistered_ThenProjectPaneIsRestored',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          picker: const _Picker(r'C:\projects\second'),
+          historyBuilder: (_, _, project) => Text(
+            'History content for ${project.name}',
+            key: const Key('history-content-probe'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      await _register(tester, 'Second');
+
+      expect(find.byKey(const Key('history-content-probe')), findsNothing);
+      expect(find.text('Project lifecycle actions'), findsOneWidget);
+      expect(find.text(r'C:\projects\second'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenNoSelectedProject_WhenCtrlBackquotePressed_ThenFeedbackIsAnnounced',
     (tester) async {
       await tester.pumpWidget(_app());
