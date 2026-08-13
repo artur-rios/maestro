@@ -1,85 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_window_chrome.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/appearance/presentation/appearance_selector.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 
 final class AuthenticationPage extends ConsumerWidget {
   const AuthenticationPage({
     required this.appearanceController,
     required this.authenticatedBuilder,
+    required this.window,
     super.key,
   });
 
   final AppearanceController appearanceController;
   final WidgetBuilder authenticatedBuilder;
+  final DesktopWindowPort window;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(authenticationControllerProvider);
-    if (state is AuthenticationAuthenticated) {
-      return _AuthenticatedShell(
-        appearanceController: appearanceController,
-        authenticatedBuilder: authenticatedBuilder,
-      );
-    }
-    return _AuthenticationForm(
-      appearanceController: appearanceController,
-      state: state,
-    );
-  }
-}
-
-final class _AuthenticatedShell extends ConsumerWidget {
-  const _AuthenticatedShell({
-    required this.appearanceController,
-    required this.authenticatedBuilder,
-  });
-
-  final AppearanceController appearanceController;
-  final WidgetBuilder authenticatedBuilder;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Material(
-      child: Column(
-        children: <Widget>[
-          SafeArea(
-            bottom: false,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AppearanceSelector(controller: appearanceController),
-                    TextButton.icon(
-                      onPressed: () => ref
-                          .read(authenticationControllerProvider.notifier)
-                          .signOut(),
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Sign out'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+    final authenticated = state is AuthenticationAuthenticated;
+    return MaestroWindowChrome(
+      window: window,
+      title: 'Maestro',
+      actions: <Widget>[
+        AppearanceSelector(controller: appearanceController),
+        if (authenticated)
+          TextButton.icon(
+            onPressed: () =>
+                ref.read(authenticationControllerProvider.notifier).signOut(),
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
           ),
-          Expanded(child: authenticatedBuilder(context)),
-        ],
-      ),
+      ],
+      child: authenticated
+          ? authenticatedBuilder(context)
+          : _AuthenticationForm(state: state),
     );
   }
 }
 
 final class _AuthenticationForm extends ConsumerStatefulWidget {
-  const _AuthenticationForm({
-    required this.appearanceController,
-    required this.state,
-  });
+  const _AuthenticationForm({required this.state});
 
-  final AppearanceController appearanceController;
   final AuthenticationPresentationState state;
 
   @override
@@ -108,117 +73,115 @@ final class _AuthenticationFormState
       AuthenticationError value => value,
       _ => null,
     };
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Maestro'),
-        actions: [AppearanceSelector(controller: widget.appearanceController)],
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final formPanel = _AuthenticationFormPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                'Local authentication',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: busy ? null : _signInWithOperatingSystem,
+                icon: const Icon(Icons.lock_person),
+                label: const Text('Sign in with your operating system'),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Row(
                   children: <Widget>[
-                    Text(
-                      'Local authentication',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: busy ? null : _signInWithOperatingSystem,
-                      icon: const Icon(Icons.lock_person),
-                      label: const Text('Sign in with your operating system'),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(child: Divider()),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12),
-                            child: Text('or use email and password'),
-                          ),
-                          Expanded(child: Divider()),
-                        ],
-                      ),
-                    ),
-                    if (error != null) ...<Widget>[
-                      _AuthenticationErrorMessage(error: error),
-                      const SizedBox(height: 16),
-                    ],
-                    TextField(
-                      controller: _emailController,
-                      enabled: !busy,
-                      autofillHints: const <String>[AutofillHints.email],
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Email address',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _passwordController,
-                      enabled: !busy,
-                      autofillHints: const <String>[AutofillHints.password],
-                      obscureText: true,
-                      enableSuggestions: false,
-                      autocorrect: false,
-                      onSubmitted: busy ? null : (_) => _submitEmail(),
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    if (_creatingAccount &&
-                        error?.category !=
-                            AuthenticationFailureCategory
-                                .passwordPolicy) ...<Widget>[
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Password must contain at least 8 characters.',
-                      ),
-                      const Text('Choose a strong, unique password.'),
-                    ],
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: busy ? null : _submitEmail,
-                      child: Text(
-                        _creatingAccount
-                            ? 'Create account'
-                            : 'Sign in with email and password',
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: busy ? null : _toggleAccountMode,
-                      child: Text(
-                        _creatingAccount
-                            ? 'Back to sign in'
-                            : 'Create a local account',
-                      ),
-                    ),
-                    if (busy) ...<Widget>[
-                      const SizedBox(height: 8),
-                      Center(
-                        child: Semantics(
-                          label: 'Authentication in progress',
-                          child: const CircularProgressIndicator(),
+                    Expanded(child: Divider()),
+                    Flexible(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'or use email and password',
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                    ],
+                    ),
+                    Expanded(child: Divider()),
                   ],
                 ),
               ),
-            ),
+              if (error != null) ...<Widget>[
+                _AuthenticationErrorMessage(error: error),
+                const SizedBox(height: 16),
+              ],
+              TextField(
+                controller: _emailController,
+                enabled: !busy,
+                autofillHints: const <String>[AutofillHints.email],
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Email address',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                enabled: !busy,
+                autofillHints: const <String>[AutofillHints.password],
+                obscureText: true,
+                enableSuggestions: false,
+                autocorrect: false,
+                onSubmitted: busy ? null : (_) => _submitEmail(),
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_creatingAccount &&
+                  error?.category !=
+                      AuthenticationFailureCategory.passwordPolicy) ...<Widget>[
+                const SizedBox(height: 12),
+                const Text('Password must contain at least 8 characters.'),
+                const Text('Choose a strong, unique password.'),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: busy ? null : _submitEmail,
+                child: Text(
+                  _creatingAccount
+                      ? 'Create account'
+                      : 'Sign in with email and password',
+                ),
+              ),
+              TextButton(
+                onPressed: busy ? null : _toggleAccountMode,
+                child: Text(
+                  _creatingAccount
+                      ? 'Back to sign in'
+                      : 'Create a local account',
+                ),
+              ),
+              if (busy) ...<Widget>[
+                const SizedBox(height: 8),
+                Center(
+                  child: Semantics(
+                    label: 'Authentication in progress',
+                    child: const CircularProgressIndicator(),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ),
-      ),
+        );
+        if (constraints.maxWidth < 760) {
+          return _AuthenticationFormPane(child: formPanel);
+        }
+        return Row(
+          children: <Widget>[
+            const Expanded(child: _AuthenticationIdentityPanel()),
+            Expanded(child: _AuthenticationFormPane(child: formPanel)),
+          ],
+        );
+      },
     );
   }
 
@@ -246,6 +209,88 @@ final class _AuthenticationFormState
     return _creatingAccount
         ? controller.createAccount(email, password)
         : controller.signInWithEmail(email, password);
+  }
+}
+
+final class _AuthenticationIdentityPanel extends StatelessWidget {
+  const _AuthenticationIdentityPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      key: const Key('authentication-identity-panel'),
+      color: theme.colorScheme.surfaceContainerLow,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(48),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    Icons.account_tree_outlined,
+                    size: 40,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 24),
+                  Text('Maestro', style: theme.textTheme.displaySmall),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Your local workspace for projects, workflows, and runs.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _AuthenticationFormPane extends StatelessWidget {
+  const _AuthenticationFormPane({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+final class _AuthenticationFormPanel extends StatelessWidget {
+  const _AuthenticationFormPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      key: const Key('authentication-form-panel'),
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: child,
+    );
   }
 }
 

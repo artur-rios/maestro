@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
@@ -12,8 +13,44 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 
 void main() {
+  testWidgets(
+    'GivenSignedOutApp_WhenShown_ThenFocusedAuthenticationUsesWindowChrome',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
+      expect(
+        find.byKey(const Key('authentication-identity-panel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('authentication-form-panel')),
+        findsOneWidget,
+      );
+      expect(find.byType(AppBar), findsNothing);
+    },
+  );
+
+  testWidgets('GivenNarrowSignedOutApp_WhenShown_ThenIdentityPanelCollapses', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(600, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_testApp(_authenticationService()));
+
+    expect(
+      find.byKey(const Key('authentication-identity-panel')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('authentication-form-panel')), findsOneWidget);
+  });
+
   testWidgets('GivenSignedOut_WhenRendered_ThenProtectedShellIsHidden', (
     tester,
   ) async {
@@ -385,8 +422,11 @@ Widget _testApp(
   return ProviderScope(
     overrides: [authenticationServiceProvider.overrideWithValue(service)],
     child: MaterialApp(
+      theme: maestroTheme(Brightness.light),
+      darkTheme: maestroTheme(Brightness.dark),
       home: AuthenticationPage(
         appearanceController: appearanceController,
+        window: const NoopDesktopWindowPort(),
         authenticatedBuilder:
             authenticatedBuilder ?? (_) => const Text('Foundation ready'),
       ),

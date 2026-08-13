@@ -86,7 +86,13 @@ void main() {
           ),
         );
 
-        expect(find.text('Maestro'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('maestro-title-bar')),
+            matching: find.text('Maestro'),
+          ),
+          findsOneWidget,
+        );
         expect(find.byTooltip('Appearance'), findsOneWidget);
         expect(find.text('Sign in with your operating system'), findsOneWidget);
         expect(
@@ -145,11 +151,13 @@ void main() {
         ),
       );
 
+      expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
       await tester.tap(
         find.bySemanticsLabel('Sign in with your operating system'),
       );
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
       expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Automations'), findsOneWidget);
       expect(find.text('Health'), findsOneWidget);
@@ -162,18 +170,18 @@ void main() {
       expect(find.text('Foundation ready'), findsNothing);
       expect(find.text('Sign out'), findsOneWidget);
       expect(find.byTooltip('Appearance'), findsOneWidget);
-      final accountActions = tester.widget<Row>(
+      final titleBarActions = tester.widget<Row>(
         find
-            .ancestor(
-              of: find.widgetWithText(TextButton, 'Sign out'),
+            .descendant(
+              of: find.byKey(const Key('maestro-title-bar')),
               matching: find.byType(Row),
             )
             .first,
       );
-      expect(accountActions.children, [
-        isA<AppearanceSelector>(),
-        isA<TextButton>(),
-      ]);
+      expect(titleBarActions.children, hasLength(6));
+      expect(titleBarActions.children.first, isA<Expanded>());
+      expect(titleBarActions.children[1], isA<AppearanceSelector>());
+      expect(titleBarActions.children[2], isA<TextButton>());
 
       await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
