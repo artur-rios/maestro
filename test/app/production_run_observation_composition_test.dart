@@ -52,38 +52,41 @@ void main() {
   test(
     'GivenProductionComposition_WhenBuilt_ThenRunObservationRetainsThreeArgumentBuilderContract',
     () async {
-    // Given: the production composition over a temporary database.
-    final root = await Directory.systemTemp.createTemp('maestro-run-control-');
-    addTearDown(() => root.delete(recursive: true));
-    final database = MaestroDatabase(NativeDatabase.memory());
-    final composition = await app.composeProductionApp(
-      paths: ApplicationPaths.fromRoot(root),
-      database: database,
-      passwordVerifiers: _MemoryVerifierStore(),
-      passwordHasher: const _PasswordHasher(),
-      operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-      commandRunner: const _CommandRunner(),
-      clock: () => DateTime.utc(2026, 8, 7, 12),
-    );
-    addTearDown(composition.close);
+      // Given: the production composition over a temporary database.
+      final root = await Directory.systemTemp.createTemp(
+        'maestro-run-control-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final database = MaestroDatabase(NativeDatabase.memory());
+      final composition = await app.composeProductionApp(
+        paths: ApplicationPaths.fromRoot(root),
+        database: database,
+        passwordVerifiers: _MemoryVerifierStore(),
+        passwordHasher: const _PasswordHasher(),
+        operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
+        commandRunner: const _CommandRunner(),
+        clock: () => DateTime.utc(2026, 8, 7, 12),
+      );
+      addTearDown(composition.close);
 
-    // When: the observation panel the workspace builds is inspected.
-    final application = composition.app as MaestroApp;
-    final panel =
-        application.runObservationBuilder!(
-              _BuildContextStub(),
-              'actor-1',
-              _project(root.path),
-            )
-            as ActiveRunsPanel;
+      // When: the observation panel the workspace builds is inspected.
+      final application = composition.app as MaestroApp;
+      final panel =
+          application.runObservationBuilder!(
+                _BuildContextStub(),
+                'actor-1',
+                _project(root.path),
+              )
+              as ActiveRunsPanel;
 
-    // Then: the run controls reach the workspace over the durable repository.
-    expect(panel.createControlController, isNotNull);
-    expect(composition.runRepository, isA<RunControlRepository>());
-    final controller = panel.createControlController!();
-    addTearDown(controller.dispose);
-    expect(controller.state.controls, isEmpty);
-  });
+      // Then: the run controls reach the workspace over the durable repository.
+      expect(panel.createControlController, isNotNull);
+      expect(composition.runRepository, isA<RunControlRepository>());
+      final controller = panel.createControlController!();
+      addTearDown(controller.dispose);
+      expect(controller.state.controls, isEmpty);
+    },
+  );
 }
 
 ProjectRecord _project(String folderPath) => ProjectRecord(
