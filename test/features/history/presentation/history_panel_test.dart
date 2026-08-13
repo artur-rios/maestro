@@ -9,6 +9,21 @@ import 'package:maestro/features/history/presentation/history_panel.dart';
 
 void main() {
   testWidgets(
+    'GivenDesktopHistoryForm_WhenRendered_ThenItsContentIsConstrained',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+
+      await tester.pumpWidget(_host(database));
+      await tester.pumpAndSettle();
+
+      expect(tester.getSize(find.byType(Card)).width, lessThan(1200));
+    },
+  );
+
+  testWidgets(
     'GivenRetentionService_WhenHistoryOpens_ThenUserCanSaveSafePolicy',
     (tester) async {
       final database = MaestroDatabase(NativeDatabase.memory());

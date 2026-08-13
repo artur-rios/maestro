@@ -726,28 +726,52 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
         const SizedBox(height: 8),
         SelectableText(selected.record.folderPath),
         const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PopupMenuButton<_SelectedProjectPane>(
-            tooltip: 'Project tools',
-            enabled: state.status != ProjectWorkspaceStatus.loading,
-            onSelected: onPaneSelected,
-            itemBuilder: (_) => const <PopupMenuEntry<_SelectedProjectPane>>[
-              PopupMenuItem<_SelectedProjectPane>(
-                value: _SelectedProjectPane.history,
-                child: Text('History & audit'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            PopupMenuButton<_SelectedProjectPane>(
+              tooltip: 'Project tools',
+              enabled: state.status != ProjectWorkspaceStatus.loading,
+              onSelected: onPaneSelected,
+              itemBuilder: (_) => const <PopupMenuEntry<_SelectedProjectPane>>[
+                PopupMenuItem<_SelectedProjectPane>(
+                  value: _SelectedProjectPane.history,
+                  child: Text('History & audit'),
+                ),
+              ],
+              child: const Chip(
+                avatar: Icon(Icons.build_outlined),
+                label: Text('Project tools'),
               ),
-            ],
-            child: const Chip(
-              avatar: Icon(Icons.build_outlined),
-              label: Text('Project tools'),
             ),
-          ),
+            FilledButton.icon(
+              onPressed:
+                  state.status == ProjectWorkspaceStatus.loading ||
+                      !selected.folderActionsEnabled ||
+                      runStartBuilder == null
+                  ? null
+                  : () => onPaneSelected(_SelectedProjectPane.startRun),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Start run'),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         if (pane == _SelectedProjectPane.history) ...<Widget>[
           if (historyBuilder != null)
             historyBuilder!(context, actorId, selected.record),
+        ] else if (pane == _SelectedProjectPane.startRun) ...<Widget>[
+          Semantics(
+            label: selected.folderActionsEnabled
+                ? 'Folder-dependent actions enabled'
+                : 'Folder-dependent actions disabled',
+            container: true,
+            child: selected.folderActionsEnabled && runStartBuilder != null
+                ? runStartBuilder!(context, actorId, selected.record)
+                : const SizedBox(height: 1, width: double.infinity),
+          ),
         ] else ...<Widget>[
           Align(
             alignment: Alignment.centerLeft,
@@ -803,18 +827,12 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
             const SizedBox(height: 16),
             _ProjectLifecycleMessage(feedback: feedback),
           ],
-          // Announces whether the folder supports action, and carries the run
-          // workspace once one is available. It previously wrapped a placeholder
-          // button, which UC-06 made redundant by supplying the real
-          // folder-dependent action.
           Semantics(
             label: selected.folderActionsEnabled
                 ? 'Folder-dependent actions enabled'
                 : 'Folder-dependent actions disabled',
             container: true,
-            child: selected.folderActionsEnabled && runStartBuilder != null
-                ? runStartBuilder!(context, actorId, selected.record)
-                : const SizedBox(height: 1, width: double.infinity),
+            child: const SizedBox(height: 1, width: double.infinity),
           ),
           if (runObservationBuilder != null)
             runObservationBuilder!(context, actorId, selected.record),

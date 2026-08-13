@@ -101,6 +101,32 @@ void main() {
   );
 
   testWidgets(
+    'GivenSelectedProject_WhenShown_ThenRunFormIsHiddenUntilStartRunIsSelected',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, project) => Text(
+            'Run workflow for ${project.name}',
+            key: const Key('run-workflow'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('run-workflow')), findsNothing);
+
+      await tester.tap(find.text('Start run'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('run-workflow')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenHistoryPane_WhenAnotherProjectIsSelected_ThenProjectPaneIsRestored',
     (tester) async {
       final repository = _Repository()
@@ -971,6 +997,7 @@ Widget _app({
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
   ProjectTerminalWorkspaceBuilder? terminalBuilder,
+  RunStartWorkspaceBuilder? runStartBuilder,
   RunStartWorkspaceBuilder? historyBuilder,
 }) {
   final repo = repository ?? _Repository();
@@ -1001,6 +1028,7 @@ Widget _app({
         lifecycleService: lifecycle,
         workflowService: workflowService,
         terminalBuilder: terminalBuilder,
+        runStartBuilder: runStartBuilder,
         historyBuilder: historyBuilder,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
