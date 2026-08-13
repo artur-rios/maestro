@@ -44,147 +44,182 @@ final class _RunStartPanelState extends State<RunStartPanel> {
   @override
   Widget build(BuildContext context) {
     final state = _controller.state;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(
-              'Start workflow run',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            for (final offer in state.recoveryOffers) ...<Widget>[
-              const SizedBox(height: 12),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(8),
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Start workflow run',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text('Interrupted run ${offer.runId}'),
-                      Wrap(
-                        spacing: 8,
+                for (final offer in state.recoveryOffers) ...<Widget>[
+                  const SizedBox(height: 12),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          for (final action in RecoveryAction.values)
-                            if (offer.actions.contains(action))
-                              OutlinedButton(
-                                onPressed:
-                                    state.recoveringRunIds.contains(offer.runId)
-                                    ? null
-                                    : () => _controller.selectRecovery(
-                                        offer,
-                                        action,
-                                      ),
-                                child: Text(_recoveryLabel(action)),
-                              ),
+                          Text('Interrupted run ${offer.runId}'),
+                          Wrap(
+                            spacing: 8,
+                            children: <Widget>[
+                              for (final action in RecoveryAction.values)
+                                if (offer.actions.contains(action))
+                                  OutlinedButton(
+                                    onPressed:
+                                        state.recoveringRunIds.contains(
+                                          offer.runId,
+                                        )
+                                        ? null
+                                        : () => _controller.selectRecovery(
+                                            offer,
+                                            action,
+                                          ),
+                                    child: Text(_recoveryLabel(action)),
+                                  ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: const Key('run-workflow'),
+                  initialValue: state.selectedWorkflow?.id,
+                  decoration: const InputDecoration(labelText: 'Workflow'),
+                  items: <DropdownMenuItem<String>>[
+                    for (final workflow in state.workflows)
+                      DropdownMenuItem<String>(
+                        value: workflow.id,
+                        child: Text(workflow.name ?? 'One-off workflow'),
+                      ),
+                  ],
+                  onChanged: state.starting
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            _controller.selectWorkflow(value);
+                          }
+                        },
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  key: const Key('run-work-item'),
+                  controller: _workItem,
+                  enabled: !state.starting,
+                  decoration: InputDecoration(labelText: state.workItemLabel),
+                  onChanged: _controller.setWorkItem,
+                ),
+                const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final delivery = _deliveryModeField(state);
+                    final branch = _branchTypeField(state);
+                    if (constraints.maxWidth < 520) {
+                      return Column(
+                        children: <Widget>[
+                          delivery,
+                          const SizedBox(height: 8),
+                          branch,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(child: delivery),
+                        const SizedBox(width: 8),
+                        Expanded(child: branch),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    key: const Key('start-run'),
+                    onPressed: state.starting || state.selectedWorkflow == null
+                        ? null
+                        : _controller.start,
+                    icon: const Icon(Icons.play_arrow),
+                    label: Text(
+                      state.starting ? 'Starting…' : 'Start isolated run',
+                    ),
                   ),
                 ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              key: const Key('run-workflow'),
-              initialValue: state.selectedWorkflow?.id,
-              decoration: const InputDecoration(labelText: 'Workflow'),
-              items: <DropdownMenuItem<String>>[
-                for (final workflow in state.workflows)
-                  DropdownMenuItem<String>(
-                    value: workflow.id,
-                    child: Text(workflow.name ?? 'One-off workflow'),
+                if (state.failure case final failure?) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text('${failure.message}\n${failure.remediation}'),
                   ),
+                ],
+                for (final run in state.runs) ...<Widget>[
+                  const Divider(height: 24),
+                  Text('Run ${run.runId} · ${run.status.name}'),
+                  Text('Current step: ${run.currentStep ?? 'Unavailable'}'),
+                  SelectableText(run.branchName),
+                  SelectableText(run.worktreePath),
+                ],
               ],
-              onChanged: state.starting
-                  ? null
-                  : (value) {
-                      if (value != null) {
-                        _controller.selectWorkflow(value);
-                      }
-                    },
             ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('run-work-item'),
-              controller: _workItem,
-              enabled: !state.starting,
-              decoration: InputDecoration(labelText: state.workItemLabel),
-              onChanged: _controller.setWorkItem,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<DeliveryMode>(
-              key: const Key('run-delivery-mode'),
-              initialValue: state.deliveryMode,
-              decoration: const InputDecoration(labelText: 'Delivery mode'),
-              items: <DropdownMenuItem<DeliveryMode>>[
-                for (final value in DeliveryMode.values)
-                  DropdownMenuItem<DeliveryMode>(
-                    value: value,
-                    child: Text(value.name),
-                  ),
-              ],
-              onChanged: state.starting
-                  ? null
-                  : (value) {
-                      if (value != null) {
-                        _controller.setDeliveryMode(value);
-                      }
-                    },
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<BranchWorkType>(
-              key: const Key('run-branch-type'),
-              initialValue: state.branchWorkType,
-              decoration: const InputDecoration(labelText: 'Branch type'),
-              items: <DropdownMenuItem<BranchWorkType>>[
-                for (final value in BranchWorkType.values)
-                  DropdownMenuItem<BranchWorkType>(
-                    value: value,
-                    child: Text(value.name),
-                  ),
-              ],
-              onChanged: state.starting
-                  ? null
-                  : (value) {
-                      if (value != null) {
-                        _controller.setBranchWorkType(value);
-                      }
-                    },
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              key: const Key('start-run'),
-              onPressed: state.starting || state.selectedWorkflow == null
-                  ? null
-                  : _controller.start,
-              icon: const Icon(Icons.play_arrow),
-              label: Text(state.starting ? 'Starting…' : 'Start isolated run'),
-            ),
-            if (state.failure case final failure?) ...<Widget>[
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                child: Text('${failure.message}\n${failure.remediation}'),
-              ),
-            ],
-            for (final run in state.runs) ...<Widget>[
-              const Divider(height: 24),
-              Text('Run ${run.runId} · ${run.status.name}'),
-              Text('Current step: ${run.currentStep ?? 'Unavailable'}'),
-              SelectableText(run.branchName),
-              SelectableText(run.worktreePath),
-            ],
-          ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _deliveryModeField(RunStartState state) =>
+      DropdownButtonFormField<DeliveryMode>(
+        key: const Key('run-delivery-mode'),
+        initialValue: state.deliveryMode,
+        decoration: const InputDecoration(labelText: 'Delivery mode'),
+        items: <DropdownMenuItem<DeliveryMode>>[
+          for (final value in DeliveryMode.values)
+            DropdownMenuItem<DeliveryMode>(
+              value: value,
+              child: Text(value.name),
+            ),
+        ],
+        onChanged: state.starting
+            ? null
+            : (value) {
+                if (value != null) _controller.setDeliveryMode(value);
+              },
+      );
+
+  Widget _branchTypeField(RunStartState state) =>
+      DropdownButtonFormField<BranchWorkType>(
+        key: const Key('run-branch-type'),
+        initialValue: state.branchWorkType,
+        decoration: const InputDecoration(labelText: 'Branch type'),
+        items: <DropdownMenuItem<BranchWorkType>>[
+          for (final value in BranchWorkType.values)
+            DropdownMenuItem<BranchWorkType>(
+              value: value,
+              child: Text(value.name),
+            ),
+        ],
+        onChanged: state.starting
+            ? null
+            : (value) {
+                if (value != null) _controller.setBranchWorkType(value);
+              },
+      );
 }
 
 String _recoveryLabel(RecoveryAction action) => switch (action) {

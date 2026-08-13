@@ -32,6 +32,7 @@ import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/data/file_selector_project_folder_picker.dart';
 import 'package:maestro/features/projects/data/local_git_project_validator.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
+import 'package:maestro/features/projects/presentation/project_tools_layout.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
@@ -392,7 +393,7 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
-  ) => Column(
+  ) => ProjectToolsLayout(
     children: <Widget>[
       HistoryPanel(
         key: ValueKey<String>('history-${project.id}'),

@@ -35,9 +35,24 @@ final class _UpdatePanelState extends State<UpdatePanel> {
               'Application updates',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            OutlinedButton(
-              onPressed: state.checking ? null : controller.check,
-              child: const Text('Check for updates'),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final checkAction = OutlinedButton(
+                  onPressed: state.checking ? null : controller.check,
+                  child: const Text('Check for updates'),
+                );
+                if (constraints.maxWidth < 520) {
+                  return SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: checkAction,
+                  );
+                }
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: checkAction,
+                );
+              },
             ),
             if (state.checking) const LinearProgressIndicator(),
             if (candidate != null) ...[

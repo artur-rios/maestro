@@ -152,13 +152,14 @@ void main() {
 
       expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Automations'), findsOneWidget);
+      expect(find.text('Health'), findsOneWidget);
       expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
       expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(
         find.text('Select a project from the sidebar to begin.'),
         findsOneWidget,
       );
-      expect(find.text('Foundation ready'), findsOneWidget);
+      expect(find.text('Foundation ready'), findsNothing);
       expect(find.text('Sign out'), findsOneWidget);
       expect(find.byTooltip('Appearance'), findsOneWidget);
       final accountActions = tester.widget<Row>(
@@ -177,6 +178,10 @@ void main() {
       await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
       expect(find.text('Create workflow'), findsOneWidget);
+
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+      expect(find.text('Foundation ready'), findsOneWidget);
     },
   );
 
@@ -286,7 +291,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(r'C:\projects\demo'), findsNothing);
-      expect(find.text('Foundation ready'), findsOneWidget);
+      expect(find.text('Foundation ready'), findsNothing);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
     },
   );
 

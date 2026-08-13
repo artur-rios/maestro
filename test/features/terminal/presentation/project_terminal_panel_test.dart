@@ -27,6 +27,28 @@ void main() {
     });
 
     testWidgets(
+      'GivenRunningTerminal_WhenRendered_ThenNerdFontTypographyIsConfigured',
+      (tester) async {
+        final drawer = ProjectTerminalDrawerController();
+
+        await _pump(tester, _FakeOpener(), drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        final terminalView = tester.widget<TerminalView>(
+          find.byKey(const Key('terminal-view')),
+        );
+        expect(terminalView.textStyle.fontFamily, 'CaskaydiaCove Nerd Font');
+        expect(terminalView.textStyle.fontFamilyFallback, <String>[
+          'JetBrainsMono Nerd Font',
+          'monospace',
+        ]);
+        expect(terminalView.textStyle.fontSize, inInclusiveRange(13, 14));
+        expect(terminalView.textStyle.height, greaterThanOrEqualTo(1.2));
+      },
+    );
+
+    testWidgets(
       'GivenARunningDrawer_WhenShown_ThenItUsesTheFullWidthBottomDock',
       (tester) async {
         final drawer = ProjectTerminalDrawerController();

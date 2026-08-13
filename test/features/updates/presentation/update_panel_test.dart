@@ -23,6 +23,38 @@ void main() {
       expect(find.text('Check for updates'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'GivenResponsiveUpdatePanel_WhenRendered_ThenCheckActionIsCompactOnDesktopAndFullWidthOnNarrowScreens',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(640, 480);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UpdatePanel(
+            createController: () => UpdateController(service: _service()),
+          ),
+        ),
+      );
+
+      final card = find.byType(Card);
+      final checkAction = find.widgetWithText(
+        OutlinedButton,
+        'Check for updates',
+      );
+      expect(
+        tester.getSize(checkAction).width,
+        lessThan(tester.getSize(card).width / 2),
+      );
+
+      tester.view.physicalSize = const Size(400, 480);
+      await tester.pump();
+      expect(tester.getSize(checkAction).width, 360);
+      expect(tester.getSize(checkAction).height, greaterThanOrEqualTo(44));
+    },
+  );
 }
 
 UpdateService _service() => UpdateService(

@@ -44,14 +44,275 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Automations'), findsOneWidget);
+      expect(find.text('Health'), findsOneWidget);
       expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
       expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(
         find.text('Select a project from the sidebar to begin.'),
         findsOneWidget,
       );
-      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text('Foundation diagnostics'), findsNothing);
       expect(find.bySemanticsLabel('Register project'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenHealthDestination_WhenSelected_ThenFoundationDiagnosticsAreShown',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.byKey(const Key('workbench-empty-state')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedProject_WhenShown_ThenHistoryOpensOnlyFromProjectTools',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          historyBuilder: (_, _, project) => Text(
+            'History content for ${project.name}',
+            key: const Key('history-content-probe'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('history-content-probe')), findsNothing);
+      expect(find.text('Project lifecycle actions'), findsOneWidget);
+
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('history-content-probe')), findsOneWidget);
+      expect(find.text('Project lifecycle actions'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedProject_WhenShown_ThenRunFormIsHiddenUntilStartRunIsSelected',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, project) => Text(
+            'Run workflow for ${project.name}',
+            key: const Key('run-workflow'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('run-workflow')), findsNothing);
+
+      await tester.tap(find.text('Start run'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('run-workflow')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowSelectedProject_WhenShown_ThenProjectActionsUseFullWidthAccessibleTargets',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(500, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, project) => Text(
+            'Run workflow for ${project.name}',
+            key: const Key('run-workflow'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).openDrawer();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).closeDrawer();
+      await tester.pumpAndSettle();
+
+      final projectTools = find.byTooltip('Project tools');
+      final startRun = find.widgetWithText(FilledButton, 'Start run');
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(projectTools).width, 452);
+      expect(tester.getSize(startRun).width, 452);
+      expect(tester.getSize(projectTools).height, greaterThanOrEqualTo(40));
+      expect(tester.getSize(startRun).height, greaterThanOrEqualTo(40));
+
+      await tester.tap(startRun);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('run-workflow')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenWorkbenchBoundaryWidth_WhenProjectSelected_ThenActionsRemainFullWidth',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(700, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, project) => Text(
+            'Run workflow for ${project.name}',
+            key: const Key('run-workflow'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).openDrawer();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).closeDrawer();
+      await tester.pumpAndSettle();
+
+      final projectTools = find.byTooltip('Project tools');
+      final startRun = find.widgetWithText(FilledButton, 'Start run');
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(projectTools).width, 652);
+      expect(tester.getSize(startRun).width, 652);
+      expect(tester.getSize(projectTools).height, greaterThanOrEqualTo(44));
+      expect(tester.getSize(startRun).height, greaterThanOrEqualTo(44));
+    },
+  );
+
+  testWidgets(
+    'GivenResponsiveProjectWorkspace_WhenRunContentChanges_ThenPanelsShareCompactDesktopGeometryAndNarrowFullWidth',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, _) => const SizedBox(
+            key: Key('run-start-geometry-probe'),
+            width: double.infinity,
+            height: 40,
+          ),
+          runObservationBuilder: (_, _, _) => const SizedBox(
+            key: Key('active-runs-geometry-probe'),
+            width: double.infinity,
+            height: 40,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      final activeRuns = find.byKey(const Key('active-runs-geometry-probe'));
+      expect(tester.getSize(activeRuns).width, 640);
+      final desktopLeft = tester.getTopLeft(activeRuns).dx;
+
+      tester.view.physicalSize = const Size(500, 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(activeRuns).width, 452);
+
+      tester.view.physicalSize = const Size(1200, 900);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start run'));
+      await tester.pumpAndSettle();
+
+      final startRun = find.byKey(const Key('run-start-geometry-probe'));
+      expect(tester.getSize(startRun).width, 640);
+      expect(tester.getTopLeft(startRun).dx, desktopLeft);
+
+      tester.view.physicalSize = const Size(500, 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(startRun).width, 452);
+    },
+  );
+
+  testWidgets(
+    'GivenHistoryPane_WhenAnotherProjectIsSelected_ThenProjectPaneIsRestored',
+    (tester) async {
+      final repository = _Repository()
+        ..records.addAll(<ProjectRecord>[
+          _record(),
+          _record(id: 'two', name: 'Second', folderPath: r'C:\projects\second'),
+        ]);
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          historyBuilder: (_, _, project) => Text(
+            'History content for ${project.name}',
+            key: const Key('history-content-probe'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Second').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('history-content-probe')), findsNothing);
+      expect(find.text('Project lifecycle actions'), findsOneWidget);
+      expect(find.text(r'C:\projects\second'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenHistoryPane_WhenAnotherProjectIsRegistered_ThenProjectPaneIsRestored',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          picker: const _Picker(r'C:\projects\second'),
+          historyBuilder: (_, _, project) => Text(
+            'History content for ${project.name}',
+            key: const Key('history-content-probe'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      await _register(tester, 'Second');
+
+      expect(find.byKey(const Key('history-content-probe')), findsNothing);
+      expect(find.text('Project lifecycle actions'), findsOneWidget);
+      expect(find.text(r'C:\projects\second'), findsOneWidget);
     },
   );
 
@@ -295,7 +556,8 @@ void main() {
         _host(service: service, picker: picker, showWorkspace: true),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text('Foundation diagnostics'), findsNothing);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(find.text(r'C:\projects\demo'), findsNothing);
     },
   );
@@ -326,7 +588,8 @@ void main() {
         _host(service: service, picker: picker, showWorkspace: true),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Foundation diagnostics'), findsOneWidget);
+      expect(find.text('Foundation diagnostics'), findsNothing);
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(find.text(record.folderPath), findsNothing);
     },
   );
@@ -860,6 +1123,9 @@ Widget _app({
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
   ProjectTerminalWorkspaceBuilder? terminalBuilder,
+  RunStartWorkspaceBuilder? runStartBuilder,
+  RunStartWorkspaceBuilder? runObservationBuilder,
+  RunStartWorkspaceBuilder? historyBuilder,
 }) {
   final repo = repository ?? _Repository();
   final validation = validator ?? _Validator();
@@ -889,6 +1155,9 @@ Widget _app({
         lifecycleService: lifecycle,
         workflowService: workflowService,
         terminalBuilder: terminalBuilder,
+        runStartBuilder: runStartBuilder,
+        runObservationBuilder: runObservationBuilder,
+        historyBuilder: historyBuilder,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
     ),
