@@ -5,6 +5,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_app.dart';
+import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/maestro_window_chrome.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
@@ -75,6 +77,8 @@ import 'package:maestro/platform/terminal/platform_shell.dart';
 import 'package:maestro/platform/terminal/pty_terminal_port.dart';
 import 'package:maestro/platform/updates/production_update_service.dart';
 import 'package:maestro/platform/updates/update_readiness_signal.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
+import 'package:maestro/platform/window/window_manager_desktop_window.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -110,6 +114,7 @@ final class ProductionAppComposition {
     required this.activeProjectRuns,
     required this.projectFolderPicker,
     required this.foundation,
+    required this.window,
     required this._closeDatabase,
   });
 
@@ -133,6 +138,7 @@ final class ProductionAppComposition {
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
+  final DesktopWindowPort window;
   final DatabaseCloser _closeDatabase;
   Future<void>? _closeFuture;
 
@@ -149,6 +155,7 @@ final class ProductionAppComposition {
     historyBuilder: historyBuilder,
     terminalBuilder: terminalBuilder,
     foundationProbes: foundation.probes,
+    window: window,
     onDispose: () => unawaited(close()),
   );
 
@@ -176,6 +183,7 @@ Future<ProductionAppComposition> composeProductionApp({
   String Function() newId = newProductionId,
   ActiveProjectRunReader? activeProjectRuns,
   DatabaseCloser closeDatabase = _closeDatabase,
+  DesktopWindowPort window = const NoopDesktopWindowPort(),
 }) async {
   final now = clock ?? () => DateTime.now().toUtc();
   final appearanceRepository = DriftAppearancePreferenceRepository(
@@ -473,6 +481,7 @@ Future<ProductionAppComposition> composeProductionApp({
     activeProjectRuns: effectiveActiveProjectRuns,
     projectFolderPicker: projectFolderPicker,
     foundation: foundation,
+    window: window,
     closeDatabase: closeDatabase,
   );
 }
@@ -531,6 +540,9 @@ Future<void> main([List<String> arguments = const <String>[]]) async {
   MaestroDatabase? database;
   ProductionAppComposition? composition;
   try {
+    final window = await initializeDesktopWindow(
+      const ProductionWindowManagerGateway(),
+    );
     final root = await getApplicationSupportDirectory();
     final paths = ApplicationPaths.fromRoot(root);
     final openedDatabase = await const DatabaseFactory().open(paths);
@@ -538,6 +550,7 @@ Future<void> main([List<String> arguments = const <String>[]]) async {
     composition = await composeProductionApp(
       paths: paths,
       database: openedDatabase,
+      window: window,
     );
     runApp(composition.app);
     await readinessSignal?.write();
@@ -559,14 +572,20 @@ final class _InitializationFailureApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Maestro',
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Maestro')),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Maestro could not initialize local security or storage services. '
-              'Check local permissions and restart the application.',
+      theme: maestroTheme(Brightness.light),
+      darkTheme: maestroTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      home: const MaestroWindowChrome(
+        window: NoopDesktopWindowPort(),
+        title: 'Maestro',
+        child: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Maestro could not initialize local security or storage services. '
+                'Check local permissions and restart the application.',
+              ),
             ),
           ),
         ),

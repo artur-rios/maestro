@@ -14,6 +14,7 @@ import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 
 class MaestroApp extends StatefulWidget {
   const MaestroApp({
@@ -29,6 +30,7 @@ class MaestroApp extends StatefulWidget {
     this.historyBuilder,
     this.terminalBuilder,
     this.foundationProbes = const <FoundationProbe>[],
+    this.window = const NoopDesktopWindowPort(),
     this.onDispose,
     super.key,
   });
@@ -45,6 +47,7 @@ class MaestroApp extends StatefulWidget {
   final RunStartWorkspaceBuilder? historyBuilder;
   final ProjectTerminalWorkspaceBuilder? terminalBuilder;
   final List<FoundationProbe> foundationProbes;
+  final DesktopWindowPort window;
   final VoidCallback? onDispose;
 
   @override
