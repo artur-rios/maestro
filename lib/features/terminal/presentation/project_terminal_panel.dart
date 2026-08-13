@@ -26,6 +26,7 @@ final class ProjectTerminalPanel extends StatefulWidget {
 
 final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
   late final ProjectTerminalController _controller;
+  late final ProjectTerminalDrawerAttachment _drawerAttachment;
   final _viewController = TerminalController();
   var _visible = false;
 
@@ -33,7 +34,11 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
   void initState() {
     super.initState();
     _controller = widget.createController()..addListener(_changed);
-    widget.drawerController.attach(show: _show, hide: _hide, toggle: _toggle);
+    _drawerAttachment = widget.drawerController.attach(
+      show: _show,
+      hide: _hide,
+      toggle: _toggle,
+    );
   }
 
   void _changed() {
@@ -59,7 +64,7 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
 
   @override
   void dispose() {
-    widget.drawerController.detach();
+    widget.drawerController.detach(_drawerAttachment);
     _controller
       ..removeListener(_changed)
       ..dispose();

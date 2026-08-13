@@ -30,5 +30,21 @@
 
 ## Concerns
 
-Runtime widget-test results remain unavailable because the local Flutter
-wrapper hangs without output. Static analysis and formatting are clean.
+Initial runtime widget-test attempts were blocked by Flutter startup. The fix
+round completed runtime verification after dependency resolution succeeded.
+
+## Fix round 1
+
+- Made drawer attachment ownership explicit. `attach()` returns a
+  `ProjectTerminalDrawerAttachment`, and `detach()` clears callbacks only when
+  the caller still owns the active attachment. Disposing an old project panel
+  can no longer detach a newer project's terminal callbacks.
+- Added a project-to-project switch regression that opens Demo's terminal,
+  selects Second, and proves `Ctrl` + backquote opens Second's terminal.
+- Corrected the bottom-dock layout probe to request `double.infinity` width so
+  it validates the full-width dock contract rather than a centered test box.
+- RED: the focused project-switch regression failed because no `terminal for
+  Second` widget appeared after the shortcut.
+- GREEN: the focused project-switch regression passed after the ownership fix.
+- Regression: workspace, terminal-panel, and app suites passed with 44 tests
+  and zero failures.

@@ -5,25 +5,34 @@ import 'package:flutter/widgets.dart';
 /// It deliberately owns no terminal state, so calls made after the panel is
 /// disposed are inert.
 final class ProjectTerminalDrawerController {
-  VoidCallback? _show;
-  VoidCallback? _hide;
-  VoidCallback? _toggle;
+  ProjectTerminalDrawerAttachment? _attachment;
 
-  void attach({
+  ProjectTerminalDrawerAttachment attach({
     required VoidCallback show,
     required VoidCallback hide,
     required VoidCallback toggle,
   }) {
-    _show = show;
-    _hide = hide;
-    _toggle = toggle;
+    final attachment = ProjectTerminalDrawerAttachment._(show, hide, toggle);
+    _attachment = attachment;
+    return attachment;
   }
 
-  void detach() => _show = _hide = _toggle = null;
+  void detach(ProjectTerminalDrawerAttachment attachment) {
+    if (identical(_attachment, attachment)) _attachment = null;
+  }
 
-  void show() => _show?.call();
+  void show() => _attachment?._show();
 
-  void hide() => _hide?.call();
+  void hide() => _attachment?._hide();
 
-  void toggle() => _toggle?.call();
+  void toggle() => _attachment?._toggle();
+}
+
+/// Identifies one mounted terminal panel's controller callbacks.
+final class ProjectTerminalDrawerAttachment {
+  const ProjectTerminalDrawerAttachment._(this._show, this._hide, this._toggle);
+
+  final VoidCallback _show;
+  final VoidCallback _hide;
+  final VoidCallback _toggle;
 }

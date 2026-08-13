@@ -428,6 +428,40 @@ void main() {
   );
 
   testWidgets(
+    'GivenAProjectTerminal_WhenAnotherProjectIsSelected_ThenShortcutTargetsTheNewProject',
+    (tester) async {
+      final repository = _Repository()
+        ..records.addAll(<ProjectRecord>[
+          _record(),
+          _record(id: 'two', name: 'Second', folderPath: r'C:\projects\second'),
+        ]);
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, project, drawerController) =>
+              _ToggleTerminalProbe(
+                key: ValueKey<String>('terminal-${project.id}'),
+                drawerController: drawerController,
+                label: 'terminal for ${project.name}',
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      expect(find.text('terminal for Demo'), findsOneWidget);
+
+      await tester.tap(find.text('Second').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+
+      expect(find.text('terminal for Demo'), findsNothing);
+      expect(find.text('terminal for Second'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenASelectedProject_WhenTerminalIsBuilt_ThenItIsBottomDockedOutsideProjectScrolling',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 900));
@@ -436,8 +470,11 @@ void main() {
       await tester.pumpWidget(
         _app(
           repository: repository,
-          terminalBuilder: (_, _, _, _) =>
-              const SizedBox(key: Key('terminal-dock-probe'), height: 80),
+          terminalBuilder: (_, _, _, _) => const SizedBox(
+            key: Key('terminal-dock-probe'),
+            width: double.infinity,
+            height: 80,
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -685,6 +722,13 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   throw TestFailure('Could not reveal the requested widget: $finder.');
 }
 
+Future<void> _toggleTerminalShortcut(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pump();
+}
+
 Future<void> _register(WidgetTester tester, String name) async {
   await tester.tap(find.bySemanticsLabel('Register project'));
   await tester.pumpAndSettle();
@@ -759,12 +803,17 @@ final class _ToggleTerminalProbe extends StatefulWidget {
 }
 
 final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {
+  late final ProjectTerminalDrawerAttachment _drawerAttachment;
   var _visible = false;
 
   @override
   void initState() {
     super.initState();
-    widget.drawerController.attach(show: _show, hide: _hide, toggle: _toggle);
+    _drawerAttachment = widget.drawerController.attach(
+      show: _show,
+      hide: _hide,
+      toggle: _toggle,
+    );
   }
 
   void _show() => setState(() => _visible = true);
@@ -775,7 +824,7 @@ final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {
 
   @override
   void dispose() {
-    widget.drawerController.detach();
+    widget.drawerController.detach(_drawerAttachment);
     super.dispose();
   }
 
@@ -974,11 +1023,15 @@ final class _Repository implements ProjectRepository {
   }
 }
 
-ProjectRecord _record() => ProjectRecord(
-  id: 'one',
-  name: 'Demo',
-  normalizedName: 'demo',
-  folderPath: r'C:\missing\demo',
+ProjectRecord _record({
+  String id = 'one',
+  String name = 'Demo',
+  String folderPath = r'C:\missing\demo',
+}) => ProjectRecord(
+  id: id,
+  name: name,
+  normalizedName: name.toLowerCase(),
+  folderPath: folderPath,
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6),
   deletedAt: null,
