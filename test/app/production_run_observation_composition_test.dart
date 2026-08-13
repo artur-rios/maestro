@@ -105,6 +105,7 @@ void main() {
         commandRunner: const _CommandRunner(),
         clock: () => DateTime.utc(2026, 8, 7, 12),
       );
+      addTearDown(composition.close);
 
       Future<void> pumpProjectTools(double width) async {
         await tester.pumpWidget(
@@ -124,7 +125,12 @@ void main() {
             ),
           ),
         );
-        await tester.pump();
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 10),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        expect(find.text('No history matches your filters.'), findsOneWidget);
       }
 
       Finder cardContaining(String text) =>
