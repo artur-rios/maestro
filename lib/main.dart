@@ -392,28 +392,36 @@ Future<ProductionAppComposition> composeProductionApp({
     BuildContext context,
     String actorId,
     ProjectRecord project,
-  ) => Column(
-    children: <Widget>[
-      HistoryPanel(
-        key: ValueKey<String>('history-${project.id}'),
-        createController: () =>
-            HistoryController(repository: historyRepository),
-        retentionService: retentionService,
-        actorId: actorId,
-      ),
-      UpdatePanel(
-        key: const ValueKey<String>('application-updates'),
-        createController: () => UpdateController(
-          service: updateService,
-          audits: DriftUpdateAuditRecorder(
-            database: database,
+  ) => Align(
+    alignment: Alignment.topLeft,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 640),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          HistoryPanel(
+            key: ValueKey<String>('history-${project.id}'),
+            createController: () =>
+                HistoryController(repository: historyRepository),
+            retentionService: retentionService,
             actorId: actorId,
-            clock: now,
-            newId: newId,
           ),
-        ),
+          UpdatePanel(
+            key: const ValueKey<String>('application-updates'),
+            createController: () => UpdateController(
+              service: updateService,
+              audits: DriftUpdateAuditRecorder(
+                database: database,
+                actorId: actorId,
+                clock: now,
+                newId: newId,
+              ),
+            ),
+          ),
+        ],
       ),
-    ],
+    ),
   );
   Widget runObservationBuilder(
     BuildContext context,

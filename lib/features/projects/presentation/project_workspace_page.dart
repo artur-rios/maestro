@@ -763,7 +763,9 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
                 : 'Folder-dependent actions disabled',
             container: true,
             child: selected.folderActionsEnabled && runStartBuilder != null
-                ? runStartBuilder!(context, actorId, selected.record)
+                ? _compactRunPanel(
+                    runStartBuilder!(context, actorId, selected.record),
+                  )
                 : const SizedBox(height: 1, width: double.infinity),
           ),
         ] else ...<Widget>[
@@ -829,9 +831,21 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
             child: const SizedBox(height: 1, width: double.infinity),
           ),
           if (runObservationBuilder != null)
-            runObservationBuilder!(context, actorId, selected.record),
+            _compactRunPanel(
+              runObservationBuilder!(context, actorId, selected.record),
+            ),
         ],
       ],
+    );
+  }
+
+  Widget _compactRunPanel(Widget child) {
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: SizedBox(width: double.infinity, child: child),
+      ),
     );
   }
 

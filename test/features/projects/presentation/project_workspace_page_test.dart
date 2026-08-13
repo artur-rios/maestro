@@ -203,6 +203,56 @@ void main() {
   );
 
   testWidgets(
+    'GivenResponsiveProjectWorkspace_WhenRunContentChanges_ThenPanelsShareCompactDesktopGeometryAndNarrowFullWidth',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runStartBuilder: (_, _, _) => const SizedBox(
+            key: Key('run-start-geometry-probe'),
+            width: double.infinity,
+            height: 40,
+          ),
+          runObservationBuilder: (_, _, _) => const SizedBox(
+            key: Key('active-runs-geometry-probe'),
+            width: double.infinity,
+            height: 40,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      final activeRuns = find.byKey(const Key('active-runs-geometry-probe'));
+      expect(tester.getSize(activeRuns).width, 640);
+      final desktopLeft = tester.getTopLeft(activeRuns).dx;
+
+      tester.view.physicalSize = const Size(500, 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(activeRuns).width, 452);
+
+      tester.view.physicalSize = const Size(1200, 900);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start run'));
+      await tester.pumpAndSettle();
+
+      final startRun = find.byKey(const Key('run-start-geometry-probe'));
+      expect(tester.getSize(startRun).width, 640);
+      expect(tester.getTopLeft(startRun).dx, desktopLeft);
+
+      tester.view.physicalSize = const Size(500, 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(startRun).width, 452);
+    },
+  );
+
+  testWidgets(
     'GivenHistoryPane_WhenAnotherProjectIsSelected_ThenProjectPaneIsRestored',
     (tester) async {
       final repository = _Repository()
@@ -1074,6 +1124,7 @@ Widget _app({
   _LifecycleStore? lifecycleStore,
   ProjectTerminalWorkspaceBuilder? terminalBuilder,
   RunStartWorkspaceBuilder? runStartBuilder,
+  RunStartWorkspaceBuilder? runObservationBuilder,
   RunStartWorkspaceBuilder? historyBuilder,
 }) {
   final repo = repository ?? _Repository();
@@ -1105,6 +1156,7 @@ Widget _app({
         workflowService: workflowService,
         terminalBuilder: terminalBuilder,
         runStartBuilder: runStartBuilder,
+        runObservationBuilder: runObservationBuilder,
         historyBuilder: historyBuilder,
         emptyContent: const Center(child: Text('Foundation diagnostics')),
       ),
