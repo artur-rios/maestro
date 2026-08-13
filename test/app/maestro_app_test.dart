@@ -162,6 +162,9 @@ void main() {
       expect(find.text('Automations'), findsOneWidget);
       expect(find.text('Health'), findsOneWidget);
       expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-navigator')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
       expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(
         find.text('Select a project from the sidebar to begin.'),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
@@ -21,9 +22,117 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
+  testWidgets('GivenWideWorkbench_WhenShown_ThenThreePanesArePersistent', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('workbench-navigator')), findsOneWidget);
+    expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
+    expect(find.byKey(const Key('workbench-inspector')), findsOneWidget);
+    expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
+    expect(
+      find.text('Inspector details are not available yet.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('workbench-navigator'))).width,
+      280,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('workbench-inspector'))).width,
+      320,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('workbench-status-bar'))).height,
+      24,
+    );
+  });
+
+  testWidgets(
+    'GivenMediumWorkbench_WhenInspectorRequested_ThenEndDrawerOpens',
+    (tester) async {
+      tester.view.physicalSize = const Size(980, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('workbench-navigator')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-inspector')), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Show context inspector'));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowWorkbench_WhenInspectorRequested_ThenEndDrawerOpens',
+    (tester) async {
+      tester.view.physicalSize = const Size(500, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('workbench-navigator')), findsNothing);
+      expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Show context inspector'));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenProjectSearch_WhenQueryEntered_ThenOnlyMatchingProjectRowsAreRendered',
+    (tester) async {
+      final repository = _Repository()
+        ..records.addAll(<ProjectRecord>[
+          _record(),
+          _record(id: 'two', name: 'Second'),
+          _deletedRecord(id: 'deleted', name: 'Archived Demo'),
+        ]);
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.bySemanticsLabel('Search projects'),
+        'second',
+      );
+      await tester.pump();
+
+      expect(find.text('Second'), findsOneWidget);
+      expect(find.text('Demo'), findsNothing);
+      expect(find.text('Archived Demo'), findsNothing);
+      expect(repository.records, hasLength(3));
+
+      await tester.enterText(
+        find.bySemanticsLabel('Search projects'),
+        'archived',
+      );
+      await tester.pump();
+
+      expect(find.text('Second'), findsNothing);
+      expect(find.text('Archived Demo'), findsOneWidget);
+      expect(repository.records, hasLength(3));
+    },
+  );
+
   testWidgets(
     'GivenAuthenticatedWorkspace_WhenWorkflowsSelected_ThenSharedEditorIsShown',
     (tester) async {
+      tester.view.physicalSize = const Size(1500, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_app(workflowService: _workflowService()));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Automations'));
@@ -206,7 +315,7 @@ void main() {
     'GivenResponsiveProjectWorkspace_WhenRunContentChanges_ThenPanelsShareCompactDesktopGeometryAndNarrowFullWidth',
     (tester) async {
       tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.physicalSize = const Size(1500, 900);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       final repository = _Repository()..records.add(_record());
@@ -237,7 +346,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.getSize(activeRuns).width, 452);
 
-      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.physicalSize = const Size(1500, 900);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Start run'));
       await tester.pumpAndSettle();
@@ -1094,7 +1203,12 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
       await tester.pump();
       return;
     }
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -500));
+    final verticalScrollable = find.byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable &&
+          widget.axisDirection == AxisDirection.down,
+    );
+    await tester.drag(verticalScrollable.last, const Offset(0, -500));
     await tester.pump();
   }
   throw TestFailure('Could not reveal the requested widget: $finder.');
@@ -1150,6 +1264,7 @@ Widget _app({
       projectFolderPickerProvider.overrideWithValue(picker),
     ],
     child: MaterialApp(
+      theme: maestroTheme(Brightness.light),
       home: ProjectWorkspacePage(
         actorId: 'actor-1',
         lifecycleService: lifecycle,
@@ -1312,6 +1427,7 @@ Widget _host({
       projectFolderPickerProvider.overrideWithValue(picker),
     ],
     child: MaterialApp(
+      theme: maestroTheme(Brightness.light),
       home: showWorkspace
           ? ProjectWorkspacePage(
               actorId: 'actor-1',
@@ -1461,15 +1577,16 @@ ProjectRecord _record({
   deletedAt: null,
 );
 
-ProjectRecord _deletedRecord({String id = 'one'}) => ProjectRecord(
-  id: id,
-  name: 'Demo',
-  normalizedName: 'demo-$id',
-  folderPath: r'C:\missing\demo',
-  createdAt: DateTime.utc(2026, 8, 6),
-  updatedAt: DateTime.utc(2026, 8, 6, 11),
-  deletedAt: DateTime.utc(2026, 8, 6, 11),
-);
+ProjectRecord _deletedRecord({String id = 'one', String name = 'Demo'}) =>
+    ProjectRecord(
+      id: id,
+      name: name,
+      normalizedName: '${name.toLowerCase()}-$id',
+      folderPath: r'C:\missing\demo',
+      createdAt: DateTime.utc(2026, 8, 6),
+      updatedAt: DateTime.utc(2026, 8, 6, 11),
+      deletedAt: DateTime.utc(2026, 8, 6, 11),
+    );
 
 WorkflowDefinition _workflowDefinition({
   int revision = 3,
