@@ -18,24 +18,25 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
     required this.success,
     required this.warning,
     required this.destructive,
-    this.titleBarHeight = 36,
-    this.toolbarHeight = 36,
-    this.statusBarHeight = 24,
-    this.navigatorWidth = 280,
-    this.inspectorWidth = 320,
-    this.controlHeight = 36,
-    this.smallRadius = 4,
-    this.mediumRadius = 7,
   });
 
-  final double titleBarHeight;
-  final double toolbarHeight;
-  final double statusBarHeight;
-  final double navigatorWidth;
-  final double inspectorWidth;
-  final double controlHeight;
-  final double smallRadius;
-  final double mediumRadius;
+  static const double _titleBarHeight = 36;
+  static const double _toolbarHeight = 36;
+  static const double _statusBarHeight = 24;
+  static const double _navigatorWidth = 280;
+  static const double _inspectorWidth = 320;
+  static const double _controlHeight = 36;
+  static const double _smallRadius = 4;
+  static const double _mediumRadius = 7;
+
+  double get titleBarHeight => _titleBarHeight;
+  double get toolbarHeight => _toolbarHeight;
+  double get statusBarHeight => _statusBarHeight;
+  double get navigatorWidth => _navigatorWidth;
+  double get inspectorWidth => _inspectorWidth;
+  double get controlHeight => _controlHeight;
+  double get smallRadius => _smallRadius;
+  double get mediumRadius => _mediumRadius;
 
   final Color titleBarSurface;
   final Color navigatorSurface;
@@ -86,14 +87,6 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
     success: success ?? this.success,
     warning: warning ?? this.warning,
     destructive: destructive ?? this.destructive,
-    titleBarHeight: titleBarHeight,
-    toolbarHeight: toolbarHeight,
-    statusBarHeight: statusBarHeight,
-    navigatorWidth: navigatorWidth,
-    inspectorWidth: inspectorWidth,
-    controlHeight: controlHeight,
-    smallRadius: smallRadius,
-    mediumRadius: mediumRadius,
   );
 
   @override
@@ -130,14 +123,6 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
       success: Color.lerp(success, other.success, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       destructive: Color.lerp(destructive, other.destructive, t)!,
-      titleBarHeight: titleBarHeight,
-      toolbarHeight: toolbarHeight,
-      statusBarHeight: statusBarHeight,
-      navigatorWidth: navigatorWidth,
-      inspectorWidth: inspectorWidth,
-      controlHeight: controlHeight,
-      smallRadius: smallRadius,
-      mediumRadius: mediumRadius,
     );
   }
 }

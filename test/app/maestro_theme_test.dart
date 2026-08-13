@@ -40,4 +40,47 @@ void main() {
     expect(light.focus, maestroTheme(Brightness.light).colorScheme.primary);
     expect(dark.focus, maestroTheme(Brightness.dark).colorScheme.primary);
   });
+
+  test(
+    'GivenGeometryOverride_WhenTokensConstructed_ThenConstructionRejectsIt',
+    () {
+      var rejected = false;
+
+      try {
+        Function.apply(MaestroThemeTokens.new, const <dynamic>[], {
+          #titleBarSurface: Colors.white,
+          #navigatorSurface: Colors.white,
+          #workspaceSurface: Colors.white,
+          #inspectorSurface: Colors.white,
+          #terminalSurface: Colors.black,
+          #statusBarSurface: Colors.white,
+          #selectedSurface: Colors.white,
+          #hoverSurface: Colors.white,
+          #subtleBorder: Colors.grey,
+          #strongBorder: Colors.black,
+          #focus: Colors.blue,
+          #success: Colors.green,
+          #warning: Colors.orange,
+          #destructive: Colors.red,
+          #titleBarHeight: 99.0,
+        });
+      } on NoSuchMethodError {
+        rejected = true;
+      }
+
+      expect(rejected, true);
+    },
+  );
+
+  test(
+    'GivenDarkTheme_WhenSnackbarContentStyled_ThenForegroundUsesOnSurfaceColor',
+    () {
+      final theme = maestroTheme(Brightness.dark);
+
+      expect(
+        theme.snackBarTheme.contentTextStyle!.color,
+        theme.colorScheme.onSurface,
+      );
+    },
+  );
 }

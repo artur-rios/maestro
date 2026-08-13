@@ -73,7 +73,7 @@ ThemeData maestroTheme(Brightness brightness) {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: tokens.terminalSurface,
-      contentTextStyle: metadataText.copyWith(color: colorScheme.surface),
+      contentTextStyle: metadataText.copyWith(color: colorScheme.onSurface),
       behavior: SnackBarBehavior.floating,
       shape: compactShape,
     ),
