@@ -181,6 +181,36 @@ void main() {
   );
 
   testWidgets(
+    'GivenDarkAppearance_WhenAuthenticated_ThenWorkbenchUsesDarkSurfaces',
+    (tester) async {
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: _appearanceController(AppearanceMode.dark),
+          authenticationService: _authenticationService(),
+          projectService: _projectService(),
+          projectLifecycleService: _projectLifecycleService(),
+          projectFolderPicker: const _ProjectFolderPicker(),
+        ),
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      final sidebar = tester.widget<Material>(
+        find.byKey(const Key('workbench-sidebar')),
+      );
+      final theme = Theme.of(
+        tester.element(find.byKey(const Key('workbench-empty-state'))),
+      );
+      expect(sidebar.color, isNot(equals(Colors.white)));
+      expect(theme.scaffoldBackgroundColor, const Color(0xFF111318));
+      expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenSelectedProjectAndWorkflowDestination_WhenAppearanceChanges_ThenPresentationStateIsPreserved',
     (tester) async {
       final appearance = _appearanceController();
