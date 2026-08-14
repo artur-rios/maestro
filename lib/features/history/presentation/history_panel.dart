@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
@@ -115,6 +116,9 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                           'Retention settings',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
+                        const SizedBox(
+                          height: MaestroFormSpacing.sectionToControl,
+                        ),
                         TextField(
                           key: const Key('retention-days'),
                           controller: _retentionDays,
@@ -123,6 +127,7 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                             labelText: 'Retention age (days)',
                           ),
                         ),
+                        const SizedBox(height: MaestroFormSpacing.fieldToField),
                         TextField(
                           key: const Key('retention-storage-limit'),
                           controller: _storageLimit,
@@ -130,6 +135,9 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                           decoration: const InputDecoration(
                             labelText: 'Storage limit (MB)',
                           ),
+                        ),
+                        const SizedBox(
+                          height: MaestroFormSpacing.controlToAction,
                         ),
                         Align(
                           alignment: Alignment.centerLeft,
@@ -139,7 +147,15 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                           ),
                         ),
                         if (_retentionFeedback case final feedback?)
-                          Text(feedback),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: MaestroFormSpacing.feedback,
+                            ),
+                            child: Text(feedback),
+                          ),
+                        const SizedBox(
+                          height: MaestroFormSpacing.sectionToControl,
+                        ),
                       ],
                       TextField(
                         onChanged: controller.search,

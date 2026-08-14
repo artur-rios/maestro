@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
@@ -402,7 +403,7 @@ final class _Editor extends ConsumerWidget {
                         ? null
                         : (value) => controller.setKind(value.single),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: MaestroFormSpacing.fieldToField),
                   TextFormField(
                     key: ValueKey(
                       'workflow-name-${draft.id ?? 'new'}-${draft.kind.name}',
@@ -422,7 +423,7 @@ final class _Editor extends ConsumerWidget {
                     ),
                     onChanged: controller.setName,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: MaestroFormSpacing.fieldToField),
                   DropdownButtonFormField<WorkItemType>(
                     initialValue: draft.unitType,
                     decoration: const InputDecoration(
@@ -683,7 +684,7 @@ final class _StepRow extends ConsumerWidget {
                 }
               : null,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: MaestroFormSpacing.fieldToField),
         DropdownButtonFormField<String>(
           key: ValueKey('step-model-${step.rowKey}'),
           initialValue: selectedModel != null && models.contains(selectedModel)
@@ -707,7 +708,7 @@ final class _StepRow extends ConsumerWidget {
                 }
               : null,
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: MaestroFormSpacing.feedback),
         Semantics(
           liveRegion: true,
           label: 'Agent status for step $position. ${_guidance(rowState)}',
@@ -723,8 +724,9 @@ final class _StepRow extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text('Step $position'),
+                  const SizedBox(height: MaestroFormSpacing.sectionToControl),
                   nameField,
-                  const SizedBox(height: 8),
+                  const SizedBox(height: MaestroFormSpacing.fieldToField),
                   agentControls,
                   Align(
                     alignment: Alignment.centerLeft,
@@ -743,7 +745,7 @@ final class _StepRow extends ConsumerWidget {
                     child: Column(
                       children: [
                         nameField,
-                        const SizedBox(height: 8),
+                        const SizedBox(height: MaestroFormSpacing.fieldToField),
                         agentControls,
                       ],
                     ),

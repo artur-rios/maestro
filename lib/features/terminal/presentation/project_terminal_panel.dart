@@ -10,8 +10,8 @@ import 'package:maestro/features/terminal/presentation/project_terminal_drawer_c
 import 'package:xterm/xterm.dart';
 
 const _terminalTextStyle = TerminalStyle(
-  fontFamily: 'CaskaydiaCove Nerd Font',
-  fontFamilyFallback: <String>['JetBrainsMono Nerd Font', 'monospace'],
+  fontFamily: 'MesloLGM Nerd Font',
+  fontFamilyFallback: <String>['monospace'],
   fontSize: 13,
   height: 1.2,
 );

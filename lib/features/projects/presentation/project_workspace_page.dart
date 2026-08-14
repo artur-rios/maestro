@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
@@ -36,7 +37,12 @@ enum _SelectedProjectPane { project, history, startRun }
 enum WorkbenchLayoutClass { narrow, medium, wide }
 
 const _desktopDialogConstraints = BoxConstraints(maxWidth: 440);
-const _desktopDialogTitlePadding = EdgeInsets.fromLTRB(20, 16, 20, 8);
+const _desktopDialogTitlePadding = EdgeInsets.fromLTRB(
+  20,
+  16,
+  20,
+  MaestroFormSpacing.sectionToControl,
+);
 const _desktopDialogContentPadding = EdgeInsets.fromLTRB(20, 0, 20, 16);
 const _desktopDialogActionsPadding = EdgeInsets.fromLTRB(20, 0, 20, 16);
 const _navigatorFocusOrder = NumericFocusOrder(1);

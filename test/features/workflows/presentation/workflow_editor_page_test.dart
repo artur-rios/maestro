@@ -112,11 +112,15 @@ void main() {
       expect(find.byTooltip('Refresh agent catalogs'), findsOneWidget);
       final cli = find.byKey(const ValueKey('step-cli-default-plan'));
       expect(cli, findsOneWidget);
+      final model = find.byKey(const ValueKey('step-model-default-plan'));
+      expect(
+        tester.getTopLeft(model).dy - tester.getBottomLeft(cli).dy,
+        greaterThanOrEqualTo(12),
+      );
       await tester.tap(cli);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Codex').last);
       await tester.pump();
-      final model = find.byKey(const ValueKey('step-model-default-plan'));
       await tester.tap(model);
       await tester.pumpAndSettle();
       await tester.tap(find.text('gpt-5.4').last);

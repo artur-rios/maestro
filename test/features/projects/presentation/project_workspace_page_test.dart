@@ -63,6 +63,18 @@ void main() {
             .hasFocus,
         isTrue,
       );
+      final title = find.descendant(
+        of: dialog,
+        matching: find.text('Register project'),
+      );
+      final field = find.descendant(
+        of: dialog,
+        matching: find.byType(TextField),
+      );
+      expect(
+        tester.getTopLeft(field).dy - tester.getBottomLeft(title).dy,
+        greaterThanOrEqualTo(16),
+      );
       expect(tester.takeException(), isNull);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);

@@ -71,6 +71,39 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'GivenRetentionSettings_WhenRendered_ThenTitleFieldsAndActionsHaveReadableSpacing',
+    (tester) async {
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      await tester.pumpWidget(_host(database));
+      await tester.pumpAndSettle();
+
+      final title = find.text('Retention settings');
+      final days = find.byKey(const Key('retention-days'));
+      final storage = find.byKey(const Key('retention-storage-limit'));
+      final save = find.widgetWithText(TextButton, 'Save retention settings');
+      final search = find.widgetWithText(TextField, 'Search history');
+
+      expect(
+        tester.getTopLeft(days).dy - tester.getBottomLeft(title).dy,
+        greaterThanOrEqualTo(16),
+      );
+      expect(
+        tester.getTopLeft(storage).dy - tester.getBottomLeft(days).dy,
+        greaterThanOrEqualTo(12),
+      );
+      expect(
+        tester.getTopLeft(save).dy - tester.getBottomLeft(storage).dy,
+        greaterThanOrEqualTo(16),
+      );
+      expect(
+        tester.getTopLeft(search).dy - tester.getBottomLeft(save).dy,
+        greaterThanOrEqualTo(16),
+      );
+    },
+  );
 }
 
 Widget _host(MaestroDatabase database) => MaterialApp(

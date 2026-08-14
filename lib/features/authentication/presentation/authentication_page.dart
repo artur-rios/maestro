@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/maestro_window_chrome.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
@@ -156,7 +157,7 @@ final class _AuthenticationFormState
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: MaestroFormSpacing.fieldToField),
               TextField(
                 controller: _passwordController,
                 enabled: !busy,
@@ -173,7 +174,7 @@ final class _AuthenticationFormState
               if (_creatingAccount &&
                   error?.category !=
                       AuthenticationFailureCategory.passwordPolicy) ...<Widget>[
-                const SizedBox(height: 12),
+                const SizedBox(height: MaestroFormSpacing.fieldToField),
                 const Text('Password must contain at least 8 characters.'),
                 const Text('Choose a strong, unique password.'),
               ],

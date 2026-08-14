@@ -53,6 +53,11 @@ void main() {
       tester.getSize(find.byKey(const Key('start-run'))).width,
       lessThan(tester.getSize(section).width),
     );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('run-work-item'))).dy -
+          tester.getBottomLeft(find.byKey(const Key('run-workflow'))).dy,
+      greaterThanOrEqualTo(12),
+    );
   });
 
   testWidgets(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
@@ -135,7 +136,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                               }
                             },
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: MaestroFormSpacing.fieldToField),
                     TextField(
                       key: const Key('run-work-item'),
                       controller: _workItem,
@@ -145,7 +146,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                       ),
                       onChanged: _controller.setWorkItem,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: MaestroFormSpacing.fieldToField),
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final delivery = _deliveryModeField(state);
@@ -154,7 +155,9 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                           return Column(
                             children: <Widget>[
                               delivery,
-                              const SizedBox(height: 8),
+                              const SizedBox(
+                                height: MaestroFormSpacing.fieldToField,
+                              ),
                               branch,
                             ],
                           );
@@ -163,13 +166,15 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Expanded(child: delivery),
-                            const SizedBox(width: 8),
+                            const SizedBox(
+                              width: MaestroFormSpacing.fieldToField,
+                            ),
                             Expanded(child: branch),
                           ],
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: MaestroFormSpacing.controlToAction),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: FilledButton.icon(

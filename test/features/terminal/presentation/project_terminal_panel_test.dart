@@ -40,9 +40,8 @@ void main() {
         final terminalView = tester.widget<TerminalView>(
           find.byKey(const Key('terminal-view')),
         );
-        expect(terminalView.textStyle.fontFamily, 'CaskaydiaCove Nerd Font');
+        expect(terminalView.textStyle.fontFamily, 'MesloLGM Nerd Font');
         expect(terminalView.textStyle.fontFamilyFallback, <String>[
-          'JetBrainsMono Nerd Font',
           'monospace',
         ]);
         expect(terminalView.textStyle.fontSize, inInclusiveRange(13, 14));
