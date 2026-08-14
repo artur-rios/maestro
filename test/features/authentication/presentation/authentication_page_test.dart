@@ -95,6 +95,45 @@ void main() {
       expect(find.text('Authentication was not successful.'), findsOneWidget);
       final decoration = tester.widget<DecoratedBox>(feedback).decoration;
       expect((decoration as BoxDecoration).border, isNotNull);
+      expect(
+        tester.getTopLeft(find.byType(TextField).first).dy -
+            tester.getBottomLeft(feedback).dy,
+        closeTo(8, 0.01),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticationForm_WhenRendered_ThenControlsUseSharedVerticalRhythm',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      final title = find.text('Local authentication');
+      final operatingSystem = find.widgetWithText(
+        FilledButton,
+        'Sign in with your operating system',
+      );
+      final fields = find.byType(TextField);
+      final email = fields.at(0);
+      final password = fields.at(1);
+      final emailAction = find.widgetWithText(
+        FilledButton,
+        'Sign in with email and password',
+      );
+
+      expect(
+        tester.getTopLeft(operatingSystem).dy - tester.getBottomLeft(title).dy,
+        closeTo(16, 0.01),
+      );
+      expect(
+        tester.getTopLeft(password).dy - tester.getBottomLeft(email).dy,
+        closeTo(12, 0.01),
+      );
+      expect(
+        tester.getTopLeft(emailAction).dy - tester.getBottomLeft(password).dy,
+        closeTo(16, 0.01),
+      );
     },
   );
 

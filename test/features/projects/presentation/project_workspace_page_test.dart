@@ -73,7 +73,7 @@ void main() {
       );
       expect(
         tester.getTopLeft(field).dy - tester.getBottomLeft(title).dy,
-        greaterThanOrEqualTo(16),
+        closeTo(16, 0.01),
       );
       expect(tester.takeException(), isNull);
 

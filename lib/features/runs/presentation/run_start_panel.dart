@@ -116,7 +116,8 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 8),
+                    if (state.recoveryOffers.isNotEmpty)
+                      const SizedBox(height: MaestroFormSpacing.fieldToField),
                     DropdownButtonFormField<String>(
                       key: const Key('run-workflow'),
                       initialValue: state.selectedWorkflow?.id,
@@ -190,7 +191,7 @@ final class _RunStartPanelState extends State<RunStartPanel> {
                       ),
                     ),
                     if (state.failure case final failure?) ...<Widget>[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: MaestroFormSpacing.feedback),
                       Semantics(
                         liveRegion: true,
                         child: Text(

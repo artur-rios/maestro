@@ -54,9 +54,19 @@ void main() {
       lessThan(tester.getSize(section).width),
     );
     expect(
+      tester.getTopLeft(find.byKey(const Key('run-workflow'))).dy -
+          tester.getBottomLeft(find.byType(Divider).first).dy,
+      closeTo(16, 0.01),
+    );
+    expect(
       tester.getTopLeft(find.byKey(const Key('run-work-item'))).dy -
           tester.getBottomLeft(find.byKey(const Key('run-workflow'))).dy,
-      greaterThanOrEqualTo(12),
+      closeTo(12, 0.01),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('start-run'))).dy -
+          tester.getBottomLeft(find.byKey(const Key('run-delivery-mode'))).dy,
+      closeTo(16, 0.01),
     );
   });
 
@@ -150,6 +160,15 @@ void main() {
             .controller!
             .text,
         'UC-06',
+      );
+      expect(
+        tester
+                .getTopLeft(
+                  find.textContaining('Source has uncommitted changes.'),
+                )
+                .dy -
+            tester.getBottomLeft(find.byKey(const Key('start-run'))).dy,
+        closeTo(8, 0.01),
       );
     },
   );

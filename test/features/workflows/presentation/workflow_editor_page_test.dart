@@ -115,7 +115,7 @@ void main() {
       final model = find.byKey(const ValueKey('step-model-default-plan'));
       expect(
         tester.getTopLeft(model).dy - tester.getBottomLeft(cli).dy,
-        greaterThanOrEqualTo(12),
+        closeTo(12, 0.01),
       );
       await tester.tap(cli);
       await tester.pumpAndSettle();

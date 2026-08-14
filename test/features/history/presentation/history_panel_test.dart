@@ -88,19 +88,19 @@ void main() {
 
       expect(
         tester.getTopLeft(days).dy - tester.getBottomLeft(title).dy,
-        greaterThanOrEqualTo(16),
+        closeTo(16, 0.01),
       );
       expect(
         tester.getTopLeft(storage).dy - tester.getBottomLeft(days).dy,
-        greaterThanOrEqualTo(12),
+        closeTo(12, 0.01),
       );
       expect(
         tester.getTopLeft(save).dy - tester.getBottomLeft(storage).dy,
-        greaterThanOrEqualTo(16),
+        closeTo(16, 0.01),
       );
       expect(
         tester.getTopLeft(search).dy - tester.getBottomLeft(save).dy,
-        greaterThanOrEqualTo(16),
+        closeTo(16, 0.01),
       );
     },
   );

@@ -84,6 +84,7 @@ flutter:
 
   assets:
     - assets/fonts/meslo/LICENSE.txt
+    - assets/fonts/meslo/notices/
 
   fonts:
     - family: MesloLGM Nerd Font

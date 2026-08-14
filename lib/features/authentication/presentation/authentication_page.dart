@@ -118,7 +118,7 @@ final class _AuthenticationFormState
                 'Local authentication',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: MaestroFormSpacing.sectionToControl),
               FilledButton.icon(
                 onPressed: busy ? null : _signInWithOperatingSystem,
                 icon: const Icon(Icons.lock_person),
@@ -144,7 +144,7 @@ final class _AuthenticationFormState
               ),
               if (error != null) ...<Widget>[
                 _AuthenticationErrorMessage(error: error),
-                const SizedBox(height: 16),
+                const SizedBox(height: MaestroFormSpacing.feedback),
               ],
               TextField(
                 controller: _emailController,
@@ -178,7 +178,7 @@ final class _AuthenticationFormState
                 const Text('Password must contain at least 8 characters.'),
                 const Text('Choose a strong, unique password.'),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: MaestroFormSpacing.controlToAction),
               FilledButton(
                 onPressed: busy ? null : _submitEmail,
                 child: Text(
