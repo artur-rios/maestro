@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 import 'package:maestro/platform/window/window_manager_desktop_window.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -61,6 +62,18 @@ void main() {
       expect(gateway.startDraggingCalls, 1);
       expect(gateway.minimizeCalls, 1);
       expect(gateway.closeCalls, 1);
+    },
+  );
+
+  test(
+    'GivenMaximizedGateway_WhenWindowStateRead_ThenPortReportsMaximized',
+    () async {
+      final gateway = FakeWindowManagerGateway(isMaximized: true);
+      final DesktopWindowPort window = WindowManagerDesktopWindow(gateway);
+
+      final isMaximized = await window.isMaximized();
+
+      expect(isMaximized, isTrue);
     },
   );
 }

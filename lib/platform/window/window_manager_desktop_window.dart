@@ -71,6 +71,9 @@ final class WindowManagerDesktopWindow implements DesktopWindowPort {
   Future<void> minimize() => gateway.minimize();
 
   @override
+  Future<bool> isMaximized() => gateway.isMaximized();
+
+  @override
   Future<void> toggleMaximize() async =>
       await gateway.isMaximized() ? gateway.unmaximize() : gateway.maximize();
 

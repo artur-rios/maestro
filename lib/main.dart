@@ -91,6 +91,17 @@ String newProductionNonce() {
 }
 
 typedef DatabaseCloser = Future<void> Function(MaestroDatabase database);
+typedef DesktopWindowInitializer = Future<DesktopWindowPort> Function();
+typedef ApplicationSupportDirectoryReader = Future<Directory> Function();
+typedef DatabaseOpener =
+    Future<MaestroDatabase> Function(ApplicationPaths paths);
+typedef ProductionAppComposer =
+    Future<ProductionAppComposition> Function({
+      required ApplicationPaths paths,
+      required MaestroDatabase database,
+      required DesktopWindowPort window,
+    });
+typedef AppRunner = void Function(Widget app);
 
 final class ProductionAppComposition {
   ProductionAppComposition._({
@@ -529,6 +540,18 @@ final class ProductionProjectExecutionReadiness
 
 Future<void> _closeDatabase(MaestroDatabase database) => database.close();
 
+Future<DesktopWindowPort> _initializeProductionDesktopWindow() =>
+    initializeDesktopWindow(const ProductionWindowManagerGateway());
+
+Future<MaestroDatabase> _openProductionDatabase(ApplicationPaths paths) =>
+    const DatabaseFactory().open(paths);
+
+Future<ProductionAppComposition> _composeProductionApplication({
+  required ApplicationPaths paths,
+  required MaestroDatabase database,
+  required DesktopWindowPort window,
+}) => composeProductionApp(paths: paths, database: database, window: window);
+
 Future<void> main([List<String> arguments = const <String>[]]) async {
   WidgetsFlutterBinding.ensureInitialized();
   final readinessSignal = Platform.isWindows
@@ -537,22 +560,38 @@ Future<void> main([List<String> arguments = const <String>[]]) async {
           executablePath: Platform.resolvedExecutable,
         )
       : null;
+  await runMaestroStartup(readinessSignal: readinessSignal);
+}
+
+Future<void> runMaestroStartup({
+  required UpdateReadinessSignal? readinessSignal,
+  DesktopWindowInitializer initializeWindow =
+      _initializeProductionDesktopWindow,
+  ApplicationSupportDirectoryReader getSupportDirectory =
+      getApplicationSupportDirectory,
+  DatabaseOpener openDatabase = _openProductionDatabase,
+  ProductionAppComposer composeApp = _composeProductionApplication,
+  AppRunner? runApplication,
+}) async {
+  DesktopWindowPort window = const NoopDesktopWindowPort();
   MaestroDatabase? database;
   ProductionAppComposition? composition;
   try {
-    final window = await initializeDesktopWindow(
-      const ProductionWindowManagerGateway(),
-    );
-    final root = await getApplicationSupportDirectory();
+    window = await initializeWindow();
+    final root = await getSupportDirectory();
     final paths = ApplicationPaths.fromRoot(root);
-    final openedDatabase = await const DatabaseFactory().open(paths);
+    final openedDatabase = await openDatabase(paths);
     database = openedDatabase;
-    composition = await composeProductionApp(
+    composition = await composeApp(
       paths: paths,
       database: openedDatabase,
       window: window,
     );
-    runApp(composition.app);
+    if (runApplication case final testRunner?) {
+      testRunner(composition.app);
+    } else {
+      runApp(composition.app);
+    }
     await readinessSignal?.write();
     database = null;
   } on Object {
@@ -561,12 +600,19 @@ Future<void> main([List<String> arguments = const <String>[]]) async {
     } else if (database case final openedDatabase?) {
       await openedDatabase.close();
     }
-    runApp(const _InitializationFailureApp());
+    final failureApp = _InitializationFailureApp(window: window);
+    if (runApplication case final testRunner?) {
+      testRunner(failureApp);
+    } else {
+      runApp(failureApp);
+    }
   }
 }
 
 final class _InitializationFailureApp extends StatelessWidget {
-  const _InitializationFailureApp();
+  const _InitializationFailureApp({required this.window});
+
+  final DesktopWindowPort window;
 
   @override
   Widget build(BuildContext context) {
@@ -575,10 +621,10 @@ final class _InitializationFailureApp extends StatelessWidget {
       theme: maestroTheme(Brightness.light),
       darkTheme: maestroTheme(Brightness.dark),
       themeMode: ThemeMode.system,
-      home: const MaestroWindowChrome(
-        window: NoopDesktopWindowPort(),
+      home: MaestroWindowChrome(
+        window: window,
         title: 'Maestro',
-        child: Scaffold(
+        child: const Scaffold(
           body: Center(
             child: Padding(
               padding: EdgeInsets.all(24),

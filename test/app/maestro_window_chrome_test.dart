@@ -131,13 +131,100 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'GivenMaximizedWindow_WhenChromeShown_ThenRestoreControlIsRendered',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(
+          _host(
+            MaestroWindowChrome(
+              window: FakeDesktopWindowPort(maximized: true),
+              title: 'Maestro',
+              child: const SizedBox(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.bySemanticsLabel('Restore Maestro'), findsOneWidget);
+        expect(find.byTooltip('Restore Maestro'), findsOneWidget);
+        expect(find.byIcon(Icons.filter_none), findsOneWidget);
+        expect(find.bySemanticsLabel('Maximize Maestro'), findsNothing);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'GivenRestoredWindow_WhenMaximizePressed_ThenControlChangesToRestore',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final window = FakeDesktopWindowPort();
+        await tester.pumpWidget(
+          _host(
+            MaestroWindowChrome(
+              window: window,
+              title: 'Maestro',
+              child: const SizedBox(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        await tester.tap(find.bySemanticsLabel('Maximize Maestro'));
+        await tester.pumpAndSettle();
+
+        expect(find.bySemanticsLabel('Restore Maestro'), findsOneWidget);
+        expect(find.byTooltip('Restore Maestro'), findsOneWidget);
+        expect(find.byIcon(Icons.filter_none), findsOneWidget);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'GivenMaximizedWindow_WhenRestorePressed_ThenControlChangesToMaximize',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final window = FakeDesktopWindowPort(maximized: true);
+        await tester.pumpWidget(
+          _host(
+            MaestroWindowChrome(
+              window: window,
+              title: 'Maestro',
+              child: const SizedBox(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        await tester.tap(find.bySemanticsLabel('Restore Maestro'));
+        await tester.pumpAndSettle();
+
+        expect(find.bySemanticsLabel('Maximize Maestro'), findsOneWidget);
+        expect(find.byTooltip('Maximize Maestro'), findsOneWidget);
+        expect(find.byIcon(Icons.crop_square), findsOneWidget);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
 }
 
 Widget _host(Widget child) =>
     MaterialApp(theme: maestroTheme(Brightness.light), home: child);
 
 final class FakeDesktopWindowPort implements DesktopWindowPort {
+  FakeDesktopWindowPort({this.maximized = false});
+
   final List<String> commands = <String>[];
+  bool maximized;
 
   @override
   Future<void> beginDrag() async => commands.add('beginDrag');
@@ -146,7 +233,13 @@ final class FakeDesktopWindowPort implements DesktopWindowPort {
   Future<void> minimize() async => commands.add('minimize');
 
   @override
-  Future<void> toggleMaximize() async => commands.add('toggleMaximize');
+  Future<void> toggleMaximize() async {
+    commands.add('toggleMaximize');
+    maximized = !maximized;
+  }
+
+  @override
+  Future<bool> isMaximized() async => maximized;
 
   @override
   Future<void> close() async => commands.add('close');
