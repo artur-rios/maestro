@@ -502,24 +502,27 @@ final class _ProjectWorkbench extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: isNarrow
-          ? NavigationBar(
-              selectedIndex: destination.index,
-              onDestinationSelected: (index) =>
-                  onDestinationSelected(_WorkbenchDestination.values[index]),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.folder_outlined),
-                  label: 'Tasks',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.account_tree_outlined),
-                  label: 'Automations',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.monitor_heart_outlined),
-                  label: 'Health',
-                ),
-              ],
+          ? FocusTraversalOrder(
+              order: _navigatorFocusOrder,
+              child: NavigationBar(
+                selectedIndex: destination.index,
+                onDestinationSelected: (index) =>
+                    onDestinationSelected(_WorkbenchDestination.values[index]),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.folder_outlined),
+                    label: 'Tasks',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.account_tree_outlined),
+                    label: 'Automations',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.monitor_heart_outlined),
+                    label: 'Health',
+                  ),
+                ],
+              ),
             )
           : null,
       body: Column(

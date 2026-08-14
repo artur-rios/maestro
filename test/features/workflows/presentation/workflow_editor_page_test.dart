@@ -27,6 +27,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('New reusable workflow'), findsOneWidget);
       expect(find.text('New one-off workflow'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.text('New reusable workflow'),
+      );
+      _expectContainedAndHitTestable(tester, find.text('New one-off workflow'));
       expect(tester.takeException(), isNull);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
@@ -39,6 +44,10 @@ void main() {
       expect(find.text('Add Execute step'), findsOneWidget);
       expect(find.text('Add Review step'), findsOneWidget);
       expect(find.text('Add custom step'), findsOneWidget);
+      _expectContainedAndHitTestable(tester, find.text('Add Plan step'));
+      _expectContainedAndHitTestable(tester, find.text('Add Execute step'));
+      _expectContainedAndHitTestable(tester, find.text('Add Review step'));
+      _expectContainedAndHitTestable(tester, find.text('Add custom step'));
       expect(tester.takeException(), isNull);
     },
   );
@@ -591,6 +600,17 @@ Future<void> _revealInEditor(WidgetTester tester, Finder finder) async {
     await tester.pump();
   }
   throw TestFailure('Could not reveal $finder.');
+}
+
+void _expectContainedAndHitTestable(WidgetTester tester, Finder finder) {
+  expect(finder, findsOneWidget);
+  expect(finder.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(finder);
+  final logicalSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.right, lessThanOrEqualTo(logicalSize.width));
+  expect(rect.bottom, lessThanOrEqualTo(logicalSize.height));
 }
 
 Widget _app({

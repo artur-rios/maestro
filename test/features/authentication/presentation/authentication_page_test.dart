@@ -53,6 +53,18 @@ void main() {
       expect(find.text('System'), findsOneWidget);
       expect(find.text('Light'), findsOneWidget);
       expect(find.text('Dark'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'System'),
+      );
+      _expectContainedAndHitTestable(
+        tester,
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'Light'),
+      );
+      _expectContainedAndHitTestable(
+        tester,
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'Dark'),
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -520,6 +532,17 @@ bool _primaryFocusIsWithin(WidgetTester tester, Finder finder) {
     if (next == null) return false;
     current = next;
   }
+}
+
+void _expectContainedAndHitTestable(WidgetTester tester, Finder finder) {
+  expect(finder, findsOneWidget);
+  expect(finder.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(finder);
+  final logicalSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.right, lessThanOrEqualTo(logicalSize.width));
+  expect(rect.bottom, lessThanOrEqualTo(logicalSize.height));
 }
 
 final class _AppearancePreferenceRepository

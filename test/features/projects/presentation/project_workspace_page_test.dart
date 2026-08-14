@@ -125,15 +125,35 @@ void main() {
 
   for (final width in <double>[1500, 980, 600]) {
     testWidgets(
-      'GivenWorkbenchAt${width.toInt()}Pixels_WhenRendered_ThenNoControlsOverflow',
+      'GivenSelectedWorkbenchAt${width.toInt()}Pixels_WhenRendered_ThenActionsStayInsideTheView',
       (tester) async {
         tester.view.physicalSize = Size(width, 760);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
+        final repository = _Repository()..records.add(_record());
 
-        await tester.pumpWidget(_app());
+        await tester.pumpWidget(
+          _app(
+            repository: repository,
+            runStartBuilder: (_, _, _) => const Text('Run start content'),
+          ),
+        );
         await tester.pumpAndSettle();
+        if (width == 600) {
+          await tester.tap(find.bySemanticsLabel('Show project navigator'));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('Demo').first);
+        await tester.pumpAndSettle();
+        if (width == 600) {
+          Navigator.of(
+            tester.element(find.bySemanticsLabel('Show context inspector')),
+          ).pop();
+          await tester.pumpAndSettle();
+        }
 
+        _expectContainedAndHitTestable(tester, find.byTooltip('Project tools'));
+        _expectContainedAndHitTestable(tester, find.text('Start run'));
         expect(tester.takeException(), isNull);
       },
     );
@@ -155,6 +175,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Choose folder and register'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.text('Choose folder and register'),
+      );
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
@@ -163,6 +187,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Permanently delete metadata'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.text('Permanently delete metadata'),
+      );
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
@@ -175,7 +203,61 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
       expect(find.text('Project details'), findsOneWidget);
+      _expectContainedAndHitTestable(tester, find.text('Project details'));
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowWorkbench_WhenTabbing_ThenNavigationPrecedesWorkspaceInspectorAndTerminal',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, _, _) => const TextButton(
+            key: Key('terminal-focus-action'),
+            onPressed: _noop,
+            child: Text('Terminal action'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Show project navigator'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      Navigator.of(
+        tester.element(find.bySemanticsLabel('Show context inspector')),
+      ).pop();
+      await tester.pumpAndSettle();
+
+      final landmarks = <Finder>[
+        find.widgetWithText(NavigationDestination, 'Tasks'),
+        find.byTooltip('Project tools'),
+        find.bySemanticsLabel('Show context inspector'),
+        find.byKey(const Key('terminal-focus-action')),
+      ];
+      final visited = <int>[];
+      for (
+        var press = 0;
+        press < 40 && visited.length < landmarks.length;
+        press++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        for (var index = 0; index < landmarks.length; index++) {
+          if (!visited.contains(index) &&
+              _primaryFocusIsWithin(tester, landmarks[index])) {
+            visited.add(index);
+          }
+        }
+      }
+
+      expect(visited, <int>[0, 1, 2, 3]);
     },
   );
 
@@ -1648,6 +1730,17 @@ bool _primaryFocusIsWithin(WidgetTester tester, Finder finder) {
 }
 
 void _noop() {}
+
+void _expectContainedAndHitTestable(WidgetTester tester, Finder finder) {
+  expect(finder, findsOneWidget);
+  expect(finder.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(finder);
+  final logicalSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.right, lessThanOrEqualTo(logicalSize.width));
+  expect(rect.bottom, lessThanOrEqualTo(logicalSize.height));
+}
 
 Future<void> _register(WidgetTester tester, String name) async {
   await tester.tap(find.bySemanticsLabel('Register project'));
