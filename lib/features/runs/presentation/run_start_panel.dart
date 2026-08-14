@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 
@@ -44,139 +45,171 @@ final class _RunStartPanelState extends State<RunStartPanel> {
   @override
   Widget build(BuildContext context) {
     final state = _controller.state;
+    final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
     return Align(
       alignment: Alignment.topLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(
-                  'Start workflow run',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                for (final offer in state.recoveryOffers) ...<Widget>[
-                  const SizedBox(height: 12),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(8),
+        child: Material(
+          key: const Key('run-start-section'),
+          color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(
+                height: tokens?.toolbarHeight ?? 36,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Start workflow run',
+                      style: theme.textTheme.titleSmall,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text('Interrupted run ${offer.runId}'),
-                          Wrap(
-                            spacing: 8,
+                  ),
+                ),
+              ),
+              Divider(height: 1, color: tokens?.subtleBorder),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    for (final offer in state.recoveryOffers) ...<Widget>[
+                      const SizedBox(height: 8),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(
+                            tokens?.smallRadius ?? 4,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              for (final action in RecoveryAction.values)
-                                if (offer.actions.contains(action))
-                                  OutlinedButton(
-                                    onPressed:
-                                        state.recoveringRunIds.contains(
-                                          offer.runId,
-                                        )
-                                        ? null
-                                        : () => _controller.selectRecovery(
-                                            offer,
-                                            action,
-                                          ),
-                                    child: Text(_recoveryLabel(action)),
-                                  ),
+                              Text('Interrupted run ${offer.runId}'),
+                              Wrap(
+                                spacing: 8,
+                                children: <Widget>[
+                                  for (final action in RecoveryAction.values)
+                                    if (offer.actions.contains(action))
+                                      OutlinedButton(
+                                        onPressed:
+                                            state.recoveringRunIds.contains(
+                                              offer.runId,
+                                            )
+                                            ? null
+                                            : () => _controller.selectRecovery(
+                                                offer,
+                                                action,
+                                              ),
+                                        child: Text(_recoveryLabel(action)),
+                                      ),
+                                ],
+                              ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  key: const Key('run-workflow'),
-                  initialValue: state.selectedWorkflow?.id,
-                  decoration: const InputDecoration(labelText: 'Workflow'),
-                  items: <DropdownMenuItem<String>>[
-                    for (final workflow in state.workflows)
-                      DropdownMenuItem<String>(
-                        value: workflow.id,
-                        child: Text(workflow.name ?? 'One-off workflow'),
-                      ),
-                  ],
-                  onChanged: state.starting
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            _controller.selectWorkflow(value);
-                          }
-                        },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  key: const Key('run-work-item'),
-                  controller: _workItem,
-                  enabled: !state.starting,
-                  decoration: InputDecoration(labelText: state.workItemLabel),
-                  onChanged: _controller.setWorkItem,
-                ),
-                const SizedBox(height: 8),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final delivery = _deliveryModeField(state);
-                    final branch = _branchTypeField(state);
-                    if (constraints.maxWidth < 520) {
-                      return Column(
-                        children: <Widget>[
-                          delivery,
-                          const SizedBox(height: 8),
-                          branch,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Expanded(child: delivery),
-                        const SizedBox(width: 8),
-                        Expanded(child: branch),
+                    ],
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      key: const Key('run-workflow'),
+                      initialValue: state.selectedWorkflow?.id,
+                      decoration: const InputDecoration(labelText: 'Workflow'),
+                      items: <DropdownMenuItem<String>>[
+                        for (final workflow in state.workflows)
+                          DropdownMenuItem<String>(
+                            value: workflow.id,
+                            child: Text(workflow.name ?? 'One-off workflow'),
+                          ),
                       ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    key: const Key('start-run'),
-                    onPressed: state.starting || state.selectedWorkflow == null
-                        ? null
-                        : _controller.start,
-                    icon: const Icon(Icons.play_arrow),
-                    label: Text(
-                      state.starting ? 'Starting…' : 'Start isolated run',
+                      onChanged: state.starting
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                _controller.selectWorkflow(value);
+                              }
+                            },
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      key: const Key('run-work-item'),
+                      controller: _workItem,
+                      enabled: !state.starting,
+                      decoration: InputDecoration(
+                        labelText: state.workItemLabel,
+                      ),
+                      onChanged: _controller.setWorkItem,
+                    ),
+                    const SizedBox(height: 8),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final delivery = _deliveryModeField(state);
+                        final branch = _branchTypeField(state);
+                        if (constraints.maxWidth < 520) {
+                          return Column(
+                            children: <Widget>[
+                              delivery,
+                              const SizedBox(height: 8),
+                              branch,
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(child: delivery),
+                            const SizedBox(width: 8),
+                            Expanded(child: branch),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.icon(
+                        key: const Key('start-run'),
+                        onPressed:
+                            state.starting || state.selectedWorkflow == null
+                            ? null
+                            : _controller.start,
+                        icon: const Icon(Icons.play_arrow),
+                        label: Text(
+                          state.starting ? 'Starting…' : 'Start isolated run',
+                        ),
+                      ),
+                    ),
+                    if (state.failure case final failure?) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          '${failure.message}\n${failure.remediation}',
+                        ),
+                      ),
+                    ],
+                    for (final run in state.runs) ...<Widget>[
+                      const Divider(height: 16),
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Run ${run.runId} · ${run.status.name}'),
+                        subtitle: Text(
+                          'Current step: ${run.currentStep ?? 'Unavailable'}',
+                        ),
+                      ),
+                      SelectableText(run.branchName),
+                      SelectableText(run.worktreePath),
+                    ],
+                  ],
                 ),
-                if (state.failure case final failure?) ...<Widget>[
-                  const SizedBox(height: 12),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text('${failure.message}\n${failure.remediation}'),
-                  ),
-                ],
-                for (final run in state.runs) ...<Widget>[
-                  const Divider(height: 24),
-                  Text('Run ${run.runId} · ${run.status.name}'),
-                  Text('Current step: ${run.currentStep ?? 'Unavailable'}'),
-                  SelectableText(run.branchName),
-                  SelectableText(run.worktreePath),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

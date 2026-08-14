@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
@@ -90,6 +91,7 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   Widget build(BuildContext context) {
     final state = _controller.state;
     final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
     _scheduleInspector(
       _runInspectorSnapshot(state, _controls?.state),
       widget.onInspectorChanged ?? WorkbenchInspectorScope.maybeOf(context),
@@ -97,125 +99,162 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
     if (_controls != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _syncControls());
     }
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text('Active runs', style: theme.textTheme.titleLarge),
-                ),
-                IconButton(
-                  key: const Key('refresh-runs'),
-                  onPressed: state.loading ? null : _controller.load,
-                  tooltip: 'Refresh runs',
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-            if (state.loading) ...<Widget>[
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                label: 'Loading runs',
-                child: const LinearProgressIndicator(key: Key('runs-loading')),
-              ),
-            ],
-            if (state.isEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              const Text(
-                key: Key('runs-empty'),
-                'No runs yet. Start a workflow run to observe it here.',
-              ),
-            ],
-            for (final run in state.runs) ...<Widget>[
-              const SizedBox(height: 8),
-              _RunRow(
-                run: run,
-                selected: run.runId == state.selectedRunId,
-                onSelected: () => _controller.select(run.runId),
-              ),
-            ],
-            if (state.selectedRun case final selected?) ...<Widget>[
-              if (_controls case final controls?) ...<Widget>[
-                const Divider(height: 24),
-                _ControlBar(controller: controls),
-              ],
-              if (widget.createDeliveryController
-                  case final create?) ...<Widget>[
-                const Divider(height: 24),
-                DeliveryPanel(
-                  key: Key('delivery-${selected.runId}'),
-                  runId: selected.runId,
-                  createController: create,
-                ),
-              ],
-              const Divider(height: 24),
-              Text('Steps', style: theme.textTheme.titleMedium),
-              for (final step in selected.steps)
-                _StepRow(
-                  step: step,
-                  current: step.position == selected.currentStepPosition,
-                ),
-              const SizedBox(height: 12),
-              Row(
+    return Material(
+      key: const Key('active-runs-section'),
+      color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: tokens?.toolbarHeight ?? 36,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 4),
+              child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: Text('Output', style: theme.textTheme.titleMedium),
-                  ),
-                  if (state.hasEarlier)
-                    TextButton(
-                      key: const Key('load-earlier-output'),
-                      onPressed: state.loadingEarlier
-                          ? null
-                          : _controller.loadEarlier,
-                      child: Text(
-                        state.loadingEarlier
-                            ? 'Loading…'
-                            : 'Load earlier output',
-                      ),
+                    child: Text(
+                      'Active runs',
+                      style: theme.textTheme.titleSmall,
                     ),
+                  ),
+                  IconButton(
+                    key: const Key('refresh-runs'),
+                    onPressed: state.loading ? null : _controller.load,
+                    tooltip: 'Refresh runs',
+                    icon: const Icon(Icons.refresh),
+                  ),
                 ],
               ),
-              if (state.durability == OutputDurability.degraded)
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    key: const Key('output-degraded'),
-                    'Durable log storage is degraded. Output is buffered and '
-                    'will be written when storage recovers.',
-                    style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ),
+          Divider(height: 1, color: tokens?.subtleBorder),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (state.loading) ...<Widget>[
+                  Semantics(
+                    liveRegion: true,
+                    label: 'Loading runs',
+                    child: const LinearProgressIndicator(
+                      key: Key('runs-loading'),
+                    ),
                   ),
-                ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 240),
-                child: SingleChildScrollView(
-                  key: Key('run-output-${selected.runId}'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                ],
+                if (state.isEmpty) ...<Widget>[
+                  const Text(
+                    key: Key('runs-empty'),
+                    'No runs yet. Start a workflow run to observe it here.',
+                  ),
+                ],
+                for (final run in state.runs) ...<Widget>[
+                  _RunRow(
+                    run: run,
+                    selected: run.runId == state.selectedRunId,
+                    onSelected: () => _controller.select(run.runId),
+                  ),
+                ],
+                if (state.selectedRun case final selected?) ...<Widget>[
+                  if (_controls case final controls?) ...<Widget>[
+                    const Divider(height: 16),
+                    _ControlBar(controller: controls),
+                  ],
+                  if (widget.createDeliveryController
+                      case final create?) ...<Widget>[
+                    const Divider(height: 16),
+                    DeliveryPanel(
+                      key: Key('delivery-${selected.runId}'),
+                      runId: selected.runId,
+                      createController: create,
+                    ),
+                  ],
+                  const Divider(height: 16),
+                  Text('Steps', style: theme.textTheme.titleMedium),
+                  for (final step in selected.steps)
+                    _StepRow(
+                      step: step,
+                      current: step.position == selected.currentStepPosition,
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
                     children: <Widget>[
-                      for (final chunk in state.output)
-                        _OutputChunk(chunk: chunk),
+                      Expanded(
+                        child: Text(
+                          'Output',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      if (state.hasEarlier)
+                        TextButton(
+                          key: const Key('load-earlier-output'),
+                          onPressed: state.loadingEarlier
+                              ? null
+                              : _controller.loadEarlier,
+                          child: Text(
+                            state.loadingEarlier
+                                ? 'Loading…'
+                                : 'Load earlier output',
+                          ),
+                        ),
                     ],
                   ),
-                ),
-              ),
-            ],
-            if (state.failure case final failure?) ...<Widget>[
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  key: const Key('runs-failure'),
-                  '${failure.message}\n${failure.remediation}',
-                ),
-              ),
-            ],
-          ],
-        ),
+                  if (state.durability == OutputDurability.degraded)
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        key: const Key('output-degraded'),
+                        'Durable log storage is degraded. Output is buffered and '
+                        'will be written when storage recovers.',
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color:
+                          tokens?.terminalSurface ??
+                          theme.colorScheme.inverseSurface,
+                      border: Border.all(
+                        color:
+                            tokens?.subtleBorder ??
+                            theme.colorScheme.outlineVariant,
+                      ),
+                      borderRadius: BorderRadius.circular(
+                        tokens?.smallRadius ?? 4,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 240),
+                        child: SingleChildScrollView(
+                          key: Key('run-output-${selected.runId}'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              for (final chunk in state.output)
+                                _OutputChunk(chunk: chunk),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                if (state.failure case final failure?) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      key: const Key('runs-failure'),
+                      '${failure.message}\n${failure.remediation}',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

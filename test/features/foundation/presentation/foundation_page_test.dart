@@ -31,6 +31,14 @@ void main() {
       );
       await tester.pump();
 
+      expect(find.byKey(const Key('foundation-section')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('foundation-section')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
       expect(first, hasLength(1));
       expect(second, hasLength(1));
     },

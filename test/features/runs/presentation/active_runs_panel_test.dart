@@ -30,6 +30,14 @@ void main() {
 
       await _pump(tester, repository, onInspectorChanged: snapshots.add);
 
+      expect(find.byKey(const Key('active-runs-section')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('active-runs-section')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
       expect(
         snapshots.last.sections.expand((section) => section.fields),
         contains(

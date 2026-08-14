@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
 import 'package:maestro/features/history/presentation/storage_limit_mb.dart';
@@ -75,96 +76,129 @@ final class _HistoryPanelState extends State<HistoryPanel> {
   @override
   Widget build(BuildContext context) {
     final state = controller.state;
+    final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
     return Align(
       alignment: Alignment.topLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'History and audit',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (widget.retentionService != null &&
-                    widget.actorId != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Retention settings',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  TextField(
-                    key: const Key('retention-days'),
-                    controller: _retentionDays,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Retention age (days)',
-                    ),
-                  ),
-                  TextField(
-                    key: const Key('retention-storage-limit'),
-                    controller: _storageLimit,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Storage limit (MB)',
-                    ),
-                  ),
-                  Align(
+        child: Material(
+          key: const Key('history-section'),
+          color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(
+                height: tokens?.toolbarHeight ?? 36,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: _saveRetentionPolicy,
-                      child: const Text('Save retention settings'),
+                    child: Text(
+                      'History and audit',
+                      style: theme.textTheme.titleSmall,
                     ),
-                  ),
-                  if (_retentionFeedback case final feedback?) Text(feedback),
-                ],
-                TextField(
-                  onChanged: controller.search,
-                  decoration: const InputDecoration(
-                    labelText: 'Search history',
                   ),
                 ),
-                if (state.loading) const LinearProgressIndicator(),
-                if (state.failure case final failure?) Text(failure),
-                if (!state.loading && state.visible.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Text('No history matches your filters.'),
-                  ),
-                for (final entry in state.visible)
-                  ListTile(
-                    title: Text(entry.label),
-                    subtitle: Text(entry.status.name),
-                    trailing: Text(entry.runId),
-                    selected: entry.runId == state.selected,
-                    onTap: () => controller.select(entry.runId),
-                  ),
-                if (state.loadingDetail) const LinearProgressIndicator(),
-                if (state.detail case final detail?) ...[
-                  const Divider(),
-                  Text(
-                    'Immutable run evidence',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  SelectableText(detail.snapshotJson),
-                  Text('Attempts: ${detail.attempts.length}'),
-                  for (final attempt in detail.attempts)
-                    Text('${attempt.status} · ${attempt.id}'),
-                  Text('Audit events: ${detail.auditEvents.length}'),
-                  for (final audit in detail.auditEvents)
-                    Text('${audit.action} · ${audit.outcome}'),
-                  Text('Log segments: ${detail.logSegments.length}'),
-                  for (final log in detail.logSegments)
-                    SelectableText(
-                      _displayLog(log.bytes, log.compression) ??
-                          'Log segment ${log.id} is corrupt or cannot be expanded.',
+              ),
+              Divider(height: 1, color: tokens?.subtleBorder),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (widget.retentionService != null &&
+                            widget.actorId != null) ...[
+                          Text(
+                            'Retention settings',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          TextField(
+                            key: const Key('retention-days'),
+                            controller: _retentionDays,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Retention age (days)',
+                            ),
+                          ),
+                          TextField(
+                            key: const Key('retention-storage-limit'),
+                            controller: _storageLimit,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Storage limit (MB)',
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: _saveRetentionPolicy,
+                              child: const Text('Save retention settings'),
+                            ),
+                          ),
+                          if (_retentionFeedback case final feedback?)
+                            Text(feedback),
+                        ],
+                        TextField(
+                          onChanged: controller.search,
+                          decoration: const InputDecoration(
+                            labelText: 'Search history',
+                          ),
+                        ),
+                        if (state.loading) const LinearProgressIndicator(),
+                        if (state.failure case final failure?) Text(failure),
+                        if (!state.loading && state.visible.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Text('No history matches your filters.'),
+                          ),
+                        for (final entry in state.visible)
+                          Column(
+                            children: <Widget>[
+                              ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                title: Text(entry.label),
+                                subtitle: Text(entry.status.name),
+                                trailing: Text(entry.runId),
+                                selected: entry.runId == state.selected,
+                                onTap: () => controller.select(entry.runId),
+                              ),
+                              Divider(height: 1, color: tokens?.subtleBorder),
+                            ],
+                          ),
+                        if (state.loadingDetail)
+                          const LinearProgressIndicator(),
+                        if (state.detail case final detail?) ...[
+                          const Divider(),
+                          Text(
+                            'Immutable run evidence',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          SelectableText(detail.snapshotJson),
+                          Text('Attempts: ${detail.attempts.length}'),
+                          for (final attempt in detail.attempts)
+                            Text('${attempt.status} · ${attempt.id}'),
+                          Text('Audit events: ${detail.auditEvents.length}'),
+                          for (final audit in detail.auditEvents)
+                            Text('${audit.action} · ${audit.outcome}'),
+                          Text('Log segments: ${detail.logSegments.length}'),
+                          for (final log in detail.logSegments)
+                            SelectableText(
+                              _displayLog(log.bytes, log.compression) ??
+                                  'Log segment ${log.id} is corrupt or cannot be expanded.',
+                            ),
+                        ],
+                      ],
                     ),
-                ],
-              ],
-            ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

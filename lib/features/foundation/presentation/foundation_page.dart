@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
@@ -29,9 +30,14 @@ final class FoundationPage extends ConsumerWidget {
         ]),
         onInspectorChanged: onInspectorChanged,
       ),
-      loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Maestro')),
-        body: Semantics(
+      loading: () => Material(
+        key: const Key('foundation-section'),
+        color:
+            Theme.of(
+              context,
+            ).extension<MaestroThemeTokens>()?.workspaceSurface ??
+            Theme.of(context).colorScheme.surface,
+        child: Semantics(
           label: 'Foundation status',
           child: const Center(child: CircularProgressIndicator()),
         ),
@@ -68,31 +74,56 @@ final class _FoundationReportViewState extends State<FoundationReportView> {
       _foundationInspectorSnapshot(report),
       widget.onInspectorChanged ?? WorkbenchInspectorScope.maybeOf(context),
     );
-    return Scaffold(
-      appBar: AppBar(title: const Text('Maestro')),
-      body: Semantics(
-        label: 'Foundation $health',
-        child: report.checks.isEmpty
-            ? const Center(child: Text('Foundation ready'))
-            : ListView(
-                padding: const EdgeInsets.all(24),
-                children: <Widget>[
-                  Text(
-                    'System diagnostics: $health',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  for (final check in report.checks)
-                    Card(
-                      child: ListTile(
-                        title: Text(check.message),
-                        subtitle: check.remediation == null
-                            ? null
-                            : Text(check.remediation!),
-                      ),
-                    ),
-                ],
+    final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
+    return Material(
+      key: const Key('foundation-section'),
+      color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: tokens?.toolbarHeight ?? 36,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Maestro', style: theme.textTheme.titleSmall),
               ),
+            ),
+          ),
+          Divider(height: 1, color: tokens?.subtleBorder),
+          Expanded(
+            child: Semantics(
+              label: 'Foundation $health',
+              child: report.checks.isEmpty
+                  ? const Center(child: Text('Foundation ready'))
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: <Widget>[
+                        Text(
+                          'System diagnostics: $health',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        for (final check in report.checks) ...<Widget>[
+                          ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                            ),
+                            title: Text(check.message),
+                            subtitle: check.remediation == null
+                                ? null
+                                : Text(check.remediation!),
+                          ),
+                          Divider(height: 1, color: tokens?.subtleBorder),
+                        ],
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

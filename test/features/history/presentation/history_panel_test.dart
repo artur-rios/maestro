@@ -19,7 +19,13 @@ void main() {
       await tester.pumpWidget(_host(database));
       await tester.pumpAndSettle();
 
-      expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(640));
+      final section = find.byKey(const Key('history-section'));
+      expect(section, findsOneWidget);
+      expect(
+        find.descendant(of: section, matching: find.byType(Card)),
+        findsNothing,
+      );
+      expect(tester.getSize(section).width, lessThanOrEqualTo(640));
     },
   );
 
@@ -35,7 +41,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(360));
+      expect(
+        tester.getSize(find.byKey(const Key('history-section'))).width,
+        lessThanOrEqualTo(360),
+      );
     },
   );
 

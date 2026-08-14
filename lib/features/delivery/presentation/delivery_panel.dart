@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/delivery/domain/delivery_record.dart';
 import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 
@@ -49,32 +50,58 @@ final class _DeliveryPanelState extends State<DeliveryPanel> {
   Widget build(BuildContext context) {
     final state = _controller.state;
     final record = state.record;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text('Delivery', style: Theme.of(context).textTheme.titleMedium),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            key: const Key('delivery-status'),
-            state.loading ? 'Loading delivery evidence' : _status(record),
+    final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
+    return Material(
+      key: const Key('delivery-section'),
+      color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: tokens?.toolbarHeight ?? 36,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Delivery', style: theme.textTheme.titleSmall),
+              ),
+            ),
           ),
-        ),
-        if (record?.pullRequestUrl case final url?)
-          SelectableText(url, key: const Key('delivery-pr-url')),
-        if (record?.reviewOutcome case final review?)
-          Text(
-            key: const Key('delivery-review'),
-            'Review: ${record?.reviewerIdentity ?? 'Unavailable'} · ${review.name}',
+          Divider(height: 1, color: tokens?.subtleBorder),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    key: const Key('delivery-status'),
+                    state.loading
+                        ? 'Loading delivery evidence'
+                        : _status(record),
+                  ),
+                ),
+                if (record?.pullRequestUrl case final url?)
+                  SelectableText(url, key: const Key('delivery-pr-url')),
+                if (record?.reviewOutcome case final review?)
+                  Text(
+                    key: const Key('delivery-review'),
+                    'Review: ${record?.reviewerIdentity ?? 'Unavailable'} · ${review.name}',
+                  ),
+                if (record?.mergeCommit case final commit?)
+                  Text(
+                    key: const Key('delivery-merge-commit'),
+                    'Merge commit: $commit',
+                  ),
+                if (_guidance(record, state.failure) case final guidance?)
+                  Text(key: const Key('delivery-guidance'), guidance),
+              ],
+            ),
           ),
-        if (record?.mergeCommit case final commit?)
-          Text(
-            key: const Key('delivery-merge-commit'),
-            'Merge commit: $commit',
-          ),
-        if (_guidance(record, state.failure) case final guidance?)
-          Text(key: const Key('delivery-guidance'), guidance),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -38,14 +38,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(640));
+    final section = find.byKey(const Key('run-start-section'));
+    expect(section, findsOneWidget);
+    expect(
+      find.descendant(of: section, matching: find.byType(Card)),
+      findsNothing,
+    );
+    expect(tester.getSize(section).width, lessThanOrEqualTo(640));
     expect(
       tester.getTopLeft(find.byKey(const Key('run-delivery-mode'))).dy,
       tester.getTopLeft(find.byKey(const Key('run-branch-type'))).dy,
     );
     expect(
       tester.getSize(find.byKey(const Key('start-run'))).width,
-      lessThan(tester.getSize(find.byType(Card)).width),
+      lessThan(tester.getSize(section).width),
     );
   });
 
@@ -78,7 +84,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(tester.getSize(find.byType(Card)).width, lessThanOrEqualTo(360));
+      expect(
+        tester.getSize(find.byKey(const Key('run-start-section'))).width,
+        lessThanOrEqualTo(360),
+      );
       expect(
         tester.getTopLeft(find.byKey(const Key('run-branch-type'))).dy,
         greaterThan(

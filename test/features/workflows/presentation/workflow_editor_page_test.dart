@@ -21,6 +21,14 @@ void main() {
       await tester.pumpWidget(_app(onInspectorChanged: snapshots.add));
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const Key('workflow-editor-section')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('workflow-editor-section')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
       expect(snapshots.last.title, 'Workflow details');
       expect(
         snapshots.last.sections.first.fields,
