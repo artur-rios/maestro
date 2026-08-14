@@ -205,7 +205,7 @@ void main() {
     });
 
     testWidgets('GivenAnIncompleteClosure_WhenThePanelRenders_'
-        'ThenTheSessionStaysCloseable', (tester) async {
+        'ThenTheFailureAndLiveSessionStayVisible', (tester) async {
       // Given: a session whose processes resist termination.
       final opener = _FakeOpener()..closure = TerminalClosure.incomplete;
       final drawer = ProjectTerminalDrawerController();
@@ -217,9 +217,19 @@ void main() {
       await tester.tap(find.byKey(const Key('close-terminal')));
       await tester.pumpAndSettle();
 
-      // Then: the panel reports the truth and keeps the escalation path.
+      // Then: the panel reports the truth without hiding the live shell the
+      // user needs to stop the remaining processes.
       expect(find.byKey(const Key('terminal-failure')), findsOneWidget);
+      expect(find.byKey(const Key('terminal-view')), findsOneWidget);
       expect(find.byKey(const Key('close-terminal')), findsOneWidget);
+      final failure = tester.getSemantics(
+        find.byKey(const Key('terminal-failure')),
+      );
+      expect(failure.label, contains('Some terminal processes did not stop'));
+      expect(
+        failure.label,
+        contains('Close them from the shell, then close the terminal again'),
+      );
     });
 
     testWidgets(

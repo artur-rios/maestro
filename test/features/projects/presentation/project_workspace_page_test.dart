@@ -142,6 +142,22 @@ void main() {
   );
 
   testWidgets(
+    'GivenWorkbenchStatus_WhenSemanticsRead_ThenContextIsAnnouncedOnce',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      final semantics = tester.getSemantics(
+        find.byKey(const Key('workbench-status-bar')),
+      );
+      expect(
+        semantics.label,
+        'Workbench status. No project selected. Ctrl+` Terminal.',
+      );
+    },
+  );
+
+  testWidgets(
     'GivenProjectCatalogUpdating_WhenWorkbenchShown_ThenStatusBarReportsBusyContext',
     (tester) async {
       final catalogGate = Completer<void>();

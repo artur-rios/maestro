@@ -39,36 +39,38 @@ final class WorkbenchStatusBar extends StatelessWidget {
     return Semantics(
       container: true,
       label: 'Workbench status. $contextLabel. $terminalShortcut.',
-      child: Container(
-        height: tokens.statusBarHeight,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: tokens.statusBarSurface,
-          border: Border(top: BorderSide(color: tokens.subtleBorder)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: DefaultTextStyle(
-          style: labelStyle ?? TextStyle(color: foreground, height: 1),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  selectedProjectName ?? 'No project selected',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      child: ExcludeSemantics(
+        child: Container(
+          height: tokens.statusBarHeight,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: tokens.statusBarSurface,
+            border: Border(top: BorderSide(color: tokens.subtleBorder)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: DefaultTextStyle(
+            style: labelStyle ?? TextStyle(color: foreground, height: 1),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    selectedProjectName ?? 'No project selected',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              if (selectedProjectStatus != null) ...<Widget>[
+                if (selectedProjectStatus != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  Text(selectedProjectStatus),
+                ],
+                const SizedBox(width: 12),
+                Text(terminalShortcut),
                 const SizedBox(width: 8),
-                Text(selectedProjectStatus),
+                trailing,
               ],
-              const SizedBox(width: 12),
-              Text(terminalShortcut),
-              const SizedBox(width: 8),
-              trailing,
-            ],
+            ),
           ),
         ),
       ),

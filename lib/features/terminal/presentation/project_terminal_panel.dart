@@ -169,56 +169,53 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
   }
 
   Widget _terminalBody(ProjectTerminalState state) {
-    if (state.isBusy) {
-      return Semantics(
-        liveRegion: true,
-        label: 'Starting project terminal',
-        child: const Align(
-          alignment: Alignment.topCenter,
-          child: LinearProgressIndicator(key: Key('terminal-starting')),
-        ),
-      );
-    }
-    if (state.failure case final failure?) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: _TerminalMessage(
-          key: const Key('terminal-failure'),
-          label: 'Project terminal error',
-          message: failure.message,
-          remediation: failure.remediation,
-          isError: true,
-        ),
-      );
-    }
-    if (state.exit case final exit?) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: _TerminalMessage(
-          key: const Key('terminal-exit'),
-          label: 'Project terminal exited',
-          message: 'The shell exited with code ${exit.exitCode}.',
-          remediation: 'Open the terminal again to start a new session.',
-          isError: false,
-        ),
-      );
-    }
-    if (state.status == TerminalSessionStatus.running) {
-      return Semantics(
-        label: 'Project terminal session',
-        container: true,
-        child: TerminalView(
-          _controller.terminal,
-          key: const Key('terminal-view'),
-          controller: _viewController,
-          autofocus: true,
-          backgroundOpacity: 1,
-          textStyle: _terminalTextStyle,
-          onKeyEvent: _handleTerminalKeyEvent,
-        ),
-      );
-    }
-    return const SizedBox.shrink();
+    final isRunning = state.status == TerminalSessionStatus.running;
+    final hasMessage =
+        state.isBusy || state.exit != null || state.failure != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (state.isBusy)
+          Semantics(
+            liveRegion: true,
+            label: 'Starting project terminal',
+            child: const LinearProgressIndicator(key: Key('terminal-starting')),
+          ),
+        if (state.exit case final exit?)
+          _TerminalMessage(
+            key: const Key('terminal-exit'),
+            label: 'Project terminal exited',
+            message: 'The shell exited with code ${exit.exitCode}.',
+            remediation: 'Open the terminal again to start a new session.',
+            isError: false,
+          ),
+        if (state.failure case final failure?)
+          _TerminalMessage(
+            key: const Key('terminal-failure'),
+            label: 'Project terminal error',
+            message: failure.message,
+            remediation: failure.remediation,
+            isError: true,
+          ),
+        if (isRunning && hasMessage) const SizedBox(height: 8),
+        if (isRunning)
+          Expanded(
+            child: Semantics(
+              label: 'Project terminal session',
+              container: true,
+              child: TerminalView(
+                _controller.terminal,
+                key: const Key('terminal-view'),
+                controller: _viewController,
+                autofocus: true,
+                backgroundOpacity: 1,
+                textStyle: _terminalTextStyle,
+                onKeyEvent: _handleTerminalKeyEvent,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
