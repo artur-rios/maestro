@@ -271,6 +271,69 @@ void main() {
   );
 
   testWidgets(
+    'GivenAuthenticatedWorkspace_WhenContextChanges_ThenChromeShowsActiveWorkspaceLabel',
+    (tester) async {
+      final projectRepository = _ProjectRepository()
+        ..records.add(_projectRecord());
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: _appearanceController(),
+          authenticationService: _authenticationService(),
+          projectService: _projectService(repository: projectRepository),
+          projectLifecycleService: _projectLifecycleService(
+            repository: projectRepository,
+          ),
+          projectFolderPicker: const _ProjectFolderPicker(),
+          workflowDesignService: _workflowService(),
+        ),
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro — Tasks'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro — Demo'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Automations'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro — Automations'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Maestro — Automations'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'GivenSelectedProject_WhenSigningOutAndBackIn_ThenWorkspaceStartsWithFreshPresentationState',
     (tester) async {
       final projectRepository = _ProjectRepository()

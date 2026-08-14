@@ -7,27 +7,51 @@ import 'package:maestro/features/appearance/presentation/appearance_selector.dar
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 
-final class AuthenticationPage extends ConsumerWidget {
+typedef AuthenticatedWorkspaceBuilder =
+    Widget Function(
+      BuildContext context,
+      ValueChanged<String?> onWorkspaceLabelChanged,
+    );
+
+final class AuthenticationPage extends ConsumerStatefulWidget {
   const AuthenticationPage({
     required this.appearanceController,
     required this.authenticatedBuilder,
     required this.window,
+    this.authenticatedWorkspaceBuilder,
     super.key,
   });
 
   final AppearanceController appearanceController;
   final WidgetBuilder authenticatedBuilder;
+  final AuthenticatedWorkspaceBuilder? authenticatedWorkspaceBuilder;
   final DesktopWindowPort window;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthenticationPage> createState() => _AuthenticationPageState();
+}
+
+final class _AuthenticationPageState extends ConsumerState<AuthenticationPage> {
+  String? _authenticatedUserId;
+  String? _workspaceLabel;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(authenticationControllerProvider);
     final authenticated = state is AuthenticationAuthenticated;
+    final authenticatedUserId = authenticated ? state.session.userId : null;
+    if (_authenticatedUserId != authenticatedUserId) {
+      _authenticatedUserId = authenticatedUserId;
+      _workspaceLabel = null;
+    }
+    final workspaceLabel = _workspaceLabel;
     return MaestroWindowChrome(
-      window: window,
-      title: 'Maestro',
+      window: widget.window,
+      title: authenticated && workspaceLabel != null
+          ? 'Maestro — $workspaceLabel'
+          : 'Maestro',
       actions: <Widget>[
-        AppearanceSelector(controller: appearanceController),
+        AppearanceSelector(controller: widget.appearanceController),
         if (authenticated)
           TextButton.icon(
             onPressed: () =>
@@ -37,9 +61,18 @@ final class AuthenticationPage extends ConsumerWidget {
           ),
       ],
       child: authenticated
-          ? authenticatedBuilder(context)
+          ? widget.authenticatedWorkspaceBuilder?.call(
+                  context,
+                  _changeWorkspaceLabel,
+                ) ??
+                widget.authenticatedBuilder(context)
           : _AuthenticationForm(state: state),
     );
+  }
+
+  void _changeWorkspaceLabel(String? label) {
+    if (!mounted || label == _workspaceLabel) return;
+    setState(() => _workspaceLabel = label);
   }
 }
 

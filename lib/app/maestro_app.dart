@@ -98,32 +98,36 @@ final class _MaestroAppState extends State<MaestroApp> {
           home: AuthenticationPage(
             appearanceController: widget.appearanceController,
             window: widget.window,
-            authenticatedBuilder: (_) {
-              if (projectService == null) return const FoundationPage();
-              final session = widget.authenticationService.currentSession;
-              if (session == null) {
-                throw StateError(
-                  'Authenticated workspace requires an active session.',
-                );
-              }
-              if (projectLifecycleService == null) {
-                throw StateError(
-                  'Authenticated project workspace requires '
-                  'ProjectLifecycleService.',
-                );
-              }
-              return ProjectWorkspacePage(
-                actorId: session.userId,
-                lifecycleService: projectLifecycleService,
-                workflowService: widget.workflowDesignService,
-                agentConfigurationService: widget.agentConfigurationService,
-                runStartBuilder: widget.runStartBuilder,
-                runObservationBuilder: widget.runObservationBuilder,
-                historyBuilder: widget.historyBuilder,
-                terminalBuilder: widget.terminalBuilder,
-                emptyContent: const FoundationPage(),
-              );
-            },
+            authenticatedBuilder: (_) => const FoundationPage(),
+            authenticatedWorkspaceBuilder: projectService == null
+                ? null
+                : (context, onWorkspaceLabelChanged) {
+                    final session = widget.authenticationService.currentSession;
+                    if (session == null) {
+                      throw StateError(
+                        'Authenticated workspace requires an active session.',
+                      );
+                    }
+                    if (projectLifecycleService == null) {
+                      throw StateError(
+                        'Authenticated project workspace requires '
+                        'ProjectLifecycleService.',
+                      );
+                    }
+                    return ProjectWorkspacePage(
+                      actorId: session.userId,
+                      lifecycleService: projectLifecycleService,
+                      onWorkspaceLabelChanged: onWorkspaceLabelChanged,
+                      workflowService: widget.workflowDesignService,
+                      agentConfigurationService:
+                          widget.agentConfigurationService,
+                      runStartBuilder: widget.runStartBuilder,
+                      runObservationBuilder: widget.runObservationBuilder,
+                      historyBuilder: widget.historyBuilder,
+                      terminalBuilder: widget.terminalBuilder,
+                      emptyContent: const FoundationPage(),
+                    );
+                  },
           ),
         ),
       ),

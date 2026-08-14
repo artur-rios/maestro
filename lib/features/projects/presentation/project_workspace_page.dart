@@ -83,6 +83,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
     this.runObservationBuilder,
     this.historyBuilder,
     this.terminalBuilder,
+    this.onWorkspaceLabelChanged,
     super.key,
   });
 
@@ -95,6 +96,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
   final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final ValueChanged<String?>? onWorkspaceLabelChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +121,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
         runObservationBuilder: runObservationBuilder,
         historyBuilder: historyBuilder,
         terminalBuilder: terminalBuilder,
+        onWorkspaceLabelChanged: onWorkspaceLabelChanged,
       ),
     );
   }
@@ -132,6 +135,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
     required this.runObservationBuilder,
     required this.historyBuilder,
     required this.terminalBuilder,
+    required this.onWorkspaceLabelChanged,
   });
 
   final String actorId;
@@ -140,6 +144,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
   final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final ValueChanged<String?>? onWorkspaceLabelChanged;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -153,6 +158,7 @@ final class _ProjectWorkspacePageState
   var _destination = _WorkbenchDestination.tasks;
   var _selectedProjectPane = _SelectedProjectPane.project;
   String? _selectedProjectId;
+  String? _publishedWorkspaceLabel;
   WorkbenchInspectorSnapshot _inspectorSnapshot = WorkbenchInspectorSnapshot(
     title: 'Project details',
     sections: <WorkbenchInspectorSection>[],
@@ -178,6 +184,7 @@ final class _ProjectWorkspacePageState
     });
     final state = ref.watch(projectControllerProvider);
     _resetProjectPaneWhenSelectionChanges(state.selected?.record.id);
+    _publishWorkspaceLabel(_workspaceLabel(state));
     final sidebar = _WorkbenchSidebar(
       state: state,
       destination: _destination,
@@ -265,6 +272,22 @@ final class _ProjectWorkspacePageState
     projectCatalogReady: state.status == ProjectWorkspaceStatus.ready,
     onInspectorChanged: _changeInspector,
   );
+
+  String _workspaceLabel(ProjectWorkspaceState state) => switch (_destination) {
+    _WorkbenchDestination.tasks => state.selected?.record.name ?? 'Tasks',
+    _WorkbenchDestination.automations => 'Automations',
+    _WorkbenchDestination.health => 'Health',
+  };
+
+  void _publishWorkspaceLabel(String label) {
+    final callback = widget.onWorkspaceLabelChanged;
+    if (callback == null || label == _publishedWorkspaceLabel) return;
+    _publishedWorkspaceLabel = label;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _publishedWorkspaceLabel != label) return;
+      callback(label);
+    });
+  }
 
   void _selectDestination(_WorkbenchDestination value) {
     _terminalDrawerController.hide();
