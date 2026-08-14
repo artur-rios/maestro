@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/delivery/presentation/delivery_panel.dart';
 import 'package:maestro/features/runs/domain/run_control.dart';
@@ -19,6 +21,7 @@ final class ActiveRunsPanel extends StatefulWidget {
     required this.createController,
     this.createControlController,
     this.createDeliveryController,
+    this.onInspectorChanged,
     super.key,
   });
 
@@ -28,6 +31,7 @@ final class ActiveRunsPanel extends StatefulWidget {
   /// observation without the ability to act on a run.
   final RunControlController Function()? createControlController;
   final DeliveryController Function()? createDeliveryController;
+  final ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged;
 
   @override
   State<ActiveRunsPanel> createState() => _ActiveRunsPanelState();
@@ -36,6 +40,10 @@ final class ActiveRunsPanel extends StatefulWidget {
 final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   late final RunObservationController _controller;
   RunControlController? _controls;
+  WorkbenchInspectorSnapshot? _lastInspectorSnapshot;
+  WorkbenchInspectorSnapshot? _scheduledInspectorSnapshot;
+  ValueChanged<WorkbenchInspectorSnapshot>? _lastInspectorPublisher;
+  ValueChanged<WorkbenchInspectorSnapshot>? _scheduledInspectorPublisher;
 
   @override
   void initState() {
@@ -82,6 +90,10 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   Widget build(BuildContext context) {
     final state = _controller.state;
     final theme = Theme.of(context);
+    _scheduleInspector(
+      _runInspectorSnapshot(state, _controls?.state),
+      widget.onInspectorChanged ?? WorkbenchInspectorScope.maybeOf(context),
+    );
     if (_controls != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _syncControls());
     }
@@ -207,7 +219,111 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
       ),
     );
   }
+
+  void _scheduleInspector(
+    WorkbenchInspectorSnapshot snapshot,
+    ValueChanged<WorkbenchInspectorSnapshot>? publisher,
+  ) {
+    if (publisher == null ||
+        (snapshot == _lastInspectorSnapshot &&
+            publisher == _lastInspectorPublisher) ||
+        (snapshot == _scheduledInspectorSnapshot &&
+            publisher == _scheduledInspectorPublisher)) {
+      return;
+    }
+    _scheduledInspectorSnapshot = snapshot;
+    _scheduledInspectorPublisher = publisher;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _scheduledInspectorSnapshot != snapshot ||
+          _scheduledInspectorPublisher != publisher) {
+        return;
+      }
+      _scheduledInspectorSnapshot = null;
+      _scheduledInspectorPublisher = null;
+      if (snapshot == _lastInspectorSnapshot &&
+          publisher == _lastInspectorPublisher) {
+        return;
+      }
+      _lastInspectorSnapshot = snapshot;
+      _lastInspectorPublisher = publisher;
+      publisher(snapshot);
+    });
+  }
 }
+
+WorkbenchInspectorSnapshot _runInspectorSnapshot(
+  RunObservationState state,
+  RunControlState? controls,
+) {
+  final run = state.selectedRun;
+  if (run == null) {
+    return WorkbenchInspectorSnapshot(
+      title: 'Run details',
+      sections: <WorkbenchInspectorSection>[],
+      emptyMessage: 'Select an active run to inspect its progress.',
+    );
+  }
+  final currentStep = run.steps
+      .where((step) => step.position == run.currentStepPosition)
+      .firstOrNull;
+  return WorkbenchInspectorSnapshot(
+    title: 'Run details',
+    emptyMessage: null,
+    sections: <WorkbenchInspectorSection>[
+      WorkbenchInspectorSection(
+        label: 'Progress',
+        fields: <WorkbenchInspectorField>[
+          WorkbenchInspectorField(label: 'Run', value: run.label),
+          WorkbenchInspectorField(
+            label: 'Status',
+            value: _runStatusLabel(run.status),
+            status: _runInspectorStatus(run.status),
+          ),
+          WorkbenchInspectorField(
+            label: 'Current step',
+            value: currentStep?.name ?? 'Not started',
+          ),
+          WorkbenchInspectorField(label: 'Steps', value: '${run.steps.length}'),
+          WorkbenchInspectorField(
+            label: 'Available controls',
+            value: _availableControlsLabel(run.runId, controls),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+String _availableControlsLabel(String runId, RunControlState? controls) {
+  if (controls == null) return 'Unavailable';
+  if (controls.runId != runId || controls.busy) return 'Loading';
+  final labels = <String>[
+    for (final action in RunControlAction.values)
+      if (controls.offers(action))
+        switch (action) {
+          RunControlAction.pause => 'Pause',
+          RunControlAction.resume => 'Resume',
+          RunControlAction.cancel => 'Cancel',
+          RunControlAction.retry => 'Retry',
+        },
+  ];
+  return labels.isEmpty ? 'None' : labels.join(', ');
+}
+
+WorkbenchInspectorStatus _runInspectorStatus(RunStatus status) =>
+    switch (status) {
+      RunStatus.succeeded => WorkbenchInspectorStatus.success,
+      RunStatus.failed ||
+      RunStatus.interrupted ||
+      RunStatus.canceled => WorkbenchInspectorStatus.error,
+      RunStatus.pauseRequested ||
+      RunStatus.paused ||
+      RunStatus.deliveryPending => WorkbenchInspectorStatus.warning,
+      RunStatus.queued ||
+      RunStatus.starting ||
+      RunStatus.running => WorkbenchInspectorStatus.neutral,
+    };
 
 /// Pause, resume, cancel, and retry for the selected run (UC-08).
 final class _ControlBar extends StatelessWidget {

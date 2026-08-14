@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
@@ -119,6 +121,11 @@ final class _ProjectWorkspacePageState
   var _destination = _WorkbenchDestination.tasks;
   var _selectedProjectPane = _SelectedProjectPane.project;
   String? _selectedProjectId;
+  WorkbenchInspectorSnapshot _inspectorSnapshot = WorkbenchInspectorSnapshot(
+    title: 'Project details',
+    sections: <WorkbenchInspectorSection>[],
+    emptyMessage: 'Select a project to inspect its source and workspace.',
+  );
 
   @override
   void initState() {
@@ -130,6 +137,13 @@ final class _ProjectWorkspacePageState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<ProjectWorkspaceState>(projectControllerProvider, (_, next) {
+      if (_destination != _WorkbenchDestination.tasks) return;
+      final snapshot = _projectInspectorSnapshot(next);
+      if (snapshot != _inspectorSnapshot && mounted) {
+        setState(() => _inspectorSnapshot = snapshot);
+      }
+    });
     final state = ref.watch(projectControllerProvider);
     _resetProjectPaneWhenSelectionChanges(state.selected?.record.id);
     final sidebar = _WorkbenchSidebar(
@@ -148,12 +162,16 @@ final class _ProjectWorkspacePageState
       historyBuilder: widget.historyBuilder,
     );
     final selected = state.selected;
+    final destinationContent = switch (_destination) {
+      _WorkbenchDestination.tasks => projectContent,
+      _WorkbenchDestination.automations => _workflowEditor(state),
+      _WorkbenchDestination.health => widget.emptyContent,
+    };
     final content = _WorkbenchMainPane(
-      destinationContent: switch (_destination) {
-        _WorkbenchDestination.tasks => projectContent,
-        _WorkbenchDestination.automations => _workflowEditor(state),
-        _WorkbenchDestination.health => widget.emptyContent,
-      },
+      destinationContent: WorkbenchInspectorScope(
+        onInspectorChanged: _changeInspector,
+        child: destinationContent,
+      ),
       terminal:
           selected != null &&
               selected.folderActionsEnabled &&
@@ -173,6 +191,11 @@ final class _ProjectWorkspacePageState
       destination: _destination,
       projectName: state.selected?.record.name,
       onDestinationSelected: _selectDestination,
+      inspectorSnapshot:
+          _destination == _WorkbenchDestination.tasks &&
+              _inspectorSnapshot.title == 'Project details'
+          ? _projectInspectorSnapshot(state)
+          : _inspectorSnapshot,
     );
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
@@ -202,12 +225,28 @@ final class _ProjectWorkspacePageState
     projects: state.projects,
     deletedProjects: state.deletedProjects,
     projectCatalogReady: state.status == ProjectWorkspaceStatus.ready,
+    onInspectorChanged: _changeInspector,
   );
 
   void _selectDestination(_WorkbenchDestination value) {
     _terminalDrawerController.hide();
     setState(() {
       _destination = value;
+      _inspectorSnapshot = switch (value) {
+        _WorkbenchDestination.tasks => _projectInspectorSnapshot(
+          ref.read(projectControllerProvider),
+        ),
+        _WorkbenchDestination.automations => WorkbenchInspectorSnapshot(
+          title: 'Workflow details',
+          sections: const <WorkbenchInspectorSection>[],
+          emptyMessage: 'Select or create a workflow to inspect it.',
+        ),
+        _WorkbenchDestination.health => WorkbenchInspectorSnapshot(
+          title: 'Health details',
+          sections: const <WorkbenchInspectorSection>[],
+          emptyMessage: 'Foundation diagnostics are loading.',
+        ),
+      };
       if (value == _WorkbenchDestination.tasks) {
         _selectedProjectPane = _SelectedProjectPane.project;
       }
@@ -216,7 +255,9 @@ final class _ProjectWorkspacePageState
 
   void _selectProject(String projectId) {
     _terminalDrawerController.hide();
-    setState(() => _selectedProjectPane = _SelectedProjectPane.project);
+    setState(() {
+      _selectedProjectPane = _SelectedProjectPane.project;
+    });
     ref.read(projectControllerProvider.notifier).select(projectId);
   }
 
@@ -228,7 +269,62 @@ final class _ProjectWorkspacePageState
 
   void _selectProjectPane(_SelectedProjectPane pane) {
     _terminalDrawerController.hide();
-    setState(() => _selectedProjectPane = pane);
+    setState(() {
+      _selectedProjectPane = pane;
+    });
+  }
+
+  WorkbenchInspectorSnapshot _projectInspectorSnapshot(
+    ProjectWorkspaceState state,
+  ) {
+    final selected = state.selected;
+    if (selected == null) {
+      return WorkbenchInspectorSnapshot(
+        title: 'Project details',
+        sections: <WorkbenchInspectorSection>[],
+        emptyMessage: 'Select a project to inspect its source and workspace.',
+      );
+    }
+    final available = selected.folderActionsEnabled;
+    return WorkbenchInspectorSnapshot(
+      title: 'Project details',
+      emptyMessage: null,
+      sections: <WorkbenchInspectorSection>[
+        WorkbenchInspectorSection(
+          label: 'Source',
+          fields: <WorkbenchInspectorField>[
+            WorkbenchInspectorField(
+              label: 'Project',
+              value: selected.record.name,
+            ),
+            WorkbenchInspectorField(
+              label: 'Folder',
+              value: _availabilityLabel(selected.availability),
+              status: available
+                  ? WorkbenchInspectorStatus.success
+                  : WorkbenchInspectorStatus.error,
+            ),
+            WorkbenchInspectorField(
+              label: 'Path',
+              value: selected.record.folderPath,
+            ),
+            WorkbenchInspectorField(
+              label: 'Pane',
+              value: switch (_selectedProjectPane) {
+                _SelectedProjectPane.project => 'Project',
+                _SelectedProjectPane.history => 'History & audit',
+                _SelectedProjectPane.startRun => 'Start run',
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _changeInspector(WorkbenchInspectorSnapshot snapshot) {
+    if (!mounted || snapshot == _inspectorSnapshot) return;
+    setState(() => _inspectorSnapshot = snapshot);
   }
 
   void _showTerminalSelectionFeedback() {
@@ -247,6 +343,16 @@ final class _ToggleProjectTerminalIntent extends Intent {
   const _ToggleProjectTerminalIntent();
 }
 
+String _availabilityLabel(ProjectAvailability availability) =>
+    switch (availability) {
+      ProjectAvailability.available => 'Available',
+      ProjectAvailability.missing => 'Missing',
+      ProjectAvailability.inaccessible => 'Inaccessible',
+      ProjectAvailability.notGitWorkingTree => 'Not a Git working tree',
+      ProjectAvailability.notGitRoot => 'Not the Git root',
+      ProjectAvailability.transientFailure => 'Check failed',
+    };
+
 final class _ProjectWorkbench extends StatelessWidget {
   const _ProjectWorkbench({
     required this.scaffoldKey,
@@ -255,6 +361,7 @@ final class _ProjectWorkbench extends StatelessWidget {
     required this.destination,
     required this.projectName,
     required this.onDestinationSelected,
+    required this.inspectorSnapshot,
   });
 
   final GlobalKey<ScaffoldState> scaffoldKey;
@@ -263,6 +370,7 @@ final class _ProjectWorkbench extends StatelessWidget {
   final _WorkbenchDestination destination;
   final String? projectName;
   final ValueChanged<_WorkbenchDestination> onDestinationSelected;
+  final WorkbenchInspectorSnapshot inspectorSnapshot;
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +410,9 @@ final class _ProjectWorkbench extends StatelessWidget {
                 SizedBox(
                   key: const Key('workbench-inspector'),
                   width: tokens.inspectorWidth,
-                  child: const _WorkbenchInspector(),
+                  child: _WorkbenchInspectorSurface(
+                    snapshot: inspectorSnapshot,
+                  ),
                 ),
               ],
             ),
@@ -323,7 +433,10 @@ final class _ProjectWorkbench extends StatelessWidget {
           : null,
       endDrawer: Drawer(
         width: tokens.inspectorWidth,
-        child: const _WorkbenchInspector(drawer: true),
+        child: _WorkbenchInspectorSurface(
+          snapshot: inspectorSnapshot,
+          drawer: true,
+        ),
       ),
       bottomNavigationBar: isNarrow
           ? NavigationBar(
@@ -478,9 +591,13 @@ final class _WorkbenchWorkspace extends StatelessWidget {
   }
 }
 
-final class _WorkbenchInspector extends StatelessWidget {
-  const _WorkbenchInspector({this.drawer = false});
+final class _WorkbenchInspectorSurface extends StatelessWidget {
+  const _WorkbenchInspectorSurface({
+    required this.snapshot,
+    this.drawer = false,
+  });
 
+  final WorkbenchInspectorSnapshot snapshot;
   final bool drawer;
 
   @override
@@ -489,31 +606,19 @@ final class _WorkbenchInspector extends StatelessWidget {
     final inspector = Material(
       key: drawer ? null : const Key('workbench-inspector-surface'),
       color: tokens.inspectorSurface,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Context inspector',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Inspector details are not available yet.',
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: SafeArea(child: WorkbenchInspector(snapshot: snapshot)),
     );
     return drawer
         ? Semantics(
             label: 'Context inspector drawer',
-            child: ExcludeSemantics(child: inspector),
+            container: true,
+            child: inspector,
           )
-        : inspector;
+        : Semantics(
+            label: 'Context inspector',
+            container: true,
+            child: inspector,
+          );
   }
 }
 
@@ -954,9 +1059,7 @@ final class _WorkbenchEmptyState extends ConsumerWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      const Text(
-                        'Select a project from the sidebar to begin.',
-                      ),
+                      const Text('Select a project from the sidebar to begin.'),
                       const SizedBox(height: 16),
                       FilledButton.icon(
                         onPressed:
@@ -978,9 +1081,7 @@ final class _WorkbenchEmptyState extends ConsumerWidget {
           ),
           if (state.lifecycleFeedback case final feedback?)
             ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: constraints.maxHeight / 2,
-              ),
+              constraints: BoxConstraints(maxHeight: constraints.maxHeight / 2),
               child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -990,9 +1091,7 @@ final class _WorkbenchEmptyState extends ConsumerWidget {
             ),
           if (state.failure case final failure?)
             ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: constraints.maxHeight / 2,
-              ),
+              constraints: BoxConstraints(maxHeight: constraints.maxHeight / 2),
               child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(16),

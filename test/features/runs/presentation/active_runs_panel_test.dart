@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
@@ -14,6 +15,53 @@ import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 
 void main() {
+  testWidgets(
+    'GivenSelectedRun_WhenRendered_ThenInspectorPublishesRunProgress',
+    (tester) async {
+      final repository = _Repository()
+        ..runs.add(_topology('run-1', currentStepPosition: 1));
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+
+      await _pump(
+        tester,
+        repository,
+        controls: _ControlRepository(status: RunStatus.running),
+        onInspectorChanged: snapshots.add,
+      );
+
+      expect(snapshots.last.title, 'Run details');
+      expect(
+        snapshots.last.sections.expand((section) => section.fields),
+        containsAll(<WorkbenchInspectorField>[
+          const WorkbenchInspectorField(label: 'Run', value: 'Observe run-1'),
+          const WorkbenchInspectorField(
+            label: 'Current step',
+            value: 'Execute',
+          ),
+          const WorkbenchInspectorField(label: 'Steps', value: '3'),
+          const WorkbenchInspectorField(
+            label: 'Available controls',
+            value: 'Pause, Cancel',
+          ),
+        ]),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenNoSelectedRun_WhenRendered_ThenInspectorPublishesSelectionGuidance',
+    (tester) async {
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+
+      await _pump(tester, _Repository(), onInspectorChanged: snapshots.add);
+
+      expect(
+        snapshots.last.emptyMessage,
+        'Select an active run to inspect its progress.',
+      );
+    },
+  );
+
   testWidgets('GivenLoading_WhenRendered_ThenProgressIsAnnounced', (
     tester,
   ) async {
@@ -414,6 +462,7 @@ Future<void> _pump(
   RunSummaryEvents? events,
   _ControlRepository? controls,
   _ControlExecution? execution,
+  ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -423,6 +472,7 @@ Future<void> _pump(
       home: Scaffold(
         body: SingleChildScrollView(
           child: ActiveRunsPanel(
+            onInspectorChanged: onInspectorChanged,
             createController: () => RunObservationController(
               projectId: 'project-1',
               observe: ObserveRuns(repository: repository),

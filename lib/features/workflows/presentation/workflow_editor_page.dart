@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/workflows/application/agent_cli_discovery.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
@@ -11,17 +13,27 @@ final class WorkflowEditorPage extends ConsumerStatefulWidget {
     required this.projects,
     this.deletedProjects = const [],
     this.projectCatalogReady = true,
+    this.onInspectorChanged,
     super.key,
   });
   final List<ProjectSelection> projects;
   final List<ProjectRecord> deletedProjects;
   final bool projectCatalogReady;
+  final ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged;
 
   @override
   ConsumerState<WorkflowEditorPage> createState() => _WorkflowEditorPageState();
 }
 
 final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
+  String? _selectedStepRowKey;
+  String? _selectedStepDraftId;
+  WorkflowKind? _selectedStepDraftKind;
+  WorkbenchInspectorSnapshot? _lastInspectorSnapshot;
+  WorkbenchInspectorSnapshot? _scheduledInspectorSnapshot;
+  ValueChanged<WorkbenchInspectorSnapshot>? _lastInspectorPublisher;
+  ValueChanged<WorkbenchInspectorSnapshot>? _scheduledInspectorPublisher;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +64,9 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(workflowControllerProvider);
     final controller = ref.read(workflowControllerProvider.notifier);
+    final publisher =
+        widget.onInspectorChanged ?? WorkbenchInspectorScope.maybeOf(context);
+    _scheduleInspector(_workflowInspectorSnapshot(state), publisher);
     final workflowList = Material(
       elevation: 1,
       child: Column(
@@ -115,6 +130,8 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
       state: state,
       projects: widget.projects,
       deletedProjects: widget.deletedProjects,
+      selectedStepRowKey: _selectedStepRowKey,
+      onStepSelected: _selectStep,
     );
     return LayoutBuilder(
       builder: (context, constraints) => constraints.maxWidth < 760
@@ -132,6 +149,136 @@ final class _WorkflowEditorPageState extends ConsumerState<WorkflowEditorPage> {
             ),
     );
   }
+
+  void _selectStep(String rowKey) {
+    if (_selectedStepRowKey == rowKey) return;
+    final draft = ref.read(workflowControllerProvider).draft;
+    setState(() {
+      _selectedStepRowKey = rowKey;
+      _selectedStepDraftId = draft.id;
+      _selectedStepDraftKind = draft.kind;
+    });
+  }
+
+  WorkbenchInspectorSnapshot _workflowInspectorSnapshot(
+    WorkflowEditorState state,
+  ) {
+    final draft = state.draft;
+    final selectionBelongsToDraft =
+        draft.id == _selectedStepDraftId &&
+        draft.kind == _selectedStepDraftKind;
+    final selected = selectionBelongsToDraft
+        ? draft.steps
+              .where((step) => step.rowKey == _selectedStepRowKey)
+              .firstOrNull
+        : null;
+    return WorkbenchInspectorSnapshot(
+      title: 'Workflow details',
+      emptyMessage: null,
+      sections: <WorkbenchInspectorSection>[
+        WorkbenchInspectorSection(
+          label: 'Workflow',
+          fields: <WorkbenchInspectorField>[
+            WorkbenchInspectorField(
+              label: 'Name',
+              value: draft.name?.trim().isNotEmpty == true
+                  ? draft.name!.trim()
+                  : draft.kind == WorkflowKind.oneOff
+                  ? 'One-off workflow'
+                  : 'New workflow',
+            ),
+            WorkbenchInspectorField(
+              label: 'Kind',
+              value: draft.kind == WorkflowKind.reusable
+                  ? 'Reusable'
+                  : 'One-off',
+            ),
+            WorkbenchInspectorField(
+              label: 'Readiness',
+              value: _readinessLabel(state.readiness),
+              status: _readinessStatus(state.readiness),
+            ),
+            WorkbenchInspectorField(
+              label: 'Agent catalog',
+              value: state.catalogBusy ? 'Refreshing' : 'Idle',
+              status: state.catalogBusy
+                  ? WorkbenchInspectorStatus.warning
+                  : WorkbenchInspectorStatus.neutral,
+            ),
+            WorkbenchInspectorField(
+              label: 'Steps',
+              value: '${draft.steps.length}',
+            ),
+          ],
+        ),
+        if (selected != null)
+          WorkbenchInspectorSection(
+            label: 'Selected step',
+            fields: <WorkbenchInspectorField>[
+              WorkbenchInspectorField(label: 'Step', value: selected.name),
+              WorkbenchInspectorField(
+                label: 'Kind',
+                value: _stepKindLabel(selected.kind),
+              ),
+              WorkbenchInspectorField(
+                label: 'Agent',
+                value: selected.assignment == null
+                    ? 'Not selected'
+                    : _agentKindLabel(selected.assignment!.kind),
+              ),
+              WorkbenchInspectorField(
+                label: 'Model',
+                value: selected.assignment?.model ?? 'Not selected',
+              ),
+              WorkbenchInspectorField(
+                label: 'Validation',
+                value: state.rowErrors.contains(selected.rowKey)
+                    ? 'Needs attention'
+                    : selected.assignmentValidated
+                    ? 'Verified'
+                    : 'Unchecked',
+                status: state.rowErrors.contains(selected.rowKey)
+                    ? WorkbenchInspectorStatus.error
+                    : selected.assignmentValidated
+                    ? WorkbenchInspectorStatus.success
+                    : WorkbenchInspectorStatus.neutral,
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  void _scheduleInspector(
+    WorkbenchInspectorSnapshot snapshot,
+    ValueChanged<WorkbenchInspectorSnapshot>? publisher,
+  ) {
+    if (publisher == null ||
+        (snapshot == _lastInspectorSnapshot &&
+            publisher == _lastInspectorPublisher) ||
+        (snapshot == _scheduledInspectorSnapshot &&
+            publisher == _scheduledInspectorPublisher)) {
+      return;
+    }
+    _scheduledInspectorSnapshot = snapshot;
+    _scheduledInspectorPublisher = publisher;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _scheduledInspectorSnapshot != snapshot ||
+          _scheduledInspectorPublisher != publisher) {
+        return;
+      }
+      _scheduledInspectorSnapshot = null;
+      _scheduledInspectorPublisher = null;
+      if (snapshot == _lastInspectorSnapshot &&
+          publisher == _lastInspectorPublisher) {
+        return;
+      }
+      _lastInspectorSnapshot = snapshot;
+      _lastInspectorPublisher = publisher;
+      publisher(snapshot);
+    });
+  }
 }
 
 final class _Editor extends ConsumerWidget {
@@ -139,10 +286,14 @@ final class _Editor extends ConsumerWidget {
     required this.state,
     required this.projects,
     required this.deletedProjects,
+    required this.selectedStepRowKey,
+    required this.onStepSelected,
   });
   final WorkflowEditorState state;
   final List<ProjectSelection> projects;
   final List<ProjectRecord> deletedProjects;
+  final String? selectedStepRowKey;
+  final ValueChanged<String> onStepSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -262,16 +413,28 @@ final class _Editor extends ConsumerWidget {
         ),
         if (state.catalogBusy) const LinearProgressIndicator(),
         for (final (index, step) in draft.steps.indexed)
-          _StepRow(
-            key: ValueKey(step.rowKey),
-            step: step,
-            index: index,
-            count: draft.steps.length,
-            hasError: state.rowErrors.contains(step.rowKey),
-            enabled: enabled,
-            catalogs: state.catalogs,
-            rowState: state.agentRowStates[step.rowKey],
-            pendingKind: state.pendingCliKinds[step.rowKey],
+          Focus(
+            onFocusChange: (focused) {
+              if (focused) onStepSelected(step.rowKey);
+            },
+            child: GestureDetector(
+              key: ValueKey(step.rowKey),
+              behavior: HitTestBehavior.translucent,
+              onTap: () => onStepSelected(step.rowKey),
+              child: Semantics(
+                selected: selectedStepRowKey == step.rowKey,
+                child: _StepRow(
+                  step: step,
+                  index: index,
+                  count: draft.steps.length,
+                  hasError: state.rowErrors.contains(step.rowKey),
+                  enabled: enabled,
+                  catalogs: state.catalogs,
+                  rowState: state.agentRowStates[step.rowKey],
+                  pendingKind: state.pendingCliKinds[step.rowKey],
+                ),
+              ),
+            ),
           ),
         Align(
           alignment: Alignment.centerLeft,
@@ -368,7 +531,6 @@ final class _StepRow extends ConsumerWidget {
     required this.catalogs,
     required this.rowState,
     required this.pendingKind,
-    super.key,
   });
   final WorkflowDraftStep step;
   final int index;
@@ -566,6 +728,34 @@ final class _WorkflowProjectOption {
   final bool unavailable;
   final bool deleted;
 }
+
+String _readinessLabel(WorkflowReadinessStatus status) => switch (status) {
+  WorkflowReadinessStatus.unchecked => 'Unchecked',
+  WorkflowReadinessStatus.ready => 'Ready',
+  WorkflowReadinessStatus.blocked => 'Blocked',
+  WorkflowReadinessStatus.failed => 'Failed',
+};
+
+WorkbenchInspectorStatus _readinessStatus(WorkflowReadinessStatus status) =>
+    switch (status) {
+      WorkflowReadinessStatus.unchecked => WorkbenchInspectorStatus.neutral,
+      WorkflowReadinessStatus.ready => WorkbenchInspectorStatus.success,
+      WorkflowReadinessStatus.blocked => WorkbenchInspectorStatus.warning,
+      WorkflowReadinessStatus.failed => WorkbenchInspectorStatus.error,
+    };
+
+String _stepKindLabel(WorkflowStepKind kind) => switch (kind) {
+  WorkflowStepKind.plan => 'Plan',
+  WorkflowStepKind.execute => 'Execute',
+  WorkflowStepKind.review => 'Review',
+  WorkflowStepKind.custom => 'Custom',
+};
+
+String _agentKindLabel(AgentCliKind kind) => switch (kind) {
+  AgentCliKind.claudeCode => 'Claude Code',
+  AgentCliKind.codex => 'Codex',
+  AgentCliKind.openCode => 'OpenCode',
+};
 
 final class _WorkflowMessage extends StatelessWidget {
   const _WorkflowMessage({required this.feedback});

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
@@ -12,6 +13,48 @@ import 'package:maestro/features/workflows/presentation/workflow_editor_page.dar
 import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 void main() {
+  testWidgets(
+    'GivenWorkflowAndFocusedStep_WhenEditorBuilds_ThenInspectorTracksFocus',
+    (tester) async {
+      await _largeSurface(tester);
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+      await tester.pumpWidget(_app(onInspectorChanged: snapshots.add));
+      await tester.pumpAndSettle();
+
+      expect(snapshots.last.title, 'Workflow details');
+      expect(
+        snapshots.last.sections.first.fields,
+        contains(const WorkbenchInspectorField(label: 'Steps', value: '3')),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('default-execute')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(snapshots.last.sections.last.label, 'Selected step');
+      expect(
+        snapshots.last.sections.last.fields,
+        contains(
+          const WorkbenchInspectorField(label: 'Step', value: 'Execute'),
+        ),
+      );
+
+      tester.binding.focusManager.primaryFocus?.unfocus();
+      await tester.pump();
+      final workflowElement = tester.element(find.byType(WorkflowEditorPage));
+      ProviderScope.containerOf(
+        workflowElement,
+      ).read(workflowControllerProvider.notifier).create(WorkflowKind.oneOff);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        snapshots.last.sections.map((section) => section.label),
+        isNot(contains('Selected step')),
+      );
+    },
+  );
+
   testWidgets(
     'GivenAgentCatalogs_WhenEditorLoads_ThenAccessibleCliAndModelControlsConfigureRows',
     (tester) async {
@@ -450,6 +493,7 @@ Widget _app({
   _Repository? repository,
   _Readiness? readiness,
   AgentCliAdapter? codex,
+  ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged,
 }) {
   final workflowRepository = repository ?? _Repository();
   final design = WorkflowDesignService(
@@ -477,6 +521,7 @@ Widget _app({
         body: WorkflowEditorPage(
           projects: projects,
           deletedProjects: deletedProjects,
+          onInspectorChanged: onInspectorChanged,
         ),
       ),
     ),

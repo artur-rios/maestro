@@ -36,8 +36,9 @@ void main() {
     expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
     expect(find.byKey(const Key('workbench-inspector')), findsOneWidget);
     expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
+    expect(find.text('Project details'), findsOneWidget);
     expect(
-      find.text('Inspector details are not available yet.'),
+      find.text('Select a project to inspect its source and workspace.'),
       findsOneWidget,
     );
     expect(
@@ -89,6 +90,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedProject_WhenInspectorShown_ThenSourceAndPaneArePublished',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      final validator = _Validator();
+
+      await tester.pumpWidget(
+        _app(repository: repository, validator: validator),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Project: Demo'), findsOneWidget);
+      expect(find.bySemanticsLabel('Folder: Available'), findsOneWidget);
+      expect(find.bySemanticsLabel(r'Path: C:\missing\demo'), findsOneWidget);
+      expect(find.bySemanticsLabel('Pane: Project'), findsOneWidget);
+
+      validator.availability = ProjectAvailability.missing;
+      final workspaceElement = tester.element(
+        find.byKey(const Key('workbench-workspace')),
+      );
+      await ProviderScope.containerOf(
+        workspaceElement,
+      ).read(projectControllerProvider.notifier).refreshSelected();
+      await tester.pumpAndSettle();
+      expect(
+        ProviderScope.containerOf(
+          workspaceElement,
+        ).read(projectControllerProvider).selected?.availability,
+        ProjectAvailability.missing,
+      );
+      expect(find.bySemanticsLabel('Folder: Missing'), findsOneWidget);
     },
   );
 
@@ -1203,10 +1243,12 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
       await tester.pump();
       return;
     }
-    final verticalScrollable = find.byWidgetPredicate(
-      (widget) =>
-          widget is Scrollable &&
-          widget.axisDirection == AxisDirection.down,
+    final verticalScrollable = find.descendant(
+      of: find.byKey(const Key('workbench-workspace')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
     );
     await tester.drag(verticalScrollable.last, const Offset(0, -500));
     await tester.pump();
