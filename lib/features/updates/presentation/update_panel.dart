@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/updates/presentation/update_controller.dart';
 
 final class UpdatePanel extends StatefulWidget {
@@ -25,66 +26,85 @@ final class _UpdatePanelState extends State<UpdatePanel> {
   Widget build(BuildContext context) {
     final state = controller.state;
     final candidate = state.candidate;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Application updates',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final checkAction = OutlinedButton(
-                  onPressed: state.checking ? null : controller.check,
-                  child: const Text('Check for updates'),
-                );
-                if (constraints.maxWidth < 520) {
-                  return SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: checkAction,
-                  );
-                }
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: checkAction,
-                );
-              },
-            ),
-            if (state.checking) const LinearProgressIndicator(),
-            if (candidate != null) ...[
-              Text('Version ${candidate.verified.manifest.version}'),
-              Text(
-                '${candidate.artifact.packageType} · ${candidate.artifact.size} bytes',
+    final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
+    return Material(
+      key: const Key('updates-section'),
+      color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: tokens?.toolbarHeight ?? 36,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Application updates',
+                  style: theme.textTheme.titleSmall,
+                ),
               ),
-              Text(
-                'Published ${candidate.verified.manifest.publishedAt.toIso8601String()}',
-              ),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: state.installing
-                        ? null
-                        : () => controller.install(approved: false),
-                    child: const Text('Decline update'),
+            ),
+          ),
+          Divider(height: 1, color: tokens?.subtleBorder),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final checkAction = OutlinedButton(
+                      onPressed: state.checking ? null : controller.check,
+                      child: const Text('Check for updates'),
+                    );
+                    if (constraints.maxWidth < 520) {
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: checkAction,
+                      );
+                    }
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: checkAction,
+                    );
+                  },
+                ),
+                if (state.checking) const LinearProgressIndicator(),
+                if (candidate != null) ...[
+                  Text('Version ${candidate.verified.manifest.version}'),
+                  Text(
+                    '${candidate.artifact.packageType} · ${candidate.artifact.size} bytes',
                   ),
-                  FilledButton(
-                    onPressed: state.installing
-                        ? null
-                        : () => controller.install(approved: true),
-                    child: const Text('Download and install'),
+                  Text(
+                    'Published ${candidate.verified.manifest.publishedAt.toIso8601String()}',
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: state.installing
+                            ? null
+                            : () => controller.install(approved: false),
+                        child: const Text('Decline update'),
+                      ),
+                      FilledButton(
+                        onPressed: state.installing
+                            ? null
+                            : () => controller.install(approved: true),
+                        child: const Text('Download and install'),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
-            if (state.installing) const LinearProgressIndicator(),
-            if (state.message case final message?)
-              Semantics(liveRegion: true, child: Text(message)),
-          ],
-        ),
+                if (state.installing) const LinearProgressIndicator(),
+                if (state.message case final message?)
+                  Semantics(liveRegion: true, child: Text(message)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

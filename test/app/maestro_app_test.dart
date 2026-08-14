@@ -86,7 +86,13 @@ void main() {
           ),
         );
 
-        expect(find.text('Maestro'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('maestro-title-bar')),
+            matching: find.text('Maestro'),
+          ),
+          findsOneWidget,
+        );
         expect(find.byTooltip('Appearance'), findsOneWidget);
         expect(find.text('Sign in with your operating system'), findsOneWidget);
         expect(
@@ -145,15 +151,20 @@ void main() {
         ),
       );
 
+      expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
       await tester.tap(
         find.bySemanticsLabel('Sign in with your operating system'),
       );
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
       expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Automations'), findsOneWidget);
       expect(find.text('Health'), findsOneWidget);
       expect(find.byKey(const Key('workbench-sidebar')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-navigator')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
       expect(find.byKey(const Key('workbench-empty-state')), findsOneWidget);
       expect(
         find.text('Select a project from the sidebar to begin.'),
@@ -162,18 +173,18 @@ void main() {
       expect(find.text('Foundation ready'), findsNothing);
       expect(find.text('Sign out'), findsOneWidget);
       expect(find.byTooltip('Appearance'), findsOneWidget);
-      final accountActions = tester.widget<Row>(
+      final titleBarActions = tester.widget<Row>(
         find
-            .ancestor(
-              of: find.widgetWithText(TextButton, 'Sign out'),
+            .descendant(
+              of: find.byKey(const Key('maestro-title-bar')),
               matching: find.byType(Row),
             )
             .first,
       );
-      expect(accountActions.children, [
-        isA<AppearanceSelector>(),
-        isA<TextButton>(),
-      ]);
+      expect(titleBarActions.children, hasLength(6));
+      expect(titleBarActions.children.first, isA<Expanded>());
+      expect(titleBarActions.children[1], isA<AppearanceSelector>());
+      expect(titleBarActions.children[2], isA<TextButton>());
 
       await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
@@ -256,6 +267,69 @@ void main() {
       await tester.tap(find.text('Tasks'));
       await tester.pumpAndSettle();
       expect(find.text(r'C:\projects\demo'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticatedWorkspace_WhenContextChanges_ThenChromeShowsActiveWorkspaceLabel',
+    (tester) async {
+      final projectRepository = _ProjectRepository()
+        ..records.add(_projectRecord());
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: _appearanceController(),
+          authenticationService: _authenticationService(),
+          projectService: _projectService(repository: projectRepository),
+          projectLifecycleService: _projectLifecycleService(
+            repository: projectRepository,
+          ),
+          projectFolderPicker: const _ProjectFolderPicker(),
+          workflowDesignService: _workflowService(),
+        ),
+      );
+
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro — Tasks'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro — Demo'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Automations'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro — Automations'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('maestro-title-bar')),
+          matching: find.text('Maestro'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Maestro — Automations'), findsNothing);
     },
   );
 

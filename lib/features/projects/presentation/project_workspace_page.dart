@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
+import 'package:maestro/app/workbench_status_bar.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
@@ -29,6 +33,45 @@ enum _WorkbenchDestination { tasks, automations, health }
 
 enum _SelectedProjectPane { project, history, startRun }
 
+enum WorkbenchLayoutClass { narrow, medium, wide }
+
+const _desktopDialogConstraints = BoxConstraints(maxWidth: 440);
+const _desktopDialogTitlePadding = EdgeInsets.fromLTRB(20, 16, 20, 8);
+const _desktopDialogContentPadding = EdgeInsets.fromLTRB(20, 0, 20, 16);
+const _desktopDialogActionsPadding = EdgeInsets.fromLTRB(20, 0, 20, 16);
+const _navigatorFocusOrder = NumericFocusOrder(1);
+const _workspaceFocusOrder = NumericFocusOrder(2);
+const _inspectorFocusOrder = NumericFocusOrder(3);
+const _terminalFocusOrder = NumericFocusOrder(4);
+const _statusFocusOrder = NumericFocusOrder(5);
+
+Widget _compactDesktopDialog({
+  required Key key,
+  required Widget title,
+  required Widget content,
+  required List<Widget> actions,
+}) => Center(
+  child: ConstrainedBox(
+    key: key,
+    constraints: _desktopDialogConstraints,
+    child: AlertDialog(
+      insetPadding: EdgeInsets.zero,
+      titlePadding: _desktopDialogTitlePadding,
+      contentPadding: _desktopDialogContentPadding,
+      actionsPadding: _desktopDialogActionsPadding,
+      title: title,
+      content: content,
+      actions: actions,
+    ),
+  ),
+);
+
+WorkbenchLayoutClass classifyWorkbench(double width) => switch (width) {
+  >= 1200 => WorkbenchLayoutClass.wide,
+  >= 720 => WorkbenchLayoutClass.medium,
+  _ => WorkbenchLayoutClass.narrow,
+};
+
 final class ProjectWorkspacePage extends StatelessWidget {
   const ProjectWorkspacePage({
     required this.actorId,
@@ -40,6 +83,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
     this.runObservationBuilder,
     this.historyBuilder,
     this.terminalBuilder,
+    this.onWorkspaceLabelChanged,
     super.key,
   });
 
@@ -52,6 +96,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
   final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final ValueChanged<String?>? onWorkspaceLabelChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +121,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
         runObservationBuilder: runObservationBuilder,
         historyBuilder: historyBuilder,
         terminalBuilder: terminalBuilder,
+        onWorkspaceLabelChanged: onWorkspaceLabelChanged,
       ),
     );
   }
@@ -89,6 +135,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
     required this.runObservationBuilder,
     required this.historyBuilder,
     required this.terminalBuilder,
+    required this.onWorkspaceLabelChanged,
   });
 
   final String actorId;
@@ -97,6 +144,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
   final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final ValueChanged<String?>? onWorkspaceLabelChanged;
 
   @override
   ConsumerState<_ProjectWorkspaceView> createState() =>
@@ -105,10 +153,17 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
 
 final class _ProjectWorkspacePageState
     extends ConsumerState<_ProjectWorkspaceView> {
+  final _workbenchScaffoldKey = GlobalKey<ScaffoldState>();
   final _terminalDrawerController = ProjectTerminalDrawerController();
   var _destination = _WorkbenchDestination.tasks;
   var _selectedProjectPane = _SelectedProjectPane.project;
   String? _selectedProjectId;
+  String? _publishedWorkspaceLabel;
+  WorkbenchInspectorSnapshot _inspectorSnapshot = WorkbenchInspectorSnapshot(
+    title: 'Project details',
+    sections: <WorkbenchInspectorSection>[],
+    emptyMessage: 'Select a project to inspect its source and workspace.',
+  );
 
   @override
   void initState() {
@@ -120,13 +175,19 @@ final class _ProjectWorkspacePageState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<ProjectWorkspaceState>(projectControllerProvider, (_, next) {
+      if (_destination != _WorkbenchDestination.tasks) return;
+      final snapshot = _projectInspectorSnapshot(next);
+      if (snapshot != _inspectorSnapshot && mounted) {
+        setState(() => _inspectorSnapshot = snapshot);
+      }
+    });
     final state = ref.watch(projectControllerProvider);
     _resetProjectPaneWhenSelectionChanges(state.selected?.record.id);
-    final narrow = MediaQuery.sizeOf(context).width < 720;
+    _publishWorkspaceLabel(_workspaceLabel(state));
     final sidebar = _WorkbenchSidebar(
       state: state,
       destination: _destination,
-      showDestinations: !narrow,
       onDestinationSelected: _selectDestination,
       onProjectSelected: _selectProject,
     );
@@ -140,12 +201,16 @@ final class _ProjectWorkspacePageState
       historyBuilder: widget.historyBuilder,
     );
     final selected = state.selected;
+    final destinationContent = switch (_destination) {
+      _WorkbenchDestination.tasks => projectContent,
+      _WorkbenchDestination.automations => _workflowEditor(state),
+      _WorkbenchDestination.health => widget.emptyContent,
+    };
     final content = _WorkbenchMainPane(
-      destinationContent: switch (_destination) {
-        _WorkbenchDestination.tasks => projectContent,
-        _WorkbenchDestination.automations => _workflowEditor(state),
-        _WorkbenchDestination.health => widget.emptyContent,
-      },
+      destinationContent: WorkbenchInspectorScope(
+        onInspectorChanged: _changeInspector,
+        child: destinationContent,
+      ),
       terminal:
           selected != null &&
               selected.folderActionsEnabled &&
@@ -158,40 +223,25 @@ final class _ProjectWorkspacePageState
             )
           : null,
     );
-    final workbench = narrow
-        ? Scaffold(
-            appBar: AppBar(
-              title: Text(switch (_destination) {
-                _WorkbenchDestination.tasks => 'Tasks',
-                _WorkbenchDestination.automations => 'Automations',
-                _WorkbenchDestination.health => 'Health',
-              }),
-            ),
-            drawer: _destination == _WorkbenchDestination.tasks
-                ? Drawer(child: SafeArea(child: sidebar))
-                : null,
-            bottomNavigationBar: NavigationBar(
-              selectedIndex: _destination.index,
-              onDestinationSelected: (index) =>
-                  _selectDestination(_WorkbenchDestination.values[index]),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.folder_outlined),
-                  label: 'Tasks',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.account_tree_outlined),
-                  label: 'Automations',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.monitor_heart_outlined),
-                  label: 'Health',
-                ),
-              ],
-            ),
-            body: content,
-          )
-        : _ProjectWorkbench(sidebar: sidebar, content: content);
+    final workbench = _ProjectWorkbench(
+      scaffoldKey: _workbenchScaffoldKey,
+      navigator: sidebar,
+      workspace: content,
+      destination: _destination,
+      projectName: state.selected?.record.name,
+      projectStatus: state.selected == null
+          ? null
+          : _availabilityLabel(state.selected!.availability),
+      statusTrailing: state.status == ProjectWorkspaceStatus.loading
+          ? const Text('Updating...', key: Key('workbench-status-busy'))
+          : const SizedBox.shrink(),
+      onDestinationSelected: _selectDestination,
+      inspectorSnapshot:
+          _destination == _WorkbenchDestination.tasks &&
+              _inspectorSnapshot.title == 'Project details'
+          ? _projectInspectorSnapshot(state)
+          : _inspectorSnapshot,
+    );
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.backquote, control: true):
@@ -220,12 +270,44 @@ final class _ProjectWorkspacePageState
     projects: state.projects,
     deletedProjects: state.deletedProjects,
     projectCatalogReady: state.status == ProjectWorkspaceStatus.ready,
+    onInspectorChanged: _changeInspector,
   );
+
+  String _workspaceLabel(ProjectWorkspaceState state) => switch (_destination) {
+    _WorkbenchDestination.tasks => state.selected?.record.name ?? 'Tasks',
+    _WorkbenchDestination.automations => 'Automations',
+    _WorkbenchDestination.health => 'Health',
+  };
+
+  void _publishWorkspaceLabel(String label) {
+    final callback = widget.onWorkspaceLabelChanged;
+    if (callback == null || label == _publishedWorkspaceLabel) return;
+    _publishedWorkspaceLabel = label;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _publishedWorkspaceLabel != label) return;
+      callback(label);
+    });
+  }
 
   void _selectDestination(_WorkbenchDestination value) {
     _terminalDrawerController.hide();
     setState(() {
       _destination = value;
+      _inspectorSnapshot = switch (value) {
+        _WorkbenchDestination.tasks => _projectInspectorSnapshot(
+          ref.read(projectControllerProvider),
+        ),
+        _WorkbenchDestination.automations => WorkbenchInspectorSnapshot(
+          title: 'Workflow details',
+          sections: const <WorkbenchInspectorSection>[],
+          emptyMessage: 'Select or create a workflow to inspect it.',
+        ),
+        _WorkbenchDestination.health => WorkbenchInspectorSnapshot(
+          title: 'Health details',
+          sections: const <WorkbenchInspectorSection>[],
+          emptyMessage: 'Foundation diagnostics are loading.',
+        ),
+      };
       if (value == _WorkbenchDestination.tasks) {
         _selectedProjectPane = _SelectedProjectPane.project;
       }
@@ -234,7 +316,9 @@ final class _ProjectWorkspacePageState
 
   void _selectProject(String projectId) {
     _terminalDrawerController.hide();
-    setState(() => _selectedProjectPane = _SelectedProjectPane.project);
+    setState(() {
+      _selectedProjectPane = _SelectedProjectPane.project;
+    });
     ref.read(projectControllerProvider.notifier).select(projectId);
   }
 
@@ -246,7 +330,65 @@ final class _ProjectWorkspacePageState
 
   void _selectProjectPane(_SelectedProjectPane pane) {
     _terminalDrawerController.hide();
-    setState(() => _selectedProjectPane = pane);
+    setState(() {
+      _selectedProjectPane = pane;
+      _inspectorSnapshot = _projectInspectorSnapshot(
+        ref.read(projectControllerProvider),
+      );
+    });
+  }
+
+  WorkbenchInspectorSnapshot _projectInspectorSnapshot(
+    ProjectWorkspaceState state,
+  ) {
+    final selected = state.selected;
+    if (selected == null) {
+      return WorkbenchInspectorSnapshot(
+        title: 'Project details',
+        sections: <WorkbenchInspectorSection>[],
+        emptyMessage: 'Select a project to inspect its source and workspace.',
+      );
+    }
+    final available = selected.folderActionsEnabled;
+    return WorkbenchInspectorSnapshot(
+      title: 'Project details',
+      emptyMessage: null,
+      sections: <WorkbenchInspectorSection>[
+        WorkbenchInspectorSection(
+          label: 'Source',
+          fields: <WorkbenchInspectorField>[
+            WorkbenchInspectorField(
+              label: 'Project',
+              value: selected.record.name,
+            ),
+            WorkbenchInspectorField(
+              label: 'Folder',
+              value: _availabilityLabel(selected.availability),
+              status: available
+                  ? WorkbenchInspectorStatus.success
+                  : WorkbenchInspectorStatus.error,
+            ),
+            WorkbenchInspectorField(
+              label: 'Path',
+              value: selected.record.folderPath,
+            ),
+            WorkbenchInspectorField(
+              label: 'Pane',
+              value: switch (_selectedProjectPane) {
+                _SelectedProjectPane.project => 'Project',
+                _SelectedProjectPane.history => 'History & audit',
+                _SelectedProjectPane.startRun => 'Start run',
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _changeInspector(WorkbenchInspectorSnapshot snapshot) {
+    if (!mounted || snapshot == _inspectorSnapshot) return;
+    setState(() => _inspectorSnapshot = snapshot);
   }
 
   void _showTerminalSelectionFeedback() {
@@ -265,22 +407,333 @@ final class _ToggleProjectTerminalIntent extends Intent {
   const _ToggleProjectTerminalIntent();
 }
 
-final class _ProjectWorkbench extends StatelessWidget {
-  const _ProjectWorkbench({required this.sidebar, required this.content});
+String _availabilityLabel(ProjectAvailability availability) =>
+    switch (availability) {
+      ProjectAvailability.available => 'Available',
+      ProjectAvailability.missing => 'Missing',
+      ProjectAvailability.inaccessible => 'Inaccessible',
+      ProjectAvailability.notGitWorkingTree => 'Not a Git working tree',
+      ProjectAvailability.notGitRoot => 'Not the Git root',
+      ProjectAvailability.transientFailure => 'Check failed',
+    };
 
-  final Widget sidebar;
-  final Widget content;
+final class _ProjectWorkbench extends StatelessWidget {
+  const _ProjectWorkbench({
+    required this.scaffoldKey,
+    required this.navigator,
+    required this.workspace,
+    required this.destination,
+    required this.projectName,
+    required this.projectStatus,
+    required this.statusTrailing,
+    required this.onDestinationSelected,
+    required this.inspectorSnapshot,
+  });
+
+  final GlobalKey<ScaffoldState> scaffoldKey;
+  final Widget navigator;
+  final Widget workspace;
+  final _WorkbenchDestination destination;
+  final String? projectName;
+  final String? projectStatus;
+  final Widget statusTrailing;
+  final ValueChanged<_WorkbenchDestination> onDestinationSelected;
+  final WorkbenchInspectorSnapshot inspectorSnapshot;
 
   @override
   Widget build(BuildContext context) {
+    return FocusTraversalGroup(
+      policy: OrderedTraversalPolicy(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final layoutClass = classifyWorkbench(constraints.maxWidth);
+          return switch (layoutClass) {
+            WorkbenchLayoutClass.wide => _wideWorkbench(context),
+            WorkbenchLayoutClass.medium => _drawerWorkbench(
+              context,
+              showNavigator: true,
+            ),
+            WorkbenchLayoutClass.narrow => _drawerWorkbench(
+              context,
+              showNavigator: false,
+            ),
+          };
+        },
+      ),
+    );
+  }
+
+  Widget _wideWorkbench(BuildContext context) {
+    final tokens = MaestroThemeTokens.of(context);
     return Scaffold(
-      body: Row(
+      key: scaffoldKey,
+      body: Column(
         children: <Widget>[
-          SizedBox(width: 300, child: sidebar),
-          Expanded(child: content),
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                FocusTraversalOrder(
+                  order: _navigatorFocusOrder,
+                  child: SizedBox(
+                    key: const Key('workbench-navigator'),
+                    width: tokens.navigatorWidth,
+                    child: navigator,
+                  ),
+                ),
+                Expanded(child: _workspaceRegion(context, canInspect: false)),
+                FocusTraversalOrder(
+                  order: _inspectorFocusOrder,
+                  child: SizedBox(
+                    key: const Key('workbench-inspector'),
+                    width: tokens.inspectorWidth,
+                    child: _WorkbenchInspectorSurface(
+                      snapshot: inspectorSnapshot,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FocusTraversalOrder(
+            order: _statusFocusOrder,
+            child: WorkbenchStatusBar(
+              key: const Key('workbench-status-bar'),
+              projectName: projectName,
+              projectStatus: projectStatus,
+              terminalShortcut: 'Ctrl+` Terminal',
+              trailing: statusTrailing,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _drawerWorkbench(BuildContext context, {required bool showNavigator}) {
+    final tokens = MaestroThemeTokens.of(context);
+    final isNarrow = !showNavigator;
+    return Scaffold(
+      key: scaffoldKey,
+      drawer: isNarrow && destination == _WorkbenchDestination.tasks
+          ? Drawer(child: navigator)
+          : null,
+      endDrawer: Drawer(
+        width: tokens.inspectorWidth,
+        child: _WorkbenchInspectorSurface(
+          snapshot: inspectorSnapshot,
+          drawer: true,
+        ),
+      ),
+      bottomNavigationBar: isNarrow
+          ? FocusTraversalOrder(
+              order: _navigatorFocusOrder,
+              child: NavigationBar(
+                selectedIndex: destination.index,
+                onDestinationSelected: (index) =>
+                    onDestinationSelected(_WorkbenchDestination.values[index]),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.folder_outlined),
+                    label: 'Tasks',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.account_tree_outlined),
+                    label: 'Automations',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.monitor_heart_outlined),
+                    label: 'Health',
+                  ),
+                ],
+              ),
+            )
+          : null,
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                if (showNavigator)
+                  FocusTraversalOrder(
+                    order: _navigatorFocusOrder,
+                    child: SizedBox(
+                      key: const Key('workbench-navigator'),
+                      width: tokens.navigatorWidth,
+                      child: navigator,
+                    ),
+                  ),
+                Expanded(
+                  child: _workspaceRegion(
+                    context,
+                    canInspect: true,
+                    canOpenNavigator:
+                        isNarrow && destination == _WorkbenchDestination.tasks,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FocusTraversalOrder(
+            order: _statusFocusOrder,
+            child: WorkbenchStatusBar(
+              key: const Key('workbench-status-bar'),
+              projectName: projectName,
+              projectStatus: projectStatus,
+              terminalShortcut: 'Ctrl+` Terminal',
+              trailing: statusTrailing,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _workspaceRegion(
+    BuildContext context, {
+    required bool canInspect,
+    bool canOpenNavigator = false,
+  }) => _WorkbenchWorkspace(
+    destination: destination,
+    projectName: projectName,
+    canInspect: canInspect,
+    canOpenNavigator: canOpenNavigator,
+    onShowInspector: () => scaffoldKey.currentState?.openEndDrawer(),
+    onShowNavigator: () => scaffoldKey.currentState?.openDrawer(),
+    child: workspace,
+  );
+}
+
+final class _WorkbenchWorkspace extends StatelessWidget {
+  const _WorkbenchWorkspace({
+    required this.destination,
+    required this.projectName,
+    required this.canInspect,
+    required this.canOpenNavigator,
+    required this.onShowInspector,
+    required this.onShowNavigator,
+    required this.child,
+  });
+
+  final _WorkbenchDestination destination;
+  final String? projectName;
+  final bool canInspect;
+  final bool canOpenNavigator;
+  final VoidCallback onShowInspector;
+  final VoidCallback onShowNavigator;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = MaestroThemeTokens.of(context);
+    final destinationLabel = switch (destination) {
+      _WorkbenchDestination.tasks => 'Tasks',
+      _WorkbenchDestination.automations => 'Automations',
+      _WorkbenchDestination.health => 'Health',
+    };
+    final contextLabel =
+        destination == _WorkbenchDestination.tasks && projectName != null
+        ? '$destinationLabel · $projectName'
+        : '$destinationLabel workspace';
+    return Material(
+      key: const Key('workbench-workspace'),
+      color: tokens.workspaceSurface,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: tokens.subtleBorder),
+            right: BorderSide(color: tokens.subtleBorder),
+          ),
+        ),
+        child: Column(
+          children: <Widget>[
+            SizedBox(
+              height: tokens.toolbarHeight,
+              child: Row(
+                children: <Widget>[
+                  if (canOpenNavigator)
+                    FocusTraversalOrder(
+                      order: _navigatorFocusOrder,
+                      child: Semantics(
+                        label: 'Show project navigator',
+                        button: true,
+                        child: IconButton(
+                          tooltip: 'Show project navigator',
+                          onPressed: onShowNavigator,
+                          icon: const Icon(Icons.menu, size: 18),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      contextLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ),
+                  if (canInspect)
+                    FocusTraversalOrder(
+                      order: _inspectorFocusOrder,
+                      child: Semantics(
+                        label: 'Show context inspector',
+                        button: true,
+                        child: IconButton(
+                          tooltip: 'Show context inspector',
+                          onPressed: onShowInspector,
+                          icon: const Icon(
+                            Icons.view_sidebar_outlined,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: tokens.subtleBorder),
+            Expanded(
+              child: FocusTraversalOrder(
+                order: _workspaceFocusOrder,
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _WorkbenchInspectorSurface extends StatelessWidget {
+  const _WorkbenchInspectorSurface({
+    required this.snapshot,
+    this.drawer = false,
+  });
+
+  final WorkbenchInspectorSnapshot snapshot;
+  final bool drawer;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = MaestroThemeTokens.of(context);
+    final inspector = Material(
+      key: drawer ? null : const Key('workbench-inspector-surface'),
+      color: tokens.inspectorSurface,
+      child: SafeArea(child: WorkbenchInspector(snapshot: snapshot)),
+    );
+    return drawer
+        ? Semantics(
+            label: 'Context inspector drawer',
+            container: true,
+            child: inspector,
+          )
+        : Semantics(
+            label: 'Context inspector',
+            container: true,
+            child: inspector,
+          );
   }
 }
 
@@ -299,65 +752,88 @@ final class _WorkbenchMainPane extends StatelessWidget {
       key: const Key('workbench-main-pane'),
       child: Column(
         children: <Widget>[
-          Expanded(child: destinationContent),
-          ?terminal,
+          Expanded(
+            child: FocusTraversalOrder(
+              order: _workspaceFocusOrder,
+              child: destinationContent,
+            ),
+          ),
+          if (terminal case final terminal?)
+            FocusTraversalOrder(order: _terminalFocusOrder, child: terminal),
         ],
       ),
     );
   }
 }
 
-final class _WorkbenchSidebar extends ConsumerWidget {
+final class _WorkbenchSidebar extends ConsumerStatefulWidget {
   const _WorkbenchSidebar({
     required this.state,
     required this.destination,
-    required this.showDestinations,
     required this.onDestinationSelected,
     required this.onProjectSelected,
   });
 
   final ProjectWorkspaceState state;
   final _WorkbenchDestination destination;
-  final bool showDestinations;
   final ValueChanged<_WorkbenchDestination> onDestinationSelected;
   final ValueChanged<String> onProjectSelected;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_WorkbenchSidebar> createState() => _WorkbenchSidebarState();
+}
+
+final class _WorkbenchSidebarState extends ConsumerState<_WorkbenchSidebar> {
+  var _query = '';
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
+    final query = _query.trim().toLowerCase();
+    final projects = query.isEmpty
+        ? widget.state.projects
+        : widget.state.projects
+              .where(
+                (project) => project.record.name.toLowerCase().contains(query),
+              )
+              .toList();
+    final deletedProjects = query.isEmpty
+        ? widget.state.deletedProjects
+        : widget.state.deletedProjects
+              .where((project) => project.name.toLowerCase().contains(query))
+              .toList();
     return Material(
       key: const Key('workbench-sidebar'),
-      color: theme.brightness == Brightness.dark
-          ? const Color(0xFF202124)
-          : theme.colorScheme.surfaceContainerLow,
+      color: tokens.navigatorSurface,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            if (showDestinations) ...<Widget>[
-              const SizedBox(height: 12),
-              _WorkbenchDestinationTile(
-                label: 'Tasks',
-                icon: Icons.task_alt_outlined,
-                selected: destination == _WorkbenchDestination.tasks,
-                onTap: () => onDestinationSelected(_WorkbenchDestination.tasks),
+            const SizedBox(height: 8),
+            _WorkbenchDestinationTile(
+              label: 'Tasks',
+              icon: Icons.task_alt_outlined,
+              selected: widget.destination == _WorkbenchDestination.tasks,
+              onTap: () =>
+                  widget.onDestinationSelected(_WorkbenchDestination.tasks),
+            ),
+            _WorkbenchDestinationTile(
+              label: 'Automations',
+              icon: Icons.account_tree_outlined,
+              selected: widget.destination == _WorkbenchDestination.automations,
+              onTap: () => widget.onDestinationSelected(
+                _WorkbenchDestination.automations,
               ),
-              _WorkbenchDestinationTile(
-                label: 'Automations',
-                icon: Icons.account_tree_outlined,
-                selected: destination == _WorkbenchDestination.automations,
-                onTap: () =>
-                    onDestinationSelected(_WorkbenchDestination.automations),
-              ),
-              _WorkbenchDestinationTile(
-                label: 'Health',
-                icon: Icons.monitor_heart_outlined,
-                selected: destination == _WorkbenchDestination.health,
-                onTap: () =>
-                    onDestinationSelected(_WorkbenchDestination.health),
-              ),
-              const Divider(height: 24),
-            ],
+            ),
+            _WorkbenchDestinationTile(
+              label: 'Health',
+              icon: Icons.monitor_heart_outlined,
+              selected: widget.destination == _WorkbenchDestination.health,
+              onTap: () =>
+                  widget.onDestinationSelected(_WorkbenchDestination.health),
+            ),
+            Divider(height: 16, color: tokens.subtleBorder),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
               child: Row(
@@ -370,7 +846,8 @@ final class _WorkbenchSidebar extends ConsumerWidget {
                     button: true,
                     child: IconButton(
                       tooltip: 'Register project',
-                      onPressed: state.status == ProjectWorkspaceStatus.loading
+                      onPressed:
+                          widget.state.status == ProjectWorkspaceStatus.loading
                           ? null
                           : () => _ProjectSidebarActions.showRegistrationDialog(
                               context,
@@ -382,21 +859,40 @@ final class _WorkbenchSidebar extends ConsumerWidget {
                 ],
               ),
             ),
-            if (state.status == ProjectWorkspaceStatus.loading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: TextField(
+                key: const Key('project-search'),
+                decoration: const InputDecoration(
+                  labelText: 'Search projects',
+                  prefixIcon: Icon(Icons.search, size: 18),
+                  isDense: true,
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            if (widget.state.status == ProjectWorkspaceStatus.loading)
               const LinearProgressIndicator(),
             Expanded(
               child: ListView(
                 children: <Widget>[
-                  if (state.projects.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No active projects.'),
+                  if (projects.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        query.isEmpty
+                            ? 'No active projects.'
+                            : 'No matching active projects.',
+                      ),
                     )
                   else
-                    for (final project in state.projects)
+                    for (final project in projects)
                       ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
                         selected:
-                            state.selected?.record.id == project.record.id,
+                            widget.state.selected?.record.id ==
+                            project.record.id,
                         title: Text(project.record.name),
                         subtitle: project.folderActionsEnabled
                             ? null
@@ -404,22 +900,28 @@ final class _WorkbenchSidebar extends ConsumerWidget {
                         trailing: project.folderActionsEnabled
                             ? null
                             : const Icon(Icons.warning_amber_rounded),
-                        onTap: state.status == ProjectWorkspaceStatus.loading
+                        onTap:
+                            widget.state.status ==
+                                ProjectWorkspaceStatus.loading
                             ? null
-                            : () => onProjectSelected(project.record.id),
+                            : () => widget.onProjectSelected(project.record.id),
                       ),
-                  const Divider(height: 16),
+                  Divider(height: 16, color: tokens.subtleBorder),
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
                     child: Text('Deleted projects'),
                   ),
-                  if (state.deletedProjects.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
-                      child: Text('No deleted projects.'),
+                  if (deletedProjects.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: Text(
+                        query.isEmpty
+                            ? 'No deleted projects.'
+                            : 'No matching deleted projects.',
+                      ),
                     )
                   else
-                    for (final project in state.deletedProjects)
+                    for (final project in deletedProjects)
                       ListTile(
                         dense: true,
                         visualDensity: VisualDensity.compact,
@@ -434,7 +936,7 @@ final class _WorkbenchSidebar extends ConsumerWidget {
                               child: IconButton(
                                 tooltip: 'Restore ${project.name}',
                                 onPressed:
-                                    state.status ==
+                                    widget.state.status ==
                                         ProjectWorkspaceStatus.loading
                                     ? null
                                     : () => ref
@@ -451,7 +953,7 @@ final class _WorkbenchSidebar extends ConsumerWidget {
                               child: IconButton(
                                 tooltip: 'Permanently delete ${project.name}',
                                 onPressed:
-                                    state.status ==
+                                    widget.state.status ==
                                         ProjectWorkspaceStatus.loading
                                     ? null
                                     : () =>
@@ -494,6 +996,7 @@ final class _WorkbenchDestinationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       dense: true,
+      visualDensity: VisualDensity.compact,
       selected: selected,
       leading: Icon(icon),
       title: Text(label),
@@ -513,7 +1016,8 @@ final class _ProjectSidebarActions {
   ) async {
     final decision = await showDialog<PermanentDeletionDecision>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => _compactDesktopDialog(
+        key: const Key('permanent-delete-project-dialog'),
         title: Text('Permanently delete $projectName metadata?'),
         content: const Text(
           'Affected Maestro records: the project metadata and its lifecycle '
@@ -528,6 +1032,10 @@ final class _ProjectSidebarActions {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: MaestroThemeTokens.of(context).destructive,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () =>
                 Navigator.pop(context, PermanentDeletionDecision.confirmed),
             child: const Text('Permanently delete metadata'),
@@ -578,7 +1086,8 @@ final class _RegistrationDialogState extends State<_RegistrationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return _compactDesktopDialog(
+      key: const Key('register-project-dialog'),
       title: const Text('Register project'),
       content: Semantics(
         textField: true,
@@ -650,46 +1159,60 @@ final class _WorkbenchEmptyState extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      key: const Key('workbench-empty-state'),
-      children: <Widget>[
-        Expanded(
-          child: Center(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Text('Select a project from the sidebar to begin.'),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: state.status == ProjectWorkspaceStatus.loading
-                          ? null
-                          : () => _ProjectSidebarActions.showRegistrationDialog(
-                              context,
-                              ref,
-                            ),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Project'),
-                    ),
-                  ],
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        key: const Key('workbench-empty-state'),
+        children: <Widget>[
+          Expanded(
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      const Text('Select a project from the sidebar to begin.'),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed:
+                            state.status == ProjectWorkspaceStatus.loading
+                            ? null
+                            : () =>
+                                  _ProjectSidebarActions.showRegistrationDialog(
+                                    context,
+                                    ref,
+                                  ),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Project'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        if (state.lifecycleFeedback case final feedback?)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: _ProjectLifecycleMessage(feedback: feedback),
-          ),
-        if (state.failure case final failure?)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: _ProjectFailureMessage(failure: failure),
-          ),
-      ],
+          if (state.lifecycleFeedback case final feedback?)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: constraints.maxHeight / 2),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _ProjectLifecycleMessage(feedback: feedback),
+                ),
+              ),
+            ),
+          if (state.failure case final failure?)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: constraints.maxHeight / 2),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _ProjectFailureMessage(failure: failure),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -915,7 +1438,8 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
     if (requested != SourcePreservationDecision.confirmed) return;
     final decision = await showDialog<SourcePreservationDecision>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => _compactDesktopDialog(
+        key: const Key('soft-delete-project-dialog'),
         title: const Text('Move project metadata to Deleted?'),
         content: const Text(
           'Affected Maestro records: this project metadata and its lifecycle '
@@ -949,17 +1473,26 @@ final class _ProjectLifecycleMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
     return Semantics(
       container: true,
       liveRegion: true,
       label: _announcement,
       child: ExcludeSemantics(
         child: DecoratedBox(
+          key: const Key('project-lifecycle-feedback'),
           decoration: BoxDecoration(
             color: feedback.isSuccess
-                ? Theme.of(context).colorScheme.secondaryContainer
-                : Theme.of(context).colorScheme.errorContainer,
-            borderRadius: BorderRadius.circular(8),
+                ? theme.colorScheme.secondaryContainer
+                : theme.colorScheme.errorContainer,
+            border: Border(
+              left: BorderSide(
+                color: feedback.isSuccess ? tokens.success : tokens.destructive,
+                width: 3,
+              ),
+            ),
+            borderRadius: BorderRadius.circular(tokens.smallRadius),
           ),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -999,13 +1532,17 @@ final class _ProjectFailureMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
     return Semantics(
       liveRegion: true,
       label: 'Project error',
       child: DecoratedBox(
+        key: const Key('project-error-feedback'),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
+          color: theme.colorScheme.errorContainer,
+          border: Border(left: BorderSide(color: tokens.destructive, width: 3)),
+          borderRadius: BorderRadius.circular(tokens.smallRadius),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),

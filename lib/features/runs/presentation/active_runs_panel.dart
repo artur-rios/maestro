@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
 import 'package:maestro/features/delivery/presentation/delivery_panel.dart';
 import 'package:maestro/features/runs/domain/run_control.dart';
@@ -19,6 +22,7 @@ final class ActiveRunsPanel extends StatefulWidget {
     required this.createController,
     this.createControlController,
     this.createDeliveryController,
+    this.onInspectorChanged,
     super.key,
   });
 
@@ -28,6 +32,7 @@ final class ActiveRunsPanel extends StatefulWidget {
   /// observation without the ability to act on a run.
   final RunControlController Function()? createControlController;
   final DeliveryController Function()? createDeliveryController;
+  final ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged;
 
   @override
   State<ActiveRunsPanel> createState() => _ActiveRunsPanelState();
@@ -36,6 +41,10 @@ final class ActiveRunsPanel extends StatefulWidget {
 final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   late final RunObservationController _controller;
   RunControlController? _controls;
+  WorkbenchInspectorSnapshot? _lastInspectorSnapshot;
+  WorkbenchInspectorSnapshot? _scheduledInspectorSnapshot;
+  ValueChanged<WorkbenchInspectorSnapshot>? _lastInspectorPublisher;
+  ValueChanged<WorkbenchInspectorSnapshot>? _scheduledInspectorPublisher;
 
   @override
   void initState() {
@@ -82,132 +91,284 @@ final class _ActiveRunsPanelState extends State<ActiveRunsPanel> {
   Widget build(BuildContext context) {
     final state = _controller.state;
     final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
+    _scheduleInspector(
+      _runInspectorSnapshot(state, _controls?.state),
+      widget.onInspectorChanged ?? WorkbenchInspectorScope.maybeOf(context),
+    );
     if (_controls != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _syncControls());
     }
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text('Active runs', style: theme.textTheme.titleLarge),
-                ),
-                IconButton(
-                  key: const Key('refresh-runs'),
-                  onPressed: state.loading ? null : _controller.load,
-                  tooltip: 'Refresh runs',
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-            if (state.loading) ...<Widget>[
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                label: 'Loading runs',
-                child: const LinearProgressIndicator(key: Key('runs-loading')),
-              ),
-            ],
-            if (state.isEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              const Text(
-                key: Key('runs-empty'),
-                'No runs yet. Start a workflow run to observe it here.',
-              ),
-            ],
-            for (final run in state.runs) ...<Widget>[
-              const SizedBox(height: 8),
-              _RunRow(
-                run: run,
-                selected: run.runId == state.selectedRunId,
-                onSelected: () => _controller.select(run.runId),
-              ),
-            ],
-            if (state.selectedRun case final selected?) ...<Widget>[
-              if (_controls case final controls?) ...<Widget>[
-                const Divider(height: 24),
-                _ControlBar(controller: controls),
-              ],
-              if (widget.createDeliveryController
-                  case final create?) ...<Widget>[
-                const Divider(height: 24),
-                DeliveryPanel(
-                  key: Key('delivery-${selected.runId}'),
-                  runId: selected.runId,
-                  createController: create,
-                ),
-              ],
-              const Divider(height: 24),
-              Text('Steps', style: theme.textTheme.titleMedium),
-              for (final step in selected.steps)
-                _StepRow(
-                  step: step,
-                  current: step.position == selected.currentStepPosition,
-                ),
-              const SizedBox(height: 12),
-              Row(
+    return Material(
+      key: const Key('active-runs-section'),
+      color: tokens?.workspaceSurface ?? theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: tokens?.toolbarHeight ?? 36,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 4),
+              child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: Text('Output', style: theme.textTheme.titleMedium),
-                  ),
-                  if (state.hasEarlier)
-                    TextButton(
-                      key: const Key('load-earlier-output'),
-                      onPressed: state.loadingEarlier
-                          ? null
-                          : _controller.loadEarlier,
-                      child: Text(
-                        state.loadingEarlier
-                            ? 'Loading…'
-                            : 'Load earlier output',
-                      ),
+                    child: Text(
+                      'Active runs',
+                      style: theme.textTheme.titleSmall,
                     ),
+                  ),
+                  IconButton(
+                    key: const Key('refresh-runs'),
+                    onPressed: state.loading ? null : _controller.load,
+                    tooltip: 'Refresh runs',
+                    icon: const Icon(Icons.refresh),
+                  ),
                 ],
               ),
-              if (state.durability == OutputDurability.degraded)
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    key: const Key('output-degraded'),
-                    'Durable log storage is degraded. Output is buffered and '
-                    'will be written when storage recovers.',
-                    style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ),
+          Divider(height: 1, color: tokens?.subtleBorder),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (state.loading) ...<Widget>[
+                  Semantics(
+                    liveRegion: true,
+                    label: 'Loading runs',
+                    child: const LinearProgressIndicator(
+                      key: Key('runs-loading'),
+                    ),
                   ),
-                ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 240),
-                child: SingleChildScrollView(
-                  key: Key('run-output-${selected.runId}'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                ],
+                if (state.isEmpty) ...<Widget>[
+                  const Text(
+                    key: Key('runs-empty'),
+                    'No runs yet. Start a workflow run to observe it here.',
+                  ),
+                ],
+                for (final run in state.runs) ...<Widget>[
+                  _RunRow(
+                    run: run,
+                    selected: run.runId == state.selectedRunId,
+                    onSelected: () => _controller.select(run.runId),
+                  ),
+                ],
+                if (state.selectedRun case final selected?) ...<Widget>[
+                  if (_controls case final controls?) ...<Widget>[
+                    const Divider(height: 16),
+                    _ControlBar(controller: controls),
+                  ],
+                  if (widget.createDeliveryController
+                      case final create?) ...<Widget>[
+                    const Divider(height: 16),
+                    DeliveryPanel(
+                      key: Key('delivery-${selected.runId}'),
+                      runId: selected.runId,
+                      createController: create,
+                    ),
+                  ],
+                  const Divider(height: 16),
+                  Text('Steps', style: theme.textTheme.titleMedium),
+                  for (final step in selected.steps)
+                    _StepRow(
+                      step: step,
+                      current: step.position == selected.currentStepPosition,
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
                     children: <Widget>[
-                      for (final chunk in state.output)
-                        _OutputChunk(chunk: chunk),
+                      Expanded(
+                        child: Text(
+                          'Output',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      if (state.hasEarlier)
+                        TextButton(
+                          key: const Key('load-earlier-output'),
+                          onPressed: state.loadingEarlier
+                              ? null
+                              : _controller.loadEarlier,
+                          child: Text(
+                            state.loadingEarlier
+                                ? 'Loading…'
+                                : 'Load earlier output',
+                          ),
+                        ),
                     ],
                   ),
-                ),
-              ),
-            ],
-            if (state.failure case final failure?) ...<Widget>[
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  key: const Key('runs-failure'),
-                  '${failure.message}\n${failure.remediation}',
-                ),
-              ),
-            ],
-          ],
-        ),
+                  if (state.durability == OutputDurability.degraded)
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        key: const Key('output-degraded'),
+                        'Durable log storage is degraded. Output is buffered and '
+                        'will be written when storage recovers.',
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color:
+                          tokens?.terminalSurface ??
+                          theme.colorScheme.inverseSurface,
+                      border: Border.all(
+                        color:
+                            tokens?.subtleBorder ??
+                            theme.colorScheme.outlineVariant,
+                      ),
+                      borderRadius: BorderRadius.circular(
+                        tokens?.smallRadius ?? 4,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 240),
+                        child: SingleChildScrollView(
+                          key: Key('run-output-${selected.runId}'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              for (final chunk in state.output)
+                                _OutputChunk(chunk: chunk),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                if (state.failure case final failure?) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      key: const Key('runs-failure'),
+                      '${failure.message}\n${failure.remediation}',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  void _scheduleInspector(
+    WorkbenchInspectorSnapshot snapshot,
+    ValueChanged<WorkbenchInspectorSnapshot>? publisher,
+  ) {
+    if (publisher == null ||
+        (snapshot == _lastInspectorSnapshot &&
+            publisher == _lastInspectorPublisher) ||
+        (snapshot == _scheduledInspectorSnapshot &&
+            publisher == _scheduledInspectorPublisher)) {
+      return;
+    }
+    _scheduledInspectorSnapshot = snapshot;
+    _scheduledInspectorPublisher = publisher;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _scheduledInspectorSnapshot != snapshot ||
+          _scheduledInspectorPublisher != publisher) {
+        return;
+      }
+      _scheduledInspectorSnapshot = null;
+      _scheduledInspectorPublisher = null;
+      if (snapshot == _lastInspectorSnapshot &&
+          publisher == _lastInspectorPublisher) {
+        return;
+      }
+      _lastInspectorSnapshot = snapshot;
+      _lastInspectorPublisher = publisher;
+      publisher(snapshot);
+    });
+  }
 }
+
+WorkbenchInspectorSnapshot _runInspectorSnapshot(
+  RunObservationState state,
+  RunControlState? controls,
+) {
+  final run = state.selectedRun;
+  if (run == null) {
+    return WorkbenchInspectorSnapshot(
+      title: 'Run details',
+      sections: <WorkbenchInspectorSection>[],
+      emptyMessage: 'Select an active run to inspect its progress.',
+    );
+  }
+  final currentStep = run.steps
+      .where((step) => step.position == run.currentStepPosition)
+      .firstOrNull;
+  return WorkbenchInspectorSnapshot(
+    title: 'Run details',
+    emptyMessage: null,
+    sections: <WorkbenchInspectorSection>[
+      WorkbenchInspectorSection(
+        label: 'Progress',
+        fields: <WorkbenchInspectorField>[
+          WorkbenchInspectorField(label: 'Run', value: run.label),
+          WorkbenchInspectorField(
+            label: 'Status',
+            value: _runStatusLabel(run.status),
+            status: _runInspectorStatus(run.status),
+          ),
+          WorkbenchInspectorField(
+            label: 'Current step',
+            value:
+                currentStep?.name ??
+                ((run.status == RunStatus.succeeded ||
+                            run.status == RunStatus.deliveryPending) &&
+                        run.currentStepPosition >= run.steps.length
+                    ? 'Completed'
+                    : 'Not started'),
+          ),
+          WorkbenchInspectorField(label: 'Steps', value: '${run.steps.length}'),
+          WorkbenchInspectorField(
+            label: 'Available controls',
+            value: _availableControlsLabel(run.runId, controls),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+String _availableControlsLabel(String runId, RunControlState? controls) {
+  if (controls == null) return 'Unavailable';
+  if (controls.runId != runId || controls.busy) return 'Loading';
+  final labels = <String>[
+    for (final action in RunControlAction.values)
+      if (controls.offers(action))
+        switch (action) {
+          RunControlAction.pause => 'Pause',
+          RunControlAction.resume => 'Resume',
+          RunControlAction.cancel => 'Cancel',
+          RunControlAction.retry => 'Retry',
+        },
+  ];
+  return labels.isEmpty ? 'None' : labels.join(', ');
+}
+
+WorkbenchInspectorStatus _runInspectorStatus(RunStatus status) =>
+    switch (status) {
+      RunStatus.succeeded => WorkbenchInspectorStatus.success,
+      RunStatus.failed ||
+      RunStatus.interrupted ||
+      RunStatus.canceled => WorkbenchInspectorStatus.error,
+      RunStatus.pauseRequested ||
+      RunStatus.paused ||
+      RunStatus.deliveryPending => WorkbenchInspectorStatus.warning,
+      RunStatus.queued ||
+      RunStatus.starting ||
+      RunStatus.running => WorkbenchInspectorStatus.neutral,
+    };
 
 /// Pause, resume, cancel, and retry for the selected run (UC-08).
 final class _ControlBar extends StatelessWidget {
@@ -438,12 +599,14 @@ final class _OutputChunk extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
     // FR-OB-05: the source of each fragment stays visible and announced, not
     // flattened into one undifferentiated stream.
     final color = switch (chunk.channel) {
-      RunLogChannel.stdout => theme.colorScheme.onSurface,
-      RunLogChannel.stderr => theme.colorScheme.error,
-      RunLogChannel.system => theme.colorScheme.primary,
+      RunLogChannel.stdout =>
+        tokens?.terminalForeground ?? const Color(0xFFF2F0F7),
+      RunLogChannel.stderr => tokens?.terminalError ?? const Color(0xFFFFB4AB),
+      RunLogChannel.system => tokens?.terminalAccent ?? const Color(0xFFB9C3FF),
     };
     return Semantics(
       label: '${_channelLabel(chunk.channel)} output',

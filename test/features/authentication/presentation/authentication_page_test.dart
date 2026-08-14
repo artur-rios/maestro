@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
@@ -12,8 +14,125 @@ import 'package:maestro/features/authentication/application/authentication_servi
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 
 void main() {
+  testWidgets(
+    'GivenSignedOutChrome_WhenTabbing_ThenTitleActionsLeadIntoAuthenticationForm',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      final landmarks = <Finder>[
+        find.byTooltip('Appearance'),
+        find.bySemanticsLabel('Minimize Maestro'),
+        find.bySemanticsLabel('Maximize Maestro'),
+        find.bySemanticsLabel('Close Maestro'),
+        find.bySemanticsLabel('Sign in with your operating system'),
+      ];
+      for (final landmark in landmarks) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        expect(_primaryFocusIsWithin(tester, landmark), isTrue);
+      }
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowAuthentication_WhenAppearanceMenuOpens_ThenEveryModeRemainsVisible',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Appearance'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('System'), findsOneWidget);
+      expect(find.text('Light'), findsOneWidget);
+      expect(find.text('Dark'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'System'),
+      );
+      _expectContainedAndHitTestable(
+        tester,
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'Light'),
+      );
+      _expectContainedAndHitTestable(
+        tester,
+        find.widgetWithText(CheckedPopupMenuItem<AppearanceMode>, 'Dark'),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticationFailure_WhenShown_ThenSemanticAccentAndTextRemainAccessible',
+    (tester) async {
+      final service = _authenticationService(
+        operatingSystemResult: const FailureResult<void>(
+          SecurityFailure(
+            code: 'authentication.operating_system.denied',
+            message: 'Operating-system authentication was denied.',
+          ),
+        ),
+      );
+      await tester.pumpWidget(_testApp(service));
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      final feedback = find.byKey(const Key('authentication-error-feedback'));
+      expect(feedback, findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Authentication error')),
+        findsOneWidget,
+      );
+      expect(find.text('Authentication was not successful.'), findsOneWidget);
+      final decoration = tester.widget<DecoratedBox>(feedback).decoration;
+      expect((decoration as BoxDecoration).border, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'GivenSignedOutApp_WhenShown_ThenFocusedAuthenticationUsesWindowChrome',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
+      expect(
+        find.byKey(const Key('authentication-identity-panel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('authentication-form-panel')),
+        findsOneWidget,
+      );
+      expect(find.byType(AppBar), findsNothing);
+    },
+  );
+
+  testWidgets('GivenNarrowSignedOutApp_WhenShown_ThenIdentityPanelCollapses', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(600, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_testApp(_authenticationService()));
+
+    expect(
+      find.byKey(const Key('authentication-identity-panel')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('authentication-form-panel')), findsOneWidget);
+  });
+
   testWidgets('GivenSignedOut_WhenRendered_ThenProtectedShellIsHidden', (
     tester,
   ) async {
@@ -385,13 +504,45 @@ Widget _testApp(
   return ProviderScope(
     overrides: [authenticationServiceProvider.overrideWithValue(service)],
     child: MaterialApp(
+      theme: maestroTheme(Brightness.light),
+      darkTheme: maestroTheme(Brightness.dark),
       home: AuthenticationPage(
         appearanceController: appearanceController,
+        window: const NoopDesktopWindowPort(),
         authenticatedBuilder:
             authenticatedBuilder ?? (_) => const Text('Foundation ready'),
       ),
     ),
   );
+}
+
+bool _primaryFocusIsWithin(WidgetTester tester, Finder finder) {
+  final focusContext = tester.binding.focusManager.primaryFocus?.context;
+  if (focusContext == null) return false;
+  final targets = finder.evaluate().toSet();
+  var current = focusContext as Element;
+  while (true) {
+    if (targets.contains(current)) return true;
+    Element? parent;
+    current.visitAncestorElements((ancestor) {
+      parent = ancestor;
+      return false;
+    });
+    final next = parent;
+    if (next == null) return false;
+    current = next;
+  }
+}
+
+void _expectContainedAndHitTestable(WidgetTester tester, Finder finder) {
+  expect(finder, findsOneWidget);
+  expect(finder.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(finder);
+  final logicalSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.right, lessThanOrEqualTo(logicalSize.width));
+  expect(rect.bottom, lessThanOrEqualTo(logicalSize.height));
 }
 
 final class _AppearancePreferenceRepository

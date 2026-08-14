@@ -3,6 +3,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/application/run_orchestrator.dart';
@@ -14,6 +17,106 @@ import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
 
 void main() {
+  testWidgets(
+    'GivenCompletedRun_WhenRendered_ThenInspectorDoesNotCallItNotStarted',
+    (tester) async {
+      final repository = _Repository()
+        ..runs.add(
+          _topology(
+            'run-1',
+            status: RunStatus.succeeded,
+            currentStepPosition: 3,
+          ),
+        );
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+
+      await _pump(tester, repository, onInspectorChanged: snapshots.add);
+
+      expect(find.byKey(const Key('active-runs-section')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('active-runs-section')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
+      expect(
+        snapshots.last.sections.expand((section) => section.fields),
+        contains(
+          const WorkbenchInspectorField(
+            label: 'Current step',
+            value: 'Completed',
+          ),
+        ),
+      );
+
+      repository.runs[0] = _topology(
+        'run-1',
+        status: RunStatus.deliveryPending,
+        currentStepPosition: 3,
+      );
+      await tester.tap(find.byKey(const Key('refresh-runs')));
+      await tester.pumpAndSettle();
+
+      expect(
+        snapshots.last.sections.expand((section) => section.fields),
+        contains(
+          const WorkbenchInspectorField(
+            label: 'Current step',
+            value: 'Completed',
+          ),
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedRun_WhenRendered_ThenInspectorPublishesRunProgress',
+    (tester) async {
+      final repository = _Repository()
+        ..runs.add(_topology('run-1', currentStepPosition: 1));
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+
+      await _pump(
+        tester,
+        repository,
+        controls: _ControlRepository(status: RunStatus.running),
+        onInspectorChanged: snapshots.add,
+      );
+
+      expect(snapshots.last.title, 'Run details');
+      expect(
+        snapshots.last.sections.expand((section) => section.fields),
+        containsAll(<WorkbenchInspectorField>[
+          const WorkbenchInspectorField(label: 'Run', value: 'Observe run-1'),
+          const WorkbenchInspectorField(
+            label: 'Current step',
+            value: 'Execute',
+          ),
+          const WorkbenchInspectorField(label: 'Steps', value: '3'),
+          const WorkbenchInspectorField(
+            label: 'Available controls',
+            value: 'Pause, Cancel',
+          ),
+        ]),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenNoSelectedRun_WhenRendered_ThenInspectorPublishesSelectionGuidance',
+    (tester) async {
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+
+      await _pump(tester, _Repository(), onInspectorChanged: snapshots.add);
+
+      expect(
+        snapshots.last.emptyMessage,
+        'Select an active run to inspect its progress.',
+      );
+    },
+  );
+
   testWidgets('GivenLoading_WhenRendered_ThenProgressIsAnnounced', (
     tester,
   ) async {
@@ -113,13 +216,7 @@ void main() {
     // When: the panel renders.
     await _pump(tester, repository);
 
-    // Then: the channels differ in color and are named in semantics.
-    final theme = ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-    );
-    expect(_colorOf(tester, 'building'), theme.colorScheme.onSurface);
-    expect(_colorOf(tester, 'warning'), theme.colorScheme.error);
-    expect(_colorOf(tester, 'step started'), theme.colorScheme.primary);
+    // Then: the channels are named in semantics.
     expect(
       tester.getSemantics(find.text('warning')).label,
       contains('Error output'),
@@ -129,6 +226,44 @@ void main() {
       contains('System output'),
     );
   });
+
+  testWidgets(
+    'GivenLightAndDarkThemes_WhenOutputRendered_ThenTerminalPaletteIsLegible',
+    (tester) async {
+      for (final brightness in Brightness.values) {
+        final repository = _Repository()
+          ..runs.add(_topology('run-1'))
+          ..output['attempt-1'] = <(RunLogChannel, String)>[
+            (RunLogChannel.stdout, 'building'),
+            (RunLogChannel.stderr, 'warning'),
+            (RunLogChannel.system, 'step started'),
+          ];
+        final theme = maestroTheme(brightness);
+        final tokens = theme.extension<MaestroThemeTokens>()!;
+
+        await _pump(tester, repository, theme: theme);
+
+        const stdout = Color(0xFFF2F0F7);
+        const stderr = Color(0xFFFFB4AB);
+        const system = Color(0xFFB9C3FF);
+        expect(_colorOf(tester, 'building'), stdout);
+        expect(_colorOf(tester, 'warning'), stderr);
+        expect(_colorOf(tester, 'step started'), system);
+        expect(
+          _contrastRatio(stdout, tokens.terminalSurface),
+          greaterThan(4.5),
+        );
+        expect(
+          _contrastRatio(stderr, tokens.terminalSurface),
+          greaterThan(4.5),
+        );
+        expect(
+          _contrastRatio(system, tokens.terminalSurface),
+          greaterThan(4.5),
+        );
+      }
+    },
+  );
 
   testWidgets('GivenUndecodableOutput_WhenRendered_ThenReplacementIsShown', (
     tester,
@@ -396,6 +531,15 @@ void main() {
 Color? _colorOf(WidgetTester tester, String text) =>
     tester.widget<Text>(find.text(text)).style?.color;
 
+double _contrastRatio(Color first, Color second) {
+  final lighter = first.computeLuminance() > second.computeLuminance()
+      ? first
+      : second;
+  final darker = identical(lighter, first) ? second : first;
+  return (lighter.computeLuminance() + 0.05) /
+      (darker.computeLuminance() + 0.05);
+}
+
 bool _enabled(WidgetTester tester, RunControlAction action) =>
     tester
         .widget<OutlinedButton>(find.byKey(Key('run-control-${action.name}')))
@@ -414,15 +558,20 @@ Future<void> _pump(
   RunSummaryEvents? events,
   _ControlRepository? controls,
   _ControlExecution? execution,
+  ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged,
+  ThemeData? theme,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-      ),
+      theme:
+          theme ??
+          ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+          ),
       home: Scaffold(
         body: SingleChildScrollView(
           child: ActiveRunsPanel(
+            onInspectorChanged: onInspectorChanged,
             createController: () => RunObservationController(
               projectId: 'project-1',
               observe: ObserveRuns(repository: repository),
@@ -457,13 +606,14 @@ RunTopology _topology(
   String stepPrefix = 'step',
   String attemptId = 'attempt-1',
   int currentStepPosition = 0,
+  RunStatus status = RunStatus.running,
 }) {
   const names = <String>['Plan', 'Execute', 'Review'];
   return RunTopology(
     runId: runId,
     projectId: 'project-1',
     label: 'Observe $runId',
-    status: RunStatus.running,
+    status: status,
     currentStepPosition: currentStepPosition,
     createdAt: DateTime.utc(2026, 8, 7),
     updatedAt: DateTime.utc(2026, 8, 7),

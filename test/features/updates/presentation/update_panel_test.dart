@@ -20,6 +20,14 @@ void main() {
           ),
         ),
       );
+      expect(find.byKey(const Key('updates-section')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('updates-section')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
       expect(find.text('Check for updates'), findsOneWidget);
     },
   );
@@ -39,19 +47,22 @@ void main() {
         ),
       );
 
-      final card = find.byType(Card);
+      final section = find.byKey(const Key('updates-section'));
       final checkAction = find.widgetWithText(
         OutlinedButton,
         'Check for updates',
       );
       expect(
         tester.getSize(checkAction).width,
-        lessThan(tester.getSize(card).width / 2),
+        lessThan(tester.getSize(section).width / 2),
       );
 
       tester.view.physicalSize = const Size(400, 480);
       await tester.pump();
-      expect(tester.getSize(checkAction).width, 360);
+      expect(
+        tester.getSize(checkAction).width,
+        tester.getSize(section).width - 32,
+      );
       expect(tester.getSize(checkAction).height, greaterThanOrEqualTo(44));
     },
   );

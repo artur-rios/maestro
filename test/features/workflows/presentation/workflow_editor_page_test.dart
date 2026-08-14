@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
@@ -12,6 +14,94 @@ import 'package:maestro/features/workflows/presentation/workflow_editor_page.dar
 import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 void main() {
+  testWidgets(
+    'GivenNarrowWorkflowEditor_WhenStepMenusOpen_ThenEveryActionRemainsVisible',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Create workflow'));
+      await tester.pumpAndSettle();
+      expect(find.text('New reusable workflow'), findsOneWidget);
+      expect(find.text('New one-off workflow'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.text('New reusable workflow'),
+      );
+      _expectContainedAndHitTestable(tester, find.text('New one-off workflow'));
+      expect(tester.takeException(), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      final addStep = find.text('Add step');
+      await _revealInEditor(tester, addStep);
+      await tester.tap(addStep);
+      await tester.pumpAndSettle();
+      expect(find.text('Add Plan step'), findsOneWidget);
+      expect(find.text('Add Execute step'), findsOneWidget);
+      expect(find.text('Add Review step'), findsOneWidget);
+      expect(find.text('Add custom step'), findsOneWidget);
+      _expectContainedAndHitTestable(tester, find.text('Add Plan step'));
+      _expectContainedAndHitTestable(tester, find.text('Add Execute step'));
+      _expectContainedAndHitTestable(tester, find.text('Add Review step'));
+      _expectContainedAndHitTestable(tester, find.text('Add custom step'));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'GivenWorkflowAndFocusedStep_WhenEditorBuilds_ThenInspectorTracksFocus',
+    (tester) async {
+      await _largeSurface(tester);
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+      await tester.pumpWidget(_app(onInspectorChanged: snapshots.add));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('workflow-editor-section')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('workflow-editor-section')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
+      expect(snapshots.last.title, 'Workflow details');
+      expect(
+        snapshots.last.sections.first.fields,
+        contains(const WorkbenchInspectorField(label: 'Steps', value: '3')),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('default-execute')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(snapshots.last.sections.last.label, 'Selected step');
+      expect(
+        snapshots.last.sections.last.fields,
+        contains(
+          const WorkbenchInspectorField(label: 'Step', value: 'Execute'),
+        ),
+      );
+
+      tester.binding.focusManager.primaryFocus?.unfocus();
+      await tester.pump();
+      final workflowElement = tester.element(find.byType(WorkflowEditorPage));
+      ProviderScope.containerOf(
+        workflowElement,
+      ).read(workflowControllerProvider.notifier).create(WorkflowKind.oneOff);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        snapshots.last.sections.map((section) => section.label),
+        isNot(contains('Selected step')),
+      );
+    },
+  );
+
   testWidgets(
     'GivenAgentCatalogs_WhenEditorLoads_ThenAccessibleCliAndModelControlsConfigureRows',
     (tester) async {
@@ -319,6 +409,57 @@ void main() {
   );
 
   testWidgets(
+    'GivenScrolledWorkflowForm_WhenSaved_ThenFeedbackRemainsVisibleAndLive',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _Repository()..definitions.add(_definition());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          projects: <ProjectSelection>[
+            for (var index = 0; index < 12; index++)
+              _project('project-$index', true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Release after scrolling',
+      );
+      final editorScroll = find
+          .descendant(
+            of: find.byKey(const Key('workflow-editor-section')),
+            matching: find.byType(Scrollable),
+          )
+          .last;
+      await tester.drag(editorScroll, const Offset(0, -1600));
+      await tester.pump();
+      expect(
+        tester.state<ScrollableState>(editorScroll).position.pixels,
+        greaterThan(300),
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save workflow'));
+      await tester.pumpAndSettle();
+
+      final feedback = find.bySemanticsLabel(RegExp(r'^Workflow success'));
+      expect(feedback, findsOneWidget);
+      expect(feedback.hitTestable(), findsOneWidget);
+      final accent = find.byKey(const Key('workflow-success-feedback'));
+      expect(accent, findsOneWidget);
+      expect(
+        (tester.widget<DecoratedBox>(accent).decoration as BoxDecoration)
+            .border,
+        isNotNull,
+      );
+    },
+  );
+
+  testWidgets(
     'GivenReadinessCheckFails_WhenSavedWorkflowSelected_ThenSanitizedLiveErrorKeepsSaveEnabled',
     (tester) async {
       await _largeSurface(tester);
@@ -444,12 +585,41 @@ Future<void> _largeSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+Future<void> _revealInEditor(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 12; attempt++) {
+    if (finder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(finder);
+      await tester.pump();
+      return;
+    }
+    final verticalScrollable = find.byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    );
+    await tester.drag(verticalScrollable.last, const Offset(0, -400));
+    await tester.pump();
+  }
+  throw TestFailure('Could not reveal $finder.');
+}
+
+void _expectContainedAndHitTestable(WidgetTester tester, Finder finder) {
+  expect(finder, findsOneWidget);
+  expect(finder.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(finder);
+  final logicalSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.right, lessThanOrEqualTo(logicalSize.width));
+  expect(rect.bottom, lessThanOrEqualTo(logicalSize.height));
+}
+
 Widget _app({
   List<ProjectSelection> projects = const [],
   List<ProjectRecord> deletedProjects = const [],
   _Repository? repository,
   _Readiness? readiness,
   AgentCliAdapter? codex,
+  ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged,
 }) {
   final workflowRepository = repository ?? _Repository();
   final design = WorkflowDesignService(
@@ -477,6 +647,7 @@ Widget _app({
         body: WorkflowEditorPage(
           projects: projects,
           deletedProjects: deletedProjects,
+          onInspectorChanged: onInspectorChanged,
         ),
       ),
     ),

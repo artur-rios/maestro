@@ -1,14 +1,25 @@
 import 'dart:async';
 
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/core/storage/database/maestro_database.dart'
+    hide WorkflowStep;
+import 'package:maestro/features/history/data/drift_history_repository.dart';
+import 'package:maestro/features/history/presentation/history_controller.dart';
+import 'package:maestro/features/history/presentation/history_panel.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
+import 'package:maestro/features/projects/presentation/project_tools_layout.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
@@ -22,8 +33,552 @@ import 'package:xterm/xterm.dart';
 
 void main() {
   testWidgets(
+    'GivenRegistrationDialog_WhenOpened_ThenCompactDesktopDialogKeepsFocus',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      final register = find.bySemanticsLabel('Register project');
+      for (
+        var press = 0;
+        press < 10 && !_primaryFocusIsWithin(tester, register);
+        press++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(_primaryFocusIsWithin(tester, register), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      final dialog = find.byKey(const Key('register-project-dialog'));
+      expect(dialog, findsOneWidget);
+      expect(tester.getSize(dialog).width, lessThanOrEqualTo(440));
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: dialog, matching: find.byType(EditableText)),
+            )
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(_primaryFocusIsWithin(tester, register), isTrue);
+    },
+  );
+
+  testWidgets(
+    'GivenLifecycleDialogs_WhenOpened_ThenTheyStayCompactAndOnlyPermanentDeletionIsDestructive',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+
+      final softDialog = find.byKey(const Key('soft-delete-project-dialog'));
+      expect(softDialog, findsOneWidget);
+      expect(tester.getSize(softDialog).width, lessThanOrEqualTo(440));
+      final softAction = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Confirm metadata deletion'),
+      );
+      expect(
+        softAction.style?.backgroundColor?.resolve(<WidgetState>{}),
+        isNot(MaestroThemeTokens.of(tester.element(softDialog)).destructive),
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm metadata deletion'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+
+      final permanentDialog = find.byKey(
+        const Key('permanent-delete-project-dialog'),
+      );
+      expect(permanentDialog, findsOneWidget);
+      expect(tester.getSize(permanentDialog).width, lessThanOrEqualTo(440));
+      final permanentAction = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Permanently delete metadata'),
+      );
+      expect(
+        permanentAction.style?.backgroundColor?.resolve(<WidgetState>{}),
+        MaestroThemeTokens.of(tester.element(permanentDialog)).destructive,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final width in <double>[1500, 980, 600]) {
+    testWidgets(
+      'GivenSelectedWorkbenchAt${width.toInt()}Pixels_WhenRendered_ThenActionsStayInsideTheView',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 760);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final repository = _Repository()..records.add(_record());
+
+        await tester.pumpWidget(
+          _app(
+            repository: repository,
+            runStartBuilder: (_, _, _) => const Text('Run start content'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (width == 600) {
+          await tester.tap(find.bySemanticsLabel('Show project navigator'));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('Demo').first);
+        await tester.pumpAndSettle();
+        if (width == 600) {
+          Navigator.of(
+            tester.element(find.bySemanticsLabel('Show context inspector')),
+          ).pop();
+          await tester.pumpAndSettle();
+        }
+
+        _expectContainedAndHitTestable(tester, find.byTooltip('Project tools'));
+        _expectContainedAndHitTestable(tester, find.text('Start run'));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'GivenNarrowWorkbench_WhenDialogsAndDrawersOpen_ThenActionsRemainVisible',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_deletedRecord());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Show project navigator'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Register project'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Choose folder and register'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.text('Choose folder and register'),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Permanently delete metadata'), findsOneWidget);
+      _expectContainedAndHitTestable(
+        tester,
+        find.text('Permanently delete metadata'),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      Navigator.of(
+        tester.element(find.bySemanticsLabel('Show context inspector')),
+      ).pop();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Show context inspector'));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+      expect(find.text('Project details'), findsOneWidget);
+      _expectContainedAndHitTestable(tester, find.text('Project details'));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowWorkbench_WhenTabbing_ThenNavigationPrecedesWorkspaceInspectorAndTerminal',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, _, _) => const TextButton(
+            key: Key('terminal-focus-action'),
+            onPressed: _noop,
+            child: Text('Terminal action'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Show project navigator'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      Navigator.of(
+        tester.element(find.bySemanticsLabel('Show context inspector')),
+      ).pop();
+      await tester.pumpAndSettle();
+
+      final landmarks = <Finder>[
+        find.widgetWithText(NavigationDestination, 'Tasks'),
+        find.byTooltip('Project tools'),
+        find.bySemanticsLabel('Show context inspector'),
+        find.byKey(const Key('terminal-focus-action')),
+      ];
+      final visited = <int>[];
+      for (
+        var press = 0;
+        press < 40 && visited.length < landmarks.length;
+        press++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        for (var index = 0; index < landmarks.length; index++) {
+          if (!visited.contains(index) &&
+              _primaryFocusIsWithin(tester, landmarks[index])) {
+            visited.add(index);
+          }
+        }
+      }
+
+      expect(visited, <int>[0, 1, 2, 3]);
+    },
+  );
+
+  testWidgets(
+    'GivenMediumWorkbench_WhenTabbing_ThenNavigatorWorkspaceInspectorAndTerminalFollowVisualRegions',
+    (tester) async {
+      tester.view.physicalSize = const Size(980, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, _, _) => const TextButton(
+            key: Key('terminal-focus-action'),
+            onPressed: _noop,
+            child: Text('Terminal action'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      final landmarks = <Finder>[
+        find.bySemanticsLabel('Register project'),
+        find.byTooltip('Project tools'),
+        find.bySemanticsLabel('Show context inspector'),
+        find.byKey(const Key('terminal-focus-action')),
+      ];
+      final visited = <int>[];
+      for (
+        var press = 0;
+        press < 40 && visited.length < landmarks.length;
+        press++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        for (var index = 0; index < landmarks.length; index++) {
+          if (!visited.contains(index) &&
+              _primaryFocusIsWithin(tester, landmarks[index])) {
+            visited.add(index);
+          }
+        }
+      }
+
+      expect(visited, <int>[0, 1, 2, 3]);
+    },
+  );
+
+  testWidgets(
+    'GivenRunInspector_WhenHistorySelected_ThenProjectHistoryContextReplacesIt',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runObservationBuilder: (_, _, _) => const _RunInspectorProbe(),
+          historyBuilder: (_, _, _) => const Text('History content'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Run details'), findsOneWidget);
+
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run details'), findsNothing);
+      expect(find.bySemanticsLabel('Pane: History & audit'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenRunInspector_WhenStartRunSelected_ThenProjectStartContextReplacesIt',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runObservationBuilder: (_, _, _) => const _RunInspectorProbe(),
+          runStartBuilder: (_, _, _) => const Text('Run start content'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Run details'), findsOneWidget);
+
+      await tester.tap(find.text('Start run'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run details'), findsNothing);
+      expect(find.bySemanticsLabel('Pane: Start run'), findsOneWidget);
+    },
+  );
+
+  testWidgets('GivenWideWorkbench_WhenShown_ThenThreePanesArePersistent', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('workbench-navigator')), findsOneWidget);
+    expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
+    expect(find.byKey(const Key('workbench-inspector')), findsOneWidget);
+    expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
+    expect(find.text('Project details'), findsOneWidget);
+    expect(
+      find.text('Select a project to inspect its source and workspace.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('workbench-navigator'))).width,
+      280,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('workbench-inspector'))).width,
+      320,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('workbench-status-bar'))).height,
+      24,
+    );
+  });
+
+  testWidgets(
+    'GivenSelectedProject_WhenWorkbenchShown_ThenStatusBarReportsContext',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
+      expect(find.text('Demo'), findsWidgets);
+      expect(find.text('Available'), findsWidgets);
+      expect(find.text('Ctrl+` Terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenNoSelectedProject_WhenWorkbenchShown_ThenStatusBarReportsTruthfulState',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      expect(find.text('No project selected'), findsOneWidget);
+      expect(find.text('Ctrl+` Terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenWorkbenchStatus_WhenSemanticsRead_ThenContextIsAnnouncedOnce',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      final semantics = tester.getSemantics(
+        find.byKey(const Key('workbench-status-bar')),
+      );
+      expect(
+        semantics.label,
+        'Workbench status. No project selected. Ctrl+` Terminal.',
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenProjectCatalogUpdating_WhenWorkbenchShown_ThenStatusBarReportsBusyContext',
+    (tester) async {
+      final catalogGate = Completer<void>();
+      final repository = _Repository()..nextListRetained = catalogGate;
+      addTearDown(() {
+        if (!catalogGate.isCompleted) catalogGate.complete();
+      });
+
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pump();
+
+      expect(find.text('Updating...'), findsOneWidget);
+
+      catalogGate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Updating...'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenMediumWorkbench_WhenInspectorRequested_ThenEndDrawerOpens',
+    (tester) async {
+      tester.view.physicalSize = const Size(980, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('workbench-navigator')), findsOneWidget);
+      expect(find.byKey(const Key('workbench-inspector')), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Show context inspector'));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowWorkbench_WhenInspectorRequested_ThenEndDrawerOpens',
+    (tester) async {
+      tester.view.physicalSize = const Size(500, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('workbench-navigator')), findsNothing);
+      expect(find.byKey(const Key('workbench-workspace')), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Show context inspector'));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenSelectedProject_WhenInspectorShown_ThenSourceAndPaneArePublished',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      final validator = _Validator();
+
+      await tester.pumpWidget(
+        _app(repository: repository, validator: validator),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Project: Demo'), findsOneWidget);
+      expect(find.bySemanticsLabel('Folder: Available'), findsOneWidget);
+      expect(find.bySemanticsLabel(r'Path: C:\missing\demo'), findsOneWidget);
+      expect(find.bySemanticsLabel('Pane: Project'), findsOneWidget);
+
+      validator.availability = ProjectAvailability.missing;
+      final workspaceElement = tester.element(
+        find.byKey(const Key('workbench-workspace')),
+      );
+      await ProviderScope.containerOf(
+        workspaceElement,
+      ).read(projectControllerProvider.notifier).refreshSelected();
+      await tester.pumpAndSettle();
+      expect(
+        ProviderScope.containerOf(
+          workspaceElement,
+        ).read(projectControllerProvider).selected?.availability,
+        ProjectAvailability.missing,
+      );
+      expect(find.bySemanticsLabel('Folder: Missing'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenProjectSearch_WhenQueryEntered_ThenOnlyMatchingProjectRowsAreRendered',
+    (tester) async {
+      final repository = _Repository()
+        ..records.addAll(<ProjectRecord>[
+          _record(),
+          _record(id: 'two', name: 'Second'),
+          _deletedRecord(id: 'deleted', name: 'Archived Demo'),
+        ]);
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.bySemanticsLabel('Search projects'),
+        'second',
+      );
+      await tester.pump();
+
+      expect(find.text('Second'), findsOneWidget);
+      expect(find.text('Demo'), findsNothing);
+      expect(find.text('Archived Demo'), findsNothing);
+      expect(repository.records, hasLength(3));
+
+      await tester.enterText(
+        find.bySemanticsLabel('Search projects'),
+        'archived',
+      );
+      await tester.pump();
+
+      expect(find.text('Second'), findsNothing);
+      expect(find.text('Archived Demo'), findsOneWidget);
+      expect(repository.records, hasLength(3));
+    },
+  );
+
+  testWidgets(
     'GivenAuthenticatedWorkspace_WhenWorkflowsSelected_ThenSharedEditorIsShown',
     (tester) async {
+      tester.view.physicalSize = const Size(1500, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_app(workflowService: _workflowService()));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Automations'));
@@ -97,6 +652,41 @@ void main() {
 
       expect(find.byKey(const Key('history-content-probe')), findsOneWidget);
       expect(find.text('Project lifecycle actions'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenProductionHistoryComposition_WhenOpened_ThenUnboundedToolsLayoutDoesNotCrash',
+    (tester) async {
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = _Repository()..records.add(_record());
+
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          historyBuilder: (_, _, project) => ProjectToolsLayout(
+            children: <Widget>[
+              HistoryPanel(
+                key: ValueKey<String>('history-${project.id}'),
+                createController: () => HistoryController(
+                  repository: DriftHistoryRepository(database),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('history-section')), findsOneWidget);
     },
   );
 
@@ -206,7 +796,7 @@ void main() {
     'GivenResponsiveProjectWorkspace_WhenRunContentChanges_ThenPanelsShareCompactDesktopGeometryAndNarrowFullWidth',
     (tester) async {
       tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.physicalSize = const Size(1500, 900);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       final repository = _Repository()..records.add(_record());
@@ -237,7 +827,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.getSize(activeRuns).width, 452);
 
-      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.physicalSize = const Size(1500, 900);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Start run'));
       await tester.pumpAndSettle();
@@ -1082,6 +1672,13 @@ void main() {
         find.text('Additional active runs are not shown.'),
         findsOneWidget,
       );
+      final feedback = find.byKey(const Key('project-lifecycle-feedback'));
+      expect(feedback, findsOneWidget);
+      expect(
+        (tester.widget<DecoratedBox>(feedback).decoration as BoxDecoration)
+            .border,
+        isNotNull,
+      );
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );
@@ -1094,7 +1691,14 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
       await tester.pump();
       return;
     }
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -500));
+    final verticalScrollable = find.descendant(
+      of: find.byKey(const Key('workbench-workspace')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
+    );
+    await tester.drag(verticalScrollable.last, const Offset(0, -500));
     await tester.pump();
   }
   throw TestFailure('Could not reveal the requested widget: $finder.');
@@ -1105,6 +1709,37 @@ Future<void> _toggleTerminalShortcut(WidgetTester tester) async {
   await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
   await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
   await tester.pump();
+}
+
+bool _primaryFocusIsWithin(WidgetTester tester, Finder finder) {
+  final focusContext = tester.binding.focusManager.primaryFocus?.context;
+  if (focusContext == null) return false;
+  final targets = finder.evaluate().toSet();
+  var current = focusContext as Element;
+  while (true) {
+    if (targets.contains(current)) return true;
+    Element? parent;
+    current.visitAncestorElements((ancestor) {
+      parent = ancestor;
+      return false;
+    });
+    final next = parent;
+    if (next == null) return false;
+    current = next;
+  }
+}
+
+void _noop() {}
+
+void _expectContainedAndHitTestable(WidgetTester tester, Finder finder) {
+  expect(finder, findsOneWidget);
+  expect(finder.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(finder);
+  final logicalSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.right, lessThanOrEqualTo(logicalSize.width));
+  expect(rect.bottom, lessThanOrEqualTo(logicalSize.height));
 }
 
 Future<void> _register(WidgetTester tester, String name) async {
@@ -1150,6 +1785,7 @@ Widget _app({
       projectFolderPickerProvider.overrideWithValue(picker),
     ],
     child: MaterialApp(
+      theme: maestroTheme(Brightness.light),
       home: ProjectWorkspacePage(
         actorId: 'actor-1',
         lifecycleService: lifecycle,
@@ -1184,6 +1820,32 @@ final class _ToggleTerminalProbe extends StatefulWidget {
 
   @override
   State<_ToggleTerminalProbe> createState() => _ToggleTerminalProbeState();
+}
+
+final class _RunInspectorProbe extends StatelessWidget {
+  const _RunInspectorProbe();
+
+  @override
+  Widget build(BuildContext context) {
+    final publisher = WorkbenchInspectorScope.maybeOf(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      publisher?.call(
+        WorkbenchInspectorSnapshot(
+          title: 'Run details',
+          sections: <WorkbenchInspectorSection>[
+            WorkbenchInspectorSection(
+              label: 'Progress',
+              fields: const <WorkbenchInspectorField>[
+                WorkbenchInspectorField(label: 'Run', value: 'Active run'),
+              ],
+            ),
+          ],
+          emptyMessage: null,
+        ),
+      );
+    });
+    return const SizedBox.shrink();
+  }
 }
 
 final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {
@@ -1312,6 +1974,7 @@ Widget _host({
       projectFolderPickerProvider.overrideWithValue(picker),
     ],
     child: MaterialApp(
+      theme: maestroTheme(Brightness.light),
       home: showWorkspace
           ? ProjectWorkspacePage(
               actorId: 'actor-1',
@@ -1461,15 +2124,16 @@ ProjectRecord _record({
   deletedAt: null,
 );
 
-ProjectRecord _deletedRecord({String id = 'one'}) => ProjectRecord(
-  id: id,
-  name: 'Demo',
-  normalizedName: 'demo-$id',
-  folderPath: r'C:\missing\demo',
-  createdAt: DateTime.utc(2026, 8, 6),
-  updatedAt: DateTime.utc(2026, 8, 6, 11),
-  deletedAt: DateTime.utc(2026, 8, 6, 11),
-);
+ProjectRecord _deletedRecord({String id = 'one', String name = 'Demo'}) =>
+    ProjectRecord(
+      id: id,
+      name: name,
+      normalizedName: '${name.toLowerCase()}-$id',
+      folderPath: r'C:\missing\demo',
+      createdAt: DateTime.utc(2026, 8, 6),
+      updatedAt: DateTime.utc(2026, 8, 6, 11),
+      deletedAt: DateTime.utc(2026, 8, 6, 11),
+    );
 
 WorkflowDefinition _workflowDefinition({
   int revision = 3,

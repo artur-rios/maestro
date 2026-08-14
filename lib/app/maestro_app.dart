@@ -14,6 +14,7 @@ import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 
 class MaestroApp extends StatefulWidget {
   const MaestroApp({
@@ -29,6 +30,7 @@ class MaestroApp extends StatefulWidget {
     this.historyBuilder,
     this.terminalBuilder,
     this.foundationProbes = const <FoundationProbe>[],
+    this.window = const NoopDesktopWindowPort(),
     this.onDispose,
     super.key,
   });
@@ -45,6 +47,7 @@ class MaestroApp extends StatefulWidget {
   final RunStartWorkspaceBuilder? historyBuilder;
   final ProjectTerminalWorkspaceBuilder? terminalBuilder;
   final List<FoundationProbe> foundationProbes;
+  final DesktopWindowPort window;
   final VoidCallback? onDispose;
 
   @override
@@ -94,32 +97,37 @@ final class _MaestroAppState extends State<MaestroApp> {
           themeMode: flutterThemeMode(widget.appearanceController.mode),
           home: AuthenticationPage(
             appearanceController: widget.appearanceController,
-            authenticatedBuilder: (_) {
-              if (projectService == null) return const FoundationPage();
-              final session = widget.authenticationService.currentSession;
-              if (session == null) {
-                throw StateError(
-                  'Authenticated workspace requires an active session.',
-                );
-              }
-              if (projectLifecycleService == null) {
-                throw StateError(
-                  'Authenticated project workspace requires '
-                  'ProjectLifecycleService.',
-                );
-              }
-              return ProjectWorkspacePage(
-                actorId: session.userId,
-                lifecycleService: projectLifecycleService,
-                workflowService: widget.workflowDesignService,
-                agentConfigurationService: widget.agentConfigurationService,
-                runStartBuilder: widget.runStartBuilder,
-                runObservationBuilder: widget.runObservationBuilder,
-                historyBuilder: widget.historyBuilder,
-                terminalBuilder: widget.terminalBuilder,
-                emptyContent: const FoundationPage(),
-              );
-            },
+            window: widget.window,
+            authenticatedBuilder: (_) => const FoundationPage(),
+            authenticatedWorkspaceBuilder: projectService == null
+                ? null
+                : (context, onWorkspaceLabelChanged) {
+                    final session = widget.authenticationService.currentSession;
+                    if (session == null) {
+                      throw StateError(
+                        'Authenticated workspace requires an active session.',
+                      );
+                    }
+                    if (projectLifecycleService == null) {
+                      throw StateError(
+                        'Authenticated project workspace requires '
+                        'ProjectLifecycleService.',
+                      );
+                    }
+                    return ProjectWorkspacePage(
+                      actorId: session.userId,
+                      lifecycleService: projectLifecycleService,
+                      onWorkspaceLabelChanged: onWorkspaceLabelChanged,
+                      workflowService: widget.workflowDesignService,
+                      agentConfigurationService:
+                          widget.agentConfigurationService,
+                      runStartBuilder: widget.runStartBuilder,
+                      runObservationBuilder: widget.runObservationBuilder,
+                      historyBuilder: widget.historyBuilder,
+                      terminalBuilder: widget.terminalBuilder,
+                      emptyContent: const FoundationPage(),
+                    );
+                  },
           ),
         ),
       ),

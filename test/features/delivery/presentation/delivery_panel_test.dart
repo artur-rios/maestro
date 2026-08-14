@@ -18,6 +18,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('delivery-section')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('delivery-section')),
+        matching: find.byType(Card),
+      ),
+      findsNothing,
+    );
     expect(find.byKey(const Key('delivery-pr-url')), findsOneWidget);
     expect(find.byKey(const Key('delivery-review')), findsOneWidget);
     expect(find.byKey(const Key('delivery-merge-commit')), findsOneWidget);

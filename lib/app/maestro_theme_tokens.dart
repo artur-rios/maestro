@@ -1,0 +1,146 @@
+import 'package:flutter/material.dart';
+
+@immutable
+final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
+  const MaestroThemeTokens({
+    required this.titleBarSurface,
+    required this.navigatorSurface,
+    required this.workspaceSurface,
+    required this.inspectorSurface,
+    required this.terminalSurface,
+    required this.terminalForeground,
+    required this.terminalError,
+    required this.terminalAccent,
+    required this.statusBarSurface,
+    required this.selectedSurface,
+    required this.hoverSurface,
+    required this.subtleBorder,
+    required this.strongBorder,
+    required this.focus,
+    required this.success,
+    required this.warning,
+    required this.destructive,
+  });
+
+  static const double _titleBarHeight = 36;
+  static const double _toolbarHeight = 36;
+  static const double _statusBarHeight = 24;
+  static const double _navigatorWidth = 280;
+  static const double _inspectorWidth = 320;
+  static const double _controlHeight = 36;
+  static const double _smallRadius = 4;
+  static const double _mediumRadius = 7;
+
+  double get titleBarHeight => _titleBarHeight;
+  double get toolbarHeight => _toolbarHeight;
+  double get statusBarHeight => _statusBarHeight;
+  double get navigatorWidth => _navigatorWidth;
+  double get inspectorWidth => _inspectorWidth;
+  double get controlHeight => _controlHeight;
+  double get smallRadius => _smallRadius;
+  double get mediumRadius => _mediumRadius;
+
+  final Color titleBarSurface;
+  final Color navigatorSurface;
+  final Color workspaceSurface;
+  final Color inspectorSurface;
+  final Color terminalSurface;
+  final Color terminalForeground;
+  final Color terminalError;
+  final Color terminalAccent;
+  final Color statusBarSurface;
+  final Color selectedSurface;
+  final Color hoverSurface;
+  final Color subtleBorder;
+  final Color strongBorder;
+  final Color focus;
+  final Color success;
+  final Color warning;
+  final Color destructive;
+
+  static MaestroThemeTokens of(BuildContext context) =>
+      Theme.of(context).extension<MaestroThemeTokens>()!;
+
+  @override
+  MaestroThemeTokens copyWith({
+    Color? titleBarSurface,
+    Color? navigatorSurface,
+    Color? workspaceSurface,
+    Color? inspectorSurface,
+    Color? terminalSurface,
+    Color? terminalForeground,
+    Color? terminalError,
+    Color? terminalAccent,
+    Color? statusBarSurface,
+    Color? selectedSurface,
+    Color? hoverSurface,
+    Color? subtleBorder,
+    Color? strongBorder,
+    Color? focus,
+    Color? success,
+    Color? warning,
+    Color? destructive,
+  }) => MaestroThemeTokens(
+    titleBarSurface: titleBarSurface ?? this.titleBarSurface,
+    navigatorSurface: navigatorSurface ?? this.navigatorSurface,
+    workspaceSurface: workspaceSurface ?? this.workspaceSurface,
+    inspectorSurface: inspectorSurface ?? this.inspectorSurface,
+    terminalSurface: terminalSurface ?? this.terminalSurface,
+    terminalForeground: terminalForeground ?? this.terminalForeground,
+    terminalError: terminalError ?? this.terminalError,
+    terminalAccent: terminalAccent ?? this.terminalAccent,
+    statusBarSurface: statusBarSurface ?? this.statusBarSurface,
+    selectedSurface: selectedSurface ?? this.selectedSurface,
+    hoverSurface: hoverSurface ?? this.hoverSurface,
+    subtleBorder: subtleBorder ?? this.subtleBorder,
+    strongBorder: strongBorder ?? this.strongBorder,
+    focus: focus ?? this.focus,
+    success: success ?? this.success,
+    warning: warning ?? this.warning,
+    destructive: destructive ?? this.destructive,
+  );
+
+  @override
+  MaestroThemeTokens lerp(covariant MaestroThemeTokens? other, double t) {
+    if (other == null) return this;
+    return MaestroThemeTokens(
+      titleBarSurface: Color.lerp(titleBarSurface, other.titleBarSurface, t)!,
+      navigatorSurface: Color.lerp(
+        navigatorSurface,
+        other.navigatorSurface,
+        t,
+      )!,
+      workspaceSurface: Color.lerp(
+        workspaceSurface,
+        other.workspaceSurface,
+        t,
+      )!,
+      inspectorSurface: Color.lerp(
+        inspectorSurface,
+        other.inspectorSurface,
+        t,
+      )!,
+      terminalSurface: Color.lerp(terminalSurface, other.terminalSurface, t)!,
+      terminalForeground: Color.lerp(
+        terminalForeground,
+        other.terminalForeground,
+        t,
+      )!,
+      terminalError: Color.lerp(terminalError, other.terminalError, t)!,
+      terminalAccent: Color.lerp(terminalAccent, other.terminalAccent, t)!,
+      statusBarSurface: Color.lerp(
+        statusBarSurface,
+        other.statusBarSurface,
+        t,
+      )!,
+      selectedSurface: Color.lerp(selectedSurface, other.selectedSurface, t)!,
+      hoverSurface: Color.lerp(hoverSurface, other.hoverSurface, t)!,
+      subtleBorder: Color.lerp(subtleBorder, other.subtleBorder, t)!,
+      strongBorder: Color.lerp(strongBorder, other.strongBorder, t)!,
+      focus: Color.lerp(focus, other.focus, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      destructive: Color.lerp(destructive, other.destructive, t)!,
+    );
+  }
+}
