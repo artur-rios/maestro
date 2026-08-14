@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:meta/meta.dart';
 
 @immutable
 final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
@@ -9,6 +8,9 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
     required this.workspaceSurface,
     required this.inspectorSurface,
     required this.terminalSurface,
+    required this.terminalForeground,
+    required this.terminalError,
+    required this.terminalAccent,
     required this.statusBarSurface,
     required this.selectedSurface,
     required this.hoverSurface,
@@ -43,6 +45,9 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
   final Color workspaceSurface;
   final Color inspectorSurface;
   final Color terminalSurface;
+  final Color terminalForeground;
+  final Color terminalError;
+  final Color terminalAccent;
   final Color statusBarSurface;
   final Color selectedSurface;
   final Color hoverSurface;
@@ -63,6 +68,9 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
     Color? workspaceSurface,
     Color? inspectorSurface,
     Color? terminalSurface,
+    Color? terminalForeground,
+    Color? terminalError,
+    Color? terminalAccent,
     Color? statusBarSurface,
     Color? selectedSurface,
     Color? hoverSurface,
@@ -78,6 +86,9 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
     workspaceSurface: workspaceSurface ?? this.workspaceSurface,
     inspectorSurface: inspectorSurface ?? this.inspectorSurface,
     terminalSurface: terminalSurface ?? this.terminalSurface,
+    terminalForeground: terminalForeground ?? this.terminalForeground,
+    terminalError: terminalError ?? this.terminalError,
+    terminalAccent: terminalAccent ?? this.terminalAccent,
     statusBarSurface: statusBarSurface ?? this.statusBarSurface,
     selectedSurface: selectedSurface ?? this.selectedSurface,
     hoverSurface: hoverSurface ?? this.hoverSurface,
@@ -110,6 +121,13 @@ final class MaestroThemeTokens extends ThemeExtension<MaestroThemeTokens> {
         t,
       )!,
       terminalSurface: Color.lerp(terminalSurface, other.terminalSurface, t)!,
+      terminalForeground: Color.lerp(
+        terminalForeground,
+        other.terminalForeground,
+        t,
+      )!,
+      terminalError: Color.lerp(terminalError, other.terminalError, t)!,
+      terminalAccent: Color.lerp(terminalAccent, other.terminalAccent, t)!,
       statusBarSurface: Color.lerp(
         statusBarSurface,
         other.statusBarSurface,

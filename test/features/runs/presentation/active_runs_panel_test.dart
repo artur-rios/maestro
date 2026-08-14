@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/runs/application/control_run.dart';
 import 'package:maestro/features/runs/application/observe_runs.dart';
@@ -214,13 +216,7 @@ void main() {
     // When: the panel renders.
     await _pump(tester, repository);
 
-    // Then: the channels differ in color and are named in semantics.
-    final theme = ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-    );
-    expect(_colorOf(tester, 'building'), theme.colorScheme.onSurface);
-    expect(_colorOf(tester, 'warning'), theme.colorScheme.error);
-    expect(_colorOf(tester, 'step started'), theme.colorScheme.primary);
+    // Then: the channels are named in semantics.
     expect(
       tester.getSemantics(find.text('warning')).label,
       contains('Error output'),
@@ -230,6 +226,44 @@ void main() {
       contains('System output'),
     );
   });
+
+  testWidgets(
+    'GivenLightAndDarkThemes_WhenOutputRendered_ThenTerminalPaletteIsLegible',
+    (tester) async {
+      for (final brightness in Brightness.values) {
+        final repository = _Repository()
+          ..runs.add(_topology('run-1'))
+          ..output['attempt-1'] = <(RunLogChannel, String)>[
+            (RunLogChannel.stdout, 'building'),
+            (RunLogChannel.stderr, 'warning'),
+            (RunLogChannel.system, 'step started'),
+          ];
+        final theme = maestroTheme(brightness);
+        final tokens = theme.extension<MaestroThemeTokens>()!;
+
+        await _pump(tester, repository, theme: theme);
+
+        const stdout = Color(0xFFF2F0F7);
+        const stderr = Color(0xFFFFB4AB);
+        const system = Color(0xFFB9C3FF);
+        expect(_colorOf(tester, 'building'), stdout);
+        expect(_colorOf(tester, 'warning'), stderr);
+        expect(_colorOf(tester, 'step started'), system);
+        expect(
+          _contrastRatio(stdout, tokens.terminalSurface),
+          greaterThan(4.5),
+        );
+        expect(
+          _contrastRatio(stderr, tokens.terminalSurface),
+          greaterThan(4.5),
+        );
+        expect(
+          _contrastRatio(system, tokens.terminalSurface),
+          greaterThan(4.5),
+        );
+      }
+    },
+  );
 
   testWidgets('GivenUndecodableOutput_WhenRendered_ThenReplacementIsShown', (
     tester,
@@ -497,6 +531,15 @@ void main() {
 Color? _colorOf(WidgetTester tester, String text) =>
     tester.widget<Text>(find.text(text)).style?.color;
 
+double _contrastRatio(Color first, Color second) {
+  final lighter = first.computeLuminance() > second.computeLuminance()
+      ? first
+      : second;
+  final darker = identical(lighter, first) ? second : first;
+  return (lighter.computeLuminance() + 0.05) /
+      (darker.computeLuminance() + 0.05);
+}
+
 bool _enabled(WidgetTester tester, RunControlAction action) =>
     tester
         .widget<OutlinedButton>(find.byKey(Key('run-control-${action.name}')))
@@ -516,12 +559,15 @@ Future<void> _pump(
   _ControlRepository? controls,
   _ControlExecution? execution,
   ValueChanged<WorkbenchInspectorSnapshot>? onInspectorChanged,
+  ThemeData? theme,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-      ),
+      theme:
+          theme ??
+          ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+          ),
       home: Scaffold(
         body: SingleChildScrollView(
           child: ActiveRunsPanel(

@@ -370,6 +370,50 @@ void main() {
   );
 
   testWidgets(
+    'GivenScrolledWorkflowForm_WhenSaved_ThenFeedbackRemainsVisibleAndLive',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _Repository()..definitions.add(_definition());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          projects: <ProjectSelection>[
+            for (var index = 0; index < 12; index++)
+              _project('project-$index', true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workflow-workflow-id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('workflow-name-workflow-id-reusable')),
+        'Release after scrolling',
+      );
+      final editorScroll = find
+          .descendant(
+            of: find.byKey(const Key('workflow-editor-section')),
+            matching: find.byType(Scrollable),
+          )
+          .last;
+      await tester.drag(editorScroll, const Offset(0, -1600));
+      await tester.pump();
+      expect(
+        tester.state<ScrollableState>(editorScroll).position.pixels,
+        greaterThan(300),
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save workflow'));
+      await tester.pumpAndSettle();
+
+      final feedback = find.bySemanticsLabel(RegExp(r'^Workflow success'));
+      expect(feedback, findsOneWidget);
+      expect(feedback.hitTestable(), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenReadinessCheckFails_WhenSavedWorkflowSelected_ThenSanitizedLiveErrorKeepsSaveEnabled',
     (tester) async {
       await _largeSurface(tester);

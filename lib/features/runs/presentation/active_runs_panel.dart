@@ -599,12 +599,14 @@ final class _OutputChunk extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
     // FR-OB-05: the source of each fragment stays visible and announced, not
     // flattened into one undifferentiated stream.
     final color = switch (chunk.channel) {
-      RunLogChannel.stdout => theme.colorScheme.onSurface,
-      RunLogChannel.stderr => theme.colorScheme.error,
-      RunLogChannel.system => theme.colorScheme.primary,
+      RunLogChannel.stdout =>
+        tokens?.terminalForeground ?? const Color(0xFFF2F0F7),
+      RunLogChannel.stderr => tokens?.terminalError ?? const Color(0xFFFFB4AB),
+      RunLogChannel.system => tokens?.terminalAccent ?? const Color(0xFFB9C3FF),
     };
     return Semantics(
       label: '${_channelLabel(chunk.channel)} output',

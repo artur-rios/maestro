@@ -365,6 +365,19 @@ final class _Editor extends ConsumerWidget {
           ),
         ),
         Divider(height: 1, color: tokens?.subtleBorder),
+        if (state.feedback case final feedback?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: _WorkflowMessage(feedback: feedback),
+          ),
+        if (state.workflowError case final error?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text(
+              error,
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ),
         Expanded(
           child: Align(
             alignment: Alignment.topLeft,
@@ -373,16 +386,6 @@ final class _Editor extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  if (state.feedback case final feedback?)
-                    _WorkflowMessage(feedback: feedback),
-                  if (state.workflowError case final error?)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        error,
-                        style: TextStyle(color: theme.colorScheme.error),
-                      ),
-                    ),
                   SegmentedButton<WorkflowKind>(
                     segments: const [
                       ButtonSegment(

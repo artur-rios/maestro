@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,10 +9,16 @@ import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/core/storage/database/maestro_database.dart'
+    hide WorkflowStep;
+import 'package:maestro/features/history/data/drift_history_repository.dart';
+import 'package:maestro/features/history/presentation/history_controller.dart';
+import 'package:maestro/features/history/presentation/history_panel.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
+import 'package:maestro/features/projects/presentation/project_tools_layout.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
@@ -368,6 +375,41 @@ void main() {
 
       expect(find.byKey(const Key('history-content-probe')), findsOneWidget);
       expect(find.text('Project lifecycle actions'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenProductionHistoryComposition_WhenOpened_ThenUnboundedToolsLayoutDoesNotCrash',
+    (tester) async {
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = _Repository()..records.add(_record());
+
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          historyBuilder: (_, _, project) => ProjectToolsLayout(
+            children: <Widget>[
+              HistoryPanel(
+                key: ValueKey<String>('history-${project.id}'),
+                createController: () => HistoryController(
+                  repository: DriftHistoryRepository(database),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('history-section')), findsOneWidget);
     },
   );
 
