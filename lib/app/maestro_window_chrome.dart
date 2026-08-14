@@ -24,6 +24,7 @@ final class MaestroWindowChrome extends StatefulWidget {
 
 final class _MaestroWindowChromeState extends State<MaestroWindowChrome> {
   bool _isMaximized = false;
+  bool _isChangingWindowState = false;
   int _stateRequest = 0;
 
   @override
@@ -115,9 +116,15 @@ final class _MaestroWindowChromeState extends State<MaestroWindowChrome> {
   }
 
   Future<void> _toggleMaximize() async {
-    _stateRequest++;
-    await widget.window.toggleMaximize();
-    await _refreshWindowState();
+    if (_isChangingWindowState) return;
+    _isChangingWindowState = true;
+    try {
+      _stateRequest++;
+      await widget.window.toggleMaximize();
+      await _refreshWindowState();
+    } finally {
+      _isChangingWindowState = false;
+    }
   }
 
   Future<void> _refreshWindowState() async {

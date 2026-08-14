@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
@@ -215,16 +217,54 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'GivenDelayedMaximize_WhenActivatedTwiceRapidly_ThenOnlyOneStateChangeRuns',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final toggleGate = Completer<void>();
+      try {
+        final window = FakeDesktopWindowPort(toggleGate: toggleGate);
+        await tester.pumpWidget(
+          _host(
+            MaestroWindowChrome(
+              window: window,
+              title: 'Maestro',
+              child: const SizedBox(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final maximize = find.bySemanticsLabel('Maximize Maestro');
+        await tester.tap(maximize);
+        await tester.tap(maximize);
+
+        expect(window.activeToggleCount, 1);
+        toggleGate.complete();
+        await tester.pumpAndSettle();
+
+        expect(window.maximumConcurrentToggleCount, 1);
+        expect(window.maximized, isTrue);
+        expect(find.bySemanticsLabel('Restore Maestro'), findsOneWidget);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
 }
 
 Widget _host(Widget child) =>
     MaterialApp(theme: maestroTheme(Brightness.light), home: child);
 
 final class FakeDesktopWindowPort implements DesktopWindowPort {
-  FakeDesktopWindowPort({this.maximized = false});
+  FakeDesktopWindowPort({this.maximized = false, this.toggleGate});
 
   final List<String> commands = <String>[];
+  final Completer<void>? toggleGate;
   bool maximized;
+  int activeToggleCount = 0;
+  int maximumConcurrentToggleCount = 0;
 
   @override
   Future<void> beginDrag() async => commands.add('beginDrag');
@@ -235,7 +275,14 @@ final class FakeDesktopWindowPort implements DesktopWindowPort {
   @override
   Future<void> toggleMaximize() async {
     commands.add('toggleMaximize');
+    activeToggleCount++;
+    maximumConcurrentToggleCount =
+        maximumConcurrentToggleCount < activeToggleCount
+        ? activeToggleCount
+        : maximumConcurrentToggleCount;
+    await toggleGate?.future;
     maximized = !maximized;
+    activeToggleCount--;
   }
 
   @override
