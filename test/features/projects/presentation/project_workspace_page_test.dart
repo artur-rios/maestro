@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/core/errors/result.dart';
@@ -31,6 +32,200 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
+  testWidgets(
+    'GivenRegistrationDialog_WhenOpened_ThenCompactDesktopDialogKeepsFocus',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      final register = find.bySemanticsLabel('Register project');
+      for (
+        var press = 0;
+        press < 10 && !_primaryFocusIsWithin(tester, register);
+        press++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(_primaryFocusIsWithin(tester, register), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      final dialog = find.byKey(const Key('register-project-dialog'));
+      expect(dialog, findsOneWidget);
+      expect(tester.getSize(dialog).width, lessThanOrEqualTo(440));
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: dialog, matching: find.byType(EditableText)),
+            )
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(_primaryFocusIsWithin(tester, register), isTrue);
+    },
+  );
+
+  testWidgets(
+    'GivenLifecycleDialogs_WhenOpened_ThenTheyStayCompactAndOnlyPermanentDeletionIsDestructive',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+
+      final softDialog = find.byKey(const Key('soft-delete-project-dialog'));
+      expect(softDialog, findsOneWidget);
+      expect(tester.getSize(softDialog).width, lessThanOrEqualTo(440));
+      final softAction = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Confirm metadata deletion'),
+      );
+      expect(
+        softAction.style?.backgroundColor?.resolve(<WidgetState>{}),
+        isNot(MaestroThemeTokens.of(tester.element(softDialog)).destructive),
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Project lifecycle actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to Deleted'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm metadata deletion'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+
+      final permanentDialog = find.byKey(
+        const Key('permanent-delete-project-dialog'),
+      );
+      expect(permanentDialog, findsOneWidget);
+      expect(tester.getSize(permanentDialog).width, lessThanOrEqualTo(440));
+      final permanentAction = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Permanently delete metadata'),
+      );
+      expect(
+        permanentAction.style?.backgroundColor?.resolve(<WidgetState>{}),
+        MaestroThemeTokens.of(tester.element(permanentDialog)).destructive,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final width in <double>[1500, 980, 600]) {
+    testWidgets(
+      'GivenWorkbenchAt${width.toInt()}Pixels_WhenRendered_ThenNoControlsOverflow',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 760);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(_app());
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'GivenNarrowWorkbench_WhenDialogsAndDrawersOpen_ThenActionsRemainVisible',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_deletedRecord());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Show project navigator'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Register project'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Choose folder and register'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Permanently delete Demo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Permanently delete metadata'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      Navigator.of(
+        tester.element(find.bySemanticsLabel('Show context inspector')),
+      ).pop();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Show context inspector'));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Context inspector drawer'), findsOneWidget);
+      expect(find.text('Project details'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'GivenMediumWorkbench_WhenTabbing_ThenNavigatorWorkspaceInspectorAndTerminalFollowVisualRegions',
+    (tester) async {
+      tester.view.physicalSize = const Size(980, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          terminalBuilder: (_, _, _, _) => const TextButton(
+            key: Key('terminal-focus-action'),
+            onPressed: _noop,
+            child: Text('Terminal action'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      final landmarks = <Finder>[
+        find.bySemanticsLabel('Register project'),
+        find.byTooltip('Project tools'),
+        find.bySemanticsLabel('Show context inspector'),
+        find.byKey(const Key('terminal-focus-action')),
+      ];
+      final visited = <int>[];
+      for (
+        var press = 0;
+        press < 40 && visited.length < landmarks.length;
+        press++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        for (var index = 0; index < landmarks.length; index++) {
+          if (!visited.contains(index) &&
+              _primaryFocusIsWithin(tester, landmarks[index])) {
+            visited.add(index);
+          }
+        }
+      }
+
+      expect(visited, <int>[0, 1, 2, 3]);
+    },
+  );
+
   testWidgets(
     'GivenRunInspector_WhenHistorySelected_ThenProjectHistoryContextReplacesIt',
     (tester) async {
@@ -1395,6 +1590,13 @@ void main() {
         find.text('Additional active runs are not shown.'),
         findsOneWidget,
       );
+      final feedback = find.byKey(const Key('project-lifecycle-feedback'));
+      expect(feedback, findsOneWidget);
+      expect(
+        (tester.widget<DecoratedBox>(feedback).decoration as BoxDecoration)
+            .border,
+        isNotNull,
+      );
       expect(find.bySemanticsLabel('Restore Demo'), findsOneWidget);
     },
   );
@@ -1426,6 +1628,26 @@ Future<void> _toggleTerminalShortcut(WidgetTester tester) async {
   await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
   await tester.pump();
 }
+
+bool _primaryFocusIsWithin(WidgetTester tester, Finder finder) {
+  final focusContext = tester.binding.focusManager.primaryFocus?.context;
+  if (focusContext == null) return false;
+  final targets = finder.evaluate().toSet();
+  var current = focusContext as Element;
+  while (true) {
+    if (targets.contains(current)) return true;
+    Element? parent;
+    current.visitAncestorElements((ancestor) {
+      parent = ancestor;
+      return false;
+    });
+    final next = parent;
+    if (next == null) return false;
+    current = next;
+  }
+}
+
+void _noop() {}
 
 Future<void> _register(WidgetTester tester, String name) async {
   await tester.tap(find.bySemanticsLabel('Register project'));

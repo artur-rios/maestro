@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/maestro_window_chrome.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/appearance/presentation/appearance_selector.dart';
@@ -301,14 +302,18 @@ final class _AuthenticationErrorMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
     return Semantics(
       container: true,
       liveRegion: true,
       label: 'Authentication error',
       child: DecoratedBox(
+        key: const Key('authentication-error-feedback'),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
+          color: theme.colorScheme.errorContainer,
+          border: Border(left: BorderSide(color: tokens.destructive, width: 3)),
+          borderRadius: BorderRadius.circular(tokens.smallRadius),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),

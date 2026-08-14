@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
@@ -13,6 +14,35 @@ import 'package:maestro/features/workflows/presentation/workflow_editor_page.dar
 import 'package:maestro/platform/agents/agent_cli_adapter.dart';
 
 void main() {
+  testWidgets(
+    'GivenNarrowWorkflowEditor_WhenStepMenusOpen_ThenEveryActionRemainsVisible',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Create workflow'));
+      await tester.pumpAndSettle();
+      expect(find.text('New reusable workflow'), findsOneWidget);
+      expect(find.text('New one-off workflow'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      final addStep = find.text('Add step');
+      await _revealInEditor(tester, addStep);
+      await tester.tap(addStep);
+      await tester.pumpAndSettle();
+      expect(find.text('Add Plan step'), findsOneWidget);
+      expect(find.text('Add Execute step'), findsOneWidget);
+      expect(find.text('Add Review step'), findsOneWidget);
+      expect(find.text('Add custom step'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'GivenWorkflowAndFocusedStep_WhenEditorBuilds_ThenInspectorTracksFocus',
     (tester) async {
@@ -410,6 +440,13 @@ void main() {
       final feedback = find.bySemanticsLabel(RegExp(r'^Workflow success'));
       expect(feedback, findsOneWidget);
       expect(feedback.hitTestable(), findsOneWidget);
+      final accent = find.byKey(const Key('workflow-success-feedback'));
+      expect(accent, findsOneWidget);
+      expect(
+        (tester.widget<DecoratedBox>(accent).decoration as BoxDecoration)
+            .border,
+        isNotNull,
+      );
     },
   );
 
@@ -537,6 +574,23 @@ void main() {
 Future<void> _largeSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1200, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+Future<void> _revealInEditor(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 12; attempt++) {
+    if (finder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(finder);
+      await tester.pump();
+      return;
+    }
+    final verticalScrollable = find.byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    );
+    await tester.drag(verticalScrollable.last, const Offset(0, -400));
+    await tester.pump();
+  }
+  throw TestFailure('Could not reveal $finder.');
 }
 
 Widget _app({

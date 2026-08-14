@@ -35,6 +35,37 @@ enum _SelectedProjectPane { project, history, startRun }
 
 enum WorkbenchLayoutClass { narrow, medium, wide }
 
+const _desktopDialogConstraints = BoxConstraints(maxWidth: 440);
+const _desktopDialogTitlePadding = EdgeInsets.fromLTRB(20, 16, 20, 8);
+const _desktopDialogContentPadding = EdgeInsets.fromLTRB(20, 0, 20, 16);
+const _desktopDialogActionsPadding = EdgeInsets.fromLTRB(20, 0, 20, 16);
+const _navigatorFocusOrder = NumericFocusOrder(1);
+const _workspaceFocusOrder = NumericFocusOrder(2);
+const _inspectorFocusOrder = NumericFocusOrder(3);
+const _terminalFocusOrder = NumericFocusOrder(4);
+const _statusFocusOrder = NumericFocusOrder(5);
+
+Widget _compactDesktopDialog({
+  required Key key,
+  required Widget title,
+  required Widget content,
+  required List<Widget> actions,
+}) => Center(
+  child: ConstrainedBox(
+    key: key,
+    constraints: _desktopDialogConstraints,
+    child: AlertDialog(
+      insetPadding: EdgeInsets.zero,
+      titlePadding: _desktopDialogTitlePadding,
+      contentPadding: _desktopDialogContentPadding,
+      actionsPadding: _desktopDialogActionsPadding,
+      title: title,
+      content: content,
+      actions: actions,
+    ),
+  ),
+);
+
 WorkbenchLayoutClass classifyWorkbench(double width) => switch (width) {
   >= 1200 => WorkbenchLayoutClass.wide,
   >= 720 => WorkbenchLayoutClass.medium,
@@ -388,21 +419,24 @@ final class _ProjectWorkbench extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final layoutClass = classifyWorkbench(constraints.maxWidth);
-        return switch (layoutClass) {
-          WorkbenchLayoutClass.wide => _wideWorkbench(context),
-          WorkbenchLayoutClass.medium => _drawerWorkbench(
-            context,
-            showNavigator: true,
-          ),
-          WorkbenchLayoutClass.narrow => _drawerWorkbench(
-            context,
-            showNavigator: false,
-          ),
-        };
-      },
+    return FocusTraversalGroup(
+      policy: OrderedTraversalPolicy(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final layoutClass = classifyWorkbench(constraints.maxWidth);
+          return switch (layoutClass) {
+            WorkbenchLayoutClass.wide => _wideWorkbench(context),
+            WorkbenchLayoutClass.medium => _drawerWorkbench(
+              context,
+              showNavigator: true,
+            ),
+            WorkbenchLayoutClass.narrow => _drawerWorkbench(
+              context,
+              showNavigator: false,
+            ),
+          };
+        },
+      ),
     );
   }
 
@@ -415,28 +449,37 @@ final class _ProjectWorkbench extends StatelessWidget {
           Expanded(
             child: Row(
               children: <Widget>[
-                SizedBox(
-                  key: const Key('workbench-navigator'),
-                  width: tokens.navigatorWidth,
-                  child: navigator,
+                FocusTraversalOrder(
+                  order: _navigatorFocusOrder,
+                  child: SizedBox(
+                    key: const Key('workbench-navigator'),
+                    width: tokens.navigatorWidth,
+                    child: navigator,
+                  ),
                 ),
                 Expanded(child: _workspaceRegion(context, canInspect: false)),
-                SizedBox(
-                  key: const Key('workbench-inspector'),
-                  width: tokens.inspectorWidth,
-                  child: _WorkbenchInspectorSurface(
-                    snapshot: inspectorSnapshot,
+                FocusTraversalOrder(
+                  order: _inspectorFocusOrder,
+                  child: SizedBox(
+                    key: const Key('workbench-inspector'),
+                    width: tokens.inspectorWidth,
+                    child: _WorkbenchInspectorSurface(
+                      snapshot: inspectorSnapshot,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          WorkbenchStatusBar(
-            key: const Key('workbench-status-bar'),
-            projectName: projectName,
-            projectStatus: projectStatus,
-            terminalShortcut: 'Ctrl+` Terminal',
-            trailing: statusTrailing,
+          FocusTraversalOrder(
+            order: _statusFocusOrder,
+            child: WorkbenchStatusBar(
+              key: const Key('workbench-status-bar'),
+              projectName: projectName,
+              projectStatus: projectStatus,
+              terminalShortcut: 'Ctrl+` Terminal',
+              trailing: statusTrailing,
+            ),
           ),
         ],
       ),
@@ -485,10 +528,13 @@ final class _ProjectWorkbench extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 if (showNavigator)
-                  SizedBox(
-                    key: const Key('workbench-navigator'),
-                    width: tokens.navigatorWidth,
-                    child: navigator,
+                  FocusTraversalOrder(
+                    order: _navigatorFocusOrder,
+                    child: SizedBox(
+                      key: const Key('workbench-navigator'),
+                      width: tokens.navigatorWidth,
+                      child: navigator,
+                    ),
                   ),
                 Expanded(
                   child: _workspaceRegion(
@@ -501,12 +547,15 @@ final class _ProjectWorkbench extends StatelessWidget {
               ],
             ),
           ),
-          WorkbenchStatusBar(
-            key: const Key('workbench-status-bar'),
-            projectName: projectName,
-            projectStatus: projectStatus,
-            terminalShortcut: 'Ctrl+` Terminal',
-            trailing: statusTrailing,
+          FocusTraversalOrder(
+            order: _statusFocusOrder,
+            child: WorkbenchStatusBar(
+              key: const Key('workbench-status-bar'),
+              projectName: projectName,
+              projectStatus: projectStatus,
+              terminalShortcut: 'Ctrl+` Terminal',
+              trailing: statusTrailing,
+            ),
           ),
         ],
       ),
@@ -576,13 +625,16 @@ final class _WorkbenchWorkspace extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   if (canOpenNavigator)
-                    Semantics(
-                      label: 'Show project navigator',
-                      button: true,
-                      child: IconButton(
-                        tooltip: 'Show project navigator',
-                        onPressed: onShowNavigator,
-                        icon: const Icon(Icons.menu, size: 18),
+                    FocusTraversalOrder(
+                      order: _navigatorFocusOrder,
+                      child: Semantics(
+                        label: 'Show project navigator',
+                        button: true,
+                        child: IconButton(
+                          tooltip: 'Show project navigator',
+                          onPressed: onShowNavigator,
+                          icon: const Icon(Icons.menu, size: 18),
+                        ),
                       ),
                     ),
                   const SizedBox(width: 12),
@@ -595,13 +647,19 @@ final class _WorkbenchWorkspace extends StatelessWidget {
                     ),
                   ),
                   if (canInspect)
-                    Semantics(
-                      label: 'Show context inspector',
-                      button: true,
-                      child: IconButton(
-                        tooltip: 'Show context inspector',
-                        onPressed: onShowInspector,
-                        icon: const Icon(Icons.view_sidebar_outlined, size: 18),
+                    FocusTraversalOrder(
+                      order: _inspectorFocusOrder,
+                      child: Semantics(
+                        label: 'Show context inspector',
+                        button: true,
+                        child: IconButton(
+                          tooltip: 'Show context inspector',
+                          onPressed: onShowInspector,
+                          icon: const Icon(
+                            Icons.view_sidebar_outlined,
+                            size: 18,
+                          ),
+                        ),
                       ),
                     ),
                   const SizedBox(width: 4),
@@ -609,7 +667,12 @@ final class _WorkbenchWorkspace extends StatelessWidget {
               ),
             ),
             Divider(height: 1, color: tokens.subtleBorder),
-            Expanded(child: child),
+            Expanded(
+              child: FocusTraversalOrder(
+                order: _workspaceFocusOrder,
+                child: child,
+              ),
+            ),
           ],
         ),
       ),
@@ -663,8 +726,14 @@ final class _WorkbenchMainPane extends StatelessWidget {
       key: const Key('workbench-main-pane'),
       child: Column(
         children: <Widget>[
-          Expanded(child: destinationContent),
-          ?terminal,
+          Expanded(
+            child: FocusTraversalOrder(
+              order: _workspaceFocusOrder,
+              child: destinationContent,
+            ),
+          ),
+          if (terminal case final terminal?)
+            FocusTraversalOrder(order: _terminalFocusOrder, child: terminal),
         ],
       ),
     );
@@ -921,7 +990,8 @@ final class _ProjectSidebarActions {
   ) async {
     final decision = await showDialog<PermanentDeletionDecision>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => _compactDesktopDialog(
+        key: const Key('permanent-delete-project-dialog'),
         title: Text('Permanently delete $projectName metadata?'),
         content: const Text(
           'Affected Maestro records: the project metadata and its lifecycle '
@@ -936,6 +1006,10 @@ final class _ProjectSidebarActions {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: MaestroThemeTokens.of(context).destructive,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () =>
                 Navigator.pop(context, PermanentDeletionDecision.confirmed),
             child: const Text('Permanently delete metadata'),
@@ -986,7 +1060,8 @@ final class _RegistrationDialogState extends State<_RegistrationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return _compactDesktopDialog(
+      key: const Key('register-project-dialog'),
       title: const Text('Register project'),
       content: Semantics(
         textField: true,
@@ -1337,7 +1412,8 @@ final class _SelectedProjectWorkspace extends ConsumerWidget {
     if (requested != SourcePreservationDecision.confirmed) return;
     final decision = await showDialog<SourcePreservationDecision>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => _compactDesktopDialog(
+        key: const Key('soft-delete-project-dialog'),
         title: const Text('Move project metadata to Deleted?'),
         content: const Text(
           'Affected Maestro records: this project metadata and its lifecycle '
@@ -1371,17 +1447,26 @@ final class _ProjectLifecycleMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
     return Semantics(
       container: true,
       liveRegion: true,
       label: _announcement,
       child: ExcludeSemantics(
         child: DecoratedBox(
+          key: const Key('project-lifecycle-feedback'),
           decoration: BoxDecoration(
             color: feedback.isSuccess
-                ? Theme.of(context).colorScheme.secondaryContainer
-                : Theme.of(context).colorScheme.errorContainer,
-            borderRadius: BorderRadius.circular(8),
+                ? theme.colorScheme.secondaryContainer
+                : theme.colorScheme.errorContainer,
+            border: Border(
+              left: BorderSide(
+                color: feedback.isSuccess ? tokens.success : tokens.destructive,
+                width: 3,
+              ),
+            ),
+            borderRadius: BorderRadius.circular(tokens.smallRadius),
           ),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -1421,13 +1506,17 @@ final class _ProjectFailureMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
     return Semantics(
       liveRegion: true,
       label: 'Project error',
       child: DecoratedBox(
+        key: const Key('project-error-feedback'),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
+          color: theme.colorScheme.errorContainer,
+          border: Border(left: BorderSide(color: tokens.destructive, width: 3)),
+          borderRadius: BorderRadius.circular(tokens.smallRadius),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),

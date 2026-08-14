@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
@@ -16,6 +17,75 @@ import 'package:maestro/features/authentication/presentation/authentication_page
 import 'package:maestro/platform/window/desktop_window_port.dart';
 
 void main() {
+  testWidgets(
+    'GivenSignedOutChrome_WhenTabbing_ThenTitleActionsLeadIntoAuthenticationForm',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      final landmarks = <Finder>[
+        find.byTooltip('Appearance'),
+        find.bySemanticsLabel('Minimize Maestro'),
+        find.bySemanticsLabel('Maximize Maestro'),
+        find.bySemanticsLabel('Close Maestro'),
+        find.bySemanticsLabel('Sign in with your operating system'),
+      ];
+      for (final landmark in landmarks) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        expect(_primaryFocusIsWithin(tester, landmark), isTrue);
+      }
+    },
+  );
+
+  testWidgets(
+    'GivenNarrowAuthentication_WhenAppearanceMenuOpens_ThenEveryModeRemainsVisible',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Appearance'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('System'), findsOneWidget);
+      expect(find.text('Light'), findsOneWidget);
+      expect(find.text('Dark'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticationFailure_WhenShown_ThenSemanticAccentAndTextRemainAccessible',
+    (tester) async {
+      final service = _authenticationService(
+        operatingSystemResult: const FailureResult<void>(
+          SecurityFailure(
+            code: 'authentication.operating_system.denied',
+            message: 'Operating-system authentication was denied.',
+          ),
+        ),
+      );
+      await tester.pumpWidget(_testApp(service));
+      await tester.tap(
+        find.bySemanticsLabel('Sign in with your operating system'),
+      );
+      await tester.pumpAndSettle();
+
+      final feedback = find.byKey(const Key('authentication-error-feedback'));
+      expect(feedback, findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Authentication error')),
+        findsOneWidget,
+      );
+      expect(find.text('Authentication was not successful.'), findsOneWidget);
+      final decoration = tester.widget<DecoratedBox>(feedback).decoration;
+      expect((decoration as BoxDecoration).border, isNotNull);
+    },
+  );
+
   testWidgets(
     'GivenSignedOutApp_WhenShown_ThenFocusedAuthenticationUsesWindowChrome',
     (tester) async {
@@ -432,6 +502,24 @@ Widget _testApp(
       ),
     ),
   );
+}
+
+bool _primaryFocusIsWithin(WidgetTester tester, Finder finder) {
+  final focusContext = tester.binding.focusManager.primaryFocus?.context;
+  if (focusContext == null) return false;
+  final targets = finder.evaluate().toSet();
+  var current = focusContext as Element;
+  while (true) {
+    if (targets.contains(current)) return true;
+    Element? parent;
+    current.visitAncestorElements((ancestor) {
+      parent = ancestor;
+      return false;
+    });
+    final next = parent;
+    if (next == null) return false;
+    current = next;
+  }
 }
 
 final class _AppearancePreferenceRepository

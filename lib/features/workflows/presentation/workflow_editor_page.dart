@@ -813,16 +813,41 @@ final class _WorkflowMessage extends StatelessWidget {
   const _WorkflowMessage({required this.feedback});
   final WorkflowFeedback feedback;
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    liveRegion: true,
-    label:
-        '${feedback.isSuccess ? 'Workflow success' : 'Workflow error'}. ${feedback.message}. ${feedback.remediation ?? ''}',
-    child: ExcludeSemantics(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text([feedback.message, ?feedback.remediation].join(' ')),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<MaestroThemeTokens>();
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label:
+          '${feedback.isSuccess ? 'Workflow success' : 'Workflow error'}. ${feedback.message}. ${feedback.remediation ?? ''}',
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          key: Key(
+            feedback.isSuccess
+                ? 'workflow-success-feedback'
+                : 'workflow-error-feedback',
+          ),
+          decoration: BoxDecoration(
+            color: feedback.isSuccess
+                ? theme.colorScheme.secondaryContainer
+                : theme.colorScheme.errorContainer,
+            border: Border(
+              left: BorderSide(
+                color: feedback.isSuccess
+                    ? tokens?.success ?? theme.colorScheme.primary
+                    : tokens?.destructive ?? theme.colorScheme.error,
+                width: 3,
+              ),
+            ),
+            borderRadius: BorderRadius.circular(tokens?.smallRadius ?? 4),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text([feedback.message, ?feedback.remediation].join(' ')),
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

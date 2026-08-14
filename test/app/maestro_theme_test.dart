@@ -83,4 +83,19 @@ void main() {
       );
     },
   );
+
+  test(
+    'GivenBothBrightnesses_WhenFieldsFocused_ThenFocusTokenDrivesTheVisibleBorder',
+    () {
+      for (final brightness in Brightness.values) {
+        final theme = maestroTheme(brightness);
+        final tokens = theme.extension<MaestroThemeTokens>()!;
+        final border = theme.inputDecorationTheme.focusedBorder;
+
+        expect(border, isA<OutlineInputBorder>());
+        expect((border! as OutlineInputBorder).borderSide.color, tokens.focus);
+        expect(border.borderSide.width, greaterThan(1));
+      }
+    },
+  );
 }
