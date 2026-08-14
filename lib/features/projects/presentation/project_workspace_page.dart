@@ -271,6 +271,9 @@ final class _ProjectWorkspacePageState
     _terminalDrawerController.hide();
     setState(() {
       _selectedProjectPane = pane;
+      _inspectorSnapshot = _projectInspectorSnapshot(
+        ref.read(projectControllerProvider),
+      );
     });
   }
 

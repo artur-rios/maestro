@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/workbench_inspector.dart';
+import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
@@ -22,6 +24,62 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
+  testWidgets(
+    'GivenRunInspector_WhenHistorySelected_ThenProjectHistoryContextReplacesIt',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runObservationBuilder: (_, _, _) => const _RunInspectorProbe(),
+          historyBuilder: (_, _, _) => const Text('History content'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Run details'), findsOneWidget);
+
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run details'), findsNothing);
+      expect(find.bySemanticsLabel('Pane: History & audit'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenRunInspector_WhenStartRunSelected_ThenProjectStartContextReplacesIt',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = _Repository()..records.add(_record());
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          runObservationBuilder: (_, _, _) => const _RunInspectorProbe(),
+          runStartBuilder: (_, _, _) => const Text('Run start content'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Run details'), findsOneWidget);
+
+      await tester.tap(find.text('Start run'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run details'), findsNothing);
+      expect(find.bySemanticsLabel('Pane: Start run'), findsOneWidget);
+    },
+  );
+
   testWidgets('GivenWideWorkbench_WhenShown_ThenThreePanesArePersistent', (
     tester,
   ) async {
@@ -1341,6 +1399,32 @@ final class _ToggleTerminalProbe extends StatefulWidget {
 
   @override
   State<_ToggleTerminalProbe> createState() => _ToggleTerminalProbeState();
+}
+
+final class _RunInspectorProbe extends StatelessWidget {
+  const _RunInspectorProbe();
+
+  @override
+  Widget build(BuildContext context) {
+    final publisher = WorkbenchInspectorScope.maybeOf(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      publisher?.call(
+        WorkbenchInspectorSnapshot(
+          title: 'Run details',
+          sections: <WorkbenchInspectorSection>[
+            WorkbenchInspectorSection(
+              label: 'Progress',
+              fields: const <WorkbenchInspectorField>[
+                WorkbenchInspectorField(label: 'Run', value: 'Active run'),
+              ],
+            ),
+          ],
+          emptyMessage: null,
+        ),
+      );
+    });
+    return const SizedBox.shrink();
+  }
 }
 
 final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {

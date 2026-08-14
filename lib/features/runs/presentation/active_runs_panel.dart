@@ -282,7 +282,13 @@ WorkbenchInspectorSnapshot _runInspectorSnapshot(
           ),
           WorkbenchInspectorField(
             label: 'Current step',
-            value: currentStep?.name ?? 'Not started',
+            value:
+                currentStep?.name ??
+                ((run.status == RunStatus.succeeded ||
+                            run.status == RunStatus.deliveryPending) &&
+                        run.currentStepPosition >= run.steps.length
+                    ? 'Completed'
+                    : 'Not started'),
           ),
           WorkbenchInspectorField(label: 'Steps', value: '${run.steps.length}'),
           WorkbenchInspectorField(

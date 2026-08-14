@@ -16,6 +16,51 @@ import 'package:maestro/features/runs/presentation/run_observation_controller.da
 
 void main() {
   testWidgets(
+    'GivenCompletedRun_WhenRendered_ThenInspectorDoesNotCallItNotStarted',
+    (tester) async {
+      final repository = _Repository()
+        ..runs.add(
+          _topology(
+            'run-1',
+            status: RunStatus.succeeded,
+            currentStepPosition: 3,
+          ),
+        );
+      final snapshots = <WorkbenchInspectorSnapshot>[];
+
+      await _pump(tester, repository, onInspectorChanged: snapshots.add);
+
+      expect(
+        snapshots.last.sections.expand((section) => section.fields),
+        contains(
+          const WorkbenchInspectorField(
+            label: 'Current step',
+            value: 'Completed',
+          ),
+        ),
+      );
+
+      repository.runs[0] = _topology(
+        'run-1',
+        status: RunStatus.deliveryPending,
+        currentStepPosition: 3,
+      );
+      await tester.tap(find.byKey(const Key('refresh-runs')));
+      await tester.pumpAndSettle();
+
+      expect(
+        snapshots.last.sections.expand((section) => section.fields),
+        contains(
+          const WorkbenchInspectorField(
+            label: 'Current step',
+            value: 'Completed',
+          ),
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'GivenSelectedRun_WhenRendered_ThenInspectorPublishesRunProgress',
     (tester) async {
       final repository = _Repository()
@@ -507,13 +552,14 @@ RunTopology _topology(
   String stepPrefix = 'step',
   String attemptId = 'attempt-1',
   int currentStepPosition = 0,
+  RunStatus status = RunStatus.running,
 }) {
   const names = <String>['Plan', 'Execute', 'Review'];
   return RunTopology(
     runId: runId,
     projectId: 'project-1',
     label: 'Observe $runId',
-    status: RunStatus.running,
+    status: status,
     currentStepPosition: currentStepPosition,
     createdAt: DateTime.utc(2026, 8, 7),
     updatedAt: DateTime.utc(2026, 8, 7),
