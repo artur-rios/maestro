@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
@@ -99,95 +101,124 @@ final class _ProjectTerminalPanelState extends State<ProjectTerminalPanel> {
     if (!_visible) return const SizedBox.shrink();
     final state = _controller.state;
     final theme = Theme.of(context);
+    final tokens = MaestroThemeTokens.of(context);
+    final availableSize = MediaQuery.sizeOf(context);
+    final dockHeight = availableSize.width < 720
+        ? math.min(300.0, availableSize.height * 0.45)
+        : 300.0;
     return Semantics(
       label: 'Project terminal drawer',
       container: true,
-      child: Container(
+      child: SizedBox(
         key: const Key('terminal-drawer'),
         width: double.infinity,
-        height: 300,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1C),
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        height: dockHeight,
+        child: DecoratedBox(
+          key: const Key('terminal-dock'),
+          decoration: BoxDecoration(
+            color: tokens.terminalSurface,
+            border: Border(top: BorderSide(color: tokens.subtleBorder)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text('TERMINAL', style: theme.textTheme.labelLarge),
-                  ),
-                  if (state.canClose)
-                    Semantics(
-                      label: 'Close project terminal',
-                      button: true,
-                      child: IconButton(
-                        key: const Key('close-terminal'),
-                        tooltip: 'Close project terminal',
-                        onPressed: () => unawaited(_close()),
-                        icon: const Icon(Icons.close),
+              SizedBox(
+                key: const Key('terminal-toolbar'),
+                height: tokens.toolbarHeight,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'TERMINAL',
+                          style: theme.textTheme.labelLarge,
+                        ),
                       ),
-                    ),
-                ],
+                      if (state.canClose)
+                        Semantics(
+                          label: 'Close project terminal',
+                          button: true,
+                          child: IconButton(
+                            key: const Key('close-terminal'),
+                            tooltip: 'Close project terminal',
+                            constraints: const BoxConstraints.tightFor(
+                              width: 36,
+                              height: 36,
+                            ),
+                            padding: EdgeInsets.zero,
+                            onPressed: () => unawaited(_close()),
+                            icon: const Icon(Icons.close, size: 18),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-              if (state.isBusy) ...<Widget>[
-                const SizedBox(height: 12),
-                Semantics(
-                  liveRegion: true,
-                  label: 'Starting project terminal',
-                  child: const LinearProgressIndicator(
-                    key: Key('terminal-starting'),
-                  ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: _terminalBody(state),
                 ),
-              ],
-              if (state.exit case final exit?) ...<Widget>[
-                const SizedBox(height: 12),
-                _TerminalMessage(
-                  key: const Key('terminal-exit'),
-                  label: 'Project terminal exited',
-                  message: 'The shell exited with code ${exit.exitCode}.',
-                  remediation:
-                      'Open the terminal again to start a new session.',
-                  isError: false,
-                ),
-              ],
-              if (state.failure case final failure?) ...<Widget>[
-                const SizedBox(height: 12),
-                _TerminalMessage(
-                  key: const Key('terminal-failure'),
-                  label: 'Project terminal error',
-                  message: failure.message,
-                  remediation: failure.remediation,
-                  isError: true,
-                ),
-              ],
-              if (state.status == TerminalSessionStatus.running) ...<Widget>[
-                const SizedBox(height: 12),
-                Expanded(
-                  child: Semantics(
-                    label: 'Project terminal session',
-                    container: true,
-                    child: TerminalView(
-                      _controller.terminal,
-                      key: const Key('terminal-view'),
-                      controller: _viewController,
-                      autofocus: true,
-                      backgroundOpacity: 1,
-                      textStyle: _terminalTextStyle,
-                      onKeyEvent: _handleTerminalKeyEvent,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _terminalBody(ProjectTerminalState state) {
+    if (state.isBusy) {
+      return Semantics(
+        liveRegion: true,
+        label: 'Starting project terminal',
+        child: const Align(
+          alignment: Alignment.topCenter,
+          child: LinearProgressIndicator(key: Key('terminal-starting')),
+        ),
+      );
+    }
+    if (state.failure case final failure?) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: _TerminalMessage(
+          key: const Key('terminal-failure'),
+          label: 'Project terminal error',
+          message: failure.message,
+          remediation: failure.remediation,
+          isError: true,
+        ),
+      );
+    }
+    if (state.exit case final exit?) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: _TerminalMessage(
+          key: const Key('terminal-exit'),
+          label: 'Project terminal exited',
+          message: 'The shell exited with code ${exit.exitCode}.',
+          remediation: 'Open the terminal again to start a new session.',
+          isError: false,
+        ),
+      );
+    }
+    if (state.status == TerminalSessionStatus.running) {
+      return Semantics(
+        label: 'Project terminal session',
+        container: true,
+        child: TerminalView(
+          _controller.terminal,
+          key: const Key('terminal-view'),
+          controller: _viewController,
+          autofocus: true,
+          backgroundOpacity: 1,
+          textStyle: _terminalTextStyle,
+          onKeyEvent: _handleTerminalKeyEvent,
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/app/maestro_theme.dart';
+import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
@@ -63,6 +65,55 @@ void main() {
         final workspaceSize = tester.getSize(find.byType(Scaffold));
         expect(drawerSize.width, workspaceSize.width);
         expect(drawerSize.height, 300);
+      },
+    );
+
+    testWidgets(
+      'GivenVisibleTerminal_WhenBuilt_ThenItUsesDockSurfaceAndCompactToolbar',
+      (tester) async {
+        final drawer = ProjectTerminalDrawerController();
+
+        await _pump(tester, _FakeOpener(), drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('terminal-dock')), findsOneWidget);
+        final dock = tester.widget<DecoratedBox>(
+          find.byKey(const Key('terminal-dock')),
+        );
+        final decoration = dock.decoration as BoxDecoration;
+        final tokens = MaestroThemeTokens.of(
+          tester.element(find.byKey(const Key('terminal-dock'))),
+        );
+        expect(decoration.color, tokens.terminalSurface);
+        final border = decoration.border! as Border;
+        expect(border.top.color, tokens.subtleBorder);
+        expect(border.left.style, BorderStyle.none);
+        expect(border.right.style, BorderStyle.none);
+        expect(border.bottom.style, BorderStyle.none);
+        expect(
+          tester.getSize(find.byKey(const Key('terminal-toolbar'))).height,
+          36,
+        );
+      },
+    );
+
+    testWidgets(
+      'GivenNarrowAvailableHeight_WhenTerminalShown_ThenDockHeightIsClamped',
+      (tester) async {
+        tester.view.physicalSize = const Size(500, 400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final drawer = ProjectTerminalDrawerController();
+
+        await _pump(tester, _FakeOpener(), drawer: drawer);
+        drawer.show();
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.getSize(find.byKey(const Key('terminal-drawer'))).height,
+          180,
+        );
       },
     );
 
@@ -272,6 +323,7 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: maestroTheme(Brightness.light),
       home: Scaffold(
         body: ProjectTerminalPanel(
           drawerController: drawer,

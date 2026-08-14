@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
+import 'package:maestro/app/workbench_status_bar.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/projects/presentation/project_controller.dart';
@@ -190,6 +191,12 @@ final class _ProjectWorkspacePageState
       workspace: content,
       destination: _destination,
       projectName: state.selected?.record.name,
+      projectStatus: state.selected == null
+          ? null
+          : _availabilityLabel(state.selected!.availability),
+      statusTrailing: state.status == ProjectWorkspaceStatus.loading
+          ? const Text('Updating...', key: Key('workbench-status-busy'))
+          : const SizedBox.shrink(),
       onDestinationSelected: _selectDestination,
       inspectorSnapshot:
           _destination == _WorkbenchDestination.tasks &&
@@ -363,6 +370,8 @@ final class _ProjectWorkbench extends StatelessWidget {
     required this.workspace,
     required this.destination,
     required this.projectName,
+    required this.projectStatus,
+    required this.statusTrailing,
     required this.onDestinationSelected,
     required this.inspectorSnapshot,
   });
@@ -372,6 +381,8 @@ final class _ProjectWorkbench extends StatelessWidget {
   final Widget workspace;
   final _WorkbenchDestination destination;
   final String? projectName;
+  final String? projectStatus;
+  final Widget statusTrailing;
   final ValueChanged<_WorkbenchDestination> onDestinationSelected;
   final WorkbenchInspectorSnapshot inspectorSnapshot;
 
@@ -420,7 +431,13 @@ final class _ProjectWorkbench extends StatelessWidget {
               ],
             ),
           ),
-          const _WorkbenchStatusBar(),
+          WorkbenchStatusBar(
+            key: const Key('workbench-status-bar'),
+            projectName: projectName,
+            projectStatus: projectStatus,
+            terminalShortcut: 'Ctrl+` Terminal',
+            trailing: statusTrailing,
+          ),
         ],
       ),
     );
@@ -484,7 +501,13 @@ final class _ProjectWorkbench extends StatelessWidget {
               ],
             ),
           ),
-          const _WorkbenchStatusBar(),
+          WorkbenchStatusBar(
+            key: const Key('workbench-status-bar'),
+            projectName: projectName,
+            projectStatus: projectStatus,
+            terminalShortcut: 'Ctrl+` Terminal',
+            trailing: statusTrailing,
+          ),
         ],
       ),
     );
@@ -622,21 +645,6 @@ final class _WorkbenchInspectorSurface extends StatelessWidget {
             container: true,
             child: inspector,
           );
-  }
-}
-
-final class _WorkbenchStatusBar extends StatelessWidget {
-  const _WorkbenchStatusBar();
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = MaestroThemeTokens.of(context);
-    return SizedBox(
-      key: const Key('workbench-status-bar'),
-      height: tokens.statusBarHeight,
-      width: double.infinity,
-      child: ColoredBox(color: tokens.statusBarSurface),
-    );
   }
 }
 

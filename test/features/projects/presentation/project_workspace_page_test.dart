@@ -114,6 +114,54 @@ void main() {
   });
 
   testWidgets(
+    'GivenSelectedProject_WhenWorkbenchShown_ThenStatusBarReportsContext',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('workbench-status-bar')), findsOneWidget);
+      expect(find.text('Demo'), findsWidgets);
+      expect(find.text('Available'), findsWidgets);
+      expect(find.text('Ctrl+` Terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenNoSelectedProject_WhenWorkbenchShown_ThenStatusBarReportsTruthfulState',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      expect(find.text('No project selected'), findsOneWidget);
+      expect(find.text('Ctrl+` Terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenProjectCatalogUpdating_WhenWorkbenchShown_ThenStatusBarReportsBusyContext',
+    (tester) async {
+      final catalogGate = Completer<void>();
+      final repository = _Repository()..nextListRetained = catalogGate;
+      addTearDown(() {
+        if (!catalogGate.isCompleted) catalogGate.complete();
+      });
+
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pump();
+
+      expect(find.text('Updating...'), findsOneWidget);
+
+      catalogGate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Updating...'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'GivenMediumWorkbench_WhenInspectorRequested_ThenEndDrawerOpens',
     (tester) async {
       tester.view.physicalSize = const Size(980, 760);
