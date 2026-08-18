@@ -33,13 +33,15 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
   GoogleBrowserAuthorizer({
     OAuthBrowserLauncher? browser,
     http.Client? httpClient,
+    http.Client Function()? httpClientFactory,
     OAuthLoopbackServerFactory? loopbackServerFactory,
     OAuthRandomBytes? randomBytes,
     DateTime Function()? clock,
     this.callbackTimeout = const Duration(minutes: 5),
     this.tokenExchangeTimeout = const Duration(seconds: 30),
   }) : _browser = browser ?? launchUrl,
-       _httpClient = httpClient ?? http.Client(),
+       _httpClientFactory =
+           httpClientFactory ?? (() => httpClient ?? http.Client()),
        _loopbackServerFactory =
            loopbackServerFactory ?? bindLoopbackOAuthServer,
        _randomBytes = randomBytes ?? _secureRandomBytes,
@@ -52,7 +54,7 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
     'https://oauth2.googleapis.com/token',
   );
   final OAuthBrowserLauncher _browser;
-  final http.Client _httpClient;
+  final http.Client Function() _httpClientFactory;
   final OAuthLoopbackServerFactory _loopbackServerFactory;
   final OAuthRandomBytes _randomBytes;
   final DateTime Function() _clock;
@@ -83,6 +85,7 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
     final verifier = _base64Url(_randomBytes(32));
     final state = _base64Url(_randomBytes(32));
     final challenge = _base64Url(sha256.convert(utf8.encode(verifier)).bytes);
+    Object? primaryError;
     try {
       final server = await _bind(operation);
       final opened = await _launch(
@@ -115,8 +118,15 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
       if (response.statusCode < 200 || response.statusCode >= 300)
         throw const GoogleTokenExchangeRejected();
       return GoogleIdToken(_parseIdToken(response.body));
+    } on Object catch (error) {
+      primaryError = error;
+      rethrow;
     } finally {
-      await operation.closeListener();
+      try {
+        await operation.closeListener();
+      } on Object {
+        if (primaryError == null) throw const OAuthListenerFailure();
+      }
       if (identical(_active, operation)) _active = null;
     }
   }
@@ -135,6 +145,7 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
 
   Future<bool> _launch(_Operation operation, Uri uri) async {
     try {
+      operation.throwIfCancelled();
       return await operation.waitFor(_browser(uri));
     } on OAuthAuthorizationCancelled {
       rethrow;
@@ -167,8 +178,11 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
     String verifier,
   ) async {
     try {
+      operation.throwIfCancelled();
+      final client = _httpClientFactory();
+      operation.setExchangeAbort(client.close);
       return await operation.waitFor(
-        _httpClient
+        client
             .post(
               _tokenEndpoint,
               headers: const <String, String>{
@@ -291,8 +305,25 @@ final class _Operation {
     if (!_isCancelled) {
       _isCancelled = true;
       _cancelled.complete();
+      _abortExchange?.call();
     }
-    await closeListener();
+    try {
+      await closeListener();
+    } on Object {
+      throw const OAuthListenerFailure();
+    }
+  }
+
+  void throwIfCancelled() {
+    if (_isCancelled) throw const OAuthAuthorizationCancelled();
+  }
+
+  void setExchangeAbort(void Function() abort) {
+    if (_isCancelled) {
+      abort();
+    } else {
+      _abortExchange = abort;
+    }
   }
 
   Future<void> closeListener() => _close ??= _closeServer();
@@ -304,13 +335,15 @@ final class _Operation {
   Future<T> waitFor<T>(Future<T> future) {
     if (_isCancelled)
       return Future<T>.error(const OAuthAuthorizationCancelled());
-    return Future<T>.any(<Future<T>>[
+    return Future.any<T>(<Future<T>>[
       future,
       _cancelled.future.then<T>(
         (_) => throw const OAuthAuthorizationCancelled(),
       ),
     ]);
   }
+
+  void Function()? _abortExchange;
 }
 
 final class _HttpLoopbackServer implements OAuthLoopbackServer {
@@ -343,13 +376,25 @@ final class _HttpLoopbackServer implements OAuthLoopbackServer {
         await request.response.close();
         continue;
       }
-      final query = request.uri.queryParameters;
+      final query = request.uri.queryParametersAll;
+      final code = query['code'];
+      final error = query['error'];
+      final state = query['state'];
+      final recognizable =
+          (state == null || state.length <= 1) &&
+          ((code?.length == 1 && error == null) ||
+              (error?.length == 1 && code == null));
+      if (!recognizable) {
+        request.response.statusCode = HttpStatus.notFound;
+        await request.response.close();
+        continue;
+      }
       request.response.statusCode = HttpStatus.ok;
       await request.response.close();
       return OAuthCallback(
-        code: query['code'],
-        state: query['state'],
-        error: query['error'],
+        code: code?.single,
+        state: state?.single,
+        error: error?.single,
       );
     }
     throw StateError('Loopback listener closed.');

@@ -12,15 +12,7 @@ final class HeimdallAuthenticationGateway
     DateTime Function()? clock,
     this.requestTimeout = const Duration(seconds: 30),
   }) : _client = client ?? http.Client(),
-       _baseUri = _validate(
-         baseUri ??
-             Uri.parse(
-               const String.fromEnvironment(
-                 'HEIMDALL_API_BASE_URL',
-                 defaultValue: 'http://localhost:8080',
-               ),
-             ),
-       ),
+       _baseUri = _validate(baseUri ?? _environmentBaseUri()),
        _clock = clock ?? _utcNow;
   final http.Client _client;
   final Uri _baseUri;
@@ -63,6 +55,19 @@ final class HeimdallAuthenticationGateway
         (uri.scheme != 'https' && !(uri.scheme == 'http' && loopback)))
       throw const HeimdallBaseUriInvalid();
     return uri;
+  }
+
+  static Uri _environmentBaseUri() {
+    try {
+      return Uri.parse(
+        const String.fromEnvironment(
+          'HEIMDALL_API_BASE_URL',
+          defaultValue: 'http://localhost:8080',
+        ),
+      );
+    } on FormatException {
+      throw const HeimdallBaseUriInvalid();
+    }
   }
 
   static ExternalTokenGrant _parse(String body, DateTime now) {
