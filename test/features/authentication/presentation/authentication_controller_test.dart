@@ -238,6 +238,29 @@ void main() {
       );
     },
   );
+
+  test(
+    'GivenRecoveryCodesAwaitAcknowledgement_WhenAnotherSignInIsRequested_ThenPendingCreationRemainsAuthoritative',
+    () async {
+      final operatingSystem = _CountingOperatingSystemAuthenticator();
+      final service = _authenticationService(operatingSystem);
+      final container = _container(service);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        authenticationControllerProvider.notifier,
+      );
+      await controller.createAccount('new@example.com', 'password1');
+
+      await controller.signInWithOperatingSystem();
+
+      expect(operatingSystem.attempts, 0);
+      expect(
+        container.read(authenticationControllerProvider),
+        isA<AuthenticationRecoveryCodesPending>(),
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
 }
 
 ProviderContainer _container(AuthenticationService service) {
@@ -376,6 +399,17 @@ final class _ImmediateOperatingSystemAuthenticator
   @override
   Future<Result<void>> authenticateCurrentUser() async =>
       const Success<void>(null);
+}
+
+final class _CountingOperatingSystemAuthenticator
+    implements OperatingSystemAuthenticator {
+  int attempts = 0;
+
+  @override
+  Future<Result<void>> authenticateCurrentUser() async {
+    attempts++;
+    return const Success<void>(null);
+  }
 }
 
 final class _RecoveryCodeRepository implements RecoveryCodeRepository {

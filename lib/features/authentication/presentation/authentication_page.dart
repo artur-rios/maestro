@@ -35,8 +35,23 @@ final class AuthenticationPage extends ConsumerStatefulWidget {
 }
 
 final class _AuthenticationPageState extends ConsumerState<AuthenticationPage> {
+  late final AuthenticationController _authenticationController;
   String? _authenticatedUserId;
   String? _workspaceLabel;
+
+  @override
+  void initState() {
+    super.initState();
+    _authenticationController = ref.read(
+      authenticationControllerProvider.notifier,
+    );
+  }
+
+  @override
+  void dispose() {
+    _authenticationController.abandonRecoveryCodePresentation();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +94,7 @@ final class _AuthenticationPageState extends ConsumerState<AuthenticationPage> {
           : Stack(
               fit: StackFit.expand,
               children: <Widget>[
-                pageContent,
+                ExcludeFocus(excluding: true, child: pageContent),
                 const ModalBarrier(dismissible: false, color: Colors.black54),
                 Center(
                   child: RecoveryCodeDialog(
@@ -146,7 +161,10 @@ final class _AuthenticationFormState
 
   @override
   Widget build(BuildContext context) {
-    final busy = widget.state is AuthenticationInProgress;
+    final authenticationInProgress = widget.state is AuthenticationInProgress;
+    final busy =
+        authenticationInProgress ||
+        widget.state is AuthenticationRecoveryCodesPending;
     final error = switch (widget.state) {
       AuthenticationError value => value,
       _ => null,
@@ -209,7 +227,9 @@ final class _AuthenticationFormState
               ),
               const SizedBox(height: MaestroFormSpacing.sectionToControl),
               FilledButton.icon(
-                onPressed: busy ? null : _signInWithGoogle,
+                onPressed: busy || !settingsState.googleSignInEnabled
+                    ? null
+                    : _signInWithGoogle,
                 icon: const Icon(Icons.account_circle_outlined),
                 label: const Text('Continue with Google'),
               ),
@@ -220,7 +240,7 @@ final class _AuthenticationFormState
               ),
               if (_settingsExpanded)
                 _buildAuthenticationSettings(busy, settingsState),
-              if (busy) ...<Widget>[
+              if (authenticationInProgress) ...<Widget>[
                 const SizedBox(height: 8),
                 Center(
                   child: Semantics(
@@ -285,15 +305,16 @@ final class _AuthenticationFormState
         if (_creatingAccount)
           FilledButton(
             onPressed: busy ? null : _submitEmail,
-            child: const Text('Create account'),
+            child: const Text('Create local account'),
           )
         else
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
                 child: FilledButton(
                   onPressed: busy ? null : _submitEmail,
-                  child: const Text('Sign in with email and password'),
+                  child: const Text('Sign in'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -308,7 +329,7 @@ final class _AuthenticationFormState
         TextButton(
           onPressed: busy ? null : _toggleAccountMode,
           child: Text(
-            _creatingAccount ? 'Back to sign in' : 'Create a local account',
+            _creatingAccount ? 'Back to sign in' : 'Create local account',
           ),
         ),
         if (!_creatingAccount)
@@ -401,6 +422,7 @@ final class _AuthenticationFormState
     bool busy,
     AuthenticationConfigurationState settingsState,
   ) {
+    final settingsBusy = busy || settingsState.settingsBusy;
     return Padding(
       padding: const EdgeInsets.only(top: MaestroFormSpacing.fieldToField),
       child: Column(
@@ -408,7 +430,7 @@ final class _AuthenticationFormState
         children: <Widget>[
           TextField(
             controller: _googleClientIdController,
-            enabled: !busy,
+            enabled: !settingsBusy,
             onChanged: (_) => _updateSettingsInput(),
             decoration: const InputDecoration(
               labelText: 'Google OAuth client ID',
@@ -418,7 +440,7 @@ final class _AuthenticationFormState
           const SizedBox(height: MaestroFormSpacing.fieldToField),
           TextField(
             controller: _heimdallScopeController,
-            enabled: !busy,
+            enabled: !settingsBusy,
             onChanged: (_) => _updateSettingsInput(),
             decoration: const InputDecoration(
               labelText: 'Heimdall scope UUID',
@@ -434,7 +456,7 @@ final class _AuthenticationFormState
           ],
           const SizedBox(height: MaestroFormSpacing.controlToAction),
           FilledButton.tonal(
-            onPressed: busy ? null : _saveSettings,
+            onPressed: settingsBusy ? null : _saveSettings,
             child: const Text('Save authentication settings'),
           ),
         ],

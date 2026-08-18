@@ -25,6 +25,9 @@ sealed class AuthenticationConfigurationState {
 
   final String clientId;
   final String scopeId;
+
+  bool get googleSignInEnabled => false;
+  bool get settingsBusy => false;
 }
 
 final class AuthenticationConfigurationLoading
@@ -33,6 +36,9 @@ final class AuthenticationConfigurationLoading
     super.clientId = '',
     super.scopeId = '',
   });
+
+  @override
+  bool get settingsBusy => true;
 }
 
 final class AuthenticationConfigurationReady
@@ -40,16 +46,34 @@ final class AuthenticationConfigurationReady
   const AuthenticationConfigurationReady({
     required super.clientId,
     required super.scopeId,
+    required this.saved,
   });
+
+  final bool saved;
+
+  @override
+  bool get googleSignInEnabled => saved;
 
   @override
   bool operator ==(Object other) =>
       other is AuthenticationConfigurationReady &&
       other.clientId == clientId &&
-      other.scopeId == scopeId;
+      other.scopeId == scopeId &&
+      other.saved == saved;
 
   @override
-  int get hashCode => Object.hash(clientId, scopeId);
+  int get hashCode => Object.hash(clientId, scopeId, saved);
+}
+
+final class AuthenticationConfigurationSaving
+    extends AuthenticationConfigurationState {
+  const AuthenticationConfigurationSaving({
+    required super.clientId,
+    required super.scopeId,
+  });
+
+  @override
+  bool get settingsBusy => true;
 }
 
 final class AuthenticationConfigurationError
@@ -89,6 +113,7 @@ final class AuthenticationSettingsController
       state = AuthenticationConfigurationReady(
         clientId: configuration?.clientId ?? '',
         scopeId: configuration?.scopeId ?? '',
+        saved: configuration != null,
       );
     } on Object {
       if (!_owns(generation)) return;
@@ -106,6 +131,7 @@ final class AuthenticationSettingsController
     state = AuthenticationConfigurationReady(
       clientId: clientId,
       scopeId: scopeId,
+      saved: false,
     );
   }
 
@@ -113,7 +139,7 @@ final class AuthenticationSettingsController
     final generation = ++_operationGeneration;
     final configuration = _validatedConfiguration(clientId, scopeId);
     if (configuration == null) return;
-    state = AuthenticationConfigurationReady(
+    state = AuthenticationConfigurationSaving(
       clientId: configuration.clientId,
       scopeId: configuration.scopeId,
     );
@@ -123,6 +149,7 @@ final class AuthenticationSettingsController
       state = AuthenticationConfigurationReady(
         clientId: configuration.clientId,
         scopeId: configuration.scopeId,
+        saved: true,
       );
     } on Object {
       if (!_owns(generation)) return;

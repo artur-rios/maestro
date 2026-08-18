@@ -166,6 +166,18 @@ final class AuthenticationController
     );
   }
 
+  /// Abandons the one-time display without activating the created session.
+  void abandonRecoveryCodePresentation() {
+    if (state is! AuthenticationRecoveryCodesPending) return;
+    _operationGeneration++;
+    _clearPendingRecoveryCodes();
+    scheduleMicrotask(() {
+      if (_disposed) return;
+      _service.signOut();
+      state = const AuthenticationSignedOut();
+    });
+  }
+
   void clearError() {
     if (state is AuthenticationError) {
       state = const AuthenticationSignedOut();
@@ -183,6 +195,7 @@ final class AuthenticationController
     Future<Result<AuthenticatedSession>> Function() action,
     _AuthenticationOperation operation,
   ) async {
+    if (state is AuthenticationRecoveryCodesPending) return;
     final operationGeneration = ++_operationGeneration;
     state = const AuthenticationInProgress();
     try {
@@ -203,6 +216,7 @@ final class AuthenticationController
   }
 
   Future<void> _createAccount(String email, String password) async {
+    if (state is AuthenticationRecoveryCodesPending) return;
     final operationGeneration = ++_operationGeneration;
     state = const AuthenticationInProgress();
     try {
