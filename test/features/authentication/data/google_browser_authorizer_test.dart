@@ -248,7 +248,7 @@ void main() {
   test(
     'GivenThrowingExchangeAbort_WhenCancelled_ThenListenerStillCloses',
     () async {
-      final server = _FakeServer()..closeError = StateError('listener-secret');
+      final server = _FakeServer();
       final client = _StallingClient()..closeError = StateError('abort-secret');
       final authorizer = GoogleBrowserAuthorizer(
         browser: (uri) async {

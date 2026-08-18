@@ -23,6 +23,10 @@ All findings in the final branch review were addressed.
   platform failures retain distinct stable codes and safe remediation.
 - Application composition now supplies the production authentication port to
   presentation, and controller disposal tolerates late recovery-dialog cleanup.
+- The loopback redirect URI is captured while the listener remains bound and the
+  same immutable URI is reused for both browser authorization and token exchange.
+- Application and startup fixtures now provide the settings and capability ports
+  required by the feature, and their assertions use the approved Windows label.
 
 ## Regression coverage
 
@@ -33,6 +37,10 @@ All findings in the final branch review were addressed.
   layers.
 - Unsupported Windows capability at the widget layer and production capability
   composition.
+- A production-shaped real loopback callback completing through token exchange,
+  including probe rejection and post-callback listener closure.
+- Throwing token-exchange abort cleanup after the listener has already closed.
+- Application-shell and production-startup composition with the feature ports.
 
 ## Verification
 
@@ -41,14 +49,6 @@ All findings in the final branch review were addressed.
 - `dart run tooling/verify_architecture.dart`: passed.
 - Review-focused Flutter tests: 138 passed.
 - Authentication-page widget suite: 29 passed.
-
-The broader `google_browser_authorizer_test.dart` still has two independently
-reproducible pre-existing failures in its real-loopback probe and throwing-abort
-cleanup cases. The review fixes only add typed failure inheritance to that
-adapter; their service/controller mapping coverage and the remaining focused
-adapter coverage pass.
-
-The stale `maestro_app_test.dart` fixtures also omit the feature branch's required
-authentication-settings repository, so that file fails provider initialization
-before reaching the reviewed behavior. Its compile-only fake dependencies were
-updated so repository analysis remains clean.
+- Google browser authorizer suite: 9 passed.
+- Maestro application-shell suite: 14 passed.
+- Foundation startup integration suite: 4 passed.

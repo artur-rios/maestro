@@ -13,6 +13,8 @@ import 'package:maestro/features/authentication/domain/external_authentication_m
 import 'package:maestro/features/foundation/application/foundation_probe.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/main.dart' as app;
+import 'package:maestro/platform/auth/authentication_port.dart';
+import 'package:maestro/platform/common/capability.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -29,14 +31,13 @@ void main() {
         MaestroApp(
           appearanceController: appearanceController,
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
           authenticationSettingsRepository:
               const _AuthenticationSettingsRepository(),
           foundationProbes: <FoundationProbe>[_ReadyProbe()],
         ),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(find.bySemanticsLabel('Foundation ready'), findsOneWidget);
@@ -55,6 +56,7 @@ void main() {
         MaestroApp(
           appearanceController: appearanceController,
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
           authenticationSettingsRepository:
               const _AuthenticationSettingsRepository(),
         ),
@@ -92,6 +94,7 @@ void main() {
           authenticationService: _authenticationService(
             settings: const _UnconfiguredAuthenticationSettingsRepository(),
           ),
+          authenticationPort: const _OperatingSystemAuthenticator(),
           authenticationSettingsRepository:
               const _UnconfiguredAuthenticationSettingsRepository(),
         ),
@@ -121,7 +124,7 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       expect(
-        find.text('Sign in with your operating system'),
+        find.text('Sign in with Windows'),
         findsOneWidget,
         reason: _visibleText(tester),
       );
@@ -231,14 +234,20 @@ final class _PasswordHasher implements PasswordHasher {
   Future<bool> verify(String verifier, String password) async => false;
 }
 
-final class _OperatingSystemAuthenticator
-    implements OperatingSystemAuthenticator {
+final class _OperatingSystemAuthenticator implements AuthenticationPort {
   const _OperatingSystemAuthenticator();
 
   @override
   Future<Result<void>> authenticateCurrentUser() async {
     return const Success<void>(null);
   }
+
+  @override
+  Future<Capability> probe() async => const Capability(
+    id: 'operating-system-authentication',
+    state: CapabilityState.available,
+    message: 'Windows authentication is available.',
+  );
 }
 
 final class _RecoveryCodeRepository implements RecoveryCodeRepository {

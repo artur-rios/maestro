@@ -88,9 +88,10 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
       final state = _base64Url(_randomBytes(32));
       final challenge = _base64Url(sha256.convert(utf8.encode(verifier)).bytes);
       final server = await _bind(operation);
+      final redirectUri = server.redirectUri;
       final opened = await _launch(
         operation,
-        _authorizationUri(configuration, server.redirectUri, challenge, state),
+        _authorizationUri(configuration, redirectUri, challenge, state),
       );
       if (!opened) throw const OAuthBrowserCancelled();
       final started = _clock();
@@ -119,7 +120,7 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
         operation,
         code,
         configuration.clientId,
-        server.redirectUri,
+        redirectUri,
         verifier,
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {

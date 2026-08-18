@@ -18,6 +18,8 @@ import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
+import 'package:maestro/platform/auth/authentication_port.dart';
+import 'package:maestro/platform/common/capability.dart';
 
 void main() {
   testWidgets(
@@ -28,6 +30,9 @@ void main() {
         MaestroApp(
           appearanceController: appearance,
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
         ),
       );
 
@@ -46,6 +51,9 @@ void main() {
       MaestroApp(
         appearanceController: appearance,
         authenticationService: _authenticationService(),
+        authenticationPort: const _OperatingSystemAuthenticator(),
+        authenticationSettingsRepository:
+            const _AuthenticationSettingsRepository(),
       ),
     );
 
@@ -64,6 +72,9 @@ void main() {
       MaestroApp(
         appearanceController: appearance,
         authenticationService: _authenticationService(),
+        authenticationPort: const _OperatingSystemAuthenticator(),
+        authenticationSettingsRepository:
+            const _AuthenticationSettingsRepository(),
       ),
     );
 
@@ -83,6 +94,9 @@ void main() {
           MaestroApp(
             appearanceController: _appearanceController(),
             authenticationService: _authenticationService(),
+            authenticationPort: const _OperatingSystemAuthenticator(),
+            authenticationSettingsRepository:
+                const _AuthenticationSettingsRepository(),
             projectService: _projectService(),
             projectLifecycleService: _projectLifecycleService(),
             projectFolderPicker: const _ProjectFolderPicker(),
@@ -97,7 +111,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.byTooltip('Appearance'), findsOneWidget);
-        expect(find.text('Sign in with your operating system'), findsOneWidget);
+        expect(find.text('Sign in with Windows'), findsOneWidget);
         expect(
           find.bySemanticsLabel(RegExp('^Foundation status')),
           findsNothing,
@@ -120,15 +134,16 @@ void main() {
       MaestroApp(
         appearanceController: _appearanceController(),
         authenticationService: service,
+        authenticationPort: operatingSystem,
+        authenticationSettingsRepository:
+            const _AuthenticationSettingsRepository(),
         projectService: _projectService(),
         projectLifecycleService: _projectLifecycleService(),
         projectFolderPicker: const _ProjectFolderPicker(),
         onDispose: () => disposeCount++,
       ),
     );
-    await tester.tap(
-      find.bySemanticsLabel('Sign in with your operating system'),
-    );
+    await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
     await tester.pump();
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -147,6 +162,9 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
           projectFolderPicker: const _ProjectFolderPicker(),
@@ -155,9 +173,7 @@ void main() {
       );
 
       expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('maestro-window-chrome')), findsOneWidget);
@@ -206,15 +222,16 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(AppearanceMode.dark),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
 
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       final sidebar = tester.widget<Material>(
@@ -239,6 +256,9 @@ void main() {
         MaestroApp(
           appearanceController: appearance,
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(repository: projectRepository),
           projectLifecycleService: _projectLifecycleService(
             repository: projectRepository,
@@ -247,9 +267,7 @@ void main() {
           workflowDesignService: _workflowService(),
         ),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Demo'));
       await tester.pumpAndSettle();
@@ -282,6 +300,9 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(repository: projectRepository),
           projectLifecycleService: _projectLifecycleService(
             repository: projectRepository,
@@ -291,9 +312,7 @@ void main() {
         ),
       );
 
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       expect(
         find.descendant(
@@ -345,6 +364,9 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(repository: projectRepository),
           projectLifecycleService: _projectLifecycleService(
             repository: projectRepository,
@@ -352,9 +374,7 @@ void main() {
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Demo'));
       await tester.pumpAndSettle();
@@ -362,9 +382,7 @@ void main() {
 
       await tester.tap(find.text('Sign out'));
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(find.text(r'C:\projects\demo'), findsNothing);
@@ -382,6 +400,9 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(repository: repository),
           projectLifecycleService: _projectLifecycleService(
             repository: repository,
@@ -390,9 +411,7 @@ void main() {
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Demo').first);
       await tester.pumpAndSettle();
@@ -414,14 +433,15 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(),
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
 
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(
@@ -447,6 +467,9 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(repository: repository),
           projectLifecycleService: _projectLifecycleService(
             repository: repository,
@@ -455,9 +478,7 @@ void main() {
           projectFolderPicker: const _ProjectFolderPicker(),
         ),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Demo').first);
       await tester.pumpAndSettle();
@@ -473,9 +494,7 @@ void main() {
       await tester.pumpAndSettle();
       completion.complete();
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(
@@ -500,15 +519,16 @@ void main() {
         MaestroApp(
           appearanceController: _appearanceController(),
           authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
           projectFolderPicker: const _ProjectFolderPicker(),
           workflowDesignService: _workflowService(repository),
         ),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
@@ -523,17 +543,12 @@ void main() {
       await repository.saveStarted!.future.timeout(const Duration(seconds: 2));
       await tester.tap(find.text('Sign out'));
       await tester.pump();
-      expect(
-        find.bySemanticsLabel('Sign in with your operating system'),
-        findsOneWidget,
-      );
+      expect(find.bySemanticsLabel('Sign in with Windows'), findsOneWidget);
       repository.pendingSave!.complete(
         WorkflowRepositorySaved(repository.lastDefinition!),
       );
       await tester.pump();
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel(RegExp(r'^Workflow success')), findsNothing);
     },
@@ -812,24 +827,37 @@ final class _PasswordHasher implements PasswordHasher {
   Future<bool> verify(String verifier, String password) async => false;
 }
 
-final class _OperatingSystemAuthenticator
-    implements OperatingSystemAuthenticator {
+final class _OperatingSystemAuthenticator implements AuthenticationPort {
   const _OperatingSystemAuthenticator();
 
   @override
   Future<Result<void>> authenticateCurrentUser() async {
     return const Success<void>(null);
   }
+
+  @override
+  Future<Capability> probe() async => const Capability(
+    id: 'operating-system-authentication',
+    state: CapabilityState.available,
+    message: 'Windows authentication is available.',
+  );
 }
 
 final class _CompletingOperatingSystemAuthenticator
-    implements OperatingSystemAuthenticator {
+    implements AuthenticationPort {
   final Completer<Result<void>> _completion = Completer<Result<void>>();
 
   void complete(Result<void> result) => _completion.complete(result);
 
   @override
   Future<Result<void>> authenticateCurrentUser() => _completion.future;
+
+  @override
+  Future<Capability> probe() async => const Capability(
+    id: 'operating-system-authentication',
+    state: CapabilityState.available,
+    message: 'Windows authentication is available.',
+  );
 }
 
 final class _RecoveryCodeRepository implements RecoveryCodeRepository {
