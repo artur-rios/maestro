@@ -333,7 +333,9 @@ final class AuthenticationService {
       if (verified is FailureResult<void>) {
         await _appendFailedAuthentication(user.id, source: 'local_windows');
         if (!_owns(generation)) return _stale<AuthenticatedSession>();
-        return _invalidCredentials();
+        return FailureResult<AuthenticatedSession>(
+          _localWindowsFailure(verified.failure),
+        );
       }
       return _completeLocalSignIn(
         user,
@@ -360,6 +362,42 @@ final class AuthenticationService {
     }
   }
 
+  static MaestroFailure _localWindowsFailure(MaestroFailure failure) {
+    return switch (failure.code) {
+      'authentication.operating_system.denied' => _invalidCredentialsFailure(),
+      'authentication.operating_system.unavailable' => const PlatformFailure(
+        code: 'authentication.operating_system.unavailable',
+        message: 'Windows credentials are unavailable.',
+        remediation: 'Use your local password or a recovery code.',
+      ),
+      'authentication.operating_system.transient_failure' =>
+        const PlatformFailure(
+          code: 'authentication.operating_system.transient_failure',
+          message: 'Windows credentials could not be verified.',
+          remediation:
+              'Retry, use your local password, or use a recovery code.',
+        ),
+      'authentication.operating_system.invalid_response' =>
+        const PlatformFailure(
+          code: 'authentication.operating_system.invalid_response',
+          message:
+              'Windows credential verification returned an invalid response.',
+          remediation: 'Use your local password or a recovery code.',
+        ),
+      _ when failure is SecurityFailure => _invalidCredentialsFailure(),
+      _ => const PlatformFailure(
+        code: 'authentication.operating_system.failed',
+        message: 'Could not verify Windows credentials.',
+        remediation: 'Use your local password or a recovery code.',
+      ),
+    };
+  }
+
+  static MaestroFailure _invalidCredentialsFailure() => const SecurityFailure(
+    code: 'authentication.credentials.invalid',
+    message: 'The email address or credentials are invalid.',
+  );
+
   Future<Result<AuthenticatedSession>> signInWithOperatingSystem() async {
     final generation = _beginAuthenticationOperation();
     try {
@@ -385,8 +423,10 @@ final class AuthenticationService {
 
   Future<Result<AuthenticatedSession>> signInWithGoogle() async {
     final generation = _beginAuthenticationOperation();
+    var loadingConfiguration = true;
     try {
       final configuration = await _settings.load();
+      loadingConfiguration = false;
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
       if (configuration == null) {
         return const FailureResult<AuthenticatedSession>(
@@ -440,19 +480,133 @@ final class AuthenticationService {
         remoteToken: grant.token,
         remoteTokenExpiresAt: grant.expiresAt,
       );
-    } catch (_) {
+    } catch (error) {
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
       try {
         await _appendFailedAuthentication(null, source: 'google');
       } catch (_) {}
-      return const FailureResult<AuthenticatedSession>(
-        SecurityFailure(
-          code: 'authentication.google.failed',
-          message: 'Google authentication was not successful.',
-          remediation: 'Try again or use a local authentication method.',
-        ),
+      return FailureResult<AuthenticatedSession>(
+        _mappedGoogleFailure(error, loadingConfiguration: loadingConfiguration),
       );
     }
+  }
+
+  static MaestroFailure _mappedGoogleFailure(
+    Object error, {
+    required bool loadingConfiguration,
+  }) {
+    if (loadingConfiguration && error is FormatException) {
+      return const ValidationFailure(
+        code: 'authentication.google.configuration.invalid',
+        message: 'The saved Google authentication configuration is invalid.',
+        remediation: 'Review and save the OAuth client ID and Heimdall scope.',
+      );
+    }
+    if (error case GoogleAuthorizationFailure(:final kind)) {
+      return switch (kind) {
+        GoogleAuthorizationFailureKind.browserCancelled =>
+          const SecurityFailure(
+            code: 'authentication.google.browser.cancelled',
+            message: 'The Google sign-in browser was closed.',
+            remediation: 'Start Google sign-in again or use a local method.',
+          ),
+        GoogleAuthorizationFailureKind.authorizationCancelled =>
+          const SecurityFailure(
+            code: 'authentication.google.authorization.cancelled',
+            message: 'Google sign-in was cancelled.',
+            remediation: 'Start Google sign-in again or use a local method.',
+          ),
+        GoogleAuthorizationFailureKind.authorizationTimedOut =>
+          const PlatformFailure(
+            code: 'authentication.google.authorization.timed_out',
+            message: 'Google sign-in timed out.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.callbackStateMismatch =>
+          const SecurityFailure(
+            code: 'authentication.google.callback.state_mismatch',
+            message: 'The Google sign-in response could not be verified.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.callbackRejected =>
+          const SecurityFailure(
+            code: 'authentication.google.callback.rejected',
+            message: 'The Google sign-in response was rejected.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.providerRejected =>
+          const SecurityFailure(
+            code: 'authentication.google.provider.rejected',
+            message: 'Google rejected the sign-in request.',
+            remediation: 'Review the Google account choice and try again.',
+          ),
+        GoogleAuthorizationFailureKind.browserLaunchFailed =>
+          const PlatformFailure(
+            code: 'authentication.google.browser.launch_failed',
+            message: 'The Google sign-in browser could not be opened.',
+            remediation: 'Check the default browser or use a local method.',
+          ),
+        GoogleAuthorizationFailureKind.listenerFailed => const PlatformFailure(
+          code: 'authentication.google.listener.failed',
+          message: 'Maestro could not receive the Google sign-in response.',
+          remediation: 'Retry Google sign-in or use a local method.',
+        ),
+        GoogleAuthorizationFailureKind.transportFailed => const PlatformFailure(
+          code: 'authentication.google.transport.failed',
+          message: 'Google sign-in could not reach the authentication service.',
+          remediation: 'Check the connection and try again.',
+        ),
+        GoogleAuthorizationFailureKind.tokenExchangeTimedOut =>
+          const PlatformFailure(
+            code: 'authentication.google.exchange.timed_out',
+            message: 'The Google token exchange timed out.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.tokenExchangeRejected =>
+          const SecurityFailure(
+            code: 'authentication.google.exchange.rejected',
+            message: 'Google rejected the token exchange.',
+            remediation: 'Start Google sign-in again.',
+          ),
+      };
+    }
+    if (error case ExternalAuthenticationFailure(:final kind)) {
+      return switch (kind) {
+        ExternalAuthenticationFailureKind.configurationInvalid =>
+          const ValidationFailure(
+            code: 'authentication.google.heimdall.configuration.invalid',
+            message: 'The Heimdall authentication endpoint is invalid.',
+            remediation: 'Repair the application authentication configuration.',
+          ),
+        ExternalAuthenticationFailureKind.rejected => const SecurityFailure(
+          code: 'authentication.google.heimdall.rejected',
+          message: 'Heimdall rejected the Google identity.',
+          remediation: 'Try again or use a local authentication method.',
+        ),
+        ExternalAuthenticationFailureKind.timedOut => const PlatformFailure(
+          code: 'authentication.google.heimdall.timed_out',
+          message: 'Heimdall authentication timed out.',
+          remediation: 'Check the connection and try again.',
+        ),
+        ExternalAuthenticationFailureKind.transportFailed =>
+          const PlatformFailure(
+            code: 'authentication.google.heimdall.transport_failed',
+            message: 'Heimdall authentication could not be reached.',
+            remediation: 'Check the connection and try again.',
+          ),
+        ExternalAuthenticationFailureKind.envelopeMalformed =>
+          const SecurityFailure(
+            code: 'authentication.google.heimdall.envelope_malformed',
+            message: 'Heimdall returned an invalid authentication response.',
+            remediation: 'Retry later or use a local authentication method.',
+          ),
+      };
+    }
+    return const SecurityFailure(
+      code: 'authentication.google.failed',
+      message: 'Google authentication was not successful.',
+      remediation: 'Try again or use a local authentication method.',
+    );
   }
 
   Future<Result<AuthenticatedSession>> recoverLocalAccount(
@@ -486,6 +640,7 @@ final class AuthenticationService {
       final verifier = await _hasher.create(password.value);
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
       final consumed = await _recoveryCodes.consumeUnusedDigest(
+        user.id,
         parsed.digest,
         _clock(),
       );

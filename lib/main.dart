@@ -73,6 +73,7 @@ import 'package:maestro/platform/agents/claude_code_adapter.dart';
 import 'package:maestro/platform/agents/codex_adapter.dart';
 import 'package:maestro/platform/agents/executable_resolver.dart';
 import 'package:maestro/platform/agents/open_code_adapter.dart';
+import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
@@ -115,6 +116,7 @@ final class ProductionAppComposition {
     required this.appearanceRepository,
     required this.appearanceController,
     required this.authenticationService,
+    required this.authenticationPort,
     required this.authenticationSettingsRepository,
     required this.projectRepository,
     required this.projectService,
@@ -140,6 +142,7 @@ final class ProductionAppComposition {
   final DriftAppearancePreferenceRepository appearanceRepository;
   final AppearanceController appearanceController;
   final AuthenticationService authenticationService;
+  final AuthenticationPort? authenticationPort;
   final AuthenticationSettingsRepository authenticationSettingsRepository;
   final DriftProjectRepository projectRepository;
   final ProjectService projectService;
@@ -164,6 +167,7 @@ final class ProductionAppComposition {
   Widget get app => MaestroApp(
     appearanceController: appearanceController,
     authenticationService: authenticationService,
+    authenticationPort: authenticationPort,
     authenticationSettingsRepository: authenticationSettingsRepository,
     projectService: projectService,
     projectLifecycleService: projectLifecycleService,
@@ -200,6 +204,7 @@ Future<ProductionAppComposition> composeProductionApp({
   NewRecoveryCodeSet Function()? newRecoveryCodeSet,
   OperatingSystemAuthenticator operatingSystemAuthentication =
       const MethodChannelAuthentication(),
+  AuthenticationPort? authenticationPort,
   CommandRunner commandRunner = const ProcessCommandRunner(),
   ProjectDirectoryAccess directoryAccess = const LocalProjectDirectoryAccess(),
   ProjectFolderPicker projectFolderPicker =
@@ -211,6 +216,12 @@ Future<ProductionAppComposition> composeProductionApp({
   DesktopWindowPort window = const NoopDesktopWindowPort(),
 }) async {
   final now = clock ?? () => DateTime.now().toUtc();
+  final effectiveAuthenticationPort =
+      authenticationPort ??
+      switch (operatingSystemAuthentication) {
+        AuthenticationPort port => port,
+        _ => null,
+      };
   final appearanceRepository = DriftAppearancePreferenceRepository(
     database,
     clock: now,
@@ -502,6 +513,7 @@ Future<ProductionAppComposition> composeProductionApp({
     appearanceRepository: appearanceRepository,
     appearanceController: appearanceController,
     authenticationService: authenticationService,
+    authenticationPort: effectiveAuthenticationPort,
     authenticationSettingsRepository: effectiveAuthenticationSettings,
     projectRepository: projectRepository,
     projectService: projectService,

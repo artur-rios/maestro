@@ -21,7 +21,11 @@ final class StoredRecoveryCode {
 abstract interface class RecoveryCodeRepository {
   Future<void> saveAll(String userId, List<StoredRecoveryCode> codes);
 
-  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt);
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  );
 }
 
 abstract interface class GoogleBrowserAuthorization {
@@ -30,6 +34,26 @@ abstract interface class GoogleBrowserAuthorization {
   );
 
   Future<void> cancelActiveAuthorization();
+}
+
+enum GoogleAuthorizationFailureKind {
+  browserCancelled,
+  authorizationCancelled,
+  authorizationTimedOut,
+  callbackStateMismatch,
+  callbackRejected,
+  providerRejected,
+  browserLaunchFailed,
+  listenerFailed,
+  transportFailed,
+  tokenExchangeTimedOut,
+  tokenExchangeRejected,
+}
+
+abstract base class GoogleAuthorizationFailure implements Exception {
+  const GoogleAuthorizationFailure(this.kind);
+
+  final GoogleAuthorizationFailureKind kind;
 }
 
 final class GoogleIdToken {
@@ -43,6 +67,20 @@ abstract interface class ExternalAuthenticationGateway {
     required String scopeId,
     required String idToken,
   });
+}
+
+enum ExternalAuthenticationFailureKind {
+  configurationInvalid,
+  rejected,
+  timedOut,
+  transportFailed,
+  envelopeMalformed,
+}
+
+abstract base class ExternalAuthenticationFailure implements Exception {
+  const ExternalAuthenticationFailure(this.kind);
+
+  final ExternalAuthenticationFailureKind kind;
 }
 
 final class ExternalTokenGrant {

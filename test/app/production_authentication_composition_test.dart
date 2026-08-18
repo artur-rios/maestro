@@ -13,6 +13,8 @@ import 'package:maestro/features/authentication/data/drift_authentication_reposi
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 import 'package:maestro/main.dart' as app;
+import 'package:maestro/platform/auth/authentication_port.dart';
+import 'package:maestro/platform/common/capability.dart';
 
 void main() {
   test(
@@ -57,6 +59,7 @@ void main() {
       final settings = _Settings();
       final google = _GoogleAuthorization();
       final gateway = _ExternalGateway();
+      const operatingSystem = _OperatingSystemAuthenticator();
       final root = Directory.systemTemp.createTempSync(
         'maestro-auth-composition-',
       );
@@ -66,7 +69,8 @@ void main() {
         database: database,
         passwordVerifiers: _MemoryVerifierStore(),
         passwordHasher: const _PasswordHasher(),
-        operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
+        operatingSystemAuthentication: operatingSystem,
+        authenticationPort: operatingSystem,
         authenticationSettings: settings,
         recoveryCodes: _RecoveryCodes(),
         googleAuthorization: google,
@@ -79,6 +83,11 @@ void main() {
       expect(result, isA<Success<AuthenticatedSession>>());
       expect(google.authorizeCalls, 1);
       expect(gateway.signInCalls, 1);
+      expect(composition.authenticationPort, same(operatingSystem));
+      expect(
+        (await composition.authenticationPort!.probe()).state,
+        CapabilityState.available,
+      );
     },
   );
 }
@@ -115,20 +124,29 @@ final class _PasswordHasher implements PasswordHasher {
   Future<bool> verify(String verifier, String password) async => false;
 }
 
-final class _OperatingSystemAuthenticator
-    implements OperatingSystemAuthenticator {
+final class _OperatingSystemAuthenticator implements AuthenticationPort {
   const _OperatingSystemAuthenticator();
 
   @override
   Future<Result<void>> authenticateCurrentUser() async {
     return const Success<void>(null);
   }
+
+  @override
+  Future<Capability> probe() async => const Capability(
+    id: 'operating-system-authentication',
+    state: CapabilityState.available,
+    message: 'Windows authentication is available.',
+  );
 }
 
 final class _RecoveryCodes implements RecoveryCodeRepository {
   @override
-  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async =>
-      false;
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  ) async => false;
 
   @override
   Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {}

@@ -16,12 +16,14 @@ import 'package:maestro/features/projects/presentation/project_controller.dart';
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
+import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 
 class MaestroApp extends StatefulWidget {
   const MaestroApp({
     required this.appearanceController,
     required this.authenticationService,
+    this.authenticationPort,
     this.authenticationSettingsRepository,
     this.projectService,
     this.projectLifecycleService,
@@ -40,6 +42,7 @@ class MaestroApp extends StatefulWidget {
 
   final AppearanceController appearanceController;
   final AuthenticationService authenticationService;
+  final AuthenticationPort? authenticationPort;
   final AuthenticationSettingsRepository? authenticationSettingsRepository;
   final ProjectService? projectService;
   final ProjectLifecycleService? projectLifecycleService;
@@ -86,6 +89,8 @@ final class _MaestroAppState extends State<MaestroApp> {
         authenticationServiceProvider.overrideWithValue(
           widget.authenticationService,
         ),
+        if (widget.authenticationPort case final port?)
+          authenticationPortProvider.overrideWithValue(port),
         if (widget.authenticationSettingsRepository case final repository?)
           authenticationSettingsRepositoryProvider.overrideWithValue(
             repository,

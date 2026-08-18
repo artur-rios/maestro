@@ -245,8 +245,11 @@ final class _RecoveryCodeRepository implements RecoveryCodeRepository {
   const _RecoveryCodeRepository();
 
   @override
-  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async =>
-      false;
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  ) async => false;
 
   @override
   Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {}

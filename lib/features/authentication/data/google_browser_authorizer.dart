@@ -97,16 +97,19 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
       final remaining = callbackTimeout - _clock().difference(started);
       if (remaining <= Duration.zero) throw const OAuthAuthorizationTimedOut();
       final callback = await _callback(operation, server, remaining);
-      if (!_constantTimeEquals(callback.state, state))
+      if (!_constantTimeEquals(callback.state, state)) {
         throw const OAuthCallbackStateMismatch();
+      }
       if (callback.error != null) {
-        if (callback.error == 'access_denied')
+        if (callback.error == 'access_denied') {
           throw const OAuthBrowserCancelled();
+        }
         throw const OAuthProviderRejected();
       }
       final code = callback.code;
-      if (code == null || code.trim().isEmpty)
+      if (code == null || code.trim().isEmpty) {
         throw const OAuthCallbackRejected();
+      }
       try {
         await operation.closeListener();
       } on Object {
@@ -119,8 +122,9 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
         server.redirectUri,
         verifier,
       );
-      if (response.statusCode < 200 || response.statusCode >= 300)
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         throw const GoogleTokenExchangeRejected();
+      }
       return GoogleIdToken(_parseIdToken(response.body));
     } on Object catch (error) {
       primaryError = error;
@@ -234,8 +238,9 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
   static String _parseIdToken(String body) {
     try {
       final decoded = jsonDecode(body);
-      if (decoded is! Map<Object?, Object?> || decoded['id_token'] is! String)
+      if (decoded is! Map<Object?, Object?> || decoded['id_token'] is! String) {
         throw const GoogleTokenExchangeRejected();
+      }
       final token = decoded['id_token']! as String;
       if (token.trim().isEmpty) throw const GoogleTokenExchangeRejected();
       return token;
@@ -245,54 +250,65 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
   }
 }
 
-abstract base class OAuthFailure implements Exception {
-  const OAuthFailure();
+abstract base class OAuthFailure extends GoogleAuthorizationFailure {
+  const OAuthFailure(super.kind);
   @override
   String toString() => runtimeType.toString();
 }
 
 final class OAuthBrowserCancelled extends OAuthFailure {
-  const OAuthBrowserCancelled();
+  const OAuthBrowserCancelled()
+    : super(GoogleAuthorizationFailureKind.browserCancelled);
 }
 
 final class OAuthAuthorizationCancelled extends OAuthFailure {
-  const OAuthAuthorizationCancelled();
+  const OAuthAuthorizationCancelled()
+    : super(GoogleAuthorizationFailureKind.authorizationCancelled);
 }
 
 final class OAuthAuthorizationTimedOut extends OAuthFailure {
-  const OAuthAuthorizationTimedOut();
+  const OAuthAuthorizationTimedOut()
+    : super(GoogleAuthorizationFailureKind.authorizationTimedOut);
 }
 
 final class OAuthCallbackStateMismatch extends OAuthFailure {
-  const OAuthCallbackStateMismatch();
+  const OAuthCallbackStateMismatch()
+    : super(GoogleAuthorizationFailureKind.callbackStateMismatch);
 }
 
 final class OAuthCallbackRejected extends OAuthFailure {
-  const OAuthCallbackRejected();
+  const OAuthCallbackRejected()
+    : super(GoogleAuthorizationFailureKind.callbackRejected);
 }
 
 final class OAuthProviderRejected extends OAuthFailure {
-  const OAuthProviderRejected();
+  const OAuthProviderRejected()
+    : super(GoogleAuthorizationFailureKind.providerRejected);
 }
 
 final class OAuthBrowserLaunchFailure extends OAuthFailure {
-  const OAuthBrowserLaunchFailure();
+  const OAuthBrowserLaunchFailure()
+    : super(GoogleAuthorizationFailureKind.browserLaunchFailed);
 }
 
 final class OAuthListenerFailure extends OAuthFailure {
-  const OAuthListenerFailure();
+  const OAuthListenerFailure()
+    : super(GoogleAuthorizationFailureKind.listenerFailed);
 }
 
 final class OAuthTransportFailure extends OAuthFailure {
-  const OAuthTransportFailure();
+  const OAuthTransportFailure()
+    : super(GoogleAuthorizationFailureKind.transportFailed);
 }
 
 final class GoogleTokenExchangeTimedOut extends OAuthFailure {
-  const GoogleTokenExchangeTimedOut();
+  const GoogleTokenExchangeTimedOut()
+    : super(GoogleAuthorizationFailureKind.tokenExchangeTimedOut);
 }
 
 final class GoogleTokenExchangeRejected extends OAuthFailure {
-  const GoogleTokenExchangeRejected();
+  const GoogleTokenExchangeRejected()
+    : super(GoogleAuthorizationFailureKind.tokenExchangeRejected);
 }
 
 final class _Operation {
@@ -360,8 +376,9 @@ final class _Operation {
   }
 
   Future<T> waitFor<T>(Future<T> future) {
-    if (_isCancelled)
+    if (_isCancelled) {
       return Future<T>.error(const OAuthAuthorizationCancelled());
+    }
     return Future.any<T>(<Future<T>>[
       future,
       _cancelled.future.then<T>(

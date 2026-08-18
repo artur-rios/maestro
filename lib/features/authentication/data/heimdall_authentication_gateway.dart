@@ -40,8 +40,9 @@ final class HeimdallAuthenticationGateway
     } on Object {
       throw const HeimdallAuthenticationTransportFailure();
     }
-    if (response.statusCode < 200 || response.statusCode >= 300)
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw const HeimdallAuthenticationRejected();
+    }
     return _parse(response.body, _clock());
   }
 
@@ -52,8 +53,9 @@ final class HeimdallAuthenticationGateway
     if (uri.host.isEmpty ||
         uri.userInfo.isNotEmpty ||
         uri.fragment.isNotEmpty ||
-        (uri.scheme != 'https' && !(uri.scheme == 'http' && loopback)))
+        (uri.scheme != 'https' && !(uri.scheme == 'http' && loopback))) {
       throw const HeimdallBaseUriInvalid();
+    }
     return uri;
   }
 
@@ -75,8 +77,9 @@ final class HeimdallAuthenticationGateway
       final json = jsonDecode(body);
       if (json is! Map<Object?, Object?> ||
           json['success'] != true ||
-          json['data'] is! Map<Object?, Object?>)
+          json['data'] is! Map<Object?, Object?>) {
         throw const HeimdallAuthenticationEnvelopeMalformed();
+      }
       final data = json['data']! as Map<Object?, Object?>;
       final token = data['token'];
       final expiryText = data['expiresAt'];
@@ -88,8 +91,9 @@ final class HeimdallAuthenticationGateway
           token.trim().isEmpty ||
           expiry == null ||
           !expiry.isAfter(now.toUtc()) ||
-          verified is! bool)
+          verified is! bool) {
         throw const HeimdallAuthenticationEnvelopeMalformed();
+      }
       return ExternalTokenGrant(
         token: token,
         expiresAt: expiry,
@@ -101,30 +105,35 @@ final class HeimdallAuthenticationGateway
   }
 }
 
-abstract base class HeimdallFailure implements Exception {
-  const HeimdallFailure();
+abstract base class HeimdallFailure extends ExternalAuthenticationFailure {
+  const HeimdallFailure(super.kind);
   @override
   String toString() => runtimeType.toString();
 }
 
 final class HeimdallBaseUriInvalid extends HeimdallFailure {
-  const HeimdallBaseUriInvalid();
+  const HeimdallBaseUriInvalid()
+    : super(ExternalAuthenticationFailureKind.configurationInvalid);
 }
 
 final class HeimdallAuthenticationRejected extends HeimdallFailure {
-  const HeimdallAuthenticationRejected();
+  const HeimdallAuthenticationRejected()
+    : super(ExternalAuthenticationFailureKind.rejected);
 }
 
 final class HeimdallAuthenticationTimedOut extends HeimdallFailure {
-  const HeimdallAuthenticationTimedOut();
+  const HeimdallAuthenticationTimedOut()
+    : super(ExternalAuthenticationFailureKind.timedOut);
 }
 
 final class HeimdallAuthenticationTransportFailure extends HeimdallFailure {
-  const HeimdallAuthenticationTransportFailure();
+  const HeimdallAuthenticationTransportFailure()
+    : super(ExternalAuthenticationFailureKind.transportFailed);
 }
 
 final class HeimdallAuthenticationEnvelopeMalformed extends HeimdallFailure {
-  const HeimdallAuthenticationEnvelopeMalformed();
+  const HeimdallAuthenticationEnvelopeMalformed()
+    : super(ExternalAuthenticationFailureKind.envelopeMalformed);
 }
 
 DateTime _utcNow() => DateTime.now().toUtc();

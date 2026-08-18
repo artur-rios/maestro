@@ -20,6 +20,8 @@ import 'package:maestro/features/authentication/presentation/authentication_cont
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
 import 'package:maestro/features/authentication/presentation/authentication_settings_controller.dart';
 import 'package:maestro/features/authentication/presentation/recovery_code_dialog.dart';
+import 'package:maestro/platform/auth/authentication_port.dart';
+import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 
 void main() {
@@ -541,6 +543,38 @@ void main() {
   );
 
   testWidgets(
+    'GivenWindowsAuthenticationUnsupported_WhenLocalAccountFormIsShown_ThenWindowsActionIsDisabledWithPasswordOrRecoveryGuidance',
+    (tester) async {
+      await tester.pumpWidget(
+        _testApp(
+          _authenticationService(),
+          authenticationPort: const _CapabilityAuthenticationPort(
+            Capability(
+              id: 'operating-system-authentication',
+              state: CapabilityState.unsupported,
+              message: 'Host detail must not be rendered.',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final action = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Use Windows credentials'),
+      );
+      expect(action.onPressed, isNull);
+      expect(
+        find.text(
+          'Windows credentials are unavailable. '
+          'Use your local password or a recovery code.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Host detail'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'GivenConfiguredGoogle_WhenContinueWithGoogleTapped_ThenGoogleSessionOpens',
     (tester) async {
       final service = _authenticationService(
@@ -923,6 +957,15 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authenticationServiceProvider.overrideWithValue(service),
+          authenticationPortProvider.overrideWithValue(
+            const _CapabilityAuthenticationPort(
+              Capability(
+                id: 'operating-system-authentication',
+                state: CapabilityState.available,
+                message: 'Windows credentials are available.',
+              ),
+            ),
+          ),
           authenticationSettingsRepositoryProvider.overrideWithValue(
             _Settings(),
           ),
@@ -1027,6 +1070,13 @@ Widget _testApp(
   AuthenticationService service, {
   WidgetBuilder? authenticatedBuilder,
   AuthenticationSettingsRepository? settingsRepository,
+  AuthenticationPort authenticationPort = const _CapabilityAuthenticationPort(
+    Capability(
+      id: 'operating-system-authentication',
+      state: CapabilityState.available,
+      message: 'Windows credentials are available.',
+    ),
+  ),
 }) {
   final appearanceController = AppearanceController(
     repository: _AppearancePreferenceRepository(),
@@ -1036,6 +1086,7 @@ Widget _testApp(
   return ProviderScope(
     overrides: [
       authenticationServiceProvider.overrideWithValue(service),
+      authenticationPortProvider.overrideWithValue(authenticationPort),
       authenticationSettingsRepositoryProvider.overrideWithValue(
         settingsRepository ?? _Settings(),
       ),
@@ -1230,6 +1281,19 @@ final class _FakeOperatingSystemAuthenticator
   Future<Result<void>> authenticateCurrentUser() async => result;
 }
 
+final class _CapabilityAuthenticationPort implements AuthenticationPort {
+  const _CapabilityAuthenticationPort(this.capability);
+
+  final Capability capability;
+
+  @override
+  Future<Result<void>> authenticateCurrentUser() async =>
+      const Success<void>(null);
+
+  @override
+  Future<Capability> probe() async => capability;
+}
+
 final class _CompletingOperatingSystemAuthenticator
     implements OperatingSystemAuthenticator {
   final Completer<Result<void>> _completion = Completer<Result<void>>();
@@ -1255,8 +1319,11 @@ final class _RecoveryCodes implements RecoveryCodeRepository {
   final Set<String> unusedDigests = <String>{};
 
   @override
-  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async =>
-      unusedDigests.remove(digest);
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  ) async => unusedDigests.remove(digest);
 
   @override
   Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {}

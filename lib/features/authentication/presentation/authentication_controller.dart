@@ -5,6 +5,17 @@ import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/platform/auth/authentication_port.dart';
+import 'package:maestro/platform/common/capability.dart';
+
+final authenticationPortProvider = Provider<AuthenticationPort>((ref) {
+  throw StateError('AuthenticationPort must be provided by the application.');
+});
+
+final operatingSystemAuthenticationCapabilityProvider =
+    FutureProvider<Capability>((ref) {
+      return ref.watch(authenticationPortProvider).probe();
+    });
 
 final authenticationServiceProvider = Provider<AuthenticationService>((ref) {
   throw StateError(
@@ -47,11 +58,13 @@ final class AuthenticationAuthenticated
 
 final class AuthenticationError extends AuthenticationPresentationState {
   const AuthenticationError({
+    required this.code,
     required this.category,
     required this.message,
     this.remediation,
   });
 
+  final String code;
   final AuthenticationFailureCategory category;
   final String message;
   final String? remediation;
@@ -168,6 +181,7 @@ final class AuthenticationController
 
   /// Abandons the one-time display without activating the created session.
   void abandonRecoveryCodePresentation() {
+    if (_disposed) return;
     if (state is! AuthenticationRecoveryCodesPending) return;
     _operationGeneration++;
     _clearPendingRecoveryCodes();
@@ -255,6 +269,7 @@ final class AuthenticationController
   ) {
     if (failure.code == 'authentication.email.invalid') {
       return const AuthenticationError(
+        code: 'authentication.email.invalid',
         category: AuthenticationFailureCategory.emailInput,
         message: 'Enter a valid email address.',
         remediation: 'Use an address such as person@example.com.',
@@ -262,6 +277,7 @@ final class AuthenticationController
     }
     if (failure.code == 'authentication.password.too_short') {
       return const AuthenticationError(
+        code: 'authentication.password.too_short',
         category: AuthenticationFailureCategory.passwordPolicy,
         message: 'Password must contain at least 8 characters.',
         remediation: 'Choose a strong, unique password.',
@@ -270,20 +286,23 @@ final class AuthenticationController
     if (operation == _AuthenticationOperation.google) {
       if (failure.code == 'authentication.google.configuration.missing') {
         return const AuthenticationError(
+          code: 'authentication.google.configuration.missing',
           category: AuthenticationFailureCategory.google,
           message: 'Google authentication is not configured.',
           remediation: 'Configure the OAuth client ID and Heimdall scope.',
         );
       }
       return AuthenticationError(
+        code: failure.code,
         category: AuthenticationFailureCategory.google,
-        message: 'Google authentication was not successful.',
+        message: failure.message,
         remediation:
             failure.remediation ?? 'Try again or use a local sign-in method.',
       );
     }
     if (operation == _AuthenticationOperation.recovery) {
       return AuthenticationError(
+        code: failure.code,
         category: AuthenticationFailureCategory.recovery,
         message: failure.code == 'authentication.recovery.persistence.failed'
             ? 'The recovery code was spent, but recovery did not finish.'
@@ -293,6 +312,7 @@ final class AuthenticationController
     }
     if (operation == _AuthenticationOperation.recoveryCodeAcknowledgement) {
       return const AuthenticationError(
+        code: 'authentication.recovery_codes.acknowledgement_required',
         category: AuthenticationFailureCategory.recovery,
         message: 'Recovery codes could not be acknowledged.',
         remediation: 'Create a new local account session and try again.',
@@ -300,6 +320,7 @@ final class AuthenticationController
     }
     if (operation == _AuthenticationOperation.accountCreation) {
       return const AuthenticationError(
+        code: 'authentication.account_creation.failed',
         category: AuthenticationFailureCategory.accountCreation,
         message: 'Account creation could not be completed.',
         remediation: 'Review the account details and try again.',
@@ -307,13 +328,17 @@ final class AuthenticationController
     }
     if (operation == _AuthenticationOperation.operatingSystem ||
         operation == _AuthenticationOperation.localWindows) {
-      return const AuthenticationError(
+      return AuthenticationError(
+        code: failure.code,
         category: AuthenticationFailureCategory.operatingSystem,
         message: 'Authentication was not successful.',
-        remediation: 'Try again or use email and password.',
+        remediation:
+            failure.remediation ??
+            'Try again or use a local password or recovery code.',
       );
     }
     return const AuthenticationError(
+      code: 'authentication.credentials.invalid',
       category: AuthenticationFailureCategory.credentials,
       message: 'Authentication was not successful.',
       remediation: 'Check your credentials and try again.',
@@ -325,6 +350,7 @@ final class AuthenticationController
   ) {
     if (operation == _AuthenticationOperation.accountCreation) {
       return const AuthenticationError(
+        code: 'authentication.account_creation.failed',
         category: AuthenticationFailureCategory.accountCreation,
         message: 'Account creation could not be completed.',
         remediation: 'Review the account details and try again.',
@@ -333,11 +359,13 @@ final class AuthenticationController
     return switch (operation) {
       _AuthenticationOperation.operatingSystem ||
       _AuthenticationOperation.localWindows => const AuthenticationError(
+        code: 'authentication.operating_system.failed',
         category: AuthenticationFailureCategory.operatingSystem,
         message: 'Authentication was not successful.',
         remediation: 'Try again or use a local password or recovery code.',
       ),
       _AuthenticationOperation.emailSignIn => const AuthenticationError(
+        code: 'authentication.credentials.failed',
         category: AuthenticationFailureCategory.credentials,
         message: 'Authentication was not successful.',
         remediation: 'Check your credentials and try again.',
@@ -346,6 +374,7 @@ final class AuthenticationController
         'Account creation failure was handled above.',
       ),
       _AuthenticationOperation.google => const AuthenticationError(
+        code: 'authentication.google.failed',
         category: AuthenticationFailureCategory.google,
         message: 'Google authentication was not successful.',
         remediation: 'Try again or use a local sign-in method.',
@@ -353,6 +382,7 @@ final class AuthenticationController
       _AuthenticationOperation.recovery ||
       _AuthenticationOperation.recoveryCodeAcknowledgement =>
         const AuthenticationError(
+          code: 'authentication.recovery.failed',
           category: AuthenticationFailureCategory.recovery,
           message: 'Local account recovery was not successful.',
           remediation: 'Check the details and use an unused recovery code.',

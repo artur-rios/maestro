@@ -4,9 +4,12 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
+import 'package:maestro/features/authentication/data/google_browser_authorizer.dart';
+import 'package:maestro/features/authentication/data/heimdall_authentication_gateway.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
@@ -151,6 +154,139 @@ void main() {
   );
 
   test(
+    'GivenTypedGoogleFailures_WhenPresented_ThenEveryStableCodeCrossesTheControllerUnchanged',
+    () async {
+      final cases = <({Object error, String code, bool browser})>[
+        (
+          error: const OAuthBrowserCancelled(),
+          code: 'authentication.google.browser.cancelled',
+          browser: true,
+        ),
+        (
+          error: const OAuthAuthorizationCancelled(),
+          code: 'authentication.google.authorization.cancelled',
+          browser: true,
+        ),
+        (
+          error: const OAuthAuthorizationTimedOut(),
+          code: 'authentication.google.authorization.timed_out',
+          browser: true,
+        ),
+        (
+          error: const OAuthCallbackStateMismatch(),
+          code: 'authentication.google.callback.state_mismatch',
+          browser: true,
+        ),
+        (
+          error: const OAuthCallbackRejected(),
+          code: 'authentication.google.callback.rejected',
+          browser: true,
+        ),
+        (
+          error: const OAuthProviderRejected(),
+          code: 'authentication.google.provider.rejected',
+          browser: true,
+        ),
+        (
+          error: const OAuthBrowserLaunchFailure(),
+          code: 'authentication.google.browser.launch_failed',
+          browser: true,
+        ),
+        (
+          error: const OAuthListenerFailure(),
+          code: 'authentication.google.listener.failed',
+          browser: true,
+        ),
+        (
+          error: const OAuthTransportFailure(),
+          code: 'authentication.google.transport.failed',
+          browser: true,
+        ),
+        (
+          error: const GoogleTokenExchangeTimedOut(),
+          code: 'authentication.google.exchange.timed_out',
+          browser: true,
+        ),
+        (
+          error: const GoogleTokenExchangeRejected(),
+          code: 'authentication.google.exchange.rejected',
+          browser: true,
+        ),
+        (
+          error: const HeimdallBaseUriInvalid(),
+          code: 'authentication.google.heimdall.configuration.invalid',
+          browser: false,
+        ),
+        (
+          error: const HeimdallAuthenticationRejected(),
+          code: 'authentication.google.heimdall.rejected',
+          browser: false,
+        ),
+        (
+          error: const HeimdallAuthenticationTimedOut(),
+          code: 'authentication.google.heimdall.timed_out',
+          browser: false,
+        ),
+        (
+          error: const HeimdallAuthenticationTransportFailure(),
+          code: 'authentication.google.heimdall.transport_failed',
+          browser: false,
+        ),
+        (
+          error: const HeimdallAuthenticationEnvelopeMalformed(),
+          code: 'authentication.google.heimdall.envelope_malformed',
+          browser: false,
+        ),
+      ];
+
+      for (final failureCase in cases) {
+        final service = _authenticationService(
+          _ImmediateOperatingSystemAuthenticator(),
+          googleAuthorization: failureCase.browser
+              ? _FailingGoogleAuthorization(failureCase.error)
+              : const _SuccessfulGoogleAuthorization(),
+          externalGateway: failureCase.browser
+              ? _SuccessfulExternalGateway()
+              : _FailingExternalGateway(failureCase.error),
+        );
+        final container = _container(service);
+        await container
+            .read(authenticationControllerProvider.notifier)
+            .signInWithGoogle();
+
+        final state =
+            container.read(authenticationControllerProvider)
+                as AuthenticationError;
+        expect(state.code, failureCase.code);
+        expect(state.message, isNot(contains(failureCase.error.toString())));
+        container.dispose();
+      }
+    },
+  );
+
+  test(
+    'GivenMalformedGoogleConfiguration_WhenPresented_ThenConfigurationCodeCrossesTheControllerUnchanged',
+    () async {
+      final service = _authenticationService(
+        _ImmediateOperatingSystemAuthenticator(),
+        settings: const _ThrowingSettingsRepository(),
+      );
+      final container = _container(service);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authenticationControllerProvider.notifier)
+          .signInWithGoogle();
+
+      final state =
+          container.read(authenticationControllerProvider)
+              as AuthenticationError;
+      expect(state.code, 'authentication.google.configuration.invalid');
+      expect(state.message, isNot(contains('persisted-sentinel')));
+    },
+  );
+
+  test(
     'GivenPasswordAccount_WhenWindowsCredentialsAreUsed_ThenThatEmailAccountIsPublished',
     () async {
       final repository = _AuthenticationRepository()..emailUser = _emailUser();
@@ -170,6 +306,30 @@ void main() {
               as AuthenticationAuthenticated;
       expect(state.session.userId, 'email-user');
       expect(state.session.source, AuthenticationSource.localWindows);
+    },
+  );
+
+  test(
+    'GivenWindowsCredentialsUnavailable_WhenPresented_ThenPasswordOrRecoveryRemediationCrossesTheController',
+    () async {
+      final repository = _AuthenticationRepository()..emailUser = _emailUser();
+      final service = _authenticationService(
+        const _UnavailableOperatingSystemAuthenticator(),
+        repository: repository,
+      );
+      final container = _container(service);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authenticationControllerProvider.notifier)
+          .signInWithLocalWindowsCredentials('person@example.com');
+
+      final state =
+          container.read(authenticationControllerProvider)
+              as AuthenticationError;
+      expect(state.code, 'authentication.operating_system.unavailable');
+      expect(state.remediation, contains('local password'));
+      expect(state.remediation, contains('recovery code'));
     },
   );
 
@@ -278,6 +438,7 @@ AuthenticationService _authenticationService(
       const _UnavailableGoogleAuthorization(),
   ExternalAuthenticationGateway externalGateway =
       const _UnavailableExternalGateway(),
+  AuthenticationSettingsRepository? settings,
   DateTime Function()? clock,
   SessionExpiryScheduler? scheduleExpiry,
 }) {
@@ -290,7 +451,7 @@ AuthenticationService _authenticationService(
     audits: authenticationRepository,
     operatingSystemAuthentication: operatingSystem,
     recoveryCodes: recoveryCodes ?? _RecoveryCodeRepository(),
-    settings: _SettingsRepository(),
+    settings: settings ?? _SettingsRepository(),
     googleAuthorization: googleAuthorization,
     externalGateway: externalGateway,
     newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
@@ -401,6 +562,20 @@ final class _ImmediateOperatingSystemAuthenticator
       const Success<void>(null);
 }
 
+final class _UnavailableOperatingSystemAuthenticator
+    implements OperatingSystemAuthenticator {
+  const _UnavailableOperatingSystemAuthenticator();
+
+  @override
+  Future<Result<void>> authenticateCurrentUser() async =>
+      const FailureResult<void>(
+        PlatformFailure(
+          code: 'authentication.operating_system.unavailable',
+          message: 'Host detail.',
+        ),
+      );
+}
+
 final class _CountingOperatingSystemAuthenticator
     implements OperatingSystemAuthenticator {
   int attempts = 0;
@@ -416,8 +591,11 @@ final class _RecoveryCodeRepository implements RecoveryCodeRepository {
   final Set<String> unusedDigests = <String>{};
 
   @override
-  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async =>
-      unusedDigests.remove(digest);
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  ) async => unusedDigests.remove(digest);
 
   @override
   Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {
@@ -463,6 +641,20 @@ final class _SuccessfulGoogleAuthorization
   Future<void> cancelActiveAuthorization() async {}
 }
 
+final class _FailingGoogleAuthorization implements GoogleBrowserAuthorization {
+  const _FailingGoogleAuthorization(this.error);
+
+  final Object error;
+
+  @override
+  Future<GoogleIdToken> authorize(
+    ExternalAuthenticationConfiguration configuration,
+  ) async => throw error;
+
+  @override
+  Future<void> cancelActiveAuthorization() async {}
+}
+
 final class _UnavailableExternalGateway
     implements ExternalAuthenticationGateway {
   const _UnavailableExternalGateway();
@@ -489,4 +681,28 @@ final class _SuccessfulExternalGateway
       emailVerified: true,
     );
   }
+}
+
+final class _FailingExternalGateway implements ExternalAuthenticationGateway {
+  const _FailingExternalGateway(this.error);
+
+  final Object error;
+
+  @override
+  Future<ExternalTokenGrant> signInWithGoogle({
+    required String scopeId,
+    required String idToken,
+  }) async => throw error;
+}
+
+final class _ThrowingSettingsRepository
+    implements AuthenticationSettingsRepository {
+  const _ThrowingSettingsRepository();
+
+  @override
+  Future<ExternalAuthenticationConfiguration?> load() async =>
+      throw const FormatException('persisted-sentinel');
+
+  @override
+  Future<void> save(ExternalAuthenticationConfiguration configuration) async {}
 }

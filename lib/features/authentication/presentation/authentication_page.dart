@@ -8,6 +8,7 @@ import 'package:maestro/features/appearance/presentation/appearance_selector.dar
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_settings_controller.dart';
 import 'package:maestro/features/authentication/presentation/recovery_code_dialog.dart';
+import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 
 typedef AuthenticatedWorkspaceBuilder =
@@ -170,6 +171,18 @@ final class _AuthenticationFormState
       _ => null,
     };
     final settingsState = ref.watch(authenticationSettingsControllerProvider);
+    final operatingSystemCapability = ref.watch(
+      operatingSystemAuthenticationCapabilityProvider,
+    );
+    final localWindowsAvailable = switch (operatingSystemCapability) {
+      AsyncData(:final value) => value.state == CapabilityState.available,
+      _ => false,
+    };
+    final localWindowsUnavailable = switch (operatingSystemCapability) {
+      AsyncData(:final value) => value.state != CapabilityState.available,
+      AsyncError() => true,
+      _ => false,
+    };
     if (!_settingsInitialized &&
         settingsState is! AuthenticationConfigurationLoading) {
       _settingsInitialized = true;
@@ -217,7 +230,12 @@ final class _AuthenticationFormState
               if (_recoveringAccount)
                 _buildRecoveryForm(busy)
               else
-                _buildLocalAccountForm(busy, error),
+                _buildLocalAccountForm(
+                  busy,
+                  error,
+                  localWindowsAvailable: localWindowsAvailable,
+                  localWindowsUnavailable: localWindowsUnavailable,
+                ),
               const SizedBox(height: MaestroFormSpacing.sectionToControl),
               const Divider(),
               const SizedBox(height: MaestroFormSpacing.sectionToControl),
@@ -265,7 +283,12 @@ final class _AuthenticationFormState
     );
   }
 
-  Widget _buildLocalAccountForm(bool busy, AuthenticationError? error) {
+  Widget _buildLocalAccountForm(
+    bool busy,
+    AuthenticationError? error, {
+    required bool localWindowsAvailable,
+    required bool localWindowsUnavailable,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -320,12 +343,21 @@ final class _AuthenticationFormState
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: busy ? null : _signInWithLocalWindowsCredentials,
+                  onPressed: busy || !localWindowsAvailable
+                      ? null
+                      : _signInWithLocalWindowsCredentials,
                   child: const Text('Use Windows credentials'),
                 ),
               ),
             ],
           ),
+        if (!_creatingAccount && localWindowsUnavailable) ...<Widget>[
+          const SizedBox(height: 8),
+          const Text(
+            'Windows credentials are unavailable. '
+            'Use your local password or a recovery code.',
+          ),
+        ],
         TextButton(
           onPressed: busy ? null : _toggleAccountMode,
           child: Text(

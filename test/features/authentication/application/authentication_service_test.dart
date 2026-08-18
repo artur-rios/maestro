@@ -7,6 +7,8 @@ import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
 import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
+import 'package:maestro/features/authentication/data/google_browser_authorizer.dart';
+import 'package:maestro/features/authentication/data/heimdall_authentication_gateway.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
 import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 
@@ -52,6 +54,131 @@ void main() {
       newId: _DeterministicIds().next,
     );
   });
+
+  final typedGoogleFailures = <({Object error, String code, bool browser})>[
+    (
+      error: const OAuthBrowserCancelled(),
+      code: 'authentication.google.browser.cancelled',
+      browser: true,
+    ),
+    (
+      error: const OAuthAuthorizationCancelled(),
+      code: 'authentication.google.authorization.cancelled',
+      browser: true,
+    ),
+    (
+      error: const OAuthAuthorizationTimedOut(),
+      code: 'authentication.google.authorization.timed_out',
+      browser: true,
+    ),
+    (
+      error: const OAuthCallbackStateMismatch(),
+      code: 'authentication.google.callback.state_mismatch',
+      browser: true,
+    ),
+    (
+      error: const OAuthCallbackRejected(),
+      code: 'authentication.google.callback.rejected',
+      browser: true,
+    ),
+    (
+      error: const OAuthProviderRejected(),
+      code: 'authentication.google.provider.rejected',
+      browser: true,
+    ),
+    (
+      error: const OAuthBrowserLaunchFailure(),
+      code: 'authentication.google.browser.launch_failed',
+      browser: true,
+    ),
+    (
+      error: const OAuthListenerFailure(),
+      code: 'authentication.google.listener.failed',
+      browser: true,
+    ),
+    (
+      error: const OAuthTransportFailure(),
+      code: 'authentication.google.transport.failed',
+      browser: true,
+    ),
+    (
+      error: const GoogleTokenExchangeTimedOut(),
+      code: 'authentication.google.exchange.timed_out',
+      browser: true,
+    ),
+    (
+      error: const GoogleTokenExchangeRejected(),
+      code: 'authentication.google.exchange.rejected',
+      browser: true,
+    ),
+    (
+      error: const HeimdallBaseUriInvalid(),
+      code: 'authentication.google.heimdall.configuration.invalid',
+      browser: false,
+    ),
+    (
+      error: const HeimdallAuthenticationRejected(),
+      code: 'authentication.google.heimdall.rejected',
+      browser: false,
+    ),
+    (
+      error: const HeimdallAuthenticationTimedOut(),
+      code: 'authentication.google.heimdall.timed_out',
+      browser: false,
+    ),
+    (
+      error: const HeimdallAuthenticationTransportFailure(),
+      code: 'authentication.google.heimdall.transport_failed',
+      browser: false,
+    ),
+    (
+      error: const HeimdallAuthenticationEnvelopeMalformed(),
+      code: 'authentication.google.heimdall.envelope_malformed',
+      browser: false,
+    ),
+  ];
+
+  for (final failureCase in typedGoogleFailures) {
+    test(
+      'Given${failureCase.error.runtimeType}_WhenSigningInWithGoogle_ThenStableRedactedCodeIsReturned',
+      () async {
+        if (failureCase.browser) {
+          googleAuthorization.exception = failureCase.error;
+        } else {
+          externalGateway.exception = failureCase.error;
+        }
+
+        final result = await service.signInWithGoogle();
+
+        expect(result, isA<FailureResult<AuthenticatedSession>>());
+        final failure = (result as FailureResult<AuthenticatedSession>).failure;
+        expect(failure.code, failureCase.code);
+        expect(failure.cause, isNull);
+        expect(audits.events.single.details, contains('"source":"google"'));
+        expect(audits.events.single.details, contains('"principal":"unknown"'));
+        expect(service.currentSession, isNull);
+      },
+    );
+  }
+
+  test(
+    'GivenMalformedPersistedGoogleConfiguration_WhenSigningIn_ThenStableRedactedConfigurationCodeIsReturned',
+    () async {
+      settings.exception = const FormatException('persisted-secret-sentinel');
+
+      final result = await service.signInWithGoogle();
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.google.configuration.invalid');
+      expect(failure.cause, isNull);
+      expect(failure.message, isNot(contains('persisted-secret-sentinel')));
+      expect(
+        audits.events.single.details,
+        isNot(contains('persisted-secret-sentinel')),
+      );
+    },
+  );
 
   // FR-AU-02 and FR-AU-05: normalized account creation stores a verifier only.
   test(
@@ -780,7 +907,10 @@ void main() {
     () async {
       users.emailUsers['person@example.com'] = _emailUser();
       operatingSystemAuthentication.result = const FailureResult<void>(
-        PlatformFailure(code: 'authentication.denied', message: 'Denied.'),
+        SecurityFailure(
+          code: 'authentication.operating_system.denied',
+          message: 'Denied.',
+        ),
       );
 
       final result = await service.signInWithLocalWindowsCredentials(
@@ -793,6 +923,33 @@ void main() {
         'authentication.credentials.invalid',
       );
       expect(audits.events.single.details, contains('"principal":"known"'));
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenWindowsCredentialsUnavailable_WhenSigningInToEmailAccount_ThenPasswordOrRecoveryRemediationIsReturned',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      operatingSystemAuthentication.result = const FailureResult<void>(
+        PlatformFailure(
+          code: 'authentication.operating_system.unavailable',
+          message: 'Host detail must not cross the service.',
+          remediation: 'Host remediation must not cross the service.',
+        ),
+      );
+
+      final result = await service.signInWithLocalWindowsCredentials(
+        'person@example.com',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.operating_system.unavailable');
+      expect(failure.message, isNot(contains('Host detail')));
+      expect(failure.remediation, contains('local password'));
+      expect(failure.remediation, contains('recovery code'));
+      expect(audits.events.single.details, isNot(contains('Host detail')));
       expect(service.currentSession, isNull);
     },
   );
@@ -1191,6 +1348,54 @@ void main() {
       expect(verifiers.values['verifier-email-user-1'], 'hashed:new-password');
       expect(recoveryCodes.unusedDigests, isNot(contains(code.digest)));
       expect(audits.events.single.details, isNot(contains(code.display)));
+    },
+  );
+
+  test(
+    'GivenRecoveryCodeOwnedByAnotherAccount_WhenRecoveringVictim_ThenCodeAndVictimVerifierAreUntouched',
+    () async {
+      users.emailUsers['victim@example.com'] = LocalUser(
+        id: 'victim-user',
+        email: NormalizedEmail.parse('victim@example.com'),
+        authenticationMethod: AuthenticationMethod.emailPassword,
+        verifierKey: 'verifier-victim-user',
+        createdAt: now,
+        lastAuthenticatedAt: null,
+      );
+      users.emailUsers['attacker@example.com'] = LocalUser(
+        id: 'attacker-user',
+        email: NormalizedEmail.parse('attacker@example.com'),
+        authenticationMethod: AuthenticationMethod.emailPassword,
+        verifierKey: 'verifier-attacker-user',
+        createdAt: now,
+        lastAuthenticatedAt: null,
+      );
+      verifiers.values['verifier-victim-user'] = 'hashed:victim-password';
+      final attackerCode = RecoveryCode.generate(Random(43));
+      recoveryCodes.unusedDigestsByUser['attacker-user'] = <String>{
+        attackerCode.digest,
+      };
+
+      final result = await service.recoverLocalAccount(
+        'victim@example.com',
+        attackerCode.display,
+        'attacker-chosen-password',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.recovery.invalid',
+      );
+      expect(
+        verifiers.values['verifier-victim-user'],
+        'hashed:victim-password',
+      );
+      expect(
+        recoveryCodes.unusedDigestsByUser['attacker-user'],
+        contains(attackerCode.digest),
+      );
+      expect(service.currentSession, isNull);
     },
   );
 
@@ -1594,6 +1799,7 @@ final class _FakeOperatingSystemAuthenticator
 final class _FakeRecoveryCodeRepository implements RecoveryCodeRepository {
   final List<StoredRecoveryCode> saved = <StoredRecoveryCode>[];
   final Set<String> unusedDigests = <String>{};
+  final Map<String, Set<String>> unusedDigestsByUser = <String, Set<String>>{};
   bool failWhenSaving = false;
   int successfulConsumptions = 0;
   Future<void> Function()? afterSuccessfulConsume;
@@ -1611,8 +1817,14 @@ final class _FakeRecoveryCodeRepository implements RecoveryCodeRepository {
   }
 
   @override
-  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async {
-    final consumed = unusedDigests.remove(digest);
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  ) async {
+    final consumed =
+        unusedDigests.remove(digest) ||
+        (unusedDigestsByUser[userId]?.remove(digest) ?? false);
     if (!consumed) {
       return false;
     }
@@ -1626,6 +1838,7 @@ final class _FakeRecoveryCodeRepository implements RecoveryCodeRepository {
 
 final class _FakeAuthenticationSettingsRepository
     implements AuthenticationSettingsRepository {
+  Object? exception;
   ExternalAuthenticationConfiguration? configuration =
       ExternalAuthenticationConfiguration(
         clientId: 'desktop-client.apps.googleusercontent.com',
@@ -1633,7 +1846,10 @@ final class _FakeAuthenticationSettingsRepository
       );
 
   @override
-  Future<ExternalAuthenticationConfiguration?> load() async => configuration;
+  Future<ExternalAuthenticationConfiguration?> load() async {
+    if (exception case final error?) throw error;
+    return configuration;
+  }
 
   @override
   Future<void> save(ExternalAuthenticationConfiguration configuration) async {
@@ -1645,12 +1861,14 @@ final class _FakeGoogleBrowserAuthorization
     implements GoogleBrowserAuthorization {
   Future<GoogleIdToken> Function(ExternalAuthenticationConfiguration)?
   authorizeCallback;
+  Object? exception;
   int cancelAttempts = 0;
 
   @override
   Future<GoogleIdToken> authorize(
     ExternalAuthenticationConfiguration configuration,
   ) async {
+    if (exception case final error?) throw error;
     if (authorizeCallback case final callback?) {
       return callback(configuration);
     }

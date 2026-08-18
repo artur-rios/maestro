@@ -159,10 +159,11 @@ void main() {
       final client = _StallingClient();
       final authorizer = GoogleBrowserAuthorizer(
         browser: (uri) async {
-          if (index == 2)
+          if (index == 2) {
             second.complete(
               OAuthCallback(code: 'code', state: uri.queryParameters['state']),
             );
+          }
           return true;
         },
         httpClient: client,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +10,9 @@ import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/appearance/presentation/appearance_selector.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
+import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 import 'package:maestro/features/projects/application/project_lifecycle_service.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
@@ -634,6 +637,11 @@ AuthenticationService _authenticationService({
     hasher: const _PasswordHasher(),
     audits: repository,
     operatingSystemAuthentication: operatingSystemAuthentication,
+    recoveryCodes: const _RecoveryCodeRepository(),
+    settings: const _AuthenticationSettingsRepository(),
+    googleAuthorization: const _GoogleBrowserAuthorization(),
+    externalGateway: const _ExternalAuthenticationGateway(),
+    newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
     clock: () => DateTime.utc(2026, 8, 5),
     newId: () => 'id-${nextId++}',
   );
@@ -822,4 +830,53 @@ final class _CompletingOperatingSystemAuthenticator
 
   @override
   Future<Result<void>> authenticateCurrentUser() => _completion.future;
+}
+
+final class _RecoveryCodeRepository implements RecoveryCodeRepository {
+  const _RecoveryCodeRepository();
+
+  @override
+  Future<bool> consumeUnusedDigest(
+    String userId,
+    String digest,
+    DateTime consumedAt,
+  ) async => false;
+
+  @override
+  Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {}
+}
+
+final class _AuthenticationSettingsRepository
+    implements AuthenticationSettingsRepository {
+  const _AuthenticationSettingsRepository();
+
+  @override
+  Future<ExternalAuthenticationConfiguration?> load() async => null;
+
+  @override
+  Future<void> save(ExternalAuthenticationConfiguration configuration) async {}
+}
+
+final class _GoogleBrowserAuthorization implements GoogleBrowserAuthorization {
+  const _GoogleBrowserAuthorization();
+
+  @override
+  Future<GoogleIdToken> authorize(
+    ExternalAuthenticationConfiguration configuration,
+  ) async => throw StateError('Google authorization is unavailable in tests.');
+
+  @override
+  Future<void> cancelActiveAuthorization() async {}
+}
+
+final class _ExternalAuthenticationGateway
+    implements ExternalAuthenticationGateway {
+  const _ExternalAuthenticationGateway();
+
+  @override
+  Future<ExternalTokenGrant> signInWithGoogle({
+    required String scopeId,
+    required String idToken,
+  }) async =>
+      throw StateError('External authentication is unavailable in tests.');
 }
