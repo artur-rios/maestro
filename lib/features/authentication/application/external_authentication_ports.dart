@@ -28,6 +28,8 @@ abstract interface class GoogleBrowserAuthorization {
   Future<GoogleIdToken> authorize(
     ExternalAuthenticationConfiguration configuration,
   );
+
+  Future<void> cancelActiveAuthorization();
 }
 
 final class GoogleIdToken {

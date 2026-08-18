@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -9,64 +10,85 @@ final class HeimdallAuthenticationGateway
     http.Client? client,
     Uri? baseUri,
     DateTime Function()? clock,
+    this.requestTimeout = const Duration(seconds: 30),
   }) : _client = client ?? http.Client(),
-       _baseUri =
-           baseUri ??
-           Uri.parse(
-             const String.fromEnvironment(
-               'HEIMDALL_API_BASE_URL',
-               defaultValue: 'http://localhost:8080',
+       _baseUri = _validate(
+         baseUri ??
+             Uri.parse(
+               const String.fromEnvironment(
+                 'HEIMDALL_API_BASE_URL',
+                 defaultValue: 'http://localhost:8080',
+               ),
              ),
-           ),
+       ),
        _clock = clock ?? _utcNow;
-
   final http.Client _client;
   final Uri _baseUri;
   final DateTime Function() _clock;
-
+  final Duration requestTimeout;
   @override
   Future<ExternalTokenGrant> signInWithGoogle({
     required String scopeId,
     required String idToken,
   }) async {
-    final response = await _client.post(
-      _baseUri.resolve('/api/auth/google'),
-      headers: const <String, String>{'content-type': 'application/json'},
-      body: jsonEncode(<String, String>{'scopeId': scopeId, 'idToken': idToken}),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw const HeimdallAuthenticationRejected();
+    late http.Response response;
+    try {
+      response = await _client
+          .post(
+            _baseUri.resolve('/api/auth/google'),
+            headers: const <String, String>{'content-type': 'application/json'},
+            body: jsonEncode(<String, String>{
+              'scopeId': scopeId,
+              'idToken': idToken,
+            }),
+          )
+          .timeout(requestTimeout);
+    } on TimeoutException {
+      throw const HeimdallAuthenticationTimedOut();
+    } on Object {
+      throw const HeimdallAuthenticationTransportFailure();
     }
-    return _parseGrant(response.body, _clock());
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw const HeimdallAuthenticationRejected();
+    return _parse(response.body, _clock());
   }
 
-  static ExternalTokenGrant _parseGrant(String body, DateTime now) {
+  static Uri _validate(Uri uri) {
+    final host = uri.host.toLowerCase();
+    final loopback =
+        host == 'localhost' || host == '127.0.0.1' || host == '::1';
+    if (uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.fragment.isNotEmpty ||
+        (uri.scheme != 'https' && !(uri.scheme == 'http' && loopback)))
+      throw const HeimdallBaseUriInvalid();
+    return uri;
+  }
+
+  static ExternalTokenGrant _parse(String body, DateTime now) {
     try {
-      final decoded = jsonDecode(body);
-      if (decoded is! Map<Object?, Object?> || decoded['success'] != true) {
+      final json = jsonDecode(body);
+      if (json is! Map<Object?, Object?> ||
+          json['success'] != true ||
+          json['data'] is! Map<Object?, Object?>)
         throw const HeimdallAuthenticationEnvelopeMalformed();
-      }
-      final data = decoded['data'];
-      if (data is! Map<Object?, Object?>) {
-        throw const HeimdallAuthenticationEnvelopeMalformed();
-      }
+      final data = json['data']! as Map<Object?, Object?>;
       final token = data['token'];
-      final expiresAtText = data['expiresAt'];
-      final emailVerified = data['emailVerified'];
-      final expiresAt = expiresAtText is String
-          ? DateTime.tryParse(expiresAtText)?.toUtc()
+      final expiryText = data['expiresAt'];
+      final verified = data['emailVerified'];
+      final expiry = expiryText is String
+          ? DateTime.tryParse(expiryText)?.toUtc()
           : null;
       if (token is! String ||
           token.trim().isEmpty ||
-          expiresAt == null ||
-          !expiresAt.isAfter(now.toUtc()) ||
-          emailVerified is! bool) {
+          expiry == null ||
+          !expiry.isAfter(now.toUtc()) ||
+          verified is! bool)
         throw const HeimdallAuthenticationEnvelopeMalformed();
-      }
       return ExternalTokenGrant(
         token: token,
-        expiresAt: expiresAt,
-        emailVerified: emailVerified,
+        expiresAt: expiry,
+        emailVerified: verified,
       );
     } on FormatException {
       throw const HeimdallAuthenticationEnvelopeMalformed();
@@ -74,11 +96,29 @@ final class HeimdallAuthenticationGateway
   }
 }
 
-final class HeimdallAuthenticationRejected implements Exception {
+abstract base class HeimdallFailure implements Exception {
+  const HeimdallFailure();
+  @override
+  String toString() => runtimeType.toString();
+}
+
+final class HeimdallBaseUriInvalid extends HeimdallFailure {
+  const HeimdallBaseUriInvalid();
+}
+
+final class HeimdallAuthenticationRejected extends HeimdallFailure {
   const HeimdallAuthenticationRejected();
 }
 
-final class HeimdallAuthenticationEnvelopeMalformed implements Exception {
+final class HeimdallAuthenticationTimedOut extends HeimdallFailure {
+  const HeimdallAuthenticationTimedOut();
+}
+
+final class HeimdallAuthenticationTransportFailure extends HeimdallFailure {
+  const HeimdallAuthenticationTransportFailure();
+}
+
+final class HeimdallAuthenticationEnvelopeMalformed extends HeimdallFailure {
   const HeimdallAuthenticationEnvelopeMalformed();
 }
 
