@@ -19,18 +19,18 @@ void main() {
   );
 
   test('GivenDisplayedRecoveryCode_WhenParsed_ThenInputIsNormalized', () {
-    final parsed = RecoveryCode.parse('abcd-efgh-jkmn-pqrs-tvwx-yz01-23');
+    final parsed = RecoveryCode.parse('abcd-efgh-jkmn-pqrs-tvwx-yz01-20');
 
-    expect(parsed.display, 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-23');
+    expect(parsed.display, 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-20');
     expect(parsed.digest, RecoveryCode.parse(parsed.display).digest);
   });
 
   test('GivenKnownRecoveryCode_WhenParsed_ThenDigestIsCanonicalSha256', () {
-    final code = RecoveryCode.parse('ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-23');
+    final code = RecoveryCode.parse('ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-20');
 
     expect(
       code.digest,
-      '0d0996f9c4e90a0a5ce75e7c16dfeb3d6f263ece0acc39c75858c13ba9022bd7',
+      '49c2d55bd9b79b04456d1d6718be8fdd5c0e9121243f07d58dcb4b820d0eab81',
     );
   });
 
