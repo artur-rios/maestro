@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
+import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
+import 'package:maestro/features/authentication/presentation/authentication_settings_controller.dart';
 import 'package:maestro/features/foundation/application/foundation_probe.dart';
 import 'package:maestro/features/foundation/presentation/foundation_controller.dart';
 import 'package:maestro/features/foundation/presentation/foundation_page.dart';
@@ -20,6 +22,7 @@ class MaestroApp extends StatefulWidget {
   const MaestroApp({
     required this.appearanceController,
     required this.authenticationService,
+    this.authenticationSettingsRepository,
     this.projectService,
     this.projectLifecycleService,
     this.projectFolderPicker,
@@ -37,6 +40,7 @@ class MaestroApp extends StatefulWidget {
 
   final AppearanceController appearanceController;
   final AuthenticationService authenticationService;
+  final AuthenticationSettingsRepository? authenticationSettingsRepository;
   final ProjectService? projectService;
   final ProjectLifecycleService? projectLifecycleService;
   final ProjectFolderPicker? projectFolderPicker;
@@ -82,6 +86,10 @@ final class _MaestroAppState extends State<MaestroApp> {
         authenticationServiceProvider.overrideWithValue(
           widget.authenticationService,
         ),
+        if (widget.authenticationSettingsRepository case final repository?)
+          authenticationSettingsRepositoryProvider.overrideWithValue(
+            repository,
+          ),
         foundationProbesProvider.overrideWithValue(widget.foundationProbes),
         if (projectService != null)
           projectServiceProvider.overrideWithValue(projectService),

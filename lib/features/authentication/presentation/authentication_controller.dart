@@ -92,10 +92,7 @@ final class AuthenticationController
   }
 
   Future<void> createAccount(String email, String password) {
-    return _authenticate(
-      () => _service.createAccount(email, password),
-      _AuthenticationOperation.accountCreation,
-    );
+    return _createAccount(email, password);
   }
 
   void clearError() {
@@ -130,6 +127,25 @@ final class AuthenticationController
         return;
       }
       state = _genericFailure(operation);
+    }
+  }
+
+  Future<void> _createAccount(String email, String password) async {
+    final operationGeneration = ++_operationGeneration;
+    state = const AuthenticationInProgress();
+    try {
+      final result = await _service.createAccount(email, password);
+      if (!_ownsAuthenticationOperation(operationGeneration)) return;
+      state = result.fold<AuthenticationPresentationState>(
+        // Account creation deliberately waits for recovery-code acknowledgement
+        // before a session may be published.
+        onSuccess: (_) => const AuthenticationSignedOut(),
+        onFailure: (failure) =>
+            _presentFailure(failure, _AuthenticationOperation.accountCreation),
+      );
+    } on Object {
+      if (!_ownsAuthenticationOperation(operationGeneration)) return;
+      state = _genericFailure(_AuthenticationOperation.accountCreation);
     }
   }
 
