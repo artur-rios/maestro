@@ -63,6 +63,13 @@ abstract interface class AuditRepository {
   Future<void> deleteEvent(String eventId);
 }
 
+typedef SessionExpiryCancellation = void Function();
+typedef SessionExpiryScheduler =
+    SessionExpiryCancellation Function(
+      Duration delay,
+      void Function() onExpiry,
+    );
+
 final class AuthenticationService {
   AuthenticationService({
     required this._users,
@@ -77,7 +84,8 @@ final class AuthenticationService {
     required this._newRecoveryCodeSet,
     required this._clock,
     required this._newId,
-  });
+    SessionExpiryScheduler? scheduleExpiry,
+  }) : _scheduleExpiry = scheduleExpiry ?? _scheduleTimer;
 
   final LocalUserRepository _users;
   final PasswordVerifierStore _verifiers;
@@ -91,18 +99,24 @@ final class AuthenticationService {
   final NewRecoveryCodeSet Function() _newRecoveryCodeSet;
   final DateTime Function() _clock;
   final String Function() _newId;
+  final SessionExpiryScheduler _scheduleExpiry;
+  final StreamController<AuthenticatedSession?> _sessionChanges =
+      StreamController<AuthenticatedSession?>.broadcast(sync: true);
 
   AuthenticatedSession? _currentSession;
-  AuthenticatedSession? _pendingCreatedSession;
+  ManagedAuthenticatedSession? _currentSessionAuthority;
+  ManagedAuthenticatedSession? _pendingCreatedSessionAuthority;
   int? _pendingCreationGeneration;
   int _operationGeneration = 0;
   bool _disposed = false;
+  SessionExpiryCancellation? _cancelSessionExpiry;
+
+  Stream<AuthenticatedSession?> get sessionChanges => _sessionChanges.stream;
 
   AuthenticatedSession? get currentSession {
     final session = _currentSession;
-    final expiresAt = session?.remoteTokenExpiresAt;
-    if (expiresAt != null && !expiresAt.isAfter(_clock())) {
-      signOut();
+    if (session != null && !session.isActive) {
+      _expireSession(session);
       return null;
     }
     return session;
@@ -208,14 +222,19 @@ final class AuthenticationService {
           ),
         );
       }
-      final session = AuthenticatedSession.fullControl(
+      final sessionAuthority = ManagedAuthenticatedSession.fullControl(
         user.id,
         source: AuthenticationSource.localPassword,
+        clock: _clock,
+        active: false,
       );
-      _pendingCreatedSession = session;
+      _pendingCreatedSessionAuthority = sessionAuthority;
       _pendingCreationGeneration = generation;
       return Success<LocalAccountCreation>(
-        LocalAccountCreation(session: session, recoveryCodes: codeSet),
+        LocalAccountCreation(
+          session: sessionAuthority.session,
+          recoveryCodes: codeSet,
+        ),
       );
     } catch (error) {
       if (user != null && verifierKey != null) {
@@ -234,10 +253,10 @@ final class AuthenticationService {
   }
 
   Result<AuthenticatedSession> acknowledgeRecoveryCodes() {
-    final session = _pendingCreatedSession;
+    final sessionAuthority = _pendingCreatedSessionAuthority;
     final generation = _pendingCreationGeneration;
-    _clearPendingCreation();
-    if (session == null || generation == null || !_owns(generation)) {
+    if (sessionAuthority == null || generation == null || !_owns(generation)) {
+      _clearPendingCreation();
       return const FailureResult<AuthenticatedSession>(
         SecurityFailure(
           code: 'authentication.recovery_codes.acknowledgement_required',
@@ -245,8 +264,11 @@ final class AuthenticationService {
         ),
       );
     }
-    _currentSession = session;
-    return Success<AuthenticatedSession>(session);
+    _pendingCreatedSessionAuthority = null;
+    _pendingCreationGeneration = null;
+    sessionAuthority.activate();
+    _publishSession(sessionAuthority);
+    return Success<AuthenticatedSession>(sessionAuthority.session);
   }
 
   Future<Result<AuthenticatedSession>> signInWithEmail(
@@ -390,14 +412,27 @@ final class AuthenticationService {
         if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidGoogleIdentity();
       }
-      await _appendAudit(
+      final successAudit = _newAuditEvent(
         actorId: subject,
         action: AuthenticationAuditAction.signIn,
         target: subject,
         outcome: AuthenticationAuditOutcome.success,
         details: _auditDetails('google', known: true),
       );
+      await _audits.append(successAudit);
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (!grant.expiresAt.isAfter(_clock())) {
+        try {
+          await _audits.deleteEvent(successAudit.id);
+          if (!_owns(generation)) return _stale<AuthenticatedSession>();
+          await _appendFailedAuthentication(subject, source: 'google');
+          if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        } catch (_) {
+          // Expiry rejection remains authoritative if audit cleanup also fails.
+        }
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidGoogleIdentity();
+      }
       return _openSession(
         subject,
         generation,
@@ -505,7 +540,7 @@ final class AuthenticationService {
 
   void signOut() {
     _operationGeneration++;
-    _currentSession = null;
+    _clearCurrentSession();
     _clearPendingCreation();
     unawaited(_cancelActiveGoogleAuthorization());
   }
@@ -514,9 +549,10 @@ final class AuthenticationService {
     if (_disposed) return;
     _disposed = true;
     _operationGeneration++;
-    _currentSession = null;
+    _clearCurrentSession();
     _clearPendingCreation();
     unawaited(_cancelActiveGoogleAuthorization());
+    unawaited(_sessionChanges.close());
   }
 
   Future<Result<AuthenticatedSession>> _completeLocalSignIn(
@@ -697,7 +733,8 @@ final class AuthenticationService {
   }
 
   void _clearPendingCreation() {
-    _pendingCreatedSession = null;
+    _pendingCreatedSessionAuthority?.revoke();
+    _pendingCreatedSessionAuthority = null;
     _pendingCreationGeneration = null;
   }
 
@@ -720,14 +757,82 @@ final class AuthenticationService {
     DateTime? remoteTokenExpiresAt,
   }) {
     if (!_owns(generation)) return _stale<AuthenticatedSession>();
-    final session = AuthenticatedSession.fullControl(
+    if (remoteTokenExpiresAt != null &&
+        !remoteTokenExpiresAt.isAfter(_clock())) {
+      return _invalidGoogleIdentity();
+    }
+    final sessionAuthority = ManagedAuthenticatedSession.fullControl(
       userId,
       source: source,
+      clock: _clock,
       remoteToken: remoteToken,
       remoteTokenExpiresAt: remoteTokenExpiresAt,
     );
+    _publishSession(sessionAuthority);
+    return Success<AuthenticatedSession>(sessionAuthority.session);
+  }
+
+  void _publishSession(ManagedAuthenticatedSession sessionAuthority) {
+    _cancelSessionExpiry?.call();
+    _cancelSessionExpiry = null;
+    _currentSessionAuthority?.revoke();
+    _currentSessionAuthority = sessionAuthority;
+    final session = sessionAuthority.session;
     _currentSession = session;
-    return Success<AuthenticatedSession>(session);
+    if (!_sessionChanges.isClosed) {
+      _sessionChanges.add(session);
+    }
+    _scheduleSessionExpiry(session);
+  }
+
+  void _scheduleSessionExpiry(AuthenticatedSession session) {
+    final expiresAt = session.remoteTokenExpiresAt;
+    if (expiresAt == null) {
+      return;
+    }
+    final remaining = expiresAt.difference(_clock());
+    if (remaining <= Duration.zero) {
+      _expireSession(session);
+      return;
+    }
+    _cancelSessionExpiry = _scheduleExpiry(
+      remaining,
+      () => _expireSession(session),
+    );
+  }
+
+  void _expireSession(AuthenticatedSession session) {
+    if (!identical(_currentSession, session)) {
+      return;
+    }
+    if (session.isActive) {
+      _scheduleSessionExpiry(session);
+      return;
+    }
+    _clearCurrentSession();
+  }
+
+  void _clearCurrentSession() {
+    _cancelSessionExpiry?.call();
+    _cancelSessionExpiry = null;
+    final session = _currentSession;
+    if (session == null) {
+      return;
+    }
+    _currentSessionAuthority?.revoke();
+    _currentSessionAuthority = null;
+    _currentSession = null;
+    if (!_sessionChanges.isClosed) {
+      _sessionChanges.add(null);
+    }
+  }
+
+  static SessionExpiryCancellation _scheduleTimer(
+    Duration delay,
+    void Function() onExpiry,
+  ) {
+    final timer = Timer(delay, onExpiry);
+    return timer.cancel;
   }
 
   FailureResult<T> _staleAfter<T>(StorageFailure? failure) =>
