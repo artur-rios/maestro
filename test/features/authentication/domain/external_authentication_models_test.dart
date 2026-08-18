@@ -9,25 +9,28 @@ void main() {
     () {
       final code = RecoveryCode.generate(Random(7));
 
-      expect(code.display, matches(RegExp(r'^[A-Z0-9]{4}(-[A-Z0-9]{4}){4}$')));
+      expect(
+        code.display,
+        matches(RegExp(r'^[A-Z0-9]{4}(-[A-Z0-9]{4}){5}-[A-Z0-9]{2}$')),
+      );
       expect(code.digest, hasLength(64));
       expect(code.digest, isNot(contains(code.display)));
     },
   );
 
   test('GivenDisplayedRecoveryCode_WhenParsed_ThenInputIsNormalized', () {
-    final parsed = RecoveryCode.parse('abcd-efgh-jkmn-pqrs-tvwx');
+    final parsed = RecoveryCode.parse('abcd-efgh-jkmn-pqrs-tvwx-yz01-23');
 
-    expect(parsed.display, 'ABCD-EFGH-JKMN-PQRS-TVWX');
+    expect(parsed.display, 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-23');
     expect(parsed.digest, RecoveryCode.parse(parsed.display).digest);
   });
 
   test('GivenMalformedRecoveryCode_WhenParsed_ThenItThrows', () {
     for (final input in <String>[
       '',
-      'ABCD-EFGH',
-      'ABCD-EFGH-I L M N-PQRS-TUVW',
-      'ABCD-EFGH-IJKL-PQRS-TUV!',
+      'ABCD-EFGH-JKMN-PQRS-TVWX',
+      'ABCD-EFGH-JKMN-PQRS-TVWX-YZ0!',
+      'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-234',
     ]) {
       expect(() => RecoveryCode.parse(input), throwsFormatException);
     }

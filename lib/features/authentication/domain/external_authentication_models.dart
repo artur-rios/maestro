@@ -44,20 +44,20 @@ final class RecoveryCode {
   static const int _byteCount = 16;
   static const String _alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   static final RegExp _displayPattern = RegExp(
-    r'^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{4}(-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{4}){4}$',
+    r'^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{4}(-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{4}){5}-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{2}$',
   );
 
   RecoveryCode._(this.display, this.digest);
 
   factory RecoveryCode.generate(Random random) {
     final bytes = List<int>.generate(_byteCount, (_) => random.nextInt(256));
-    final encoded = _encode(bytes).substring(0, 20);
+    final encoded = _encode(bytes);
     return RecoveryCode._(_format(encoded), _digest(encoded));
   }
 
   factory RecoveryCode.parse(String input) {
     final canonical = input.replaceAll('-', '').trim().toUpperCase();
-    if (canonical.length != 20 ||
+    if (canonical.length != 26 ||
         !_displayPattern.hasMatch(_format(canonical))) {
       throw const FormatException('Recovery code is malformed.');
     }
@@ -67,9 +67,15 @@ final class RecoveryCode {
   final String display;
   final String digest;
 
-  static String _format(String canonical) => RegExp(
-    r'(.{4})',
-  ).allMatches(canonical).map((match) => match.group(1)!).join('-');
+  static String _format(String canonical) {
+    final groups = <String>[];
+    for (var offset = 0; offset < canonical.length; offset += 4) {
+      groups.add(
+        canonical.substring(offset, min(offset + 4, canonical.length)),
+      );
+    }
+    return groups.join('-');
+  }
 
   static String _digest(String canonical) =>
       sha256.convert(utf8.encode(canonical)).toString();
