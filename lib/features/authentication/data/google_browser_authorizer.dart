@@ -81,12 +81,12 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
     _Operation operation,
     _Operation? previous,
   ) async {
-    await previous?.cancel();
-    final verifier = _base64Url(_randomBytes(32));
-    final state = _base64Url(_randomBytes(32));
-    final challenge = _base64Url(sha256.convert(utf8.encode(verifier)).bytes);
     Object? primaryError;
     try {
+      await previous?.cancel();
+      final verifier = _base64Url(_randomBytes(32));
+      final state = _base64Url(_randomBytes(32));
+      final challenge = _base64Url(sha256.convert(utf8.encode(verifier)).bytes);
       final server = await _bind(operation);
       final opened = await _launch(
         operation,
@@ -99,7 +99,6 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
       final callback = await _callback(operation, server, remaining);
       if (!_constantTimeEquals(callback.state, state))
         throw const OAuthCallbackStateMismatch();
-      await operation.closeListener();
       if (callback.error != null) {
         if (callback.error == 'access_denied')
           throw const OAuthBrowserCancelled();
@@ -108,6 +107,11 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
       final code = callback.code;
       if (code == null || code.trim().isEmpty)
         throw const OAuthCallbackRejected();
+      try {
+        await operation.closeListener();
+      } on Object {
+        throw const OAuthListenerFailure();
+      }
       final response = await _exchange(
         operation,
         code,
@@ -201,9 +205,12 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
     } on OAuthAuthorizationCancelled {
       rethrow;
     } on TimeoutException {
+      _abortExchangeSilently(operation);
       throw const GoogleTokenExchangeTimedOut();
     } on Object {
       throw const OAuthTransportFailure();
+    } finally {
+      _abortExchangeSilently(operation);
     }
   }
 
@@ -305,9 +312,9 @@ final class _Operation {
     if (!_isCancelled) {
       _isCancelled = true;
       _cancelled.complete();
-      _abortExchange?.call();
     }
     try {
+      abortExchange();
       await closeListener();
     } on Object {
       throw const OAuthListenerFailure();
@@ -323,6 +330,18 @@ final class _Operation {
       abort();
     } else {
       _abortExchange = abort;
+    }
+  }
+
+  void abortExchange() {
+    final abort = _abortExchange;
+    _abortExchange = null;
+    if (abort != null) {
+      try {
+        abort();
+      } on Object {
+        throw const OAuthTransportFailure();
+      }
     }
   }
 
@@ -416,6 +435,14 @@ List<int> _secureRandomBytes(int length) {
 }
 
 DateTime _utcNow() => DateTime.now().toUtc();
+void _abortExchangeSilently(_Operation operation) {
+  try {
+    operation.abortExchange();
+  } on Object {
+    // The caller's cancellation, timeout, or transport result remains primary.
+  }
+}
+
 bool _constantTimeEquals(String? actual, String expected) {
   if (actual == null) return false;
   final a = utf8.encode(actual);

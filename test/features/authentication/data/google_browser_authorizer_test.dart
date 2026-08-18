@@ -220,6 +220,44 @@ void main() {
       }
     },
   );
+
+  test('GivenExchangeTimeout_WhenAuthorized_ThenItAbortsOwnedClient', () async {
+    final server = _FakeServer();
+    final client = _StallingClient();
+    final authorizer = GoogleBrowserAuthorizer(
+      browser: (uri) async {
+        server.complete(
+          OAuthCallback(code: 'code', state: uri.queryParameters['state']),
+        );
+        return true;
+      },
+      httpClientFactory: () => client,
+      loopbackServerFactory: () async => server,
+      randomBytes: (_) => List<int>.filled(32, 1),
+      tokenExchangeTimeout: Duration.zero,
+    );
+
+    await expectLater(
+      authorizer.authorize(configuration),
+      throwsA(isA<GoogleTokenExchangeTimedOut>()),
+    );
+    expect(client.closeCalls, 1);
+  });
+
+  test(
+    'GivenCloseFailureAndStateMismatch_WhenAuthorized_ThenStateMismatchRemainsPrimary',
+    () async {
+      final server = _FakeServer()..closeError = StateError('close-secret');
+      final authorizer = _authorizer(server, (uri) {
+        server.complete(const OAuthCallback(code: 'code', state: 'wrong'));
+      });
+
+      await expectLater(
+        authorizer.authorize(configuration),
+        throwsA(isA<OAuthCallbackStateMismatch>()),
+      );
+    },
+  );
 }
 
 GoogleBrowserAuthorizer _authorizer(
@@ -265,6 +303,7 @@ final class _FakeServer implements OAuthLoopbackServer {
   Uri authorizationUri = Uri();
   var closeCalls = 0;
   var nextCalls = 0;
+  Object? closeError;
   @override
   Uri get redirectUri => Uri.parse('http://127.0.0.1:49152/callback');
   void complete(OAuthCallback callback) => _callback.complete(callback);
@@ -277,6 +316,8 @@ final class _FakeServer implements OAuthLoopbackServer {
   @override
   Future<void> close() async {
     closeCalls++;
+    final error = closeError;
+    if (error != null) throw error;
   }
 }
 
@@ -302,9 +343,15 @@ final class _StallingClient extends http.BaseClient {
   final Completer<http.StreamedResponse> _response =
       Completer<http.StreamedResponse>();
   var started = false;
+  var closeCalls = 0;
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
     started = true;
     return _response.future;
+  }
+
+  @override
+  void close() {
+    closeCalls++;
   }
 }
