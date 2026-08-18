@@ -23,3 +23,34 @@ abstract interface class RecoveryCodeRepository {
 
   Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt);
 }
+
+abstract interface class GoogleBrowserAuthorization {
+  Future<GoogleIdToken> authorize(
+    ExternalAuthenticationConfiguration configuration,
+  );
+}
+
+final class GoogleIdToken {
+  const GoogleIdToken(this.value);
+
+  final String value;
+}
+
+abstract interface class ExternalAuthenticationGateway {
+  Future<ExternalTokenGrant> signInWithGoogle({
+    required String scopeId,
+    required String idToken,
+  });
+}
+
+final class ExternalTokenGrant {
+  const ExternalTokenGrant({
+    required this.token,
+    required this.expiresAt,
+    required this.emailVerified,
+  });
+
+  final String token;
+  final DateTime expiresAt;
+  final bool emailVerified;
+}
