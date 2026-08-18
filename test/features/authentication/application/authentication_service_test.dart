@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
+import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 
 void main() {
   late _FakeLocalUserRepository users;
@@ -12,6 +16,11 @@ void main() {
   late _FakePasswordHasher hasher;
   late _FakeAuditRepository audits;
   late _FakeOperatingSystemAuthenticator operatingSystemAuthentication;
+  late _FakeRecoveryCodeRepository recoveryCodes;
+  late _FakeAuthenticationSettingsRepository settings;
+  late _FakeGoogleBrowserAuthorization googleAuthorization;
+  late _FakeExternalAuthenticationGateway externalGateway;
+  late DateTime now;
   late AuthenticationService service;
 
   setUp(() {
@@ -20,13 +29,23 @@ void main() {
     hasher = _FakePasswordHasher();
     audits = _FakeAuditRepository();
     operatingSystemAuthentication = _FakeOperatingSystemAuthenticator();
+    recoveryCodes = _FakeRecoveryCodeRepository();
+    settings = _FakeAuthenticationSettingsRepository();
+    googleAuthorization = _FakeGoogleBrowserAuthorization();
+    externalGateway = _FakeExternalAuthenticationGateway();
+    now = DateTime.utc(2026, 8, 5, 12);
     service = AuthenticationService(
       users: users,
       verifiers: verifiers,
       hasher: hasher,
       audits: audits,
       operatingSystemAuthentication: operatingSystemAuthentication,
-      clock: () => DateTime.utc(2026, 8, 5, 12),
+      recoveryCodes: recoveryCodes,
+      settings: settings,
+      googleAuthorization: googleAuthorization,
+      externalGateway: externalGateway,
+      newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
+      clock: () => now,
       newId: _DeterministicIds().next,
     );
   });
@@ -40,12 +59,12 @@ void main() {
         'password1',
       );
 
-      expect(result, isA<Success<AuthenticatedSession>>());
+      expect(result, isA<Success<LocalAccountCreation>>());
       expect(users.saved, hasLength(1));
       expect(users.saved.single.email!.value, 'user@example.com');
       expect(verifiers.writes.keys, contains('maestro.auth.verifier.user-1'));
       expect(audits.events.single.outcome, AuthenticationAuditOutcome.success);
-      expect(service.currentSession?.userId, 'user-1');
+      expect(service.currentSession, isNull);
     },
   );
 
@@ -60,7 +79,7 @@ void main() {
         'password1',
       );
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
       expect(verifiers.writes, isEmpty);
       expect(users.saved, isEmpty);
       expect(audits.events, isEmpty);
@@ -73,9 +92,9 @@ void main() {
     () async {
       final result = await service.createAccount('user@example.com', 'short');
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
       expect(
-        (result as FailureResult<AuthenticatedSession>).failure,
+        (result as FailureResult<LocalAccountCreation>).failure,
         isA<ValidationFailure>(),
       );
       expect(verifiers.writes, isEmpty);
@@ -96,10 +115,10 @@ void main() {
 
         expect(
           result,
-          isA<FailureResult<AuthenticatedSession>>(),
+          isA<FailureResult<LocalAccountCreation>>(),
           reason: email,
         );
-        final failure = (result as FailureResult<AuthenticatedSession>).failure;
+        final failure = (result as FailureResult<LocalAccountCreation>).failure;
         expect(failure, isA<ValidationFailure>(), reason: email);
         expect(failure.code, 'authentication.email.invalid', reason: email);
       }
@@ -138,7 +157,7 @@ void main() {
 
     final result = await service.createAccount('user@example.com', 'password1');
 
-    expect(result, isA<FailureResult<AuthenticatedSession>>());
+    expect(result, isA<FailureResult<LocalAccountCreation>>());
     expect(verifiers.deleted, <String>['maestro.auth.verifier.user-1']);
     expect(service.currentSession, isNull);
   });
@@ -154,7 +173,7 @@ void main() {
         'password1',
       );
 
-      expect(failed, isA<FailureResult<AuthenticatedSession>>());
+      expect(failed, isA<FailureResult<LocalAccountCreation>>());
       expect(users.deletedUserIds, <String>['user-1']);
       expect(verifiers.deleted, <String>['maestro.auth.verifier.user-1']);
       expect(service.currentSession, isNull);
@@ -165,7 +184,7 @@ void main() {
         'password1',
       );
 
-      expect(retried, isA<Success<AuthenticatedSession>>());
+      expect(retried, isA<Success<LocalAccountCreation>>());
     },
   );
 
@@ -181,8 +200,8 @@ void main() {
         'password1',
       );
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
-      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
+      final failure = (result as FailureResult<LocalAccountCreation>).failure;
       expect(failure.code, 'authentication.verifier.cleanup.failed');
       expect(failure.cause, isNull);
       expect(failure.message, isNot(contains('password1')));
@@ -206,9 +225,9 @@ void main() {
       releaseWrite.complete();
       final result = await pending;
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
       expect(
-        (result as FailureResult<AuthenticatedSession>).failure.code,
+        (result as FailureResult<LocalAccountCreation>).failure.code,
         'authentication.operation.stale',
       );
       expect(verifiers.values, isEmpty);
@@ -237,9 +256,9 @@ void main() {
       releaseSave.complete();
       final result = await pending;
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
       expect(
-        (result as FailureResult<AuthenticatedSession>).failure.code,
+        (result as FailureResult<LocalAccountCreation>).failure.code,
         'authentication.operation.stale',
       );
       expect(verifiers.values, isEmpty);
@@ -268,9 +287,9 @@ void main() {
       releaseAppend.complete();
       final result = await pending;
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
       expect(
-        (result as FailureResult<AuthenticatedSession>).failure.code,
+        (result as FailureResult<LocalAccountCreation>).failure.code,
         'authentication.operation.stale',
       );
       expect(audits.events, isEmpty);
@@ -300,8 +319,8 @@ void main() {
       releaseSave.complete();
       final result = await pending;
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
-      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
+      final failure = (result as FailureResult<LocalAccountCreation>).failure;
       expect(failure.code, 'authentication.account.cleanup.failed');
       expect(failure.cause, isNull);
       expect(verifiers.values, isEmpty);
@@ -326,8 +345,8 @@ void main() {
       releaseAppend.complete();
       final result = await pending;
 
-      expect(result, isA<FailureResult<AuthenticatedSession>>());
-      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
+      final failure = (result as FailureResult<LocalAccountCreation>).failure;
       expect(failure.code, 'authentication.audit.cleanup.failed');
       expect(failure.cause, isNull);
       expect(audits.events, hasLength(1));
@@ -370,7 +389,10 @@ void main() {
 
       expect(result, isA<FailureResult<AuthenticatedSession>>());
       expect(audits.events.single.outcome, AuthenticationAuditOutcome.failure);
-      expect(audits.events.single.details, '{"principal":"known"}');
+      expect(
+        audits.events.single.details,
+        '{"principal":"known","source":"local_password"}',
+      );
       expect(audits.events.single.details, isNot(contains('user@example.com')));
       expect(audits.events.single.details, isNot(contains('wrong')));
       expect(service.currentSession, isNull);
@@ -387,7 +409,10 @@ void main() {
       );
 
       expect(result, isA<FailureResult<AuthenticatedSession>>());
-      expect(audits.events.single.details, '{"principal":"unknown"}');
+      expect(
+        audits.events.single.details,
+        '{"principal":"unknown","source":"local_password"}',
+      );
       expect(service.currentSession, isNull);
     },
   );
@@ -595,6 +620,342 @@ void main() {
       expect(service.currentSession, isNull);
     },
   );
+
+  test(
+    'GivenNewLocalAccount_WhenCreated_ThenCodesArePersistedAndSessionWaitsForAcknowledgement',
+    () async {
+      final result = await service.createAccount(
+        'person@example.com',
+        'strong-password',
+      );
+
+      expect(result, isA<Success<LocalAccountCreation>>());
+      final creation = (result as Success<LocalAccountCreation>).value;
+      expect(creation.recoveryCodes.codes, hasLength(RecoveryCode.count));
+      expect(recoveryCodes.saved, hasLength(RecoveryCode.count));
+      expect(
+        recoveryCodes.saved.map((code) => code.digest),
+        unorderedEquals(
+          creation.recoveryCodes.codes.map((code) => code.digest),
+        ),
+      );
+      expect(
+        recoveryCodes.saved.join(),
+        isNot(contains(creation.recoveryCodes.codes.first.display)),
+      );
+      expect(service.currentSession, isNull);
+
+      final acknowledged = service.acknowledgeRecoveryCodes();
+
+      expect(acknowledged, isA<Success<AuthenticatedSession>>());
+      expect(service.currentSession?.userId, creation.session.userId);
+      expect(
+        service.currentSession?.source,
+        AuthenticationSource.localPassword,
+      );
+    },
+  );
+
+  test(
+    'GivenRecoveryCodesAlreadyAcknowledged_WhenAcknowledgingAgain_ThenNoSessionIsRepublished',
+    () async {
+      await service.createAccount('person@example.com', 'strong-password');
+      service.acknowledgeRecoveryCodes();
+      service.signOut();
+
+      final result = service.acknowledgeRecoveryCodes();
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenRecoveryCodePersistenceFailure_WhenCreating_ThenAccountAndVerifierAreCompensated',
+    () async {
+      recoveryCodes.failWhenSaving = true;
+
+      final result = await service.createAccount(
+        'person@example.com',
+        'strong-password',
+      );
+
+      expect(result, isA<FailureResult<LocalAccountCreation>>());
+      expect(users.deletedUserIds, <String>['user-1']);
+      expect(verifiers.values, isEmpty);
+      expect(audits.events, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenEmailAccountAndVerifiedWindowsCredentials_WhenSigningIn_ThenItOpensThatEmailSession',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+
+      final result = await service.signInWithLocalWindowsCredentials(
+        'person@example.com',
+      );
+
+      expect(result, isA<Success<AuthenticatedSession>>());
+      expect(
+        (result as Success<AuthenticatedSession>).value.userId,
+        'email-user-1',
+      );
+      expect(service.currentSession?.source, AuthenticationSource.localWindows);
+      expect(verifiers.readKeys, isEmpty);
+      expect(operatingSystemAuthentication.attempts, 1);
+    },
+  );
+
+  test(
+    'GivenUnknownEmail_WhenSigningInWithWindows_ThenNativePromptIsNotOpenedAndFailureIsRedacted',
+    () async {
+      final result = await service.signInWithLocalWindowsCredentials(
+        'missing@example.com',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(operatingSystemAuthentication.attempts, 0);
+      expect(audits.events.single.details, contains('"principal":"unknown"'));
+      expect(
+        audits.events.single.details,
+        isNot(contains('missing@example.com')),
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenPendingWindowsCredentialPrompt_WhenSignedOut_ThenLateSuccessCannotOpenSession',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      final completion = Completer<Result<void>>();
+      operatingSystemAuthentication.authenticate = () => completion.future;
+      final pending = service.signInWithLocalWindowsCredentials(
+        'person@example.com',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      service.signOut();
+      completion.complete(const Success<void>(null));
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.operation.stale',
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenWindowsAdapterAndFailureAuditThrow_WhenSigningInToEmailAccount_ThenTypedPlatformFailureIsReturned',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      operatingSystemAuthentication.exception = StateError('native detail');
+      audits.failWhenAppending = true;
+
+      final result = await service.signInWithLocalWindowsCredentials(
+        'person@example.com',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure, isA<PlatformFailure>());
+      expect(failure.cause, isNull);
+      expect(failure.message, isNot(contains('native detail')));
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenValidGoogleGrant_WhenSigningIn_ThenJwtSubjectOwnsExpiringExternalSession',
+    () async {
+      externalGateway.grant = ExternalTokenGrant(
+        token: _jwtWithPayload(<String, Object?>{'sub': 'external-actor'}),
+        expiresAt: now.add(const Duration(minutes: 30)),
+        emailVerified: true,
+      );
+
+      final result = await service.signInWithGoogle();
+
+      expect(result, isA<Success<AuthenticatedSession>>());
+      expect(service.currentSession?.userId, 'external-actor');
+      expect(service.currentSession?.source, AuthenticationSource.google);
+      expect(service.currentSession?.remoteToken, externalGateway.grant.token);
+      expect(
+        service.currentSession?.remoteTokenExpiresAt,
+        externalGateway.grant.expiresAt,
+      );
+
+      now = externalGateway.grant.expiresAt;
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenGoogleGrantWithoutSubject_WhenSigningIn_ThenItFailsWithoutLeakingToken',
+    () async {
+      externalGateway.grant = ExternalTokenGrant(
+        token: _jwtWithPayload(<String, Object?>{
+          'email': 'person@example.com',
+        }),
+        expiresAt: now.add(const Duration(minutes: 30)),
+        emailVerified: true,
+      );
+
+      final result = await service.signInWithGoogle();
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      final failure = (result as FailureResult<AuthenticatedSession>).failure;
+      expect(failure.code, 'authentication.google.identity.invalid');
+      expect(failure.cause, isNull);
+      expect(failure.message, isNot(contains(externalGateway.grant.token)));
+      expect(
+        audits.events.single.details,
+        isNot(contains(externalGateway.grant.token)),
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenPendingGoogleAuthorization_WhenSignedOut_ThenAuthorizationIsCancelledAndCannotOpenSession',
+    () async {
+      final completion = Completer<GoogleIdToken>();
+      googleAuthorization.authorizeCallback = (_) => completion.future;
+      final pending = service.signInWithGoogle();
+      await Future<void>.delayed(Duration.zero);
+
+      service.signOut();
+      completion.complete(const GoogleIdToken('late-id-token'));
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(googleAuthorization.cancelAttempts, greaterThanOrEqualTo(1));
+      expect(externalGateway.idTokens, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenUnusedRecoveryCode_WhenRecovering_ThenItConsumesCodeAndReplacesVerifier',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      final code = RecoveryCode.generate(Random(11));
+      recoveryCodes.unusedDigests.add(code.digest);
+
+      final result = await service.recoverLocalAccount(
+        'person@example.com',
+        code.display,
+        'new-password',
+      );
+
+      expect(result, isA<Success<AuthenticatedSession>>());
+      expect(service.currentSession?.userId, 'email-user-1');
+      expect(service.currentSession?.source, AuthenticationSource.recoveryCode);
+      expect(verifiers.values['verifier-email-user-1'], 'hashed:new-password');
+      expect(recoveryCodes.unusedDigests, isNot(contains(code.digest)));
+      expect(audits.events.single.details, isNot(contains(code.display)));
+    },
+  );
+
+  test(
+    'GivenVerifierWriteFailsAfterRecoveryConsumption_WhenRecovering_ThenCodeRemainsSpent',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      final code = RecoveryCode.generate(Random(13));
+      recoveryCodes.unusedDigests.add(code.digest);
+      verifiers.failWhenWriting = true;
+
+      final result = await service.recoverLocalAccount(
+        'person@example.com',
+        code.display,
+        'new-password',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(recoveryCodes.unusedDigests, isNot(contains(code.digest)));
+      expect(audits.events.single.outcome, AuthenticationAuditOutcome.failure);
+      expect(audits.events.single.details, isNot(contains(code.display)));
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenConcurrentRecoveryAttempts_WhenUsingOneCode_ThenExactlyOneReplacesTheVerifier',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      final code = RecoveryCode.generate(Random(17));
+      recoveryCodes.unusedDigests.add(code.digest);
+      final competingService = AuthenticationService(
+        users: users,
+        verifiers: verifiers,
+        hasher: hasher,
+        audits: audits,
+        operatingSystemAuthentication: operatingSystemAuthentication,
+        recoveryCodes: recoveryCodes,
+        settings: settings,
+        googleAuthorization: googleAuthorization,
+        externalGateway: externalGateway,
+        newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(19)),
+        clock: () => now,
+        newId: _DeterministicIds().next,
+      );
+
+      final results = await Future.wait(<Future<Result<AuthenticatedSession>>>[
+        service.recoverLocalAccount(
+          'person@example.com',
+          code.display,
+          'first-password',
+        ),
+        competingService.recoverLocalAccount(
+          'person@example.com',
+          code.display,
+          'second-password',
+        ),
+      ]);
+
+      expect(results.whereType<Success<AuthenticatedSession>>(), hasLength(1));
+      expect(
+        results.whereType<FailureResult<AuthenticatedSession>>(),
+        hasLength(1),
+      );
+      expect(recoveryCodes.successfulConsumptions, 1);
+    },
+  );
+
+  test(
+    'GivenRecoveryCodeConsumedBeforeSignOut_WhenOperationBecomesStale_ThenCodeStaysSpentAndVerifierIsUntouched',
+    () async {
+      users.emailUsers['person@example.com'] = _emailUser();
+      final code = RecoveryCode.generate(Random(23));
+      recoveryCodes.unusedDigests.add(code.digest);
+      final consumed = Completer<void>();
+      final release = Completer<void>();
+      recoveryCodes.afterSuccessfulConsume = () {
+        consumed.complete();
+        return release.future;
+      };
+      final pending = service.recoverLocalAccount(
+        'person@example.com',
+        code.display,
+        'new-password',
+      );
+      await consumed.future;
+
+      service.signOut();
+      release.complete();
+      final result = await pending;
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(recoveryCodes.unusedDigests, isNot(contains(code.digest)));
+      expect(verifiers.writes, isEmpty);
+      expect(service.currentSession, isNull);
+    },
+  );
 }
 
 final class _DeterministicIds {
@@ -608,6 +969,7 @@ final class _DeterministicIds {
 
 final class _FakeLocalUserRepository implements LocalUserRepository {
   String? existingEmail;
+  final Map<String, LocalUser> emailUsers = <String, LocalUser>{};
   bool failWhenSaving = false;
   bool failWhenDeleting = false;
   final List<LocalUser> saved = <LocalUser>[];
@@ -630,6 +992,10 @@ final class _FakeLocalUserRepository implements LocalUserRepository {
     final saved = _usersByEmail[email.value];
     if (saved != null) {
       return saved;
+    }
+    final configured = emailUsers[email.value];
+    if (configured != null) {
+      return configured;
     }
     if (existingEmail != email.value) {
       return null;
@@ -691,6 +1057,7 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   final List<String> deleted = <String>[];
   final List<String> readKeys = <String>[];
   bool failWhenDeleting = false;
+  bool failWhenWriting = false;
   Future<void> Function(String key, String verifier)? afterWrite;
 
   @override
@@ -713,6 +1080,12 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
 
   @override
   Future<void> write(String key, String verifier) async {
+    if (failWhenWriting) {
+      throw const StorageFailure(
+        code: 'storage.verifier_write',
+        message: 'Unavailable.',
+      );
+    }
     writes[key] = verifier;
     values[key] = verifier;
     if (afterWrite case final callback?) {
@@ -773,9 +1146,11 @@ final class _FakeOperatingSystemAuthenticator
   Result<void> result = const Success<void>(null);
   Object? exception;
   Future<Result<void>> Function()? authenticate;
+  int attempts = 0;
 
   @override
   Future<Result<void>> authenticateCurrentUser() async {
+    attempts += 1;
     if (exception case final error?) {
       throw error;
     }
@@ -784,6 +1159,103 @@ final class _FakeOperatingSystemAuthenticator
     }
     return result;
   }
+}
+
+final class _FakeRecoveryCodeRepository implements RecoveryCodeRepository {
+  final List<StoredRecoveryCode> saved = <StoredRecoveryCode>[];
+  final Set<String> unusedDigests = <String>{};
+  bool failWhenSaving = false;
+  int successfulConsumptions = 0;
+  Future<void> Function()? afterSuccessfulConsume;
+
+  @override
+  Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {
+    if (failWhenSaving) {
+      throw const StorageFailure(
+        code: 'storage.recovery_codes',
+        message: 'Unavailable.',
+      );
+    }
+    saved.addAll(codes);
+    unusedDigests.addAll(codes.map((code) => code.digest));
+  }
+
+  @override
+  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async {
+    final consumed = unusedDigests.remove(digest);
+    if (!consumed) {
+      return false;
+    }
+    successfulConsumptions += 1;
+    if (afterSuccessfulConsume case final callback?) {
+      await callback();
+    }
+    return true;
+  }
+}
+
+final class _FakeAuthenticationSettingsRepository
+    implements AuthenticationSettingsRepository {
+  ExternalAuthenticationConfiguration? configuration =
+      ExternalAuthenticationConfiguration(
+        clientId: 'desktop-client.apps.googleusercontent.com',
+        scopeId: '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+      );
+
+  @override
+  Future<ExternalAuthenticationConfiguration?> load() async => configuration;
+
+  @override
+  Future<void> save(ExternalAuthenticationConfiguration configuration) async {
+    this.configuration = configuration;
+  }
+}
+
+final class _FakeGoogleBrowserAuthorization
+    implements GoogleBrowserAuthorization {
+  Future<GoogleIdToken> Function(ExternalAuthenticationConfiguration)?
+  authorizeCallback;
+  int cancelAttempts = 0;
+
+  @override
+  Future<GoogleIdToken> authorize(
+    ExternalAuthenticationConfiguration configuration,
+  ) async {
+    if (authorizeCallback case final callback?) {
+      return callback(configuration);
+    }
+    return const GoogleIdToken('google-id-token');
+  }
+
+  @override
+  Future<void> cancelActiveAuthorization() async {
+    cancelAttempts += 1;
+  }
+}
+
+final class _FakeExternalAuthenticationGateway
+    implements ExternalAuthenticationGateway {
+  ExternalTokenGrant grant = ExternalTokenGrant(
+    token: _jwtWithPayload(<String, Object?>{'sub': 'external-actor'}),
+    expiresAt: DateTime.utc(2026, 8, 5, 13),
+    emailVerified: true,
+  );
+  final List<String> idTokens = <String>[];
+
+  @override
+  Future<ExternalTokenGrant> signInWithGoogle({
+    required String scopeId,
+    required String idToken,
+  }) async {
+    idTokens.add(idToken);
+    return grant;
+  }
+}
+
+String _jwtWithPayload(Map<String, Object?> payload) {
+  String encode(Object value) =>
+      base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
+  return '${encode(<String, Object?>{'alg': 'none'})}.${encode(payload)}.';
 }
 
 LocalUser _operatingSystemUser() {

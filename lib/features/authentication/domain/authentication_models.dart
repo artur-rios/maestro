@@ -1,3 +1,5 @@
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
+
 final class NormalizedEmail {
   const NormalizedEmail._(this.value);
 
@@ -122,14 +124,39 @@ final class LocalUser {
   final DateTime? lastAuthenticatedAt;
 }
 
+enum AuthenticationSource {
+  localPassword,
+  operatingSystem,
+  localWindows,
+  recoveryCode,
+  google,
+}
+
 final class AuthenticatedSession {
-  const AuthenticatedSession.fullControl(this.userId)
-    : canManageRecords = true,
-      canRunWorkflows = true,
-      canDeliverChanges = true;
+  const AuthenticatedSession.fullControl(
+    this.userId, {
+    this.source = AuthenticationSource.localPassword,
+    this.remoteToken,
+    this.remoteTokenExpiresAt,
+  }) : canManageRecords = true,
+       canRunWorkflows = true,
+       canDeliverChanges = true;
 
   final String userId;
+  final AuthenticationSource source;
+  final String? remoteToken;
+  final DateTime? remoteTokenExpiresAt;
   final bool canManageRecords;
   final bool canRunWorkflows;
   final bool canDeliverChanges;
+}
+
+final class LocalAccountCreation {
+  const LocalAccountCreation({
+    required this.session,
+    required this.recoveryCodes,
+  });
+
+  final AuthenticatedSession session;
+  final NewRecoveryCodeSet recoveryCodes;
 }
