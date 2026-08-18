@@ -1756,6 +1756,372 @@ class LocalUsersCompanion extends UpdateCompanion<LocalUser> {
   }
 }
 
+class $LocalRecoveryCodesTable extends LocalRecoveryCodes
+    with TableInfo<$LocalRecoveryCodesTable, LocalRecoveryCode> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalRecoveryCodesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES local_users (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _digestMeta = const VerificationMeta('digest');
+  @override
+  late final GeneratedColumn<String> digest = GeneratedColumn<String>(
+    'digest',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _issuedAtMeta = const VerificationMeta(
+    'issuedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> issuedAt = GeneratedColumn<DateTime>(
+    'issued_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _consumedAtMeta = const VerificationMeta(
+    'consumedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> consumedAt = GeneratedColumn<DateTime>(
+    'consumed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    digest,
+    issuedAt,
+    consumedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_recovery_codes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalRecoveryCode> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('digest')) {
+      context.handle(
+        _digestMeta,
+        digest.isAcceptableOrUnknown(data['digest']!, _digestMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_digestMeta);
+    }
+    if (data.containsKey('issued_at')) {
+      context.handle(
+        _issuedAtMeta,
+        issuedAt.isAcceptableOrUnknown(data['issued_at']!, _issuedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_issuedAtMeta);
+    }
+    if (data.containsKey('consumed_at')) {
+      context.handle(
+        _consumedAtMeta,
+        consumedAt.isAcceptableOrUnknown(data['consumed_at']!, _consumedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LocalRecoveryCode map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalRecoveryCode(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      digest: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}digest'],
+      )!,
+      issuedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}issued_at'],
+      )!,
+      consumedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}consumed_at'],
+      ),
+    );
+  }
+
+  @override
+  $LocalRecoveryCodesTable createAlias(String alias) {
+    return $LocalRecoveryCodesTable(attachedDatabase, alias);
+  }
+}
+
+class LocalRecoveryCode extends DataClass
+    implements Insertable<LocalRecoveryCode> {
+  final String id;
+  final String userId;
+  final String digest;
+  final DateTime issuedAt;
+  final DateTime? consumedAt;
+  const LocalRecoveryCode({
+    required this.id,
+    required this.userId,
+    required this.digest,
+    required this.issuedAt,
+    this.consumedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    map['digest'] = Variable<String>(digest);
+    map['issued_at'] = Variable<DateTime>(issuedAt);
+    if (!nullToAbsent || consumedAt != null) {
+      map['consumed_at'] = Variable<DateTime>(consumedAt);
+    }
+    return map;
+  }
+
+  LocalRecoveryCodesCompanion toCompanion(bool nullToAbsent) {
+    return LocalRecoveryCodesCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      digest: Value(digest),
+      issuedAt: Value(issuedAt),
+      consumedAt: consumedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(consumedAt),
+    );
+  }
+
+  factory LocalRecoveryCode.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalRecoveryCode(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      digest: serializer.fromJson<String>(json['digest']),
+      issuedAt: serializer.fromJson<DateTime>(json['issuedAt']),
+      consumedAt: serializer.fromJson<DateTime?>(json['consumedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'digest': serializer.toJson<String>(digest),
+      'issuedAt': serializer.toJson<DateTime>(issuedAt),
+      'consumedAt': serializer.toJson<DateTime?>(consumedAt),
+    };
+  }
+
+  LocalRecoveryCode copyWith({
+    String? id,
+    String? userId,
+    String? digest,
+    DateTime? issuedAt,
+    Value<DateTime?> consumedAt = const Value.absent(),
+  }) => LocalRecoveryCode(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    digest: digest ?? this.digest,
+    issuedAt: issuedAt ?? this.issuedAt,
+    consumedAt: consumedAt.present ? consumedAt.value : this.consumedAt,
+  );
+  LocalRecoveryCode copyWithCompanion(LocalRecoveryCodesCompanion data) {
+    return LocalRecoveryCode(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      digest: data.digest.present ? data.digest.value : this.digest,
+      issuedAt: data.issuedAt.present ? data.issuedAt.value : this.issuedAt,
+      consumedAt: data.consumedAt.present
+          ? data.consumedAt.value
+          : this.consumedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalRecoveryCode(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('digest: $digest, ')
+          ..write('issuedAt: $issuedAt, ')
+          ..write('consumedAt: $consumedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, userId, digest, issuedAt, consumedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalRecoveryCode &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.digest == this.digest &&
+          other.issuedAt == this.issuedAt &&
+          other.consumedAt == this.consumedAt);
+}
+
+class LocalRecoveryCodesCompanion extends UpdateCompanion<LocalRecoveryCode> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<String> digest;
+  final Value<DateTime> issuedAt;
+  final Value<DateTime?> consumedAt;
+  final Value<int> rowid;
+  const LocalRecoveryCodesCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.digest = const Value.absent(),
+    this.issuedAt = const Value.absent(),
+    this.consumedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalRecoveryCodesCompanion.insert({
+    required String id,
+    required String userId,
+    required String digest,
+    required DateTime issuedAt,
+    this.consumedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       digest = Value(digest),
+       issuedAt = Value(issuedAt);
+  static Insertable<LocalRecoveryCode> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<String>? digest,
+    Expression<DateTime>? issuedAt,
+    Expression<DateTime>? consumedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (digest != null) 'digest': digest,
+      if (issuedAt != null) 'issued_at': issuedAt,
+      if (consumedAt != null) 'consumed_at': consumedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalRecoveryCodesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<String>? digest,
+    Value<DateTime>? issuedAt,
+    Value<DateTime?>? consumedAt,
+    Value<int>? rowid,
+  }) {
+    return LocalRecoveryCodesCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      digest: digest ?? this.digest,
+      issuedAt: issuedAt ?? this.issuedAt,
+      consumedAt: consumedAt ?? this.consumedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (digest.present) {
+      map['digest'] = Variable<String>(digest.value);
+    }
+    if (issuedAt.present) {
+      map['issued_at'] = Variable<DateTime>(issuedAt.value);
+    }
+    if (consumedAt.present) {
+      map['consumed_at'] = Variable<DateTime>(consumedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalRecoveryCodesCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('digest: $digest, ')
+          ..write('issuedAt: $issuedAt, ')
+          ..write('consumedAt: $consumedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AuditEventsTable extends AuditEvents
     with TableInfo<$AuditEventsTable, AuditEvent> {
   @override
@@ -8455,6 +8821,8 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
       $DiagnosticLogSegmentsTable(this);
   late final $OwnedResourcesTable ownedResources = $OwnedResourcesTable(this);
   late final $LocalUsersTable localUsers = $LocalUsersTable(this);
+  late final $LocalRecoveryCodesTable localRecoveryCodes =
+      $LocalRecoveryCodesTable(this);
   late final $AuditEventsTable auditEvents = $AuditEventsTable(this);
   late final $ProjectsTable projects = $ProjectsTable(this);
   late final $WorkflowsTable workflows = $WorkflowsTable(this);
@@ -8476,6 +8844,10 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   late final Index localUsersSingleOperatingSystem = Index(
     'local_users_single_operating_system',
     'CREATE UNIQUE INDEX local_users_single_operating_system ON local_users (auth_method) WHERE auth_method = \'operatingSystem\'',
+  );
+  late final Index localRecoveryCodesUnusedDigest = Index(
+    'local_recovery_codes_unused_digest',
+    'CREATE INDEX local_recovery_codes_unused_digest ON local_recovery_codes (digest) WHERE consumed_at IS NULL',
   );
   late final Index workflowStepsWorkflowPosition = Index(
     'workflow_steps_workflow_position',
@@ -8542,6 +8914,7 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     diagnosticLogSegments,
     ownedResources,
     localUsers,
+    localRecoveryCodes,
     auditEvents,
     projects,
     workflows,
@@ -8555,6 +8928,7 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
     runRecoveryRequests,
     deliveryRecords,
     localUsersSingleOperatingSystem,
+    localRecoveryCodesUnusedDigest,
     workflowStepsWorkflowPosition,
     workflowProjectRefsProject,
     workflowRunsProjectStatus,
@@ -8572,6 +8946,13 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'local_users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('local_recovery_codes', kind: UpdateKind.delete)],
+    ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
         'workflows',
@@ -9387,6 +9768,32 @@ typedef $$LocalUsersTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$LocalUsersTableReferences
+    extends BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser> {
+  $$LocalUsersTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$LocalRecoveryCodesTable, List<LocalRecoveryCode>>
+  _localRecoveryCodesRefsTable(_$MaestroDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.localRecoveryCodes,
+        aliasName: 'local_users__id__local_recovery_codes__user_id',
+      );
+
+  $$LocalRecoveryCodesTableProcessedTableManager get localRecoveryCodesRefs {
+    final manager = $$LocalRecoveryCodesTableTableManager(
+      $_db,
+      $_db.localRecoveryCodes,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _localRecoveryCodesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$LocalUsersTableFilterComposer
     extends Composer<_$MaestroDatabase, $LocalUsersTable> {
   $$LocalUsersTableFilterComposer({
@@ -9425,6 +9832,31 @@ class $$LocalUsersTableFilterComposer
     column: $table.lastAuthenticatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> localRecoveryCodesRefs(
+    Expression<bool> Function($$LocalRecoveryCodesTableFilterComposer f) f,
+  ) {
+    final $$LocalRecoveryCodesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.localRecoveryCodes,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocalRecoveryCodesTableFilterComposer(
+            $db: $db,
+            $table: $db.localRecoveryCodes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$LocalUsersTableOrderingComposer
@@ -9499,6 +9931,32 @@ class $$LocalUsersTableAnnotationComposer
     column: $table.lastAuthenticatedAt,
     builder: (column) => column,
   );
+
+  Expression<T> localRecoveryCodesRefs<T extends Object>(
+    Expression<T> Function($$LocalRecoveryCodesTableAnnotationComposer a) f,
+  ) {
+    final $$LocalRecoveryCodesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.localRecoveryCodes,
+          getReferencedColumn: (t) => t.userId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$LocalRecoveryCodesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.localRecoveryCodes,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$LocalUsersTableTableManager
@@ -9512,12 +9970,9 @@ class $$LocalUsersTableTableManager
           $$LocalUsersTableAnnotationComposer,
           $$LocalUsersTableCreateCompanionBuilder,
           $$LocalUsersTableUpdateCompanionBuilder,
-          (
-            LocalUser,
-            BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser>,
-          ),
+          (LocalUser, $$LocalUsersTableReferences),
           LocalUser,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool localRecoveryCodesRefs})
         > {
   $$LocalUsersTableTableManager(_$MaestroDatabase db, $LocalUsersTable table)
     : super(
@@ -9567,9 +10022,45 @@ class $$LocalUsersTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$LocalUsersTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({localRecoveryCodesRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (localRecoveryCodesRefs) db.localRecoveryCodes,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (localRecoveryCodesRefs)
+                    await $_getPrefetchedData<
+                      LocalUser,
+                      $LocalUsersTable,
+                      LocalRecoveryCode
+                    >(
+                      currentTable: table,
+                      referencedTable: $$LocalUsersTableReferences
+                          ._localRecoveryCodesRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$LocalUsersTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).localRecoveryCodesRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.userId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -9584,12 +10075,344 @@ typedef $$LocalUsersTableProcessedTableManager =
       $$LocalUsersTableAnnotationComposer,
       $$LocalUsersTableCreateCompanionBuilder,
       $$LocalUsersTableUpdateCompanionBuilder,
-      (
-        LocalUser,
-        BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser>,
-      ),
+      (LocalUser, $$LocalUsersTableReferences),
       LocalUser,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool localRecoveryCodesRefs})
+    >;
+typedef $$LocalRecoveryCodesTableCreateCompanionBuilder =
+    LocalRecoveryCodesCompanion Function({
+      required String id,
+      required String userId,
+      required String digest,
+      required DateTime issuedAt,
+      Value<DateTime?> consumedAt,
+      Value<int> rowid,
+    });
+typedef $$LocalRecoveryCodesTableUpdateCompanionBuilder =
+    LocalRecoveryCodesCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<String> digest,
+      Value<DateTime> issuedAt,
+      Value<DateTime?> consumedAt,
+      Value<int> rowid,
+    });
+
+final class $$LocalRecoveryCodesTableReferences
+    extends
+        BaseReferences<
+          _$MaestroDatabase,
+          $LocalRecoveryCodesTable,
+          LocalRecoveryCode
+        > {
+  $$LocalRecoveryCodesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $LocalUsersTable _userIdTable(_$MaestroDatabase db) => db.localUsers
+      .createAlias('local_recovery_codes__user_id__local_users__id');
+
+  $$LocalUsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$LocalUsersTableTableManager(
+      $_db,
+      $_db.localUsers,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$LocalRecoveryCodesTableFilterComposer
+    extends Composer<_$MaestroDatabase, $LocalRecoveryCodesTable> {
+  $$LocalRecoveryCodesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get digest => $composableBuilder(
+    column: $table.digest,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get issuedAt => $composableBuilder(
+    column: $table.issuedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get consumedAt => $composableBuilder(
+    column: $table.consumedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$LocalUsersTableFilterComposer get userId {
+    final $$LocalUsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.localUsers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocalUsersTableFilterComposer(
+            $db: $db,
+            $table: $db.localUsers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LocalRecoveryCodesTableOrderingComposer
+    extends Composer<_$MaestroDatabase, $LocalRecoveryCodesTable> {
+  $$LocalRecoveryCodesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get digest => $composableBuilder(
+    column: $table.digest,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get issuedAt => $composableBuilder(
+    column: $table.issuedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get consumedAt => $composableBuilder(
+    column: $table.consumedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$LocalUsersTableOrderingComposer get userId {
+    final $$LocalUsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.localUsers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocalUsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.localUsers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LocalRecoveryCodesTableAnnotationComposer
+    extends Composer<_$MaestroDatabase, $LocalRecoveryCodesTable> {
+  $$LocalRecoveryCodesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get digest =>
+      $composableBuilder(column: $table.digest, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get issuedAt =>
+      $composableBuilder(column: $table.issuedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get consumedAt => $composableBuilder(
+    column: $table.consumedAt,
+    builder: (column) => column,
+  );
+
+  $$LocalUsersTableAnnotationComposer get userId {
+    final $$LocalUsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.localUsers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocalUsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.localUsers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LocalRecoveryCodesTableTableManager
+    extends
+        RootTableManager<
+          _$MaestroDatabase,
+          $LocalRecoveryCodesTable,
+          LocalRecoveryCode,
+          $$LocalRecoveryCodesTableFilterComposer,
+          $$LocalRecoveryCodesTableOrderingComposer,
+          $$LocalRecoveryCodesTableAnnotationComposer,
+          $$LocalRecoveryCodesTableCreateCompanionBuilder,
+          $$LocalRecoveryCodesTableUpdateCompanionBuilder,
+          (LocalRecoveryCode, $$LocalRecoveryCodesTableReferences),
+          LocalRecoveryCode,
+          PrefetchHooks Function({bool userId})
+        > {
+  $$LocalRecoveryCodesTableTableManager(
+    _$MaestroDatabase db,
+    $LocalRecoveryCodesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalRecoveryCodesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalRecoveryCodesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocalRecoveryCodesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> digest = const Value.absent(),
+                Value<DateTime> issuedAt = const Value.absent(),
+                Value<DateTime?> consumedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalRecoveryCodesCompanion(
+                id: id,
+                userId: userId,
+                digest: digest,
+                issuedAt: issuedAt,
+                consumedAt: consumedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required String digest,
+                required DateTime issuedAt,
+                Value<DateTime?> consumedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalRecoveryCodesCompanion.insert(
+                id: id,
+                userId: userId,
+                digest: digest,
+                issuedAt: issuedAt,
+                consumedAt: consumedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$LocalRecoveryCodesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable:
+                                    $$LocalRecoveryCodesTableReferences
+                                        ._userIdTable(db),
+                                referencedColumn:
+                                    $$LocalRecoveryCodesTableReferences
+                                        ._userIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$LocalRecoveryCodesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MaestroDatabase,
+      $LocalRecoveryCodesTable,
+      LocalRecoveryCode,
+      $$LocalRecoveryCodesTableFilterComposer,
+      $$LocalRecoveryCodesTableOrderingComposer,
+      $$LocalRecoveryCodesTableAnnotationComposer,
+      $$LocalRecoveryCodesTableCreateCompanionBuilder,
+      $$LocalRecoveryCodesTableUpdateCompanionBuilder,
+      (LocalRecoveryCode, $$LocalRecoveryCodesTableReferences),
+      LocalRecoveryCode,
+      PrefetchHooks Function({bool userId})
     >;
 typedef $$AuditEventsTableCreateCompanionBuilder =
     AuditEventsCompanion Function({
@@ -16070,6 +16893,8 @@ class $MaestroDatabaseManager {
       $$OwnedResourcesTableTableManager(_db, _db.ownedResources);
   $$LocalUsersTableTableManager get localUsers =>
       $$LocalUsersTableTableManager(_db, _db.localUsers);
+  $$LocalRecoveryCodesTableTableManager get localRecoveryCodes =>
+      $$LocalRecoveryCodesTableTableManager(_db, _db.localRecoveryCodes);
   $$AuditEventsTableTableManager get auditEvents =>
       $$AuditEventsTableTableManager(_db, _db.auditEvents);
   $$ProjectsTableTableManager get projects =>

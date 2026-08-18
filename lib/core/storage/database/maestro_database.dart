@@ -58,6 +58,22 @@ class LocalUsers extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
 
+@TableIndex.sql(
+  'CREATE INDEX local_recovery_codes_unused_digest '
+  'ON local_recovery_codes (digest) WHERE consumed_at IS NULL',
+)
+class LocalRecoveryCodes extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId =>
+      text().references(LocalUsers, #id, onDelete: KeyAction.cascade)();
+  TextColumn get digest => text().unique()();
+  DateTimeColumn get issuedAt => dateTime()();
+  DateTimeColumn get consumedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
 class AuditEvents extends Table {
   TextColumn get id => text()();
   TextColumn get actorId => text()();
@@ -355,6 +371,7 @@ class DeliveryRecords extends Table {
     DiagnosticLogSegments,
     OwnedResources,
     LocalUsers,
+    LocalRecoveryCodes,
     AuditEvents,
     Projects,
     Workflows,
@@ -416,6 +433,10 @@ final class MaestroDatabase extends _$MaestroDatabase {
       }
       if (from < 6) {
         await migrator.createTable(deliveryRecords);
+      }
+      if (from < 7) {
+        await migrator.createTable(localRecoveryCodes);
+        await migrator.createIndex(localRecoveryCodesUnusedDigest);
       }
     },
     beforeOpen: (_) async {
