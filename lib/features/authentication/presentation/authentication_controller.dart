@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
@@ -27,6 +29,15 @@ final class AuthenticationInProgress extends AuthenticationPresentationState {
   const AuthenticationInProgress();
 }
 
+final class AuthenticationRecoveryCodesPending
+    extends AuthenticationPresentationState {
+  const AuthenticationRecoveryCodesPending(this.recoveryCodes);
+
+  /// Ephemeral plaintext owned by the controller and cleared on acknowledgement
+  /// or controller disposal.
+  final List<String> recoveryCodes;
+}
+
 final class AuthenticationAuthenticated
     extends AuthenticationPresentationState {
   const AuthenticationAuthenticated(this.session);
@@ -52,23 +63,46 @@ enum AuthenticationFailureCategory {
   accountCreation,
   operatingSystem,
   credentials,
+  google,
+  recovery,
 }
 
-enum _AuthenticationOperation { operatingSystem, emailSignIn, accountCreation }
+enum _AuthenticationOperation {
+  operatingSystem,
+  emailSignIn,
+  localWindows,
+  accountCreation,
+  google,
+  recovery,
+  recoveryCodeAcknowledgement,
+}
 
 final class AuthenticationController
     extends Notifier<AuthenticationPresentationState> {
   int _operationGeneration = 0;
   bool _disposed = false;
+  List<String>? _pendingRecoveryCodePlaintext;
 
   AuthenticationService get _service => ref.read(authenticationServiceProvider);
 
   @override
   AuthenticationPresentationState build() {
     final service = ref.watch(authenticationServiceProvider);
+    final sessionSubscription = service.sessionChanges.listen((session) {
+      if (_disposed) return;
+      if (session == null) {
+        _operationGeneration++;
+        _clearPendingRecoveryCodes();
+        state = const AuthenticationSignedOut();
+      } else {
+        state = AuthenticationAuthenticated(session);
+      }
+    });
     ref.onDispose(() {
       _disposed = true;
       _operationGeneration++;
+      _clearPendingRecoveryCodes();
+      unawaited(sessionSubscription.cancel());
       service.dispose();
     });
     final session = service.currentSession;
@@ -91,8 +125,45 @@ final class AuthenticationController
     );
   }
 
+  Future<void> signInWithLocalWindowsCredentials(String email) {
+    return _authenticate(
+      () => _service.signInWithLocalWindowsCredentials(email),
+      _AuthenticationOperation.localWindows,
+    );
+  }
+
+  Future<void> signInWithGoogle() {
+    return _authenticate(
+      _service.signInWithGoogle,
+      _AuthenticationOperation.google,
+    );
+  }
+
+  Future<void> recoverLocalAccount(
+    String email,
+    String recoveryCode,
+    String newPassword,
+  ) {
+    return _authenticate(
+      () => _service.recoverLocalAccount(email, recoveryCode, newPassword),
+      _AuthenticationOperation.recovery,
+    );
+  }
+
   Future<void> createAccount(String email, String password) {
     return _createAccount(email, password);
+  }
+
+  void acknowledgeRecoveryCodes() {
+    final result = _service.acknowledgeRecoveryCodes();
+    _clearPendingRecoveryCodes();
+    state = result.fold<AuthenticationPresentationState>(
+      onSuccess: AuthenticationAuthenticated.new,
+      onFailure: (failure) => _presentFailure(
+        failure,
+        _AuthenticationOperation.recoveryCodeAcknowledgement,
+      ),
+    );
   }
 
   void clearError() {
@@ -103,6 +174,7 @@ final class AuthenticationController
 
   void signOut() {
     _operationGeneration++;
+    _clearPendingRecoveryCodes();
     _service.signOut();
     state = const AuthenticationSignedOut();
   }
@@ -137,9 +209,14 @@ final class AuthenticationController
       final result = await _service.createAccount(email, password);
       if (!_ownsAuthenticationOperation(operationGeneration)) return;
       state = result.fold<AuthenticationPresentationState>(
-        // Account creation deliberately waits for recovery-code acknowledgement
-        // before a session may be published.
-        onSuccess: (_) => const AuthenticationSignedOut(),
+        onSuccess: (creation) {
+          _clearPendingRecoveryCodes();
+          final plaintext = creation.recoveryCodes.codes
+              .map((code) => code.display)
+              .toList(growable: true);
+          _pendingRecoveryCodePlaintext = plaintext;
+          return AuthenticationRecoveryCodesPending(plaintext);
+        },
         onFailure: (failure) =>
             _presentFailure(failure, _AuthenticationOperation.accountCreation),
       );
@@ -151,6 +228,11 @@ final class AuthenticationController
 
   bool _ownsAuthenticationOperation(int operationGeneration) {
     return !_disposed && operationGeneration == _operationGeneration;
+  }
+
+  void _clearPendingRecoveryCodes() {
+    _pendingRecoveryCodePlaintext?.clear();
+    _pendingRecoveryCodePlaintext = null;
   }
 
   static AuthenticationError _presentFailure(
@@ -171,6 +253,37 @@ final class AuthenticationController
         remediation: 'Choose a strong, unique password.',
       );
     }
+    if (operation == _AuthenticationOperation.google) {
+      if (failure.code == 'authentication.google.configuration.missing') {
+        return const AuthenticationError(
+          category: AuthenticationFailureCategory.google,
+          message: 'Google authentication is not configured.',
+          remediation: 'Configure the OAuth client ID and Heimdall scope.',
+        );
+      }
+      return AuthenticationError(
+        category: AuthenticationFailureCategory.google,
+        message: 'Google authentication was not successful.',
+        remediation:
+            failure.remediation ?? 'Try again or use a local sign-in method.',
+      );
+    }
+    if (operation == _AuthenticationOperation.recovery) {
+      return AuthenticationError(
+        category: AuthenticationFailureCategory.recovery,
+        message: failure.code == 'authentication.recovery.persistence.failed'
+            ? 'The recovery code was spent, but recovery did not finish.'
+            : 'The account or recovery code is invalid.',
+        remediation: failure.remediation ?? 'Use another unused recovery code.',
+      );
+    }
+    if (operation == _AuthenticationOperation.recoveryCodeAcknowledgement) {
+      return const AuthenticationError(
+        category: AuthenticationFailureCategory.recovery,
+        message: 'Recovery codes could not be acknowledged.',
+        remediation: 'Create a new local account session and try again.',
+      );
+    }
     if (operation == _AuthenticationOperation.accountCreation) {
       return const AuthenticationError(
         category: AuthenticationFailureCategory.accountCreation,
@@ -178,7 +291,8 @@ final class AuthenticationController
         remediation: 'Review the account details and try again.',
       );
     }
-    if (operation == _AuthenticationOperation.operatingSystem) {
+    if (operation == _AuthenticationOperation.operatingSystem ||
+        operation == _AuthenticationOperation.localWindows) {
       return const AuthenticationError(
         category: AuthenticationFailureCategory.operatingSystem,
         message: 'Authentication was not successful.',
@@ -203,10 +317,11 @@ final class AuthenticationController
       );
     }
     return switch (operation) {
-      _AuthenticationOperation.operatingSystem => const AuthenticationError(
+      _AuthenticationOperation.operatingSystem ||
+      _AuthenticationOperation.localWindows => const AuthenticationError(
         category: AuthenticationFailureCategory.operatingSystem,
         message: 'Authentication was not successful.',
-        remediation: 'Try again or use email and password.',
+        remediation: 'Try again or use a local password or recovery code.',
       ),
       _AuthenticationOperation.emailSignIn => const AuthenticationError(
         category: AuthenticationFailureCategory.credentials,
@@ -216,6 +331,18 @@ final class AuthenticationController
       _AuthenticationOperation.accountCreation => throw StateError(
         'Account creation failure was handled above.',
       ),
+      _AuthenticationOperation.google => const AuthenticationError(
+        category: AuthenticationFailureCategory.google,
+        message: 'Google authentication was not successful.',
+        remediation: 'Try again or use a local sign-in method.',
+      ),
+      _AuthenticationOperation.recovery ||
+      _AuthenticationOperation.recoveryCodeAcknowledgement =>
+        const AuthenticationError(
+          category: AuthenticationFailureCategory.recovery,
+          message: 'Local account recovery was not successful.',
+          remediation: 'Check the details and use an unused recovery code.',
+        ),
     };
   }
 }

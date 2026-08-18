@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import 'package:maestro/features/authentication/domain/authentication_models.dar
 import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
+import 'package:maestro/features/authentication/presentation/authentication_settings_controller.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 
 void main() {
@@ -31,7 +33,7 @@ void main() {
         find.bySemanticsLabel('Minimize Maestro'),
         find.bySemanticsLabel('Maximize Maestro'),
         find.bySemanticsLabel('Close Maestro'),
-        find.bySemanticsLabel('Sign in with your operating system'),
+        find.bySemanticsLabel('Sign in with Windows'),
       ];
       for (final landmark in landmarks) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -84,9 +86,7 @@ void main() {
         ),
       );
       await tester.pumpWidget(_testApp(service));
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       final feedback = find.byKey(const Key('authentication-error-feedback'));
@@ -115,7 +115,7 @@ void main() {
       final title = find.text('Local authentication');
       final operatingSystem = find.widgetWithText(
         FilledButton,
-        'Sign in with your operating system',
+        'Sign in with Windows',
       );
       final fields = find.byType(TextField);
       final email = fields.at(0);
@@ -191,7 +191,7 @@ void main() {
     );
 
     expect(find.text('Foundation ready'), findsNothing);
-    expect(find.text('Sign in with your operating system'), findsOneWidget);
+    expect(find.text('Sign in with Windows'), findsOneWidget);
     expect(protectedBuilds, 0);
   });
 
@@ -200,9 +200,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(_testApp(_authenticationService()));
 
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(find.text('Foundation ready'), findsOneWidget);
@@ -223,9 +221,7 @@ void main() {
       );
       await tester.pumpWidget(_testApp(service));
 
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(find.text('Authentication was not successful.'), findsOneWidget);
@@ -255,9 +251,7 @@ void main() {
       await tester.pump();
       expect(find.bySemanticsLabel('Create account'), findsOneWidget);
 
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pumpAndSettle();
 
       expect(
@@ -438,7 +432,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Foundation ready'), findsNothing);
-    expect(find.text('Sign in with your operating system'), findsOneWidget);
+    expect(find.text('Sign in with Windows'), findsOneWidget);
   });
 
   testWidgets(
@@ -486,10 +480,226 @@ void main() {
       await tester.pumpAndSettle();
 
       final state = container.read(authenticationControllerProvider);
-      expect(state, isA<AuthenticationSignedOut>());
+      expect(state, isA<AuthenticationRecoveryCodesPending>());
       expect(service.currentSession, isNull);
       expect(protectedBuilds, 0);
       expect(find.text('Foundation ready'), findsNothing);
+      expect(find.bySemanticsLabel('Recovery codes'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Acknowledge recovery codes'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.bySemanticsLabel('Acknowledge recovery codes'));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Recovery codes'), findsNothing);
+      expect(find.text('Foundation ready'), findsOneWidget);
+      expect(service.currentSession, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'GivenSignedOutPage_WhenRendered_ThenSourceSpecificActionsAndNoResetAlternativeArePresent',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Sign in with Windows'), findsOneWidget);
+      expect(find.bySemanticsLabel('Use Windows credentials'), findsOneWidget);
+      expect(find.bySemanticsLabel('Continue with Google'), findsOneWidget);
+      expect(find.bySemanticsLabel('Recover local account'), findsOneWidget);
+      expect(find.textContaining('Forgot password'), findsNothing);
+      expect(find.textContaining('Reset password'), findsNothing);
+      expect(find.textContaining('Regenerate'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'GivenEmailAccount_WhenUseWindowsCredentialsTapped_ThenEmailWindowsSessionOpens',
+    (tester) async {
+      final users = _MemoryAuthenticationRepository()
+        ..users.add(_passwordUser(email: 'person@example.com'));
+      final windows = _CountingOperatingSystemAuthenticator();
+      final service = _authenticationService(
+        users: users,
+        operatingSystemAuthentication: windows,
+      );
+      await tester.pumpWidget(_testApp(service));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.bySemanticsLabel('Email address'),
+        'person@example.com',
+      );
+      await tester.tap(find.bySemanticsLabel('Use Windows credentials'));
+      await tester.pumpAndSettle();
+
+      expect(windows.attempts, 1);
+      expect(service.currentSession?.userId, 'person');
+      expect(service.currentSession?.source, AuthenticationSource.localWindows);
+      expect(find.text('Foundation ready'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenConfiguredGoogle_WhenContinueWithGoogleTapped_ThenGoogleSessionOpens',
+    (tester) async {
+      final service = _authenticationService(
+        googleAuthorization: const _SuccessfulGoogleAuthorization(),
+        externalGateway: _SuccessfulExternalGateway(),
+      );
+      await tester.pumpWidget(_testApp(service));
+      await tester.pumpAndSettle();
+
+      final googleAction = find.bySemanticsLabel('Continue with Google');
+      await tester.ensureVisible(googleAction);
+      await tester.pump();
+      await tester.tap(googleAction);
+      await tester.pumpAndSettle();
+
+      expect(service.currentSession?.userId, 'google-subject');
+      expect(service.currentSession?.source, AuthenticationSource.google);
+      expect(find.text('Foundation ready'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenAuthenticationSettings_WhenMalformedValuesSaved_ThenValidationGuidanceIsVisible',
+    (tester) async {
+      await tester.pumpWidget(_testApp(_authenticationService()));
+      await tester.pumpAndSettle();
+
+      final settingsAction = find.bySemanticsLabel('Authentication settings');
+      await tester.ensureVisible(settingsAction);
+      await tester.pump();
+      await tester.tap(settingsAction);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.bySemanticsLabel('Google OAuth client ID'),
+        ' ',
+      );
+      await tester.enterText(
+        find.bySemanticsLabel('Heimdall scope UUID'),
+        'not-a-uuid',
+      );
+      final saveAction = find.bySemanticsLabel('Save authentication settings');
+      await tester.ensureVisible(saveAction);
+      await tester.pump();
+      await tester.tap(saveAction);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Enter a Google OAuth client ID and Heimdall scope UUID.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenRecoveryForm_WhenPasswordsMatchAndCodeIsUnused_ThenRecoveredSessionOpens',
+    (tester) async {
+      final code = RecoveryCode.generate(Random(13));
+      final recoveryCodes = _RecoveryCodes()..unusedDigests.add(code.digest);
+      final users = _MemoryAuthenticationRepository()
+        ..users.add(_passwordUser(email: 'person@example.com'));
+      final service = _authenticationService(
+        users: users,
+        recoveryCodes: recoveryCodes,
+      );
+      await tester.pumpWidget(_testApp(service));
+      await tester.pumpAndSettle();
+
+      final recoveryAction = find.bySemanticsLabel('Recover local account');
+      await tester.ensureVisible(recoveryAction);
+      await tester.pump();
+      await tester.tap(recoveryAction);
+      await tester.pump();
+      await tester.enterText(
+        find.bySemanticsLabel('Recovery email address'),
+        'person@example.com',
+      );
+      await tester.enterText(
+        find.bySemanticsLabel('Recovery code'),
+        code.display,
+      );
+      await tester.enterText(
+        find.bySemanticsLabel('New password'),
+        'replacement-password',
+      );
+      await tester.enterText(
+        find.bySemanticsLabel('Confirm new password'),
+        'replacement-password',
+      );
+      final submitRecovery = find.bySemanticsLabel('Recover local account');
+      await tester.ensureVisible(submitRecovery);
+      await tester.pump();
+      await tester.tap(submitRecovery);
+      await tester.pumpAndSettle();
+
+      expect(service.currentSession?.source, AuthenticationSource.recoveryCode);
+      expect(find.text('Foundation ready'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenBusyAuthentication_WhenOperationIsPending_ThenEveryAuthenticationActionIsDisabled',
+    (tester) async {
+      final operatingSystem = _CompletingOperatingSystemAuthenticator();
+      await tester.pumpWidget(
+        _testApp(
+          _authenticationService(
+            operatingSystemAuthentication: operatingSystem,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Sign in with Windows'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Use Windows credentials'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Continue with Google'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(
+              find.widgetWithText(TextButton, 'Recover local account'),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      operatingSystem.complete(
+        const FailureResult<void>(
+          SecurityFailure(
+            code: 'authentication.operating_system.denied',
+            message: 'Denied.',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
     },
   );
 
@@ -513,9 +723,7 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(AuthenticationPage)),
       );
-      await tester.tap(
-        find.bySemanticsLabel('Sign in with your operating system'),
-      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
       await tester.pump();
 
       container.read(authenticationControllerProvider.notifier).signOut();
@@ -525,7 +733,7 @@ void main() {
 
       expect(protectedBuilds, 0);
       expect(find.text('Foundation ready'), findsNothing);
-      expect(find.text('Sign in with your operating system'), findsOneWidget);
+      expect(find.text('Sign in with Windows'), findsOneWidget);
       expect(service.currentSession, isNull);
     },
   );
@@ -534,6 +742,7 @@ void main() {
 Widget _testApp(
   AuthenticationService service, {
   WidgetBuilder? authenticatedBuilder,
+  AuthenticationSettingsRepository? settingsRepository,
 }) {
   final appearanceController = AppearanceController(
     repository: _AppearancePreferenceRepository(),
@@ -541,7 +750,12 @@ Widget _testApp(
   );
   addTearDown(appearanceController.dispose);
   return ProviderScope(
-    overrides: [authenticationServiceProvider.overrideWithValue(service)],
+    overrides: [
+      authenticationServiceProvider.overrideWithValue(service),
+      authenticationSettingsRepositoryProvider.overrideWithValue(
+        settingsRepository ?? _Settings(),
+      ),
+    ],
     child: MaterialApp(
       theme: maestroTheme(Brightness.light),
       darkTheme: maestroTheme(Brightness.dark),
@@ -599,6 +813,9 @@ AuthenticationService _authenticationService({
   PasswordHasher? hasher,
   OperatingSystemAuthenticator? operatingSystemAuthentication,
   Result<void> operatingSystemResult = const Success<void>(null),
+  RecoveryCodeRepository? recoveryCodes,
+  GoogleBrowserAuthorization googleAuthorization = const _GoogleAuthorization(),
+  ExternalAuthenticationGateway externalGateway = const _ExternalGateway(),
 }) {
   var nextId = 0;
   final repository = users ?? _MemoryAuthenticationRepository();
@@ -610,10 +827,10 @@ AuthenticationService _authenticationService({
     operatingSystemAuthentication:
         operatingSystemAuthentication ??
         _FakeOperatingSystemAuthenticator(operatingSystemResult),
-    recoveryCodes: _RecoveryCodes(),
+    recoveryCodes: recoveryCodes ?? _RecoveryCodes(),
     settings: _Settings(),
-    googleAuthorization: const _GoogleAuthorization(),
-    externalGateway: const _ExternalGateway(),
+    googleAuthorization: googleAuthorization,
+    externalGateway: externalGateway,
     newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
     clock: () => DateTime.utc(2026, 8, 5),
     newId: () => 'id-${nextId++}',
@@ -736,10 +953,23 @@ final class _CompletingOperatingSystemAuthenticator
   Future<Result<void>> authenticateCurrentUser() => _completion.future;
 }
 
+final class _CountingOperatingSystemAuthenticator
+    implements OperatingSystemAuthenticator {
+  int attempts = 0;
+
+  @override
+  Future<Result<void>> authenticateCurrentUser() async {
+    attempts++;
+    return const Success<void>(null);
+  }
+}
+
 final class _RecoveryCodes implements RecoveryCodeRepository {
+  final Set<String> unusedDigests = <String>{};
+
   @override
   Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async =>
-      false;
+      unusedDigests.remove(digest);
 
   @override
   Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {}
@@ -777,4 +1007,34 @@ final class _ExternalGateway implements ExternalAuthenticationGateway {
     required String scopeId,
     required String idToken,
   }) async => throw UnimplementedError();
+}
+
+final class _SuccessfulGoogleAuthorization
+    implements GoogleBrowserAuthorization {
+  const _SuccessfulGoogleAuthorization();
+
+  @override
+  Future<GoogleIdToken> authorize(
+    ExternalAuthenticationConfiguration configuration,
+  ) async => const GoogleIdToken('google-id-token');
+
+  @override
+  Future<void> cancelActiveAuthorization() async {}
+}
+
+final class _SuccessfulExternalGateway
+    implements ExternalAuthenticationGateway {
+  @override
+  Future<ExternalTokenGrant> signInWithGoogle({
+    required String scopeId,
+    required String idToken,
+  }) async {
+    final header = base64Url.encode(utf8.encode('{"alg":"none"}'));
+    final payload = base64Url.encode(utf8.encode('{"sub":"google-subject"}'));
+    return ExternalTokenGrant(
+      token: '$header.$payload.signature',
+      expiresAt: DateTime.utc(2026, 8, 5, 1),
+      emailVerified: true,
+    );
+  }
 }
