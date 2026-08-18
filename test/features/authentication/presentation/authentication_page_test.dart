@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +12,9 @@ import 'package:maestro/features/appearance/application/appearance_preference_re
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
+import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 import 'package:maestro/features/authentication/presentation/authentication_page.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
@@ -439,7 +442,7 @@ void main() {
   });
 
   testWidgets(
-    'GivenValidAccountDetails_WhenCreated_ThenOneFullControlProtectedTransitionOccurs',
+    'GivenValidAccountDetails_WhenCreated_ThenWorkspaceWaitsForRecoveryCodeAcknowledgement',
     (tester) async {
       final hashing = Completer<String>();
       final service = _authenticationService(
@@ -483,13 +486,10 @@ void main() {
       await tester.pumpAndSettle();
 
       final state = container.read(authenticationControllerProvider);
-      expect(state, isA<AuthenticationAuthenticated>());
-      final session = (state as AuthenticationAuthenticated).session;
-      expect(session.canManageRecords, isTrue);
-      expect(session.canRunWorkflows, isTrue);
-      expect(session.canDeliverChanges, isTrue);
-      expect(protectedBuilds, 1);
-      expect(find.text('Foundation ready'), findsOneWidget);
+      expect(state, isA<AuthenticationSignedOut>());
+      expect(service.currentSession, isNull);
+      expect(protectedBuilds, 0);
+      expect(find.text('Foundation ready'), findsNothing);
     },
   );
 
@@ -610,6 +610,11 @@ AuthenticationService _authenticationService({
     operatingSystemAuthentication:
         operatingSystemAuthentication ??
         _FakeOperatingSystemAuthenticator(operatingSystemResult),
+    recoveryCodes: _RecoveryCodes(),
+    settings: _Settings(),
+    googleAuthorization: const _GoogleAuthorization(),
+    externalGateway: const _ExternalGateway(),
+    newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
     clock: () => DateTime.utc(2026, 8, 5),
     newId: () => 'id-${nextId++}',
   );
@@ -729,4 +734,47 @@ final class _CompletingOperatingSystemAuthenticator
 
   @override
   Future<Result<void>> authenticateCurrentUser() => _completion.future;
+}
+
+final class _RecoveryCodes implements RecoveryCodeRepository {
+  @override
+  Future<bool> consumeUnusedDigest(String digest, DateTime consumedAt) async =>
+      false;
+
+  @override
+  Future<void> saveAll(String userId, List<StoredRecoveryCode> codes) async {}
+}
+
+final class _Settings implements AuthenticationSettingsRepository {
+  @override
+  Future<ExternalAuthenticationConfiguration?> load() async =>
+      ExternalAuthenticationConfiguration(
+        clientId: 'desktop-client.apps.googleusercontent.com',
+        scopeId: '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+      );
+
+  @override
+  Future<void> save(ExternalAuthenticationConfiguration configuration) async {}
+}
+
+final class _GoogleAuthorization implements GoogleBrowserAuthorization {
+  const _GoogleAuthorization();
+
+  @override
+  Future<GoogleIdToken> authorize(
+    ExternalAuthenticationConfiguration configuration,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<void> cancelActiveAuthorization() async {}
+}
+
+final class _ExternalGateway implements ExternalAuthenticationGateway {
+  const _ExternalGateway();
+
+  @override
+  Future<ExternalTokenGrant> signInWithGoogle({
+    required String scopeId,
+    required String idToken,
+  }) async => throw UnimplementedError();
 }
