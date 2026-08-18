@@ -319,12 +319,14 @@ final class _Operation {
     } on Object catch (error) {
       abortFailure = error;
     }
+    Object? listenerFailure;
     try {
       await closeListener();
-    } on Object {
-      throw const OAuthListenerFailure();
+    } on Object catch (error) {
+      listenerFailure = error;
     }
     if (abortFailure != null) throw const OAuthTransportFailure();
+    if (listenerFailure != null) throw const OAuthListenerFailure();
   }
 
   void throwIfCancelled() {
