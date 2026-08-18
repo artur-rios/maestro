@@ -313,12 +313,18 @@ final class _Operation {
       _isCancelled = true;
       _cancelled.complete();
     }
+    Object? abortFailure;
     try {
       abortExchange();
+    } on Object catch (error) {
+      abortFailure = error;
+    }
+    try {
       await closeListener();
     } on Object {
       throw const OAuthListenerFailure();
     }
+    if (abortFailure != null) throw const OAuthTransportFailure();
   }
 
   void throwIfCancelled() {

@@ -245,6 +245,38 @@ void main() {
   });
 
   test(
+    'GivenThrowingExchangeAbort_WhenCancelled_ThenListenerStillCloses',
+    () async {
+      final server = _FakeServer();
+      final client = _StallingClient()..closeError = StateError('abort-secret');
+      final authorizer = GoogleBrowserAuthorizer(
+        browser: (uri) async {
+          server.complete(
+            OAuthCallback(code: 'code', state: uri.queryParameters['state']),
+          );
+          return true;
+        },
+        httpClientFactory: () => client,
+        loopbackServerFactory: () async => server,
+        randomBytes: (_) => List<int>.filled(32, 1),
+      );
+      final pending = authorizer.authorize(configuration);
+      final pendingExpectation = expectLater(
+        pending,
+        throwsA(isA<OAuthAuthorizationCancelled>()),
+      );
+      await _waitUntil(() => client.started);
+
+      await expectLater(
+        authorizer.cancelActiveAuthorization(),
+        throwsA(isA<OAuthTransportFailure>()),
+      );
+      await pendingExpectation;
+      expect(server.closeCalls, 1);
+    },
+  );
+
+  test(
     'GivenCloseFailureAndStateMismatch_WhenAuthorized_ThenStateMismatchRemainsPrimary',
     () async {
       final server = _FakeServer()..closeError = StateError('close-secret');
@@ -302,8 +334,8 @@ final class _FakeServer implements OAuthLoopbackServer {
   final Completer<OAuthCallback> _callback = Completer<OAuthCallback>();
   Uri authorizationUri = Uri();
   var closeCalls = 0;
-  var nextCalls = 0;
   Object? closeError;
+  var nextCalls = 0;
   @override
   Uri get redirectUri => Uri.parse('http://127.0.0.1:49152/callback');
   void complete(OAuthCallback callback) => _callback.complete(callback);
@@ -344,6 +376,7 @@ final class _StallingClient extends http.BaseClient {
       Completer<http.StreamedResponse>();
   var started = false;
   var closeCalls = 0;
+  Object? closeError;
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
     started = true;
@@ -353,5 +386,7 @@ final class _StallingClient extends http.BaseClient {
   @override
   void close() {
     closeCalls++;
+    final error = closeError;
+    if (error != null) throw error;
   }
 }
