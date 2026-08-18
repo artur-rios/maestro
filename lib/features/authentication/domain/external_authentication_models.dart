@@ -45,6 +45,7 @@ final class RecoveryCode {
   static const String _alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   static final RegExp _displayPattern = RegExp(
     r'^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{4}(-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{4}){5}-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{2}$',
+    caseSensitive: false,
   );
 
   RecoveryCode._(this.display, this.digest);
@@ -56,10 +57,12 @@ final class RecoveryCode {
   }
 
   factory RecoveryCode.parse(String input) {
-    final canonical = input.replaceAll('-', '').trim().toUpperCase();
-    if (canonical.length != 26 ||
-        !_displayPattern.hasMatch(_format(canonical))) {
+    if (!_displayPattern.hasMatch(input)) {
       throw const FormatException('Recovery code is malformed.');
+    }
+    final canonical = input.replaceAll('-', '').toUpperCase();
+    if (_alphabet.indexOf(canonical[25]) & 3 != 0) {
+      throw const FormatException('Recovery code has invalid padding bits.');
     }
     return RecoveryCode._(_format(canonical), _digest(canonical));
   }
@@ -111,7 +114,33 @@ final class NewRecoveryCodeSet {
 }
 
 final class ExternalAuthenticatedIdentity {
-  const ExternalAuthenticatedIdentity({
+  factory ExternalAuthenticatedIdentity({
+    required String subject,
+    required String email,
+    required String token,
+    required DateTime expiresAt,
+    DateTime? now,
+    required bool emailVerified,
+  }) {
+    final effectiveNow = now ?? DateTime.now().toUtc();
+    if (subject.trim().isEmpty ||
+        token.trim().isEmpty ||
+        !_emailPattern.hasMatch(email.trim()) ||
+        !expiresAt.isAfter(effectiveNow)) {
+      throw const FormatException(
+        'External authenticated identity is invalid.',
+      );
+    }
+    return ExternalAuthenticatedIdentity._(
+      subject: subject,
+      email: email.trim().toLowerCase(),
+      token: token,
+      expiresAt: expiresAt,
+      emailVerified: emailVerified,
+    );
+  }
+
+  ExternalAuthenticatedIdentity._({
     required this.subject,
     required this.email,
     required this.token,
@@ -129,3 +158,5 @@ final class ExternalAuthenticatedIdentity {
 final RegExp _uuidPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
 );
+
+final RegExp _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');

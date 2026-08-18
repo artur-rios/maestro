@@ -25,6 +25,44 @@ void main() {
     expect(parsed.digest, RecoveryCode.parse(parsed.display).digest);
   });
 
+  test('GivenKnownRecoveryCode_WhenParsed_ThenDigestIsCanonicalSha256', () {
+    final code = RecoveryCode.parse('ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-23');
+
+    expect(
+      code.digest,
+      '0d0996f9c4e90a0a5ce75e7c16dfeb3d6f263ece0acc39c75858c13ba9022bd7',
+    );
+  });
+
+  test('GivenMisplacedWhitespaceOrHyphens_WhenParsed_ThenItThrows', () {
+    for (final input in <String>[
+      ' ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-23',
+      'ABCD-EFGH-JKMN-PQRS-TVWX-YZ0123',
+      'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01--23',
+    ]) {
+      expect(() => RecoveryCode.parse(input), throwsFormatException);
+    }
+  });
+
+  test('GivenInvalidTailBits_WhenParsed_ThenItThrows', () {
+    expect(
+      () => RecoveryCode.parse('ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2Z'),
+      throwsFormatException,
+    );
+  });
+
+  test('GivenAmbiguousRecoveryAlphabet_WhenParsed_ThenItThrows', () {
+    for (final symbol in <String>['I', 'L', 'O', 'U']) {
+      expect(
+        () => RecoveryCode.parse(
+          'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-$symbol'
+          '3',
+        ),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('GivenMalformedRecoveryCode_WhenParsed_ThenItThrows', () {
     for (final input in <String>[
       '',
@@ -63,5 +101,34 @@ void main() {
     );
     expect(config.clientId, 'desktop-client');
     expect(config.scopeId, '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92');
+  });
+
+  test('GivenValidExternalIdentity_WhenCreated_ThenValuesAreRetained', () {
+    final now = DateTime.utc(2026, 8, 18);
+    final identity = ExternalAuthenticatedIdentity(
+      subject: 'subject-1',
+      email: 'person@example.com',
+      token: 'token',
+      expiresAt: now.add(const Duration(minutes: 5)),
+      now: now,
+      emailVerified: true,
+    );
+
+    expect(identity.subject, 'subject-1');
+  });
+
+  test('GivenInvalidExternalIdentity_WhenCreated_ThenItThrows', () {
+    final now = DateTime.utc(2026, 8, 18);
+    expect(
+      () => ExternalAuthenticatedIdentity(
+        subject: ' ',
+        email: 'bad',
+        token: '',
+        expiresAt: now,
+        now: now,
+        emailVerified: false,
+      ),
+      throwsFormatException,
+    );
   });
 }
