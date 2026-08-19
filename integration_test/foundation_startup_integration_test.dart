@@ -129,6 +129,9 @@ void main() {
         reason: _visibleText(tester),
       );
       expect(find.bySemanticsLabel(RegExp(r'^Foundation ')), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     },
   );
 }
