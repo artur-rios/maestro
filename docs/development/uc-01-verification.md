@@ -25,6 +25,24 @@ to the implementation and local verification evidence prepared for review.
 | FR-AU-06 | `AuthenticationPage` invokes the protected-content builder only for an authenticated controller state. Sign-out, disposal, failure, and stale completions remain outside the shell. | `authentication_controller_test.dart`; `authentication_page_test.dart`; `maestro_app_test.dart` | Protected content is absent while signed out and after sign-out; late or superseded authentication cannot reopen it. |
 | FR-AU-07 / BR-21 | `AuthenticatedSession.fullControl` grants the single local permission set for records, workflows, and delivery. | Domain, service, and successful account-creation widget tests | Every successful authentication path produces full-control flags; no differentiated local role exists. |
 
+## External authentication and local recovery extension
+
+The UC-01 extension adds Google sign-in through Heimdall, Windows credentials
+for an existing local email account, and recovery codes for password-backed
+local accounts. It retains the existing Windows-only account path.
+
+| Behavior | Automated evidence | Manual verification |
+| --- | --- | --- |
+| Configured Google sign-in | `authentication_service_test.dart`, `authentication_settings_controller_test.dart`, `drift_authentication_settings_repository_test.dart`, `google_browser_authorizer_test.dart`, and `heimdall_authentication_gateway_test.dart` | Save a valid Google desktop OAuth client ID and Heimdall scope UUID in **Authentication settings**. **Continue with Google** becomes available only after the configuration is loaded or saved. |
+| Browser OAuth and Heimdall exchange | `google_browser_authorizer_test.dart` and `heimdall_authentication_gateway_test.dart` use a loopback/browser fake and HTTP client fakes, respectively. | Start with `--dart-define=HEIMDALL_API_BASE_URL=https://<host>` (or the local `http://localhost:8080` default), then use a mock `POST /api/auth/google` endpoint that returns a successful Heimdall `DataOutput` envelope. The system browser opens for Google; the temporary `127.0.0.1` callback accepts the exact generated state, then the app enters the protected workspace. Cancellation, timeout, state mismatch, or rejected/malformed output leaves it signed out. |
+| Configuration and secret boundaries | `drift_authentication_settings_repository_test.dart`, service audit tests, and gateway/authorizer tests | Confirm that only `authentication.google.oauth_client_id` and `authentication.heimdall.scope_id` are stored in `Settings`. OAuth code, PKCE verifier, Google ID token, Heimdall bearer token, passwords, and recovery-code plaintext are never persisted or logged. |
+| Windows credential alternatives | `authentication_service_test.dart` and `authentication_page_test.dart` | Verify the existing **Sign in with Windows** control for the Windows-only local account. For an existing password-backed local account, enter its email and select **Use Windows credentials**; a successful native credential check opens that same account, while unavailable or denied verification stays signed out. |
+| Creation-only recovery codes | `authentication_service_test.dart`, `drift_recovery_code_repository_test.dart`, `recovery_code_dialog_test.dart`, and `authentication_page_test.dart` | Create a local password account and record all ten displayed codes before acknowledgement. The dialog blocks workspace entry and displays the codes only once. Sign out, choose **Recover local account**, and redeem one recorded code with a new valid password. A reused or invalid code fails without an account-enumeration disclosure. |
+
+There is deliberately no recovery-code regeneration, email reset link, or
+password-reset API. Loss of every recorded recovery code makes the
+password-backed local account unrecoverable.
+
 ## Use-case flow evidence
 
 | Flow | Evidence |
@@ -92,6 +110,24 @@ flutter analyze
 flutter test
 # Exit 0; 124 tests passed
 ```
+
+### External authentication extension commands
+
+Run the following from the feature worktree after resolving dependencies:
+
+```text
+dart format --set-exit-if-changed .
+flutter analyze
+flutter test test/features/authentication
+flutter test integration_test/foundation_startup_integration_test.dart
+flutter test
+```
+
+The startup integration assertion verifies that, with a configured but
+unauthenticated composition, **Continue with Google** and **Recover local
+account** are both exposed. The full command set is the delivery gate for this
+extension; the Task 8 report records the actual local command results rather
+than treating the historical 124-test result above as evidence for this change.
 
 The formatter initially rewrote mixed working-copy line endings in
 `maestro_database.dart` while producing no textual Git diff. A second run

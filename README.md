@@ -22,11 +22,12 @@ branch in the background.
 - Supports supervised pull-request delivery and autonomous model-reviewed delivery.
 - Preserves immutable run snapshots, attempts, audit evidence, and configurable compacted history.
 - Checks, verifies, and installs signed updates published through GitHub Releases.
+- Supports local passwords, Windows credentials, Google sign-in through Heimdall, and one-use local recovery codes.
 
 ## What It Doesn't Do
 
-- The first release does not connect to an external authentication service. It provides the boundary needed
-  to add one later.
+- Maestro does not provide email-reset links, recovery-code regeneration, or a password-reset API. Losing every
+  recorded recovery code makes a password-backed local account unrecoverable by design.
 - Removing a project record from Maestro never modifies or deletes its source folder.
 
 No other product capability has been declared out of scope for the first release.
@@ -95,6 +96,38 @@ flutter run -d linux
 ```
 
 Operational prerequisites and clean-clone commands are documented in [Building and Testing](docs/development/building-and-testing.md). Release packaging and the current publisher-signing limitation are documented in [Releases and Signing](docs/development/releases-and-signing.md). Application data ownership and recovery are documented in [Application Data and Recovery](docs/development/application-data.md).
+
+## Authentication and recovery
+
+Google sign-in needs a Google desktop OAuth client ID and a Heimdall scope UUID.
+On the signed-out page, open **Authentication settings**, enter both values,
+and save them. Maestro persists the non-secret values as
+`authentication.google.oauth_client_id` and
+`authentication.heimdall.scope_id`; it never persists OAuth codes, PKCE
+verifiers, Google ID tokens, Heimdall bearer tokens, passwords, or recovery-code
+plaintext.
+
+Set the Heimdall API base at build time; it is intentionally not an end-user
+setting. The default is `http://localhost:8080` for local development:
+
+```bash
+flutter run -d windows --dart-define=HEIMDALL_API_BASE_URL=https://heimdall.example
+```
+
+After **Continue with Google**, Maestro opens the system browser, waits for the
+Google authorization-code callback on a temporary `127.0.0.1` loopback port,
+and exchanges the resulting ID token with Heimdall. A mock Heimdall endpoint
+for development must implement `POST /api/auth/google` and return the standard
+successful `DataOutput` envelope with `token`, future `expiresAt`, and
+`emailVerified`. Browser cancellation, a timeout, callback-state mismatch, or
+a rejected/malformed gateway response leaves the app signed out.
+
+When creating a local password account, record the ten recovery codes shown
+before acknowledging the dialog; they are displayed only once. To recover,
+choose **Recover local account**, provide the local email, one unused recorded
+code, and a new valid password. The existing **Sign in with Windows** path
+remains available, while **Use Windows credentials** verifies an existing
+local email account on supported platforms.
 
 ### Publishing releases
 

@@ -15,9 +15,15 @@ import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/features/appearance/data/drift_appearance_preference_repository.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/authentication/application/authentication_service.dart';
+import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
 import 'package:maestro/features/authentication/data/drift_authentication_repository.dart';
+import 'package:maestro/features/authentication/data/drift_authentication_settings_repository.dart';
+import 'package:maestro/features/authentication/data/drift_recovery_code_repository.dart';
+import 'package:maestro/features/authentication/data/google_browser_authorizer.dart';
+import 'package:maestro/features/authentication/data/heimdall_authentication_gateway.dart';
 import 'package:maestro/features/authentication/data/protected_password_verifier_store.dart';
 import 'package:maestro/features/authentication/data/sodium_password_hasher.dart';
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 import 'package:maestro/features/delivery/application/autonomous_delivery.dart';
 import 'package:maestro/features/delivery/data/command_runner_autonomous_delivery_port.dart';
 import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
@@ -67,6 +73,7 @@ import 'package:maestro/platform/agents/claude_code_adapter.dart';
 import 'package:maestro/platform/agents/codex_adapter.dart';
 import 'package:maestro/platform/agents/executable_resolver.dart';
 import 'package:maestro/platform/agents/open_code_adapter.dart';
+import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/auth/method_channel_authentication.dart';
 import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/git/git_port.dart';
@@ -109,6 +116,8 @@ final class ProductionAppComposition {
     required this.appearanceRepository,
     required this.appearanceController,
     required this.authenticationService,
+    required this.authenticationPort,
+    required this.authenticationSettingsRepository,
     required this.projectRepository,
     required this.projectService,
     required this.projectLifecycleService,
@@ -133,6 +142,8 @@ final class ProductionAppComposition {
   final DriftAppearancePreferenceRepository appearanceRepository;
   final AppearanceController appearanceController;
   final AuthenticationService authenticationService;
+  final AuthenticationPort? authenticationPort;
+  final AuthenticationSettingsRepository authenticationSettingsRepository;
   final DriftProjectRepository projectRepository;
   final ProjectService projectService;
   final ProjectLifecycleService projectLifecycleService;
@@ -156,6 +167,8 @@ final class ProductionAppComposition {
   Widget get app => MaestroApp(
     appearanceController: appearanceController,
     authenticationService: authenticationService,
+    authenticationPort: authenticationPort,
+    authenticationSettingsRepository: authenticationSettingsRepository,
     projectService: projectService,
     projectLifecycleService: projectLifecycleService,
     projectFolderPicker: projectFolderPicker,
@@ -184,8 +197,14 @@ Future<ProductionAppComposition> composeProductionApp({
   required MaestroDatabase database,
   PasswordVerifierStore? passwordVerifiers,
   PasswordHasher? passwordHasher,
+  AuthenticationSettingsRepository? authenticationSettings,
+  RecoveryCodeRepository? recoveryCodes,
+  GoogleBrowserAuthorization? googleAuthorization,
+  ExternalAuthenticationGateway? externalGateway,
+  NewRecoveryCodeSet Function()? newRecoveryCodeSet,
   OperatingSystemAuthenticator operatingSystemAuthentication =
       const MethodChannelAuthentication(),
+  AuthenticationPort? authenticationPort,
   CommandRunner commandRunner = const ProcessCommandRunner(),
   ProjectDirectoryAccess directoryAccess = const LocalProjectDirectoryAccess(),
   ProjectFolderPicker projectFolderPicker =
@@ -197,6 +216,12 @@ Future<ProductionAppComposition> composeProductionApp({
   DesktopWindowPort window = const NoopDesktopWindowPort(),
 }) async {
   final now = clock ?? () => DateTime.now().toUtc();
+  final effectiveAuthenticationPort =
+      authenticationPort ??
+      switch (operatingSystemAuthentication) {
+        AuthenticationPort port => port,
+        _ => null,
+      };
   final appearanceRepository = DriftAppearancePreferenceRepository(
     database,
     clock: now,
@@ -206,6 +231,9 @@ Future<ProductionAppComposition> composeProductionApp({
     initialMode: await appearanceRepository.load(),
   );
   final authenticationRepository = DriftAuthenticationRepository(database);
+  final effectiveAuthenticationSettings =
+      authenticationSettings ??
+      DriftAuthenticationSettingsRepository(database, clock: now);
   final authenticationService = AuthenticationService(
     users: authenticationRepository,
     verifiers:
@@ -216,6 +244,15 @@ Future<ProductionAppComposition> composeProductionApp({
     hasher: passwordHasher ?? await SodiumPasswordHasher.initialize(),
     audits: authenticationRepository,
     operatingSystemAuthentication: operatingSystemAuthentication,
+    recoveryCodes: recoveryCodes ?? DriftRecoveryCodeRepository(database),
+    settings: effectiveAuthenticationSettings,
+    googleAuthorization: googleAuthorization ?? GoogleBrowserAuthorizer(),
+    // The gateway validates HEIMDALL_API_BASE_URL at construction, before any
+    // browser or network operation can start.
+    externalGateway: externalGateway ?? HeimdallAuthenticationGateway(),
+    newRecoveryCodeSet:
+        newRecoveryCodeSet ??
+        () => NewRecoveryCodeSet.generate(Random.secure()),
     clock: now,
     newId: newId,
   );
@@ -476,6 +513,8 @@ Future<ProductionAppComposition> composeProductionApp({
     appearanceRepository: appearanceRepository,
     appearanceController: appearanceController,
     authenticationService: authenticationService,
+    authenticationPort: effectiveAuthenticationPort,
+    authenticationSettingsRepository: effectiveAuthenticationSettings,
     projectRepository: projectRepository,
     projectService: projectService,
     projectLifecycleService: projectLifecycleService,

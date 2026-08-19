@@ -1,1 +1,1 @@
-const int currentSchemaVersion = 6;
+const int currentSchemaVersion = 7;

@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/features/authentication/application/external_authentication_ports.dart';
 import 'package:maestro/features/authentication/domain/authentication_models.dart';
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 
 abstract interface class LocalUserRepository {
   Future<LocalUser?> findByEmail(NormalizedEmail email);
@@ -25,7 +30,12 @@ abstract interface class PasswordHasher {
   Future<bool> verify(String verifier, String password);
 }
 
-enum AuthenticationAuditAction { accountCreated, signIn, signInFailed }
+enum AuthenticationAuditAction {
+  accountCreated,
+  accountRecovered,
+  signIn,
+  signInFailed,
+}
 
 enum AuthenticationAuditOutcome { success, failure }
 
@@ -39,7 +49,6 @@ final class AuthenticationAuditEvent {
     required this.occurredAt,
     required this.details,
   });
-
   final String id;
   final String actorId;
   final AuthenticationAuditAction action;
@@ -54,6 +63,13 @@ abstract interface class AuditRepository {
   Future<void> deleteEvent(String eventId);
 }
 
+typedef SessionExpiryCancellation = void Function();
+typedef SessionExpiryScheduler =
+    SessionExpiryCancellation Function(
+      Duration delay,
+      void Function() onExpiry,
+    );
+
 final class AuthenticationService {
   AuthenticationService({
     required this._users,
@@ -61,235 +77,340 @@ final class AuthenticationService {
     required this._hasher,
     required this._audits,
     required this._operatingSystemAuthentication,
+    required this._recoveryCodes,
+    required this._settings,
+    required this._googleAuthorization,
+    required this._externalGateway,
+    required this._newRecoveryCodeSet,
     required this._clock,
     required this._newId,
-  });
+    SessionExpiryScheduler? scheduleExpiry,
+  }) : _scheduleExpiry = scheduleExpiry ?? _scheduleTimer;
 
   final LocalUserRepository _users;
   final PasswordVerifierStore _verifiers;
   final PasswordHasher _hasher;
   final AuditRepository _audits;
   final OperatingSystemAuthenticator _operatingSystemAuthentication;
+  final RecoveryCodeRepository _recoveryCodes;
+  final AuthenticationSettingsRepository _settings;
+  final GoogleBrowserAuthorization _googleAuthorization;
+  final ExternalAuthenticationGateway _externalGateway;
+  final NewRecoveryCodeSet Function() _newRecoveryCodeSet;
   final DateTime Function() _clock;
   final String Function() _newId;
+  final SessionExpiryScheduler _scheduleExpiry;
+  final StreamController<AuthenticatedSession?> _sessionChanges =
+      StreamController<AuthenticatedSession?>.broadcast(sync: true);
 
   AuthenticatedSession? _currentSession;
+  ManagedAuthenticatedSession? _currentSessionAuthority;
+  ManagedAuthenticatedSession? _pendingCreatedSessionAuthority;
+  int? _pendingCreationGeneration;
   int _operationGeneration = 0;
   bool _disposed = false;
+  SessionExpiryCancellation? _cancelSessionExpiry;
 
-  AuthenticatedSession? get currentSession => _currentSession;
+  Stream<AuthenticatedSession?> get sessionChanges => _sessionChanges.stream;
 
-  Future<Result<AuthenticatedSession>> createAccount(
+  AuthenticatedSession? get currentSession {
+    final session = _currentSession;
+    if (session != null && !session.isActive) {
+      _expireSession(session);
+      return null;
+    }
+    return session;
+  }
+
+  Future<Result<LocalAccountCreation>> createAccount(
     String email,
     String password,
   ) async {
-    final operationGeneration = _beginAuthenticationOperation();
+    final generation = _beginAuthenticationOperation();
     final normalizedEmail = _validatedEmail(email);
-    if (normalizedEmail == null) {
-      return _invalidEmail();
-    }
+    if (normalizedEmail == null) return _invalidEmail<LocalAccountCreation>();
     final localPassword = _validatedPassword(password);
-    if (localPassword == null) {
-      return const FailureResult<AuthenticatedSession>(
-        ValidationFailure(
-          code: 'authentication.password.too_short',
-          message: 'Password must contain at least 8 characters.',
-          remediation:
-              'Use at least 8 characters and choose a strong, unique password.',
-        ),
-      );
-    }
+    if (localPassword == null) return _passwordTooShort<LocalAccountCreation>();
 
+    String? verifierKey;
+    LocalUser? user;
+    String? auditEventId;
     try {
-      final existingUser = await _users.findByEmail(normalizedEmail);
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      if (existingUser != null) {
-        return const FailureResult<AuthenticatedSession>(
+      if (await _users.findByEmail(normalizedEmail) != null) {
+        if (!_owns(generation)) return _stale<LocalAccountCreation>();
+        return const FailureResult<LocalAccountCreation>(
           ValidationFailure(
             code: 'authentication.email.duplicate',
             message: 'An account already exists for this email address.',
           ),
         );
       }
-
+      if (!_owns(generation)) return _stale<LocalAccountCreation>();
       final userId = _newId();
-      final verifierKey = 'maestro.auth.verifier.$userId';
+      verifierKey = 'maestro.auth.verifier.$userId';
       final verifier = await _hasher.create(localPassword.value);
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
+      if (!_owns(generation)) return _stale<LocalAccountCreation>();
       try {
         await _verifiers.write(verifierKey, verifier);
       } catch (error) {
-        final rollbackFailure = await _rollbackVerifier(verifierKey);
-        if (rollbackFailure != null) {
-          return FailureResult<AuthenticatedSession>(rollbackFailure);
+        final cleanup = await _rollbackVerifier(verifierKey);
+        if (cleanup != null) {
+          return FailureResult<LocalAccountCreation>(cleanup);
         }
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
-        return FailureResult<AuthenticatedSession>(_storageFailure(error));
+        if (!_owns(generation)) return _stale<LocalAccountCreation>();
+        return FailureResult<LocalAccountCreation>(_storageFailure(error));
       }
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleAfterCompensation(await _rollbackVerifier(verifierKey));
+      if (!_owns(generation)) {
+        return _staleAfter<LocalAccountCreation>(
+          await _rollbackVerifier(verifierKey),
+        );
       }
 
-      final user = LocalUser(
+      final createdAt = _clock();
+      user = LocalUser(
         id: userId,
         email: normalizedEmail,
         authenticationMethod: AuthenticationMethod.emailPassword,
         verifierKey: verifierKey,
-        createdAt: _clock(),
-        lastAuthenticatedAt: _clock(),
+        createdAt: createdAt,
+        lastAuthenticatedAt: createdAt,
       );
-      try {
-        await _users.save(user);
-      } catch (error) {
-        final rollbackFailure = await _compensateCreatedAccount(
-          user.id,
-          verifierKey,
-        );
-        if (rollbackFailure != null) {
-          return FailureResult<AuthenticatedSession>(rollbackFailure);
-        }
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
-        return FailureResult<AuthenticatedSession>(_storageFailure(error));
-      }
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleAfterCompensation(
+      await _users.save(user);
+      if (!_owns(generation)) {
+        return _staleAfter<LocalAccountCreation>(
           await _compensateCreatedAccount(user.id, verifierKey),
         );
       }
 
-      final accountCreatedAudit = _newAuditEvent(
+      final codeSet = _newRecoveryCodeSet();
+      if (codeSet.codes.length != RecoveryCode.count) {
+        throw StateError('Recovery code generator returned an invalid set.');
+      }
+      await _recoveryCodes.saveAll(
+        user.id,
+        codeSet.codes
+            .map(
+              (code) => StoredRecoveryCode(
+                id: _newId(),
+                digest: code.digest,
+                issuedAt: createdAt,
+              ),
+            )
+            .toList(growable: false),
+      );
+      if (!_owns(generation)) {
+        return _staleAfter<LocalAccountCreation>(
+          await _compensateCreatedAccount(user.id, verifierKey),
+        );
+      }
+
+      final audit = _newAuditEvent(
         actorId: user.id,
         action: AuthenticationAuditAction.accountCreated,
         target: user.id,
         outcome: AuthenticationAuditOutcome.success,
-        details: '{"principal":"known"}',
+        details: _auditDetails('local_password', known: true),
       );
-      try {
-        await _audits.append(accountCreatedAudit);
-      } catch (error) {
-        final compensationFailure = await _compensateCreatedAccount(
-          user.id,
-          verifierKey,
-          auditEventId: accountCreatedAudit.id,
-        );
-        if (compensationFailure != null) {
-          return FailureResult<AuthenticatedSession>(compensationFailure);
-        }
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
-        return FailureResult<AuthenticatedSession>(_storageFailure(error));
-      }
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleAfterCompensation(
+      auditEventId = audit.id;
+      await _audits.append(audit);
+      if (!_owns(generation)) {
+        return _staleAfter<LocalAccountCreation>(
           await _compensateCreatedAccount(
             user.id,
             verifierKey,
-            auditEventId: accountCreatedAudit.id,
+            auditEventId: auditEventId,
           ),
         );
       }
-      return _openSession(user.id, operationGeneration);
+      final sessionAuthority = ManagedAuthenticatedSession.fullControl(
+        user.id,
+        source: AuthenticationSource.localPassword,
+        clock: _clock,
+        active: false,
+      );
+      _pendingCreatedSessionAuthority = sessionAuthority;
+      _pendingCreationGeneration = generation;
+      return Success<LocalAccountCreation>(
+        LocalAccountCreation(
+          session: sessionAuthority.session,
+          recoveryCodes: codeSet,
+        ),
+      );
     } catch (error) {
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
+      if (user != null && verifierKey != null) {
+        final cleanup = await _compensateCreatedAccount(
+          user.id,
+          verifierKey,
+          auditEventId: auditEventId,
+        );
+        if (cleanup != null) {
+          return FailureResult<LocalAccountCreation>(cleanup);
+        }
       }
-      return FailureResult<AuthenticatedSession>(_storageFailure(error));
+      if (!_owns(generation)) return _stale<LocalAccountCreation>();
+      return FailureResult<LocalAccountCreation>(_storageFailure(error));
     }
+  }
+
+  Result<AuthenticatedSession> acknowledgeRecoveryCodes() {
+    final sessionAuthority = _pendingCreatedSessionAuthority;
+    final generation = _pendingCreationGeneration;
+    if (sessionAuthority == null || generation == null || !_owns(generation)) {
+      _clearPendingCreation();
+      return const FailureResult<AuthenticatedSession>(
+        SecurityFailure(
+          code: 'authentication.recovery_codes.acknowledgement_required',
+          message: 'No recovery codes are awaiting acknowledgement.',
+        ),
+      );
+    }
+    _pendingCreatedSessionAuthority = null;
+    _pendingCreationGeneration = null;
+    sessionAuthority.activate();
+    _publishSession(sessionAuthority);
+    return Success<AuthenticatedSession>(sessionAuthority.session);
   }
 
   Future<Result<AuthenticatedSession>> signInWithEmail(
     String email,
     String password,
   ) async {
-    final operationGeneration = _beginAuthenticationOperation();
+    final generation = _beginAuthenticationOperation();
     final normalizedEmail = _validatedEmail(email);
-    if (normalizedEmail == null) {
-      return _invalidEmail();
-    }
+    if (normalizedEmail == null) return _invalidEmail<AuthenticatedSession>();
     try {
       final user = await _users.findByEmail(normalizedEmail);
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      if (user == null || user.verifierKey == null) {
-        await _appendFailedEmailSignIn(null);
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (user == null ||
+          user.authenticationMethod != AuthenticationMethod.emailPassword ||
+          user.verifierKey == null) {
+        await _appendFailedAuthentication(user?.id, source: 'local_password');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidCredentials();
       }
-
       final verifier = await _verifiers.read(user.verifierKey!);
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      if (verifier == null) {
-        await _appendFailedEmailSignIn(user.id);
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
-        return _invalidCredentials();
-      }
-      final matches = await _hasher.verify(verifier, password);
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      final matches =
+          verifier != null && await _hasher.verify(verifier, password);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
       if (!matches) {
-        await _appendFailedEmailSignIn(user.id);
-        if (!_ownsAuthenticationOperation(operationGeneration)) {
-          return _staleOperation();
-        }
+        await _appendFailedAuthentication(user.id, source: 'local_password');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidCredentials();
       }
-
-      final authenticatedAt = _clock();
-      await _users.updateLastAuthenticatedAt(user.id, authenticatedAt);
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      await _appendAudit(
-        actorId: user.id,
-        action: AuthenticationAuditAction.signIn,
-        target: user.id,
-        outcome: AuthenticationAuditOutcome.success,
-        details: '{"principal":"known"}',
+      return _completeLocalSignIn(
+        user,
+        generation,
+        AuthenticationSource.localPassword,
+        auditSource: 'local_password',
       );
-      return _openSession(user.id, operationGeneration);
     } catch (error) {
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
       return FailureResult<AuthenticatedSession>(_storageFailure(error));
     }
   }
 
+  Future<Result<AuthenticatedSession>> signInWithLocalWindowsCredentials(
+    String email,
+  ) async {
+    final generation = _beginAuthenticationOperation();
+    final normalizedEmail = _validatedEmail(email);
+    if (normalizedEmail == null) return _invalidEmail<AuthenticatedSession>();
+    LocalUser? user;
+    try {
+      user = await _users.findByEmail(normalizedEmail);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (user == null ||
+          user.authenticationMethod != AuthenticationMethod.emailPassword ||
+          user.verifierKey == null) {
+        await _appendFailedAuthentication(user?.id, source: 'local_windows');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidCredentials();
+      }
+      final verified = await _operatingSystemAuthentication
+          .authenticateCurrentUser();
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (verified is FailureResult<void>) {
+        await _appendFailedAuthentication(user.id, source: 'local_windows');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return FailureResult<AuthenticatedSession>(
+          _localWindowsFailure(verified.failure),
+        );
+      }
+      return _completeLocalSignIn(
+        user,
+        generation,
+        AuthenticationSource.localWindows,
+        auditSource: 'local_windows',
+      );
+    } catch (_) {
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (user != null) {
+        try {
+          await _appendFailedAuthentication(user.id, source: 'local_windows');
+        } catch (_) {
+          // The redacted platform failure remains primary.
+        }
+      }
+      return const FailureResult<AuthenticatedSession>(
+        PlatformFailure(
+          code: 'authentication.operating_system.failed',
+          message: 'Could not verify Windows credentials.',
+          remediation: 'Use your local password or a recovery code.',
+        ),
+      );
+    }
+  }
+
+  static MaestroFailure _localWindowsFailure(MaestroFailure failure) {
+    return switch (failure.code) {
+      'authentication.operating_system.denied' => _invalidCredentialsFailure(),
+      'authentication.operating_system.unavailable' => const PlatformFailure(
+        code: 'authentication.operating_system.unavailable',
+        message: 'Windows credentials are unavailable.',
+        remediation: 'Use your local password or a recovery code.',
+      ),
+      'authentication.operating_system.transient_failure' =>
+        const PlatformFailure(
+          code: 'authentication.operating_system.transient_failure',
+          message: 'Windows credentials could not be verified.',
+          remediation:
+              'Retry, use your local password, or use a recovery code.',
+        ),
+      'authentication.operating_system.invalid_response' =>
+        const PlatformFailure(
+          code: 'authentication.operating_system.invalid_response',
+          message:
+              'Windows credential verification returned an invalid response.',
+          remediation: 'Use your local password or a recovery code.',
+        ),
+      _ when failure is SecurityFailure => _invalidCredentialsFailure(),
+      _ => const PlatformFailure(
+        code: 'authentication.operating_system.failed',
+        message: 'Could not verify Windows credentials.',
+        remediation: 'Use your local password or a recovery code.',
+      ),
+    };
+  }
+
+  static MaestroFailure _invalidCredentialsFailure() => const SecurityFailure(
+    code: 'authentication.credentials.invalid',
+    message: 'The email address or credentials are invalid.',
+  );
+
   Future<Result<AuthenticatedSession>> signInWithOperatingSystem() async {
-    final operationGeneration = _beginAuthenticationOperation();
+    final generation = _beginAuthenticationOperation();
     try {
       final verified = await _operatingSystemAuthentication
           .authenticateCurrentUser();
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      switch (verified) {
-        case FailureResult<void>(:final failure):
-          return FailureResult<AuthenticatedSession>(failure);
-        case Success<void>():
-          return _signInVerifiedOperatingSystemUser(operationGeneration);
-      }
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      return switch (verified) {
+        FailureResult<void>(:final failure) =>
+          FailureResult<AuthenticatedSession>(failure),
+        Success<void>() => _signInVerifiedOperatingSystemUser(generation),
+      };
     } catch (error) {
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
       return FailureResult<AuthenticatedSession>(
         PlatformFailure(
           code: 'authentication.operating_system.failed',
@@ -300,20 +421,433 @@ final class AuthenticationService {
     }
   }
 
+  Future<Result<AuthenticatedSession>> signInWithGoogle() async {
+    final generation = _beginAuthenticationOperation();
+    var loadingConfiguration = true;
+    try {
+      final configuration = await _settings.load();
+      loadingConfiguration = false;
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (configuration == null) {
+        return const FailureResult<AuthenticatedSession>(
+          ValidationFailure(
+            code: 'authentication.google.configuration.missing',
+            message: 'Google authentication is not configured.',
+            remediation: 'Configure the OAuth client ID and Heimdall scope.',
+          ),
+        );
+      }
+      final idToken = await _googleAuthorization.authorize(configuration);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      final grant = await _externalGateway.signInWithGoogle(
+        scopeId: configuration.scopeId,
+        idToken: idToken.value,
+      );
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      final subject = _jwtSubject(grant.token);
+      if (subject == null ||
+          !grant.emailVerified ||
+          !grant.expiresAt.isAfter(_clock())) {
+        await _appendFailedAuthentication(null, source: 'google');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidGoogleIdentity();
+      }
+      final successAudit = _newAuditEvent(
+        actorId: subject,
+        action: AuthenticationAuditAction.signIn,
+        target: subject,
+        outcome: AuthenticationAuditOutcome.success,
+        details: _auditDetails('google', known: true),
+      );
+      await _audits.append(successAudit);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (!grant.expiresAt.isAfter(_clock())) {
+        try {
+          await _audits.deleteEvent(successAudit.id);
+          if (!_owns(generation)) return _stale<AuthenticatedSession>();
+          await _appendFailedAuthentication(subject, source: 'google');
+          if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        } catch (_) {
+          // Expiry rejection remains authoritative if audit cleanup also fails.
+        }
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidGoogleIdentity();
+      }
+      return _openSession(
+        subject,
+        generation,
+        AuthenticationSource.google,
+        remoteToken: grant.token,
+        remoteTokenExpiresAt: grant.expiresAt,
+      );
+    } catch (error) {
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      try {
+        await _appendFailedAuthentication(null, source: 'google');
+      } catch (_) {}
+      return FailureResult<AuthenticatedSession>(
+        _mappedGoogleFailure(error, loadingConfiguration: loadingConfiguration),
+      );
+    }
+  }
+
+  static MaestroFailure _mappedGoogleFailure(
+    Object error, {
+    required bool loadingConfiguration,
+  }) {
+    if (loadingConfiguration && error is FormatException) {
+      return const ValidationFailure(
+        code: 'authentication.google.configuration.invalid',
+        message: 'The saved Google authentication configuration is invalid.',
+        remediation: 'Review and save the OAuth client ID and Heimdall scope.',
+      );
+    }
+    if (error case GoogleAuthorizationFailure(:final kind)) {
+      return switch (kind) {
+        GoogleAuthorizationFailureKind.browserCancelled =>
+          const SecurityFailure(
+            code: 'authentication.google.browser.cancelled',
+            message: 'The Google sign-in browser was closed.',
+            remediation: 'Start Google sign-in again or use a local method.',
+          ),
+        GoogleAuthorizationFailureKind.authorizationCancelled =>
+          const SecurityFailure(
+            code: 'authentication.google.authorization.cancelled',
+            message: 'Google sign-in was cancelled.',
+            remediation: 'Start Google sign-in again or use a local method.',
+          ),
+        GoogleAuthorizationFailureKind.authorizationTimedOut =>
+          const PlatformFailure(
+            code: 'authentication.google.authorization.timed_out',
+            message: 'Google sign-in timed out.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.callbackStateMismatch =>
+          const SecurityFailure(
+            code: 'authentication.google.callback.state_mismatch',
+            message: 'The Google sign-in response could not be verified.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.callbackRejected =>
+          const SecurityFailure(
+            code: 'authentication.google.callback.rejected',
+            message: 'The Google sign-in response was rejected.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.providerRejected =>
+          const SecurityFailure(
+            code: 'authentication.google.provider.rejected',
+            message: 'Google rejected the sign-in request.',
+            remediation: 'Review the Google account choice and try again.',
+          ),
+        GoogleAuthorizationFailureKind.browserLaunchFailed =>
+          const PlatformFailure(
+            code: 'authentication.google.browser.launch_failed',
+            message: 'The Google sign-in browser could not be opened.',
+            remediation: 'Check the default browser or use a local method.',
+          ),
+        GoogleAuthorizationFailureKind.listenerFailed => const PlatformFailure(
+          code: 'authentication.google.listener.failed',
+          message: 'Maestro could not receive the Google sign-in response.',
+          remediation: 'Retry Google sign-in or use a local method.',
+        ),
+        GoogleAuthorizationFailureKind.transportFailed => const PlatformFailure(
+          code: 'authentication.google.transport.failed',
+          message: 'Google sign-in could not reach the authentication service.',
+          remediation: 'Check the connection and try again.',
+        ),
+        GoogleAuthorizationFailureKind.tokenExchangeTimedOut =>
+          const PlatformFailure(
+            code: 'authentication.google.exchange.timed_out',
+            message: 'The Google token exchange timed out.',
+            remediation: 'Start Google sign-in again.',
+          ),
+        GoogleAuthorizationFailureKind.tokenExchangeRejected =>
+          const SecurityFailure(
+            code: 'authentication.google.exchange.rejected',
+            message: 'Google rejected the token exchange.',
+            remediation: 'Start Google sign-in again.',
+          ),
+      };
+    }
+    if (error case ExternalAuthenticationFailure(:final kind)) {
+      return switch (kind) {
+        ExternalAuthenticationFailureKind.configurationInvalid =>
+          const ValidationFailure(
+            code: 'authentication.google.heimdall.configuration.invalid',
+            message: 'The Heimdall authentication endpoint is invalid.',
+            remediation: 'Repair the application authentication configuration.',
+          ),
+        ExternalAuthenticationFailureKind.rejected => const SecurityFailure(
+          code: 'authentication.google.heimdall.rejected',
+          message: 'Heimdall rejected the Google identity.',
+          remediation: 'Try again or use a local authentication method.',
+        ),
+        ExternalAuthenticationFailureKind.timedOut => const PlatformFailure(
+          code: 'authentication.google.heimdall.timed_out',
+          message: 'Heimdall authentication timed out.',
+          remediation: 'Check the connection and try again.',
+        ),
+        ExternalAuthenticationFailureKind.transportFailed =>
+          const PlatformFailure(
+            code: 'authentication.google.heimdall.transport_failed',
+            message: 'Heimdall authentication could not be reached.',
+            remediation: 'Check the connection and try again.',
+          ),
+        ExternalAuthenticationFailureKind.envelopeMalformed =>
+          const SecurityFailure(
+            code: 'authentication.google.heimdall.envelope_malformed',
+            message: 'Heimdall returned an invalid authentication response.',
+            remediation: 'Retry later or use a local authentication method.',
+          ),
+      };
+    }
+    return const SecurityFailure(
+      code: 'authentication.google.failed',
+      message: 'Google authentication was not successful.',
+      remediation: 'Try again or use a local authentication method.',
+    );
+  }
+
+  Future<Result<AuthenticatedSession>> recoverLocalAccount(
+    String email,
+    String recoveryCode,
+    String newPassword,
+  ) async {
+    final generation = _beginAuthenticationOperation();
+    final normalizedEmail = _validatedEmail(email);
+    if (normalizedEmail == null) return _invalidEmail<AuthenticatedSession>();
+    final password = _validatedPassword(newPassword);
+    if (password == null) return _passwordTooShort<AuthenticatedSession>();
+    try {
+      final user = await _users.findByEmail(normalizedEmail);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (user == null ||
+          user.authenticationMethod != AuthenticationMethod.emailPassword ||
+          user.verifierKey == null) {
+        await _appendFailedAuthentication(user?.id, source: 'recovery_code');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidRecoveryCode();
+      }
+      RecoveryCode parsed;
+      try {
+        parsed = RecoveryCode.parse(recoveryCode);
+      } on FormatException {
+        await _appendFailedAuthentication(user.id, source: 'recovery_code');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidRecoveryCode();
+      }
+      final verifier = await _hasher.create(password.value);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      final consumed = await _recoveryCodes.consumeUnusedDigest(
+        user.id,
+        parsed.digest,
+        _clock(),
+      );
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (!consumed) {
+        await _appendFailedAuthentication(user.id, source: 'recovery_code');
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        return _invalidRecoveryCode();
+      }
+      try {
+        await _verifiers.write(user.verifierKey!, verifier);
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        await _users.updateLastAuthenticatedAt(user.id, _clock());
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        await _appendAudit(
+          actorId: user.id,
+          action: AuthenticationAuditAction.accountRecovered,
+          target: user.id,
+          outcome: AuthenticationAuditOutcome.success,
+          details: _auditDetails('recovery_code', known: true),
+        );
+        return _openSession(
+          user.id,
+          generation,
+          AuthenticationSource.recoveryCode,
+        );
+      } catch (_) {
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
+        try {
+          await _appendAudit(
+            actorId: user.id,
+            action: AuthenticationAuditAction.accountRecovered,
+            target: user.id,
+            outcome: AuthenticationAuditOutcome.failure,
+            details: _auditDetails('recovery_code', known: true),
+          );
+        } catch (_) {}
+        return const FailureResult<AuthenticatedSession>(
+          StorageFailure(
+            code: 'authentication.recovery.persistence.failed',
+            message:
+                'The recovery code was spent, but recovery did not finish.',
+            remediation: 'Try again with another recorded recovery code.',
+          ),
+        );
+      }
+    } catch (error) {
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      return FailureResult<AuthenticatedSession>(_storageFailure(error));
+    }
+  }
+
   void signOut() {
     _operationGeneration++;
-    _currentSession = null;
+    _clearCurrentSession();
+    _clearPendingCreation();
+    unawaited(_cancelActiveGoogleAuthorization());
   }
 
   void dispose() {
-    if (_disposed) {
-      return;
-    }
+    if (_disposed) return;
     _disposed = true;
     _operationGeneration++;
-    _currentSession = null;
+    _clearCurrentSession();
+    _clearPendingCreation();
+    unawaited(_cancelActiveGoogleAuthorization());
+    unawaited(_sessionChanges.close());
   }
 
+  Future<Result<AuthenticatedSession>> _completeLocalSignIn(
+    LocalUser user,
+    int generation,
+    AuthenticationSource source, {
+    required String auditSource,
+  }) async {
+    await _users.updateLastAuthenticatedAt(user.id, _clock());
+    if (!_owns(generation)) return _stale<AuthenticatedSession>();
+    await _appendAudit(
+      actorId: user.id,
+      action: AuthenticationAuditAction.signIn,
+      target: user.id,
+      outcome: AuthenticationAuditOutcome.success,
+      details: _auditDetails(auditSource, known: true),
+    );
+    return _openSession(user.id, generation, source);
+  }
+
+  Future<Result<AuthenticatedSession>> _signInVerifiedOperatingSystemUser(
+    int generation,
+  ) async {
+    try {
+      var user = await _users.findOperatingSystemUser();
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (user == null) {
+        final now = _clock();
+        user = LocalUser(
+          id: _newId(),
+          email: null,
+          authenticationMethod: AuthenticationMethod.operatingSystem,
+          verifierKey: null,
+          createdAt: now,
+          lastAuthenticatedAt: now,
+        );
+        await _users.save(user);
+      } else {
+        await _users.updateLastAuthenticatedAt(user.id, _clock());
+      }
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      await _appendAudit(
+        actorId: user.id,
+        action: AuthenticationAuditAction.signIn,
+        target: user.id,
+        outcome: AuthenticationAuditOutcome.success,
+        details: _auditDetails('operating_system', known: true),
+      );
+      return _openSession(
+        user.id,
+        generation,
+        AuthenticationSource.operatingSystem,
+      );
+    } catch (error) {
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      return FailureResult<AuthenticatedSession>(_storageFailure(error));
+    }
+  }
+
+  Future<void> _appendFailedAuthentication(
+    String? userId, {
+    required String source,
+  }) => _appendAudit(
+    actorId: userId ?? _newId(),
+    action: AuthenticationAuditAction.signInFailed,
+    target: userId ?? 'unknown',
+    outcome: AuthenticationAuditOutcome.failure,
+    details: _auditDetails(source, known: userId != null),
+  );
+  static String _auditDetails(String source, {required bool known}) =>
+      jsonEncode(<String, String>{
+        'principal': known ? 'known' : 'unknown',
+        'source': source,
+      });
+  Future<void> _appendAudit({
+    required String actorId,
+    required AuthenticationAuditAction action,
+    required String target,
+    required AuthenticationAuditOutcome outcome,
+    required String details,
+  }) => _audits.append(
+    _newAuditEvent(
+      actorId: actorId,
+      action: action,
+      target: target,
+      outcome: outcome,
+      details: details,
+    ),
+  );
+  AuthenticationAuditEvent _newAuditEvent({
+    required String actorId,
+    required AuthenticationAuditAction action,
+    required String target,
+    required AuthenticationAuditOutcome outcome,
+    required String details,
+  }) => AuthenticationAuditEvent(
+    id: _newId(),
+    actorId: actorId,
+    action: action,
+    target: target,
+    outcome: outcome,
+    occurredAt: _clock(),
+    details: details,
+  );
+
+  Future<StorageFailure?> _compensateCreatedAccount(
+    String userId,
+    String verifierKey, {
+    String? auditEventId,
+  }) async {
+    StorageFailure? first;
+    if (auditEventId != null) {
+      try {
+        await _audits.deleteEvent(auditEventId);
+      } catch (_) {
+        first ??= _cleanupFailure('authentication.audit.cleanup.failed');
+      }
+    }
+    try {
+      await _users.delete(userId);
+    } catch (_) {
+      first ??= _cleanupFailure('authentication.account.cleanup.failed');
+    }
+    final verifierFailure = await _rollbackVerifier(verifierKey);
+    return first ?? verifierFailure;
+  }
+
+  Future<StorageFailure?> _rollbackVerifier(String key) async {
+    try {
+      await _verifiers.delete(key);
+      return null;
+    } catch (_) {
+      return _cleanupFailure('authentication.verifier.cleanup.failed');
+    }
+  }
+
+  StorageFailure _cleanupFailure(String code) => StorageFailure(
+    code: code,
+    message: 'Could not remove incomplete account credentials.',
+  );
   LocalPassword? _validatedPassword(String password) {
     try {
       return LocalPassword.validate(password);
@@ -330,188 +864,179 @@ final class AuthenticationService {
     }
   }
 
-  Future<Result<AuthenticatedSession>> _signInVerifiedOperatingSystemUser(
-    int operationGeneration,
-  ) async {
+  String? _jwtSubject(String token) {
     try {
-      var user = await _users.findOperatingSystemUser();
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      if (user == null) {
-        final userId = _newId();
-        user = LocalUser(
-          id: userId,
-          email: null,
-          authenticationMethod: AuthenticationMethod.operatingSystem,
-          verifierKey: null,
-          createdAt: _clock(),
-          lastAuthenticatedAt: _clock(),
-        );
-        await _users.save(user);
-      } else {
-        await _users.updateLastAuthenticatedAt(user.id, _clock());
-      }
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      await _appendAudit(
-        actorId: user.id,
-        action: AuthenticationAuditAction.signIn,
-        target: user.id,
-        outcome: AuthenticationAuditOutcome.success,
-        details: '{"principal":"known"}',
+      final parts = token.split('.');
+      if (parts.length != 3 || parts[1].isEmpty) return null;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
       );
-      return _openSession(user.id, operationGeneration);
-    } catch (error) {
-      if (!_ownsAuthenticationOperation(operationGeneration)) {
-        return _staleOperation();
-      }
-      return FailureResult<AuthenticatedSession>(_storageFailure(error));
-    }
-  }
-
-  Future<void> _appendFailedEmailSignIn(String? userId) {
-    final isKnownUser = userId != null;
-    return _appendAudit(
-      actorId: userId ?? _newId(),
-      action: AuthenticationAuditAction.signInFailed,
-      target: userId ?? 'unknown',
-      outcome: AuthenticationAuditOutcome.failure,
-      details: isKnownUser
-          ? '{"principal":"known"}'
-          : '{"principal":"unknown"}',
-    );
-  }
-
-  Future<void> _appendAudit({
-    required String actorId,
-    required AuthenticationAuditAction action,
-    required String target,
-    required AuthenticationAuditOutcome outcome,
-    required String details,
-  }) {
-    return _audits.append(
-      _newAuditEvent(
-        actorId: actorId,
-        action: action,
-        target: target,
-        outcome: outcome,
-        details: details,
-      ),
-    );
-  }
-
-  AuthenticationAuditEvent _newAuditEvent({
-    required String actorId,
-    required AuthenticationAuditAction action,
-    required String target,
-    required AuthenticationAuditOutcome outcome,
-    required String details,
-  }) {
-    return AuthenticationAuditEvent(
-      id: _newId(),
-      actorId: actorId,
-      action: action,
-      target: target,
-      outcome: outcome,
-      occurredAt: _clock(),
-      details: details,
-    );
-  }
-
-  Future<StorageFailure?> _compensateCreatedAccount(
-    String userId,
-    String verifierKey, {
-    String? auditEventId,
-  }) async {
-    StorageFailure? firstFailure;
-    if (auditEventId != null) {
-      try {
-        await _audits.deleteEvent(auditEventId);
-      } catch (_) {
-        firstFailure ??= _cleanupFailure('authentication.audit.cleanup.failed');
-      }
-    }
-    try {
-      await _users.delete(userId);
-    } catch (_) {
-      firstFailure ??= _cleanupFailure('authentication.account.cleanup.failed');
-    }
-    final verifierFailure = await _rollbackVerifier(verifierKey);
-    return firstFailure ?? verifierFailure;
-  }
-
-  Future<StorageFailure?> _rollbackVerifier(String verifierKey) async {
-    try {
-      await _verifiers.delete(verifierKey);
+      if (payload is! Map<String, dynamic>) return null;
+      final subject = payload['sub'];
+      return subject is String && subject.trim().isNotEmpty
+          ? subject.trim()
+          : null;
+    } on Object {
       return null;
-    } catch (_) {
-      return _cleanupFailure('authentication.verifier.cleanup.failed');
     }
   }
 
-  StorageFailure _cleanupFailure(String code) {
-    return StorageFailure(
-      code: code,
-      message: 'Could not remove incomplete account credentials.',
-    );
+  int _beginAuthenticationOperation() {
+    _clearPendingCreation();
+    unawaited(_cancelActiveGoogleAuthorization());
+    return ++_operationGeneration;
   }
 
-  FailureResult<AuthenticatedSession> _staleAfterCompensation(
-    StorageFailure? compensationFailure,
-  ) {
-    return compensationFailure == null
-        ? _staleOperation()
-        : FailureResult<AuthenticatedSession>(compensationFailure);
+  void _clearPendingCreation() {
+    _pendingCreatedSessionAuthority?.revoke();
+    _pendingCreatedSessionAuthority = null;
+    _pendingCreationGeneration = null;
   }
 
-  int _beginAuthenticationOperation() => ++_operationGeneration;
-
-  bool _ownsAuthenticationOperation(int operationGeneration) {
-    return !_disposed && operationGeneration == _operationGeneration;
+  Future<void> _cancelActiveGoogleAuthorization() async {
+    try {
+      await _googleAuthorization.cancelActiveAuthorization();
+    } on Object {
+      // Generation ownership still prevents a cancelled callback from winning.
+    }
   }
+
+  bool _owns(int generation) =>
+      !_disposed && generation == _operationGeneration;
 
   Result<AuthenticatedSession> _openSession(
     String userId,
-    int operationGeneration,
-  ) {
-    if (!_ownsAuthenticationOperation(operationGeneration)) {
-      return _staleOperation();
+    int generation,
+    AuthenticationSource source, {
+    String? remoteToken,
+    DateTime? remoteTokenExpiresAt,
+  }) {
+    if (!_owns(generation)) return _stale<AuthenticatedSession>();
+    if (remoteTokenExpiresAt != null &&
+        !remoteTokenExpiresAt.isAfter(_clock())) {
+      return _invalidGoogleIdentity();
     }
-    final session = AuthenticatedSession.fullControl(userId);
+    final sessionAuthority = ManagedAuthenticatedSession.fullControl(
+      userId,
+      source: source,
+      clock: _clock,
+      remoteToken: remoteToken,
+      remoteTokenExpiresAt: remoteTokenExpiresAt,
+    );
+    _publishSession(sessionAuthority);
+    return Success<AuthenticatedSession>(sessionAuthority.session);
+  }
+
+  void _publishSession(ManagedAuthenticatedSession sessionAuthority) {
+    _cancelSessionExpiry?.call();
+    _cancelSessionExpiry = null;
+    _currentSessionAuthority?.revoke();
+    _currentSessionAuthority = sessionAuthority;
+    final session = sessionAuthority.session;
     _currentSession = session;
-    return Success<AuthenticatedSession>(session);
+    if (!_sessionChanges.isClosed) {
+      _sessionChanges.add(session);
+    }
+    _scheduleSessionExpiry(session);
   }
 
-  FailureResult<AuthenticatedSession> _staleOperation() {
-    return const FailureResult<AuthenticatedSession>(
-      SecurityFailure(
-        code: 'authentication.operation.stale',
-        message: 'Authentication was superseded by a newer action.',
-        remediation: 'Try again if authentication is still required.',
-      ),
+  void _scheduleSessionExpiry(AuthenticatedSession session) {
+    final expiresAt = session.remoteTokenExpiresAt;
+    if (expiresAt == null) {
+      return;
+    }
+    final remaining = expiresAt.difference(_clock());
+    if (remaining <= Duration.zero) {
+      _expireSession(session);
+      return;
+    }
+    _cancelSessionExpiry = _scheduleExpiry(
+      remaining,
+      () => _expireSession(session),
     );
   }
 
-  FailureResult<AuthenticatedSession> _invalidCredentials() {
-    return const FailureResult<AuthenticatedSession>(
-      SecurityFailure(
-        code: 'authentication.credentials.invalid',
-        message: 'The email address or password is invalid.',
-      ),
-    );
+  void _expireSession(AuthenticatedSession session) {
+    if (!identical(_currentSession, session)) {
+      return;
+    }
+    if (session.isActive) {
+      _scheduleSessionExpiry(session);
+      return;
+    }
+    _clearCurrentSession();
   }
 
-  FailureResult<AuthenticatedSession> _invalidEmail() {
-    return const FailureResult<AuthenticatedSession>(
-      ValidationFailure(
-        code: 'authentication.email.invalid',
-        message: 'Enter a valid email address.',
-        remediation: 'Use an address such as person@example.com.',
-      ),
-    );
+  void _clearCurrentSession() {
+    _cancelSessionExpiry?.call();
+    _cancelSessionExpiry = null;
+    final session = _currentSession;
+    if (session == null) {
+      return;
+    }
+    _currentSessionAuthority?.revoke();
+    _currentSessionAuthority = null;
+    _currentSession = null;
+    if (!_sessionChanges.isClosed) {
+      _sessionChanges.add(null);
+    }
   }
+
+  static SessionExpiryCancellation _scheduleTimer(
+    Duration delay,
+    void Function() onExpiry,
+  ) {
+    final timer = Timer(delay, onExpiry);
+    return timer.cancel;
+  }
+
+  FailureResult<T> _staleAfter<T>(StorageFailure? failure) =>
+      failure == null ? _stale<T>() : FailureResult<T>(failure);
+  FailureResult<T> _stale<T>() => FailureResult<T>(
+    const SecurityFailure(
+      code: 'authentication.operation.stale',
+      message: 'Authentication was superseded by a newer action.',
+      remediation: 'Try again if authentication is still required.',
+    ),
+  );
+  FailureResult<AuthenticatedSession> _invalidCredentials() =>
+      const FailureResult<AuthenticatedSession>(
+        SecurityFailure(
+          code: 'authentication.credentials.invalid',
+          message: 'The email address or credentials are invalid.',
+        ),
+      );
+  FailureResult<AuthenticatedSession> _invalidRecoveryCode() =>
+      const FailureResult<AuthenticatedSession>(
+        SecurityFailure(
+          code: 'authentication.recovery.invalid',
+          message: 'The account or recovery code is invalid.',
+          remediation: 'Check the recorded code and try again.',
+        ),
+      );
+  FailureResult<AuthenticatedSession> _invalidGoogleIdentity() =>
+      const FailureResult<AuthenticatedSession>(
+        SecurityFailure(
+          code: 'authentication.google.identity.invalid',
+          message: 'Google authentication returned an invalid identity.',
+          remediation: 'Try again or use a local authentication method.',
+        ),
+      );
+  FailureResult<T> _invalidEmail<T>() => FailureResult<T>(
+    const ValidationFailure(
+      code: 'authentication.email.invalid',
+      message: 'Enter a valid email address.',
+      remediation: 'Use an address such as person@example.com.',
+    ),
+  );
+  FailureResult<T> _passwordTooShort<T>() => FailureResult<T>(
+    const ValidationFailure(
+      code: 'authentication.password.too_short',
+      message: 'Password must contain at least 8 characters.',
+      remediation:
+          'Use at least 8 characters and choose a strong, unique password.',
+    ),
+  );
 
   StorageFailure _storageFailure(Object error) {
     if (error case MaestroFailure failure) {

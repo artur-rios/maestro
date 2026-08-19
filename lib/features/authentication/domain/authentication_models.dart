@@ -1,3 +1,5 @@
+import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
+
 final class NormalizedEmail {
   const NormalizedEmail._(this.value);
 
@@ -122,14 +124,116 @@ final class LocalUser {
   final DateTime? lastAuthenticatedAt;
 }
 
+enum AuthenticationSource {
+  localPassword,
+  operatingSystem,
+  localWindows,
+  recoveryCode,
+  google,
+}
+
 final class AuthenticatedSession {
-  const AuthenticatedSession.fullControl(this.userId)
-    : canManageRecords = true,
-      canRunWorkflows = true,
-      canDeliverChanges = true;
+  const AuthenticatedSession.fullControl(
+    this.userId, {
+    this.source = AuthenticationSource.localPassword,
+  }) : _remoteToken = null,
+       remoteTokenExpiresAt = null,
+       _clock = null,
+       _revocation = null;
+
+  AuthenticatedSession._managedFullControl(
+    this.userId, {
+    required this.source,
+    required DateTime Function() clock,
+    required _SessionRevocation revocation,
+    String? remoteToken,
+    this.remoteTokenExpiresAt,
+  }) : // Managed construction maps through service-owned authority state.
+       // ignore: prefer_initializing_formals
+       _remoteToken = remoteToken,
+       // ignore: prefer_initializing_formals
+       _clock = clock,
+       // ignore: prefer_initializing_formals
+       _revocation = revocation;
 
   final String userId;
-  final bool canManageRecords;
-  final bool canRunWorkflows;
-  final bool canDeliverChanges;
+  final AuthenticationSource source;
+  final String? _remoteToken;
+  final DateTime? remoteTokenExpiresAt;
+  final DateTime Function()? _clock;
+  final _SessionRevocation? _revocation;
+
+  bool get isActive {
+    final revocation = _revocation;
+    if (revocation != null && (!revocation.active || revocation.revoked)) {
+      return false;
+    }
+    final expiresAt = remoteTokenExpiresAt;
+    if (expiresAt == null) {
+      return true;
+    }
+    final now = _clock?.call() ?? DateTime.now().toUtc();
+    return expiresAt.isAfter(now);
+  }
+
+  String? get remoteToken => isActive ? _remoteToken : null;
+  bool get canManageRecords => isActive;
+  bool get canRunWorkflows => isActive;
+  bool get canDeliverChanges => isActive;
+}
+
+final class ManagedAuthenticatedSession {
+  factory ManagedAuthenticatedSession.fullControl(
+    String userId, {
+    required AuthenticationSource source,
+    required DateTime Function() clock,
+    bool active = true,
+    String? remoteToken,
+    DateTime? remoteTokenExpiresAt,
+  }) {
+    final revocation = _SessionRevocation(active);
+    return ManagedAuthenticatedSession._(
+      AuthenticatedSession._managedFullControl(
+        userId,
+        source: source,
+        clock: clock,
+        revocation: revocation,
+        remoteToken: remoteToken,
+        remoteTokenExpiresAt: remoteTokenExpiresAt,
+      ),
+      revocation,
+    );
+  }
+
+  const ManagedAuthenticatedSession._(this.session, this._revocation);
+
+  final AuthenticatedSession session;
+  final _SessionRevocation _revocation;
+
+  void activate() {
+    if (!_revocation.revoked) {
+      _revocation.active = true;
+    }
+  }
+
+  void revoke() {
+    _revocation.revoked = true;
+  }
+}
+
+final class _SessionRevocation {
+  _SessionRevocation(this.active);
+
+  bool active;
+  bool revoked = false;
+}
+
+final class LocalAccountCreation {
+  const LocalAccountCreation({
+    required this.session,
+    required this.recoveryCodes,
+  });
+
+  final AuthenticatedSession session;
+  final NewRecoveryCodeSet recoveryCodes;
 }

@@ -76,6 +76,7 @@ void main() {
         'first@example.com',
         'password',
       );
+      composition.authenticationService.acknowledgeRecoveryCodes();
       final registration = await composition.projectService.register(
         name: 'Real source',
         folderPath: source.path,
@@ -161,6 +162,7 @@ void main() {
         'second@example.com',
         'password',
       );
+      composition.authenticationService.acknowledgeRecoveryCodes();
       final secondSessionList = await composition.workflowDesignService.list();
       expect(
         (secondSessionList as Success<List<WorkflowDefinition>>).value,
