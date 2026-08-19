@@ -109,13 +109,14 @@ final class WorkbenchTerminalManager extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    final shouldSelectNeighbor = _activeId == entry.id;
     entry.controller.removeListener(_relayControllerChange);
     entry.controller.dispose();
     _entries.removeWhere((candidate) => candidate.id == entry.id);
     if (_entries.isEmpty) {
       _activeId = null;
       _isVisible = false;
-    } else {
+    } else if (shouldSelectNeighbor) {
       _activeId = _entries[index.clamp(0, _entries.length - 1)].id;
     }
     notifyListeners();

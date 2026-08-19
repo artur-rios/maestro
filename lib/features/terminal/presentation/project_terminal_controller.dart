@@ -88,43 +88,58 @@ final class ProjectTerminalController extends ChangeNotifier {
   TerminalSession? _session;
   StreamSubscription<String>? _output;
   Timer? _folderMonitor;
+  Completer<void>? _startupSettlement;
   var _generation = 0;
   var _disposed = false;
 
   Future<void> open() async {
     if (_disposed || _initialFailure != null || !state.canOpen) return;
     final generation = ++_generation;
+    final startupSettlement = Completer<void>();
+    _startupSettlement = startupSettlement;
     _publish(
       const ProjectTerminalState(status: TerminalSessionStatus.starting),
     );
-    late final TerminalOpenResult result;
     try {
-      result = await _open(
-        workingDirectory: _workingDirectory,
-        columns: terminal.viewWidth,
-        rows: terminal.viewHeight,
+      late final TerminalOpenResult result;
+      try {
+        result = await _open(
+          workingDirectory: _workingDirectory,
+          columns: terminal.viewWidth,
+          rows: terminal.viewHeight,
+        );
+      } on Object {
+        _publishFailure(generation, _unexpectedFailure);
+        return;
+      }
+      if (!_owns(generation)) {
+        // A session opened for a generation nobody is waiting on would leak a
+        // shell, so it is closed rather than dropped.
+        unawaited(result.session?.close());
+        return;
+      }
+      if (result.failure case final failure?) {
+        _publishFailure(generation, failure);
+        return;
+      }
+      _attach(result.session!, generation);
+      _publish(
+        const ProjectTerminalState(status: TerminalSessionStatus.running),
       );
-    } on Object {
-      _publishFailure(generation, _unexpectedFailure);
-      return;
+    } finally {
+      if (identical(_startupSettlement, startupSettlement)) {
+        _startupSettlement = null;
+      }
+      startupSettlement.complete();
     }
-    if (!_owns(generation)) {
-      // A session opened for a generation nobody is waiting on would leak a
-      // shell, so it is closed rather than dropped.
-      unawaited(result.session?.close());
-      return;
-    }
-    if (result.failure case final failure?) {
-      _publishFailure(generation, failure);
-      return;
-    }
-    _attach(result.session!, generation);
-    _publish(const ProjectTerminalState(status: TerminalSessionStatus.running));
   }
 
   Future<TerminalClosure> close() async {
+    if (_disposed) return TerminalClosure.closed;
+    await _startupSettlement?.future;
+    if (_disposed) return TerminalClosure.closed;
     final session = _session;
-    if (_disposed || session == null) return TerminalClosure.closed;
+    if (session == null) return TerminalClosure.closed;
     final generation = _generation;
     late final TerminalClosure closure;
     try {

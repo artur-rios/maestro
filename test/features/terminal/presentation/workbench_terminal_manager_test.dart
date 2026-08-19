@@ -222,6 +222,92 @@ void main() {
         ]);
       },
     );
+
+    test(
+      'GivenAStartingSession_WhenKilled_ThenItsEntryRemainsUntilStartupSettles',
+      () async {
+        final fixture = _ManagerFixture(delayOpen: true);
+        final creation = fixture.manager.create(_projectTarget('Starting'));
+
+        final kill = fixture.manager.killActive();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fixture.manager.entries, hasLength(1));
+        expect(fixture.manager.isVisible, isTrue);
+        expect(fixture.manager.isKilling, isTrue);
+
+        fixture.openers.single.completeOpen();
+        await creation;
+        await kill;
+      },
+    );
+
+    test(
+      'GivenAStartingSession_WhenKilled_ThenItsLateSessionClosesBeforeRemoval',
+      () async {
+        final fixture = _ManagerFixture(delayOpen: true, delayClose: true);
+        final creation = fixture.manager.create(_projectTarget('Starting'));
+
+        final kill = fixture.manager.killActive();
+        fixture.openers.single.completeOpen();
+        await creation;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fixture.manager.entries, hasLength(1));
+        expect(fixture.openers.single.session.closed, isFalse);
+
+        fixture.openers.single.completeClose();
+        await kill;
+
+        expect(fixture.openers.single.session.closed, isTrue);
+        expect(fixture.manager.entries, isEmpty);
+      },
+    );
+
+    test(
+      'GivenAStartingSession_WhenLateClosureIsIncomplete_ThenEntryRemains',
+      () async {
+        final fixture = _ManagerFixture(
+          closure: TerminalClosure.incomplete,
+          delayOpen: true,
+        );
+        final creation = fixture.manager.create(_projectTarget('Starting'));
+
+        final kill = fixture.manager.killActive();
+        fixture.openers.single.completeOpen();
+        await creation;
+        await kill;
+
+        expect(fixture.manager.entries, hasLength(1));
+        expect(fixture.manager.isVisible, isTrue);
+        expect(fixture.manager.isKilling, isFalse);
+        expect(
+          fixture.manager.entries.single.controller.state.failure?.code,
+          TerminalFailure.closeIncompleteCode,
+        );
+      },
+    );
+
+    test(
+      'GivenAKillInFlight_WhenAnotherTabIsSelected_ThenSelectionIsPreserved',
+      () async {
+        final fixture = _ManagerFixture(delayClose: true);
+        await fixture.manager.create(_projectTarget('One'));
+        await fixture.manager.create(_projectTarget('Two'));
+        await fixture.manager.create(_projectTarget('Three'));
+        final firstId = fixture.manager.entries.first.id;
+        final thirdId = fixture.manager.entries.last.id;
+        fixture.manager.select(firstId);
+
+        final kill = fixture.manager.killActive();
+        fixture.manager.select(thirdId);
+        fixture.openers.first.completeClose();
+        await kill;
+
+        expect(fixture.manager.activeEntry?.id, thirdId);
+        expect(fixture.manager.activeEntry?.label, 'Three');
+      },
+    );
   });
 }
 
@@ -237,18 +323,24 @@ TerminalLaunchTarget _homeTarget() =>
 final class _ManagerFixture {
   _ManagerFixture({
     this.closure = TerminalClosure.closed,
+    this.delayOpen = false,
     this.delayClose = false,
   }) {
     manager = WorkbenchTerminalManager(factory: _createController);
   }
 
   final TerminalClosure closure;
+  final bool delayOpen;
   final bool delayClose;
   final openers = <_FakeOpener>[];
   late final WorkbenchTerminalManager manager;
 
   ProjectTerminalController _createController(TerminalLaunchTarget target) {
-    final opener = _FakeOpener(closure: closure, delayClose: delayClose);
+    final opener = _FakeOpener(
+      closure: closure,
+      delayOpen: delayOpen,
+      delayClose: delayClose,
+    );
     openers.add(opener);
     return ProjectTerminalController(
       workingDirectory: target.workingDirectory ?? '',
@@ -259,12 +351,17 @@ final class _ManagerFixture {
 }
 
 final class _FakeOpener {
-  _FakeOpener({required this.closure, required this.delayClose});
+  _FakeOpener({
+    required this.closure,
+    required bool delayOpen,
+    required bool delayClose,
+  }) : session = _FakeSession(closure: closure, delayClose: delayClose),
+       _openCompleter = delayOpen ? Completer<TerminalOpenResult>() : null;
 
   final TerminalClosure closure;
-  final bool delayClose;
+  final _FakeSession session;
+  final Completer<TerminalOpenResult>? _openCompleter;
   final requests = <({String workingDirectory, int columns, int rows})>[];
-  late _FakeSession session;
 
   Future<TerminalOpenResult> call({
     required String workingDirectory,
@@ -276,9 +373,11 @@ final class _FakeOpener {
       columns: columns,
       rows: rows,
     ));
-    session = _FakeSession(closure: closure, delayClose: delayClose);
-    return TerminalOpenResult.opened(session);
+    return _openCompleter?.future ?? TerminalOpenResult.opened(session);
   }
+
+  void completeOpen() =>
+      _openCompleter?.complete(TerminalOpenResult.opened(session));
 
   void completeClose() => session.completeClose();
 }
