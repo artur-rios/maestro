@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/core/storage/application_paths.dart';
+import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
@@ -15,6 +17,7 @@ import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/main.dart' as app;
 import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/common/capability.dart';
+import 'package:maestro/platform/window/desktop_window_port.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -120,17 +123,10 @@ void main() {
   testWidgets(
     'GivenProductionComposition_WhenStarted_ThenAuthenticationGateIsVisible',
     (tester) async {
-      late app.ProductionAppComposition composition;
+      final capture = _ProductionCompositionCapture();
       await app.runMaestroStartup(
         readinessSignal: null,
-        composeApp: ({required paths, required database, required window}) async {
-          composition = await app.composeProductionApp(
-            paths: paths,
-            database: database,
-            window: window,
-          );
-          return composition;
-        },
+        composeApp: capture.compose,
       );
       try {
         await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -144,10 +140,27 @@ void main() {
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
-        await composition.close();
+        await capture.composition.close();
       }
     },
   );
+}
+
+final class _ProductionCompositionCapture {
+  late app.ProductionAppComposition composition;
+
+  Future<app.ProductionAppComposition> compose({
+    required ApplicationPaths paths,
+    required MaestroDatabase database,
+    required DesktopWindowPort window,
+  }) async {
+    composition = await app.composeProductionApp(
+      paths: paths,
+      database: database,
+      window: window,
+    );
+    return composition;
+  }
 }
 
 final class _AppearancePreferenceRepository
