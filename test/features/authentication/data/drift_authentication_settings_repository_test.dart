@@ -1,7 +1,8 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
-import 'package:maestro/features/authentication/data/drift_authentication_settings_repository.dart';
+import 'package:maestro/features/authentication/data/'
+    'drift_authentication_settings_repository.dart';
 import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 
 void main() {

@@ -73,6 +73,10 @@ void main() {
         password,
       );
       expect(account, isA<Success<Object>>());
+      expect(
+        composition.authenticationService.acknowledgeRecoveryCodes(),
+        isA<Success<Object>>(),
+      );
       final actorId = composition.authenticationService.currentSession!.userId;
       final registration = await composition.projectService.register(
         name: 'Owned only by user',

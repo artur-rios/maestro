@@ -5,8 +5,10 @@ import 'package:maestro/features/authentication/domain/external_authentication_m
 
 final class DriftAuthenticationSettingsRepository
     implements AuthenticationSettingsRepository {
-  DriftAuthenticationSettingsRepository(this._database, {DateTime Function()? clock})
-    : _clock = clock ?? (() => DateTime.now().toUtc());
+  DriftAuthenticationSettingsRepository(
+    this._database, {
+    DateTime Function()? clock,
+  }) : _clock = clock ?? (() => DateTime.now().toUtc());
 
   static const googleOAuthClientIdKey = 'authentication.google.oauth_client_id';
   static const heimdallScopeIdKey = 'authentication.heimdall.scope_id';
@@ -29,7 +31,11 @@ final class DriftAuthenticationSettingsRepository
   Future<void> save(ExternalAuthenticationConfiguration configuration) =>
       _database.transaction(() async {
         final updatedAt = _clock();
-        await _saveValue(googleOAuthClientIdKey, configuration.clientId, updatedAt);
+        await _saveValue(
+          googleOAuthClientIdKey,
+          configuration.clientId,
+          updatedAt,
+        );
         await _saveValue(heimdallScopeIdKey, configuration.scopeId, updatedAt);
       });
 
