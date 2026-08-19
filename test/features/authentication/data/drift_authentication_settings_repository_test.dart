@@ -20,30 +20,33 @@ void main() {
     expect(await repository.load(), configuration);
   });
 
-  test('GivenSavedConfiguration_WhenChanged_ThenBothValuesAreUpserted', () async {
-    final database = MaestroDatabase(NativeDatabase.memory());
-    addTearDown(database.close);
-    final repository = DriftAuthenticationSettingsRepository(database);
+  test(
+    'GivenSavedConfiguration_WhenChanged_ThenBothValuesAreUpserted',
+    () async {
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = DriftAuthenticationSettingsRepository(database);
 
-    await repository.save(
-      ExternalAuthenticationConfiguration(
-        clientId: 'first.apps.googleusercontent.com',
-        scopeId: '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
-      ),
-    );
-    await repository.save(
-      ExternalAuthenticationConfiguration(
-        clientId: 'second.apps.googleusercontent.com',
-        scopeId: 'aa91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
-      ),
-    );
+      await repository.save(
+        ExternalAuthenticationConfiguration(
+          clientId: 'first.apps.googleusercontent.com',
+          scopeId: '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+        ),
+      );
+      await repository.save(
+        ExternalAuthenticationConfiguration(
+          clientId: 'second.apps.googleusercontent.com',
+          scopeId: 'aa91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+        ),
+      );
 
-    expect(
-      await repository.load(),
-      ExternalAuthenticationConfiguration(
-        clientId: 'second.apps.googleusercontent.com',
-        scopeId: 'aa91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
-      ),
-    );
-  });
+      expect(
+        await repository.load(),
+        ExternalAuthenticationConfiguration(
+          clientId: 'second.apps.googleusercontent.com',
+          scopeId: 'aa91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+        ),
+      );
+    },
+  );
 }

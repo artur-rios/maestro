@@ -39,17 +39,18 @@ final class DriftAuthenticationSettingsRepository
         await _saveValue(heimdallScopeIdKey, configuration.scopeId, updatedAt);
       });
 
-  Future<String?> _loadValue(String key) async =>
-      (await (_database.select(
-        _database.settings,
-      )..where((setting) => setting.key.equals(key))).getSingleOrNull())?.value;
+  Future<String?> _loadValue(String key) async => (await (_database.select(
+    _database.settings,
+  )..where((setting) => setting.key.equals(key))).getSingleOrNull())?.value;
 
   Future<void> _saveValue(String key, String value, DateTime updatedAt) =>
-      _database.into(_database.settings).insertOnConflictUpdate(
-        SettingsCompanion.insert(
-          key: key,
-          value: value,
-          updatedAt: Value(updatedAt),
-        ),
-      );
+      _database
+          .into(_database.settings)
+          .insertOnConflictUpdate(
+            SettingsCompanion.insert(
+              key: key,
+              value: value,
+              updatedAt: Value(updatedAt),
+            ),
+          );
 }
