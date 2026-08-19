@@ -4,7 +4,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/core/storage/application_paths.dart';
-import 'package:maestro/core/storage/database/maestro_database.dart';
+import 'package:maestro/core/storage/database/maestro_database.dart'
+    show MaestroDatabase;
 import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
