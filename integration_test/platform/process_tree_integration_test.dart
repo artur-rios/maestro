@@ -21,8 +21,9 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final pidFile = File('${directory.path}${Platform.pathSeparator}child.pid');
     final escapedPidFile = pidFile.path.replaceAll("'", "''");
+    final windowsPowerShell = _windowsPowerShellPath().replaceAll("'", "''");
     final request = Platform.isWindows
-        ? _windowsParentRequest(escapedPidFile)
+        ? _windowsParentRequest(escapedPidFile, windowsPowerShell)
         : _linuxParentRequest(escapedPidFile);
     final owned = await ProcessTreeFactory.current().start(request);
     final childPid = await _waitForChildPid(pidFile);
@@ -33,15 +34,23 @@ void main() {
   });
 }
 
-ProcessStartRequest _windowsParentRequest(String escapedPidFile) {
+String _windowsPowerShellPath() {
+  final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+  return '$systemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+}
+
+ProcessStartRequest _windowsParentRequest(
+  String escapedPidFile,
+  String windowsPowerShell,
+) {
   final script =
       '''
-\$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 60' -PassThru -WindowStyle Hidden
+\$child = Start-Process -FilePath '$windowsPowerShell' -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 60' -PassThru -WindowStyle Hidden
 Set-Content -LiteralPath '$escapedPidFile' -Value \$child.Id
 Start-Sleep -Seconds 60
 ''';
   return ProcessStartRequest(
-    executable: 'powershell.exe',
+    executable: windowsPowerShell,
     arguments: <String>['-NoProfile', '-Command', script],
   );
 }

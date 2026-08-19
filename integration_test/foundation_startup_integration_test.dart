@@ -120,18 +120,32 @@ void main() {
   testWidgets(
     'GivenProductionComposition_WhenStarted_ThenAuthenticationGateIsVisible',
     (tester) async {
-      await app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 1));
-
-      expect(
-        find.text('Sign in with Windows'),
-        findsOneWidget,
-        reason: _visibleText(tester),
+      late app.ProductionAppComposition composition;
+      await app.runMaestroStartup(
+        readinessSignal: null,
+        composeApp: ({required paths, required database, required window}) async {
+          composition = await app.composeProductionApp(
+            paths: paths,
+            database: database,
+            window: window,
+          );
+          return composition;
+        },
       );
-      expect(find.bySemanticsLabel(RegExp(r'^Foundation ')), findsNothing);
+      try {
+        await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+        expect(
+          find.text('Sign in with Windows'),
+          findsOneWidget,
+          reason: _visibleText(tester),
+        );
+        expect(find.bySemanticsLabel(RegExp(r'^Foundation ')), findsNothing);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await composition.close();
+      }
     },
   );
 }
