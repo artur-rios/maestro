@@ -23,6 +23,7 @@ void main() {
         // Then: the session is live and rooted at the project folder.
         expect(controller.state.status, TerminalSessionStatus.running);
         expect(controller.state.canClose, isTrue);
+        expect(controller.workingDirectory, r'D:\project');
         expect(opener.requests.single.workingDirectory, r'D:\project');
         controller.dispose();
       },
@@ -131,7 +132,7 @@ void main() {
       await controller.open();
 
       // When: the user closes it.
-      await controller.close();
+      final result = await controller.close();
 
       // Then: the panel does not claim a closed terminal, and close stays
       // available so the user can escalate.
@@ -141,11 +142,12 @@ void main() {
       );
       expect(controller.state.status, TerminalSessionStatus.running);
       expect(controller.state.canClose, isTrue);
+      expect(result, TerminalClosure.incomplete);
       controller.dispose();
     });
 
     test(
-      'GivenARunningSession_WhenClosingSucceeds_ThenThePanelReturnsToIdle',
+      'GivenARunningSession_WhenClosingSucceeds_ThenClosedIsReturned',
       () async {
         // Given: a running session.
         final opener = _FakeOpener();
@@ -153,11 +155,62 @@ void main() {
         await controller.open();
 
         // When: the user closes it (FR-TE-05).
-        await controller.close();
+        final result = await controller.close();
 
         // Then: the panel is idle and ready to open again.
+        expect(result, TerminalClosure.closed);
         expect(controller.state.status, TerminalSessionStatus.idle);
         expect(opener.session.closed, isTrue);
+        controller.dispose();
+      },
+    );
+
+    test('GivenNoLiveSession_WhenClosing_ThenClosedIsReturned', () async {
+      final result = await _controller(_FakeOpener()).close();
+
+      expect(result, TerminalClosure.closed);
+    });
+
+    test(
+      'GivenAThrowingSession_WhenClosing_ThenIncompleteAndTypedFailureAreReturned',
+      () async {
+        final opener = _FakeOpener()..closeError = StateError('boom');
+        final controller = _controller(opener);
+        await controller.open();
+
+        final result = await controller.close();
+
+        expect(result, TerminalClosure.incomplete);
+        expect(controller.state.status, TerminalSessionStatus.running);
+        expect(
+          controller.state.failure?.code,
+          TerminalFailure.closeIncompleteCode,
+        );
+        opener.session.closeError = null;
+        controller.dispose();
+      },
+    );
+
+    test(
+      'GivenAnInitialFailure_WhenOpening_ThenItRemainsFailedWithoutInvokingTheOpener',
+      () async {
+        final opener = _FakeOpener();
+        const failure = TerminalFailure(
+          code: TerminalFailure.folderUnavailableCode,
+          message: 'The project folder could not be resolved.',
+          remediation: 'Choose a project folder, then try again.',
+        );
+        final controller = ProjectTerminalController(
+          workingDirectory: r'D:\project',
+          open: opener.call,
+          initialFailure: failure,
+        );
+
+        await controller.open();
+
+        expect(controller.state.status, TerminalSessionStatus.failed);
+        expect(identical(controller.state.failure, failure), isTrue);
+        expect(opener.requests, isEmpty);
         controller.dispose();
       },
     );
@@ -262,6 +315,7 @@ final class _FakeOpener {
   final TerminalFailure? failure;
   final Object? error;
   TerminalClosure closure = TerminalClosure.closed;
+  Object? closeError;
   final requests = <({String workingDirectory, int columns, int rows})>[];
   late _FakeSession session;
 
@@ -277,15 +331,16 @@ final class _FakeOpener {
     ));
     if (error case final value?) throw value;
     if (failure case final value?) return TerminalOpenResult.rejected(value);
-    session = _FakeSession(closure);
+    session = _FakeSession(closure, closeError: closeError);
     return TerminalOpenResult.opened(session);
   }
 }
 
 final class _FakeSession implements TerminalSession {
-  _FakeSession(this._closure);
+  _FakeSession(this._closure, {this.closeError});
 
   final TerminalClosure _closure;
+  Object? closeError;
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
   final written = <Uint8List>[];
@@ -307,6 +362,7 @@ final class _FakeSession implements TerminalSession {
 
   @override
   Future<TerminalClosure> close() async {
+    if (closeError case final error?) throw error;
     if (_closure == TerminalClosure.closed) {
       closed = true;
       exitWith(0);

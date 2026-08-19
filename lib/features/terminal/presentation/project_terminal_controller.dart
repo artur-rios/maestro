@@ -51,12 +51,20 @@ final class ProjectTerminalController extends ChangeNotifier {
     required String workingDirectory,
     required ProjectTerminalOpener open,
     Terminal? terminal,
+    TerminalFailure? initialFailure,
     Future<TerminalFolderAvailability> Function()? folderAvailability,
     Duration folderCheckInterval = const Duration(seconds: 5),
   }) : _workingDirectory = workingDirectory,
        _open = open,
+       _initialFailure = initialFailure,
        _folderAvailability = folderAvailability,
        _folderCheckInterval = folderCheckInterval,
+       state = initialFailure == null
+           ? const ProjectTerminalState()
+           : ProjectTerminalState(
+               status: TerminalSessionStatus.failed,
+               failure: initialFailure,
+             ),
        terminal = terminal ?? Terminal(maxLines: _scrollbackLines);
 
   /// Bounded scrollback keeps a chatty shell from growing without limit
@@ -65,13 +73,17 @@ final class ProjectTerminalController extends ChangeNotifier {
 
   final String _workingDirectory;
   final ProjectTerminalOpener _open;
+  final TerminalFailure? _initialFailure;
   final Future<TerminalFolderAvailability> Function()? _folderAvailability;
   final Duration _folderCheckInterval;
 
   /// The emulator the view renders. It owns selection, copy, and paste.
   final Terminal terminal;
 
-  ProjectTerminalState state = const ProjectTerminalState();
+  /// The resolved path remains stable for the lifetime of this controller.
+  String get workingDirectory => _workingDirectory;
+
+  ProjectTerminalState state;
 
   TerminalSession? _session;
   StreamSubscription<String>? _output;
@@ -80,7 +92,7 @@ final class ProjectTerminalController extends ChangeNotifier {
   var _disposed = false;
 
   Future<void> open() async {
-    if (_disposed || !state.canOpen) return;
+    if (_disposed || _initialFailure != null || !state.canOpen) return;
     final generation = ++_generation;
     _publish(
       const ProjectTerminalState(status: TerminalSessionStatus.starting),
@@ -110,12 +122,29 @@ final class ProjectTerminalController extends ChangeNotifier {
     _publish(const ProjectTerminalState(status: TerminalSessionStatus.running));
   }
 
-  Future<void> close() async {
+  Future<TerminalClosure> close() async {
     final session = _session;
-    if (_disposed || session == null) return;
+    if (_disposed || session == null) return TerminalClosure.closed;
     final generation = _generation;
-    final closure = await session.close();
-    if (!_owns(generation)) return;
+    late final TerminalClosure closure;
+    try {
+      closure = await session.close();
+    } on Object {
+      if (_owns(generation)) {
+        _publish(
+          const ProjectTerminalState(
+            status: TerminalSessionStatus.running,
+            failure: TerminalFailure(
+              code: TerminalFailure.closeIncompleteCode,
+              message: 'The terminal could not be stopped safely.',
+              remediation: 'Stop its processes from the shell, then try again.',
+            ),
+          ),
+        );
+      }
+      return TerminalClosure.incomplete;
+    }
+    if (!_owns(generation)) return closure;
     if (closure == TerminalClosure.incomplete) {
       // The shell is still running, so the session stays live and closable.
       _publish(
@@ -129,10 +158,11 @@ final class ProjectTerminalController extends ChangeNotifier {
           ),
         ),
       );
-      return;
+      return closure;
     }
     await _detach();
     _publish(const ProjectTerminalState());
+    return closure;
   }
 
   void _attach(TerminalSession session, int generation) {
