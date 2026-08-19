@@ -130,7 +130,7 @@ final class ProjectTerminalController extends ChangeNotifier {
       if (identical(_startupSettlement, startupSettlement)) {
         _startupSettlement = null;
       }
-      startupSettlement.complete();
+      if (!startupSettlement.isCompleted) startupSettlement.complete();
     }
   }
 
@@ -287,6 +287,11 @@ final class ProjectTerminalController extends ChangeNotifier {
     if (_disposed) return;
     _disposed = true;
     _generation++;
+    final startupSettlement = _startupSettlement;
+    _startupSettlement = null;
+    if (startupSettlement != null && !startupSettlement.isCompleted) {
+      startupSettlement.complete();
+    }
     final session = _session;
     unawaited(_detach());
     // Navigating away must not leave a shell running in the project folder.

@@ -289,6 +289,36 @@ void main() {
     );
 
     test(
+      'GivenAKillWaitingForStartup_WhenDisposed_ThenKillCompletesAndLateSessionCloses',
+      () async {
+        final fixture = _ManagerFixture(delayOpen: true);
+        final creation = fixture.manager.create(_projectTarget('Starting'));
+        final controller = fixture.manager.entries.single.controller;
+        var controllerNotifications = 0;
+        controller.addListener(() => controllerNotifications++);
+
+        final kill = fixture.manager.killActive();
+        var killCompleted = false;
+        final observedKill = kill.then((_) => killCompleted = true);
+        await Future<void>.delayed(Duration.zero);
+        expect(killCompleted, isFalse);
+
+        fixture.manager.dispose();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(killCompleted, isTrue);
+        await observedKill;
+        fixture.openers.single.completeOpen();
+        await creation;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fixture.openers.single.session.closeCalls, 1);
+        expect(fixture.openers.single.session.closed, isTrue);
+        expect(controllerNotifications, 0);
+      },
+    );
+
+    test(
       'GivenAKillInFlight_WhenAnotherTabIsSelected_ThenSelectionIsPreserved',
       () async {
         final fixture = _ManagerFixture(delayClose: true);
@@ -391,6 +421,7 @@ final class _FakeSession implements TerminalSession {
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
   var closed = false;
+  var closeCalls = 0;
 
   @override
   Stream<Uint8List> get output => _output.stream;
@@ -406,6 +437,7 @@ final class _FakeSession implements TerminalSession {
 
   @override
   Future<TerminalClosure> close() async {
+    closeCalls++;
     final result = _closeCompleter == null
         ? closure
         : await _closeCompleter.future;
