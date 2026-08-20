@@ -45,11 +45,11 @@ final class OpenProjectTerminal {
         TerminalFailure(
           code: TerminalFailure.folderUnavailableCode,
           message: availability == TerminalFolderAvailability.missing
-              ? 'The project folder no longer exists.'
-              : 'The project folder could not be read.',
+              ? 'The terminal working directory no longer exists.'
+              : 'The terminal working directory could not be accessed.',
           remediation:
-              'Restore or reconnect the folder, refresh the project, then '
-              'open the terminal again. The project record is unchanged.',
+              'Restore or reconnect the directory, then open the terminal '
+              'again.',
         ),
       );
     }
@@ -81,7 +81,7 @@ final class OpenProjectTerminal {
       return const TerminalOpenResult.rejected(
         TerminalFailure(
           code: TerminalFailure.startFailedCode,
-          message: 'The project terminal could not be started.',
+          message: 'The terminal could not be started.',
           remediation:
               'Retry, and review the diagnostics log if it keeps failing.',
         ),

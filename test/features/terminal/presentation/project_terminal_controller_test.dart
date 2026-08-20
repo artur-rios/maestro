@@ -165,6 +165,22 @@ void main() {
       },
     );
 
+    test(
+      'GivenConfirmedClose_WhenOutputCancellationFails_ThenClosedIsStillReturned',
+      () async {
+        final opener = _FakeOpener(cancelOutputError: true);
+        final controller = _controller(opener);
+        await controller.open();
+
+        final result = await controller.close();
+
+        expect(result, TerminalClosure.closed);
+        expect(controller.state.status, TerminalSessionStatus.idle);
+        expect(opener.session.closeCalls, 1);
+        controller.dispose();
+      },
+    );
+
     test('GivenNoLiveSession_WhenClosing_ThenClosedIsReturned', () async {
       final result = await _controller(_FakeOpener()).close();
 
@@ -271,6 +287,49 @@ void main() {
       },
     );
 
+    test(
+      'GivenAThrowingSessionClose_WhenControllerIsDisposed_ThenCleanupErrorIsConsumed',
+      () async {
+        final opener = _FakeOpener()..closeError = StateError('close failed');
+        final controller = _controller(opener);
+        await controller.open();
+
+        controller.dispose();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(opener.session.closeCalls, 1);
+      },
+    );
+
+    test(
+      'GivenDisposedController_WhenLateSessionCloseThrows_ThenCleanupErrorIsConsumed',
+      () async {
+        final result = Completer<TerminalOpenResult>();
+        final session = _FakeSession(
+          TerminalClosure.closed,
+          closeError: StateError('late close failed'),
+        );
+        final controller = ProjectTerminalController(
+          workingDirectory: r'D:\project',
+          open:
+              ({
+                required String workingDirectory,
+                required int columns,
+                required int rows,
+              }) => result.future,
+        );
+        final opening = controller.open();
+        await Future<void>.delayed(Duration.zero);
+
+        controller.dispose();
+        result.complete(TerminalOpenResult.opened(session));
+        await opening;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(session.closeCalls, 1);
+      },
+    );
+
     test('GivenARunningSession_WhenItsProjectFolderBecomesUnavailable_'
         'ThenTheSessionIsClosedAndTheFailureExplainsHowToRecover', () async {
       final opener = _FakeOpener();
@@ -292,8 +351,43 @@ void main() {
         controller.state.failure?.code,
         TerminalFailure.folderUnavailableCode,
       );
+      expect(
+        controller.state.failure?.message,
+        'The terminal working directory no longer exists.',
+      );
+      expect(
+        controller.state.failure?.remediation,
+        'Restore or reconnect the directory, then open the terminal again.',
+      );
       controller.dispose();
     });
+
+    test(
+      'GivenFolderUnavailable_WhenSessionCloseThrows_ThenTypedIncompleteFailureRemainsRetryable',
+      () async {
+        final opener = _FakeOpener()..closeError = StateError('close failed');
+        final folder = _MutableFolder();
+        final controller = ProjectTerminalController(
+          workingDirectory: r'D:\project',
+          open: opener.call,
+          folderAvailability: folder.availability,
+          folderCheckInterval: const Duration(milliseconds: 1),
+        );
+        await controller.open();
+        folder.value = TerminalFolderAvailability.inaccessible;
+
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(controller.state.status, TerminalSessionStatus.running);
+        expect(
+          controller.state.failure?.code,
+          TerminalFailure.closeIncompleteCode,
+        );
+        expect(opener.session.closeCalls, 1);
+        opener.session.closeError = null;
+        controller.dispose();
+      },
+    );
   });
 }
 
@@ -310,10 +404,11 @@ ProjectTerminalController _controller(_FakeOpener opener) =>
     );
 
 final class _FakeOpener {
-  _FakeOpener({this.failure, this.error});
+  _FakeOpener({this.failure, this.error, this.cancelOutputError = false});
 
   final TerminalFailure? failure;
   final Object? error;
+  final bool cancelOutputError;
   TerminalClosure closure = TerminalClosure.closed;
   Object? closeError;
   final requests = <({String workingDirectory, int columns, int rows})>[];
@@ -331,24 +426,36 @@ final class _FakeOpener {
     ));
     if (error case final value?) throw value;
     if (failure case final value?) return TerminalOpenResult.rejected(value);
-    session = _FakeSession(closure, closeError: closeError);
+    session = _FakeSession(
+      closure,
+      closeError: closeError,
+      cancelOutputError: cancelOutputError,
+    );
     return TerminalOpenResult.opened(session);
   }
 }
 
 final class _FakeSession implements TerminalSession {
-  _FakeSession(this._closure, {this.closeError});
+  _FakeSession(
+    this._closure, {
+    this.closeError,
+    this._cancelOutputError = false,
+  });
 
   final TerminalClosure _closure;
+  final bool _cancelOutputError;
   Object? closeError;
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
   final written = <Uint8List>[];
   final resizes = <({int columns, int rows})>[];
   var closed = false;
+  var closeCalls = 0;
 
   @override
-  Stream<Uint8List> get output => _output.stream;
+  Stream<Uint8List> get output => _cancelOutputError
+      ? _CancelErrorStream<Uint8List>(_output.stream)
+      : _output.stream;
 
   @override
   Future<TerminalExit> get exit => _exit.future;
@@ -362,6 +469,7 @@ final class _FakeSession implements TerminalSession {
 
   @override
   Future<TerminalClosure> close() async {
+    closeCalls++;
     if (closeError case final error?) throw error;
     if (_closure == TerminalClosure.closed) {
       closed = true;
@@ -376,4 +484,59 @@ final class _FakeSession implements TerminalSession {
     if (_exit.isCompleted) return;
     _exit.complete(TerminalExit(code));
   }
+}
+
+final class _CancelErrorStream<T> extends Stream<T> {
+  const _CancelErrorStream(this._delegate);
+
+  final Stream<T> _delegate;
+
+  @override
+  StreamSubscription<T> listen(
+    void Function(T event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => _CancelErrorSubscription<T>(
+    _delegate.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    ),
+  );
+}
+
+final class _CancelErrorSubscription<T> implements StreamSubscription<T> {
+  const _CancelErrorSubscription(this._delegate);
+
+  final StreamSubscription<T> _delegate;
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) => _delegate.asFuture(futureValue);
+
+  @override
+  Future<void> cancel() async {
+    await _delegate.cancel();
+    throw StateError('output cancellation failed');
+  }
+
+  @override
+  bool get isPaused => _delegate.isPaused;
+
+  @override
+  void onData(void Function(T data)? handleData) =>
+      _delegate.onData(handleData);
+
+  @override
+  void onDone(void Function()? handleDone) => _delegate.onDone(handleDone);
+
+  @override
+  void onError(Function? handleError) => _delegate.onError(handleError);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _delegate.pause(resumeSignal);
+
+  @override
+  void resume() => _delegate.resume();
 }

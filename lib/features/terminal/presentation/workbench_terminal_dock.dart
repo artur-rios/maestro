@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/terminal/domain/terminal_launch_target.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
+import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:maestro/features/terminal/presentation/workbench_terminal_manager.dart';
 import 'package:xterm/xterm.dart';
@@ -17,18 +18,42 @@ const _terminalTextStyle = TerminalStyle(
   height: 1.2,
 );
 
+enum _TerminalTabStatus { idle, starting, running, exited, failed }
+
+final class _TerminalStatusPresentation {
+  const _TerminalStatusPresentation({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+}
+
+final class _TerminalEntryResources {
+  _TerminalEntryResources(String id)
+    : focusNode = FocusNode(debugLabel: 'Workbench terminal $id');
+
+  final TerminalController viewController = TerminalController();
+  final FocusNode focusNode;
+
+  void dispose() {
+    viewController.dispose();
+    focusNode.dispose();
+  }
+}
+
 /// Hosts the authenticated workbench's independently owned terminal sessions.
 final class WorkbenchTerminalDock extends StatefulWidget {
   const WorkbenchTerminalDock({
     required this.createManager,
     required this.launchTarget,
     required this.drawerController,
+    required this.onWorkbenchFocusRequested,
     super.key,
   });
 
   final WorkbenchTerminalManager Function() createManager;
   final TerminalLaunchTarget launchTarget;
   final ProjectTerminalDrawerController drawerController;
+  final VoidCallback onWorkbenchFocusRequested;
 
   @override
   State<WorkbenchTerminalDock> createState() => _WorkbenchTerminalDockState();
@@ -37,13 +62,19 @@ final class WorkbenchTerminalDock extends StatefulWidget {
 final class _WorkbenchTerminalDockState extends State<WorkbenchTerminalDock> {
   late final WorkbenchTerminalManager _manager;
   late ProjectTerminalDrawerAttachment _drawerAttachment;
-  final _viewControllers = <String, TerminalController>{};
+  final _entryResources = <String, _TerminalEntryResources>{};
+  final _previousTabStatuses = <String, _TerminalTabStatus>{};
+  var _previousVisible = false;
+  String? _previousActiveId;
+  TerminalSessionStatus? _previousActiveStatus;
+  String? _inactiveStatusAnnouncement;
 
   @override
   void initState() {
     super.initState();
     _manager = widget.createManager()..addListener(_changed);
     _drawerAttachment = _attachDrawer(widget.drawerController);
+    _recordManagerSnapshot();
   }
 
   @override
@@ -64,22 +95,110 @@ final class _WorkbenchTerminalDockState extends State<WorkbenchTerminalDock> {
 
   void _changed() {
     if (!mounted) return;
-    _disposeUnusedViewControllers();
+    final active = _manager.activeEntry;
+    final activeStatus = active?.controller.state.status;
+    final shouldFocusActive =
+        _manager.isVisible &&
+        active != null &&
+        activeStatus == TerminalSessionStatus.running &&
+        (!_previousVisible ||
+            _previousActiveId != active.id ||
+            _previousActiveStatus != TerminalSessionStatus.running);
+    final shouldFocusWorkbench = _previousVisible && !_manager.isVisible;
+    _syncEntryResources();
+    _updateInactiveStatusAnnouncement(active?.id);
+    _recordManagerSnapshot();
     setState(() {});
+    if (shouldFocusActive) _requestTerminalFocus(active.id);
+    if (shouldFocusWorkbench) _requestWorkbenchFocus();
   }
 
-  void _disposeUnusedViewControllers() {
+  void _syncEntryResources() {
     final liveIds = _manager.entries.map((entry) => entry.id).toSet();
-    final removedIds = _viewControllers.keys
+    for (final id in liveIds) {
+      _entryResources.putIfAbsent(id, () => _TerminalEntryResources(id));
+    }
+    final removedIds = _entryResources.keys
         .where((id) => !liveIds.contains(id))
         .toList(growable: false);
     for (final id in removedIds) {
-      _viewControllers.remove(id)?.dispose();
+      _entryResources.remove(id)?.dispose();
     }
   }
 
-  TerminalController _viewControllerFor(WorkbenchTerminalEntry entry) =>
-      _viewControllers.putIfAbsent(entry.id, TerminalController.new);
+  _TerminalEntryResources _resourcesFor(WorkbenchTerminalEntry entry) =>
+      _entryResources.putIfAbsent(
+        entry.id,
+        () => _TerminalEntryResources(entry.id),
+      );
+
+  void _recordManagerSnapshot() {
+    final active = _manager.activeEntry;
+    _previousVisible = _manager.isVisible;
+    _previousActiveId = active?.id;
+    _previousActiveStatus = active?.controller.state.status;
+    _previousTabStatuses
+      ..clear()
+      ..addEntries(
+        _manager.entries.map(
+          (entry) => MapEntry(entry.id, _tabStatusFor(entry.controller.state)),
+        ),
+      );
+  }
+
+  void _updateInactiveStatusAnnouncement(String? activeId) {
+    for (final entry in _manager.entries) {
+      if (entry.id == activeId) continue;
+      final status = _tabStatusFor(entry.controller.state);
+      if (_previousTabStatuses[entry.id] == status ||
+          !{
+            _TerminalTabStatus.starting,
+            _TerminalTabStatus.exited,
+            _TerminalTabStatus.failed,
+          }.contains(status)) {
+        continue;
+      }
+      _inactiveStatusAnnouncement = _announcementFor(entry, status);
+    }
+  }
+
+  String _announcementFor(
+    WorkbenchTerminalEntry entry,
+    _TerminalTabStatus status,
+  ) => switch (status) {
+    _TerminalTabStatus.starting => '${entry.label} terminal starting.',
+    _TerminalTabStatus.exited =>
+      '${entry.label} terminal exited with code '
+          '${entry.controller.state.exit?.exitCode ?? 'unknown'}.',
+    _TerminalTabStatus.failed => <String>[
+      '${entry.label} terminal failed',
+      if (entry.controller.state.failure case final failure?) ...<String>[
+        failure.message,
+        failure.remediation,
+      ],
+    ].join('. '),
+    _ => '',
+  };
+
+  void _requestTerminalFocus(String id) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_manager.isVisible ||
+          _manager.activeEntry?.id != id ||
+          _manager.activeEntry?.controller.state.status !=
+              TerminalSessionStatus.running) {
+        return;
+      }
+      _entryResources[id]?.focusNode.requestFocus();
+    });
+  }
+
+  void _requestWorkbenchFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _manager.isVisible) return;
+      widget.onWorkbenchFocusRequested();
+    });
+  }
 
   KeyEventResult _handleTerminalKeyEvent(FocusNode _, KeyEvent event) {
     final keyboard = HardwareKeyboard.instance;
@@ -101,10 +220,10 @@ final class _WorkbenchTerminalDockState extends State<WorkbenchTerminalDock> {
     _manager
       ..removeListener(_changed)
       ..dispose();
-    for (final controller in _viewControllers.values) {
-      controller.dispose();
+    for (final resources in _entryResources.values) {
+      resources.dispose();
     }
-    _viewControllers.clear();
+    _entryResources.clear();
     super.dispose();
   }
 
@@ -170,6 +289,14 @@ final class _WorkbenchTerminalDockState extends State<WorkbenchTerminalDock> {
                   ],
                 ),
               ),
+              if (_inactiveStatusAnnouncement case final announcement?)
+                Semantics(
+                  key: const Key('terminal-inactive-status-announcement'),
+                  container: true,
+                  liveRegion: true,
+                  label: announcement,
+                  child: const SizedBox.shrink(),
+                ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -187,6 +314,7 @@ final class _WorkbenchTerminalDockState extends State<WorkbenchTerminalDock> {
     final entry = _manager.activeEntry;
     if (entry == null) return const SizedBox.shrink();
     final state = entry.controller.state;
+    final resources = _resourcesFor(entry);
     final isRunning = state.status == TerminalSessionStatus.running;
     final hasMessage =
         state.isBusy || state.exit != null || state.failure != null;
@@ -224,8 +352,8 @@ final class _WorkbenchTerminalDockState extends State<WorkbenchTerminalDock> {
               child: TerminalView(
                 entry.controller.terminal,
                 key: Key('terminal-view-${entry.id}'),
-                controller: _viewControllerFor(entry),
-                autofocus: true,
+                controller: resources.viewController,
+                focusNode: resources.focusNode,
                 backgroundOpacity: 1,
                 textStyle: _terminalTextStyle,
                 onKeyEvent: _handleTerminalKeyEvent,
@@ -261,6 +389,7 @@ final class _TerminalTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = manager.activeEntry?.id == entry.id;
+    final status = _terminalStatusPresentation(entry.controller.state);
     final theme = Theme.of(context);
     final description =
         entry.target.workingDirectory ??
@@ -272,7 +401,7 @@ final class _TerminalTab extends StatelessWidget {
       button: true,
       enabled: true,
       selected: selected,
-      label: '${entry.label}. $description',
+      label: '${entry.label}. ${status.label}. $description',
       onTap: select,
       excludeSemantics: true,
       child: Tooltip(
@@ -290,12 +419,66 @@ final class _TerminalTab extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             shape: const RoundedRectangleBorder(),
           ),
-          child: Text(entry.label, maxLines: 1),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                status.icon,
+                key: Key('terminal-tab-status-${entry.id}'),
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                entry.label,
+                key: Key('terminal-tab-label-${entry.id}'),
+                maxLines: 1,
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+_TerminalTabStatus _tabStatusFor(ProjectTerminalState state) {
+  if (state.failure != null) return _TerminalTabStatus.failed;
+  return switch (state.status) {
+    TerminalSessionStatus.idle => _TerminalTabStatus.idle,
+    TerminalSessionStatus.starting => _TerminalTabStatus.starting,
+    TerminalSessionStatus.running => _TerminalTabStatus.running,
+    TerminalSessionStatus.exited => _TerminalTabStatus.exited,
+    TerminalSessionStatus.failed => _TerminalTabStatus.failed,
+  };
+}
+
+_TerminalStatusPresentation _terminalStatusPresentation(
+  ProjectTerminalState state,
+) => switch (_tabStatusFor(state)) {
+  _TerminalTabStatus.idle => const _TerminalStatusPresentation(
+    label: 'Idle',
+    icon: Icons.terminal,
+  ),
+  _TerminalTabStatus.starting => const _TerminalStatusPresentation(
+    label: 'Starting',
+    icon: Icons.hourglass_top,
+  ),
+  _TerminalTabStatus.running => const _TerminalStatusPresentation(
+    label: 'Running',
+    icon: Icons.terminal,
+  ),
+  _TerminalTabStatus.exited => const _TerminalStatusPresentation(
+    label: 'Exited',
+    icon: Icons.stop_circle_outlined,
+  ),
+  _TerminalTabStatus.failed => const _TerminalStatusPresentation(
+    label: 'Failed',
+    icon: Icons.error_outline,
+  ),
+};
 
 final class _ToolbarAction extends StatelessWidget {
   const _ToolbarAction({

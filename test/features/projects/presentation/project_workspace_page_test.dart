@@ -232,7 +232,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           repository: repository,
-          terminalBuilder: (_, _, _, _) => const TextButton(
+          terminalBuilder: (_, _, _, _, _) => const TextButton(
             key: Key('terminal-focus-action'),
             onPressed: _noop,
             child: Text('Terminal action'),
@@ -285,7 +285,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           repository: repository,
-          terminalBuilder: (_, _, _, _) => const TextButton(
+          terminalBuilder: (_, _, _, _, _) => const TextButton(
             key: Key('terminal-focus-action'),
             onPressed: _noop,
             child: Text('Terminal action'),
@@ -319,6 +319,49 @@ void main() {
       }
 
       expect(visited, <int>[0, 1, 2, 3]);
+    },
+  );
+
+  testWidgets(
+    'GivenTerminalDockRequestsWorkbenchFocus_WhenInvoked_ThenStableWorkbenchNodeReceivesPrimaryFocus',
+    (tester) async {
+      late VoidCallback requestWorkbenchFocus;
+      final terminalFocusNode = FocusNode(debugLabel: 'test terminal');
+      addTearDown(terminalFocusNode.dispose);
+      await tester.pumpWidget(
+        _app(
+          terminalBuilder: (_, _, _, _, requestFocus) {
+            requestWorkbenchFocus = requestFocus;
+            return Focus(
+              focusNode: terminalFocusNode,
+              child: const TextButton(
+                key: Key('terminal-focus-action'),
+                onPressed: _noop,
+                child: Text('Terminal action'),
+              ),
+            );
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      final focusBefore = tester
+          .widget<Focus>(find.byKey(const Key('workbench-focus')))
+          .focusNode!;
+
+      terminalFocusNode.requestFocus();
+      await tester.pump();
+      expect(focusBefore.hasPrimaryFocus, isFalse);
+
+      requestWorkbenchFocus();
+      await tester.pump();
+      expect(focusBefore.hasPrimaryFocus, isTrue);
+
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+      final focusAfter = tester
+          .widget<Focus>(find.byKey(const Key('workbench-focus')))
+          .focusNode!;
+      expect(focusAfter, same(focusBefore));
     },
   );
 
@@ -1448,7 +1491,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         _app(
-          terminalBuilder: (_, _, _, _) => const SizedBox(
+          terminalBuilder: (_, _, _, _, _) => const SizedBox(
             key: Key('terminal-dock-probe'),
             width: double.infinity,
             height: 80,
@@ -1825,6 +1868,7 @@ final class _GlobalTerminalProbe {
     String actorId,
     ProjectRecord? availableProject,
     ProjectTerminalDrawerController drawerController,
+    VoidCallback onWorkbenchFocusRequested,
   ) {
     buildCallCount++;
     lastAvailableProject = availableProject;
@@ -1931,6 +1975,7 @@ final class _WorkbenchTerminalProbe {
     String actorId,
     ProjectRecord? availableProject,
     ProjectTerminalDrawerController drawerController,
+    VoidCallback onWorkbenchFocusRequested,
   ) {
     final target = availableProject == null
         ? TerminalLaunchTarget.home(workingDirectory: r'C:\Users\tester')
@@ -1943,6 +1988,7 @@ final class _WorkbenchTerminalProbe {
       createManager: _createManager,
       launchTarget: target,
       drawerController: drawerController,
+      onWorkbenchFocusRequested: onWorkbenchFocusRequested,
     );
   }
 

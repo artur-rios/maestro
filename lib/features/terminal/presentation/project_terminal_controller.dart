@@ -17,6 +17,18 @@ typedef ProjectTerminalOpener =
       required int rows,
     });
 
+abstract interface class WorkbenchTerminalController implements Listenable {
+  ProjectTerminalState get state;
+
+  Terminal get terminal;
+
+  Future<void> open();
+
+  Future<TerminalClosure> close();
+
+  void dispose();
+}
+
 final class ProjectTerminalState {
   const ProjectTerminalState({
     this.status = TerminalSessionStatus.idle,
@@ -46,7 +58,8 @@ final class ProjectTerminalState {
 ///
 /// It never restarts a shell on its own. A shell that died leaves output the
 /// user may want to read, so the fresh session in AF-03 is their decision.
-final class ProjectTerminalController extends ChangeNotifier {
+final class ProjectTerminalController extends ChangeNotifier
+    implements WorkbenchTerminalController {
   ProjectTerminalController({
     required String workingDirectory,
     required ProjectTerminalOpener open,
@@ -78,11 +91,13 @@ final class ProjectTerminalController extends ChangeNotifier {
   final Duration _folderCheckInterval;
 
   /// The emulator the view renders. It owns selection, copy, and paste.
+  @override
   final Terminal terminal;
 
   /// The resolved path remains stable for the lifetime of this controller.
   String get workingDirectory => _workingDirectory;
 
+  @override
   ProjectTerminalState state;
 
   TerminalSession? _session;
@@ -90,8 +105,10 @@ final class ProjectTerminalController extends ChangeNotifier {
   Timer? _folderMonitor;
   Completer<void>? _startupSettlement;
   var _generation = 0;
+  var _folderClosureInProgress = false;
   var _disposed = false;
 
+  @override
   Future<void> open() async {
     if (_disposed || _initialFailure != null || !state.canOpen) return;
     final generation = ++_generation;
@@ -115,7 +132,7 @@ final class ProjectTerminalController extends ChangeNotifier {
       if (!_owns(generation)) {
         // A session opened for a generation nobody is waiting on would leak a
         // shell, so it is closed rather than dropped.
-        unawaited(result.session?.close());
+        unawaited(_closeDetachedSession(result.session));
         return;
       }
       if (result.failure case final failure?) {
@@ -134,6 +151,7 @@ final class ProjectTerminalController extends ChangeNotifier {
     }
   }
 
+  @override
   Future<TerminalClosure> close() async {
     if (_disposed) return TerminalClosure.closed;
     await _startupSettlement?.future;
@@ -145,18 +163,7 @@ final class ProjectTerminalController extends ChangeNotifier {
     try {
       closure = await session.close();
     } on Object {
-      if (_owns(generation)) {
-        _publish(
-          const ProjectTerminalState(
-            status: TerminalSessionStatus.running,
-            failure: TerminalFailure(
-              code: TerminalFailure.closeIncompleteCode,
-              message: 'The terminal could not be stopped safely.',
-              remediation: 'Stop its processes from the shell, then try again.',
-            ),
-          ),
-        );
-      }
+      _publishCloseIncomplete(generation);
       return TerminalClosure.incomplete;
     }
     if (!_owns(generation)) return closure;
@@ -215,7 +222,11 @@ final class ProjectTerminalController extends ChangeNotifier {
     _session = null;
     final output = _output;
     _output = null;
-    await output?.cancel();
+    try {
+      await output?.cancel();
+    } on Object {
+      // The process state is already known; subscription cleanup is best-effort.
+    }
   }
 
   void _startFolderMonitor(TerminalSession session, int generation) {
@@ -230,32 +241,79 @@ final class ProjectTerminalController extends ChangeNotifier {
     int generation,
   ) async {
     final reader = _folderAvailability;
-    if (reader == null || !_owns(generation)) return;
-    final availability = await reader();
-    if (availability == TerminalFolderAvailability.available ||
-        !_owns(generation)) {
+    if (reader == null || !_owns(generation) || _folderClosureInProgress) {
       return;
     }
-    final closure = await session.close();
-    if (!_owns(generation) || closure == TerminalClosure.incomplete) return;
-    // Invalidate the exit callback before detaching: the user needs the folder
-    // remediation, not an unrelated shell exit code (AF-02).
-    _generation++;
-    await _detach();
+    _folderClosureInProgress = true;
+    try {
+      late final TerminalFolderAvailability availability;
+      try {
+        availability = await reader();
+      } on Object {
+        return;
+      }
+      if (availability == TerminalFolderAvailability.available ||
+          !_owns(generation)) {
+        return;
+      }
+      _folderMonitor?.cancel();
+      _folderMonitor = null;
+      late final TerminalClosure closure;
+      try {
+        closure = await session.close();
+      } on Object {
+        _publishCloseIncomplete(generation);
+        return;
+      }
+      if (!_owns(generation)) return;
+      if (closure == TerminalClosure.incomplete) {
+        _publishCloseIncomplete(generation);
+        return;
+      }
+      // Invalidate the exit callback before detaching: the user needs the
+      // folder remediation, not an unrelated shell exit code (AF-02).
+      _generation++;
+      await _detach();
+      _publish(
+        ProjectTerminalState(
+          status: TerminalSessionStatus.failed,
+          failure: TerminalFailure(
+            code: TerminalFailure.folderUnavailableCode,
+            message: availability == TerminalFolderAvailability.missing
+                ? 'The terminal working directory no longer exists.'
+                : 'The terminal working directory could not be accessed.',
+            remediation:
+                'Restore or reconnect the directory, then open the terminal '
+                'again.',
+          ),
+        ),
+      );
+    } finally {
+      _folderClosureInProgress = false;
+    }
+  }
+
+  void _publishCloseIncomplete(int generation) {
+    if (!_owns(generation)) return;
     _publish(
-      ProjectTerminalState(
-        status: TerminalSessionStatus.failed,
+      const ProjectTerminalState(
+        status: TerminalSessionStatus.running,
         failure: TerminalFailure(
-          code: TerminalFailure.folderUnavailableCode,
-          message: availability == TerminalFolderAvailability.missing
-              ? 'The project folder no longer exists.'
-              : 'The project folder could not be read.',
-          remediation:
-              'Restore or reconnect the folder, refresh the project, then '
-              'open the terminal again. The project record is unchanged.',
+          code: TerminalFailure.closeIncompleteCode,
+          message: 'The terminal could not be stopped safely.',
+          remediation: 'Stop its processes from the shell, then try again.',
         ),
       ),
     );
+  }
+
+  Future<void> _closeDetachedSession(TerminalSession? session) async {
+    if (session == null) return;
+    try {
+      await session.close();
+    } on Object {
+      // A detached or disposed controller has no UI owner for cleanup errors.
+    }
   }
 
   void _publishFailure(int generation, TerminalFailure failure) {
@@ -270,7 +328,7 @@ final class ProjectTerminalController extends ChangeNotifier {
 
   static const _unexpectedFailure = TerminalFailure(
     code: TerminalFailure.startFailedCode,
-    message: 'The project terminal could not be started.',
+    message: 'The terminal could not be started.',
     remediation: 'Retry, and review the diagnostics log if it keeps failing.',
   );
 
@@ -294,8 +352,8 @@ final class ProjectTerminalController extends ChangeNotifier {
     }
     final session = _session;
     unawaited(_detach());
-    // Navigating away must not leave a shell running in the project folder.
-    unawaited(session?.close());
+    // Disposing the workbench must not leave an owned shell running.
+    unawaited(_closeDetachedSession(session));
     super.dispose();
   }
 }

@@ -28,6 +28,7 @@ typedef WorkbenchTerminalBuilder =
       String actorId,
       ProjectRecord? availableProject,
       ProjectTerminalDrawerController drawerController,
+      VoidCallback onWorkbenchFocusRequested,
     );
 
 enum _WorkbenchDestination { tasks, automations, health }
@@ -161,6 +162,7 @@ final class _ProjectWorkspacePageState
     extends ConsumerState<_ProjectWorkspaceView> {
   final _workbenchScaffoldKey = GlobalKey<ScaffoldState>();
   final _terminalDrawerController = ProjectTerminalDrawerController();
+  final _workbenchFocusNode = FocusNode(debugLabel: 'Authenticated workbench');
   var _destination = _WorkbenchDestination.tasks;
   var _selectedProjectPane = _SelectedProjectPane.project;
   String? _selectedProjectId;
@@ -177,6 +179,12 @@ final class _ProjectWorkspacePageState
     Future<void>.microtask(
       () => ref.read(projectControllerProvider.notifier).load(),
     );
+  }
+
+  @override
+  void dispose() {
+    _workbenchFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -224,6 +232,7 @@ final class _ProjectWorkspacePageState
         widget.actorId,
         availableProject,
         _terminalDrawerController,
+        _workbenchFocusNode.requestFocus,
       ),
     );
     final workbench = _ProjectWorkbench(
@@ -260,7 +269,12 @@ final class _ProjectWorkspacePageState
                 },
               ),
         },
-        child: Focus(autofocus: true, child: workbench),
+        child: Focus(
+          key: const Key('workbench-focus'),
+          focusNode: _workbenchFocusNode,
+          autofocus: true,
+          child: workbench,
+        ),
       ),
     );
   }

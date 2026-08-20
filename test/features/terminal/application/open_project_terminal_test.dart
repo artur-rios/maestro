@@ -53,7 +53,14 @@ void main() {
       // Then: the typed failure is returned and no session is started.
       expect(result.session, isNull);
       expect(result.failure?.code, TerminalFailure.folderUnavailableCode);
-      expect(result.failure?.remediation, isNotEmpty);
+      expect(
+        result.failure?.message,
+        'The terminal working directory no longer exists.',
+      );
+      expect(
+        result.failure?.remediation,
+        'Restore or reconnect the directory, then open the terminal again.',
+      );
       expect(port.requests, isEmpty);
     });
 
@@ -91,6 +98,10 @@ void main() {
 
       // Then: the same typed failure covers both AF-02 conditions.
       expect(result.failure?.code, TerminalFailure.folderUnavailableCode);
+      expect(
+        result.failure?.message,
+        'The terminal working directory could not be accessed.',
+      );
     });
 
     test('GivenAnUnavailableShell_WhenOpeningATerminal_'

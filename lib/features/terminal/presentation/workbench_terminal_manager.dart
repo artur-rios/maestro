@@ -7,7 +7,7 @@ import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 
 typedef WorkbenchTerminalFactory =
-    ProjectTerminalController Function(TerminalLaunchTarget target);
+    WorkbenchTerminalController Function(TerminalLaunchTarget target);
 
 final class WorkbenchTerminalEntry {
   const WorkbenchTerminalEntry({
@@ -20,7 +20,7 @@ final class WorkbenchTerminalEntry {
   final String id;
   final String label;
   final TerminalLaunchTarget target;
-  final ProjectTerminalController controller;
+  final WorkbenchTerminalController controller;
 }
 
 final class WorkbenchTerminalManager extends ChangeNotifier {
@@ -102,24 +102,44 @@ final class WorkbenchTerminalManager extends ChangeNotifier {
     _isKilling = true;
     notifyListeners();
     final index = _entries.indexWhere((candidate) => candidate.id == entry.id);
-    final closure = await entry.controller.close();
-    if (_disposed) return;
-    _isKilling = false;
-    if (closure == TerminalClosure.incomplete) {
-      notifyListeners();
-      return;
+    try {
+      var closure = TerminalClosure.incomplete;
+      try {
+        closure = await entry.controller.close();
+      } on Object {
+        // A controller is expected to normalize close errors. Retaining the
+        // captured entry is still the only safe manager-level fallback.
+      }
+      if (_disposed) return;
+      if (closure == TerminalClosure.incomplete) {
+        _activeId = entry.id;
+        _isVisible = true;
+        return;
+      }
+      final shouldSelectNeighbor = _activeId == entry.id;
+      try {
+        entry.controller.removeListener(_relayControllerChange);
+      } on Object {
+        // Confirmed process termination must still allow entry removal.
+      }
+      try {
+        entry.controller.dispose();
+      } on Object {
+        // Controller cleanup is best-effort after confirmed termination.
+      }
+      _entries.removeWhere((candidate) => candidate.id == entry.id);
+      if (_entries.isEmpty) {
+        _activeId = null;
+        _isVisible = false;
+      } else if (shouldSelectNeighbor) {
+        _activeId = _entries[index.clamp(0, _entries.length - 1)].id;
+      }
+    } finally {
+      _isKilling = false;
+      if (!_disposed) {
+        notifyListeners();
+      }
     }
-    final shouldSelectNeighbor = _activeId == entry.id;
-    entry.controller.removeListener(_relayControllerChange);
-    entry.controller.dispose();
-    _entries.removeWhere((candidate) => candidate.id == entry.id);
-    if (_entries.isEmpty) {
-      _activeId = null;
-      _isVisible = false;
-    } else if (shouldSelectNeighbor) {
-      _activeId = _entries[index.clamp(0, _entries.length - 1)].id;
-    }
-    notifyListeners();
   }
 
   String _nextLabel(String baseLabel) {
@@ -141,8 +161,16 @@ final class WorkbenchTerminalManager extends ChangeNotifier {
     if (_disposed) return;
     _disposed = true;
     for (final entry in _entries) {
-      entry.controller.removeListener(_relayControllerChange);
-      entry.controller.dispose();
+      try {
+        entry.controller.removeListener(_relayControllerChange);
+      } on Object {
+        // Continue disposing the remaining owned entries.
+      }
+      try {
+        entry.controller.dispose();
+      } on Object {
+        // Continue disposing the remaining owned entries.
+      }
     }
     _entries.clear();
     _activeId = null;

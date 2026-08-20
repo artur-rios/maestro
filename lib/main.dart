@@ -501,6 +501,7 @@ Future<ProductionAppComposition> composeProductionApp({
     String actorId,
     ProjectRecord? project,
     ProjectTerminalDrawerController drawerController,
+    VoidCallback onWorkbenchFocusRequested,
   ) {
     final target = project == null
         ? homeDirectories.resolve()
@@ -512,6 +513,7 @@ Future<ProductionAppComposition> composeProductionApp({
       key: const ValueKey<String>('workbench-terminal-dock'),
       drawerController: drawerController,
       launchTarget: target,
+      onWorkbenchFocusRequested: onWorkbenchFocusRequested,
       createManager: () => WorkbenchTerminalManager(
         factory: (entryTarget) => ProjectTerminalController(
           workingDirectory: entryTarget.workingDirectory ?? '',

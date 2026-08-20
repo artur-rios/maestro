@@ -34,11 +34,17 @@ void main() {
       await expectLater(
         start,
         throwsA(
-          isA<TerminalStartFailure>().having(
-            (failure) => failure.kind,
-            'kind',
-            TerminalStartFailureKind.folderUnavailable,
-          ),
+          isA<TerminalStartFailure>()
+              .having(
+                (failure) => failure.kind,
+                'kind',
+                TerminalStartFailureKind.folderUnavailable,
+              )
+              .having(
+                (failure) => failure.message,
+                'message',
+                'The terminal working directory no longer exists.',
+              ),
         ),
       );
       expect(launcher.requests, isEmpty);
@@ -60,11 +66,17 @@ void main() {
       await expectLater(
         start,
         throwsA(
-          isA<TerminalStartFailure>().having(
-            (failure) => failure.remediation,
-            'remediation',
-            isNotEmpty,
-          ),
+          isA<TerminalStartFailure>()
+              .having(
+                (failure) => failure.message,
+                'message',
+                'The terminal working directory could not be accessed.',
+              )
+              .having(
+                (failure) => failure.remediation,
+                'remediation',
+                'Restore or reconnect the directory, then open the terminal again.',
+              ),
         ),
       );
     });

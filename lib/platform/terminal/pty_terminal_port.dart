@@ -146,11 +146,10 @@ final class PtyTerminalPort implements TerminalCapabilityPort {
     throw TerminalStartFailure(
       kind: TerminalStartFailureKind.folderUnavailable,
       message: availability == TerminalFolderAvailability.missing
-          ? 'The project folder no longer exists.'
-          : 'The project folder could not be read.',
+          ? 'The terminal working directory no longer exists.'
+          : 'The terminal working directory could not be accessed.',
       remediation:
-          'Restore or reconnect the folder, refresh the project, then open '
-          'the terminal again. The project record is unchanged.',
+          'Restore or reconnect the directory, then open the terminal again.',
     );
   }
 

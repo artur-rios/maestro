@@ -229,7 +229,7 @@ void main() {
           projectService: _projectService(),
           projectLifecycleService: _projectLifecycleService(),
           projectFolderPicker: const _ProjectFolderPicker(),
-          terminalBuilder: (_, _, _, _) => _DisposeProbe(
+          terminalBuilder: (_, _, _, _, _) => _DisposeProbe(
             key: const Key('terminal-disposal-probe'),
             onDispose: () => disposeCount++,
           ),
