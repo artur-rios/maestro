@@ -18,7 +18,8 @@ branch in the background.
 - Runs at least two isolated workflows concurrently while keeping the desktop interface responsive.
 - Shows current steps and streaming logs through a visual run workspace.
 - Pauses between steps, resumes, cancels complete process trees, and retries with user-selected scope.
-- Embeds PowerShell on Windows and Bash on Linux at the selected project folder.
+- Embeds PowerShell on Windows and Bash on Linux at a selected project folder
+  or the user's home folder, with multiple concurrent terminal sessions.
 - Supports supervised pull-request delivery and autonomous model-reviewed delivery.
 - Preserves immutable run snapshots, attempts, audit evidence, and configurable compacted history.
 - Checks, verifies, and installs signed updates published through GitHub Releases.
