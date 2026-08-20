@@ -266,16 +266,19 @@ final class _TerminalTab extends StatelessWidget {
         entry.target.workingDirectory ??
         entry.target.failure?.message ??
         entry.label;
+    void select() => manager.select(entry.id);
     return Semantics(
       key: Key('terminal-tab-${entry.id}'),
       button: true,
+      enabled: true,
       selected: selected,
       label: '${entry.label}. $description',
+      onTap: select,
       excludeSemantics: true,
       child: Tooltip(
         message: description,
         child: TextButton(
-          onPressed: () => manager.select(entry.id),
+          onPressed: select,
           style: TextButton.styleFrom(
             foregroundColor: selected
                 ? theme.colorScheme.onSurface
@@ -312,6 +315,8 @@ final class _ToolbarAction extends StatelessWidget {
     key: actionKey,
     label: tooltip,
     button: true,
+    enabled: onPressed != null,
+    onTap: onPressed,
     excludeSemantics: true,
     child: SizedBox.square(
       dimension: 36,

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' show Tristate;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -342,10 +342,29 @@ void main() {
         );
         expect(activeSemantics.flagsCollection.isSelected, Tristate.isTrue);
         expect(inactiveSemantics.flagsCollection.isSelected, Tristate.isFalse);
+        for (final control in <Finder>[
+          find.byKey(Key('terminal-tab-${active.id}')),
+          find.byKey(Key('terminal-tab-${inactive.id}')),
+          find.byKey(const Key('new-terminal')),
+          find.byKey(const Key('kill-terminal')),
+          find.byKey(const Key('collapse-terminal')),
+        ]) {
+          final semantics = tester.getSemantics(control);
+          expect(
+            semantics.getSemanticsData().hasAction(SemanticsAction.tap),
+            isTrue,
+          );
+          expect(semantics.flagsCollection.isEnabled, Tristate.isTrue);
+        }
         expect(find.byTooltip(r'D:\Maestro'), findsNWidgets(2));
         expect(find.byTooltip('New terminal'), findsOneWidget);
         expect(find.byTooltip('Kill active terminal'), findsOneWidget);
         expect(find.byTooltip('Collapse terminal dock'), findsOneWidget);
+        expect(find.bySemanticsLabel(r'Maestro. D:\Maestro'), findsOneWidget);
+        expect(find.bySemanticsLabel(r'Maestro 2. D:\Maestro'), findsOneWidget);
+        expect(find.bySemanticsLabel('New terminal'), findsOneWidget);
+        expect(find.bySemanticsLabel('Kill active terminal'), findsOneWidget);
+        expect(find.bySemanticsLabel('Collapse terminal dock'), findsOneWidget);
         expect(
           tester.getSemantics(find.byKey(const Key('new-terminal'))).label,
           contains('New terminal'),
@@ -358,6 +377,36 @@ void main() {
           tester.getSemantics(find.byKey(const Key('collapse-terminal'))).label,
           contains('Collapse terminal dock'),
         );
+      },
+    );
+
+    testWidgets(
+      'GivenKillInFlight_WhenSemanticsInspected_ThenKillCannotBeActivated',
+      (tester) async {
+        final fixture = await _pumpDock(
+          tester,
+          target: _homeTarget(),
+          delayClose: true,
+        );
+        await fixture.manager.show(fixture.target);
+        await tester.pumpAndSettle();
+
+        final kill = fixture.manager.killActive();
+        await tester.pump();
+
+        final killSemantics = tester.getSemantics(
+          find.byKey(const Key('kill-terminal')),
+        );
+        expect(
+          killSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+          isFalse,
+        );
+        expect(killSemantics.flagsCollection.isEnabled, Tristate.isFalse);
+        expect(find.bySemanticsLabel('Kill active terminal'), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        fixture.sessions.single.completeClose();
+        await kill;
       },
     );
 
@@ -425,8 +474,13 @@ Future<_DockFixture> _pumpDock(
   WidgetTester tester, {
   required TerminalLaunchTarget target,
   TerminalClosure closure = TerminalClosure.closed,
+  bool delayClose = false,
 }) async {
-  final fixture = _DockFixture(target, closure: closure);
+  final fixture = _DockFixture(
+    target,
+    closure: closure,
+    delayClose: delayClose,
+  );
   await _pumpFixture(tester, fixture);
   return fixture;
 }
@@ -458,10 +512,15 @@ TerminalLaunchTarget _homeTarget() =>
     TerminalLaunchTarget.home(workingDirectory: r'C:\Users\tester');
 
 final class _DockFixture {
-  _DockFixture(this.target, {this.closure = TerminalClosure.closed});
+  _DockFixture(
+    this.target, {
+    this.closure = TerminalClosure.closed,
+    this.delayClose = false,
+  });
 
   TerminalLaunchTarget target;
   final TerminalClosure closure;
+  final bool delayClose;
   final drawer = ProjectTerminalDrawerController();
   final sessions = <_FakeSession>[];
   final openRequests = <({String workingDirectory, int columns, int rows})>[];
@@ -475,7 +534,7 @@ final class _DockFixture {
   }
 
   ProjectTerminalController _createController(TerminalLaunchTarget target) {
-    final session = _FakeSession(closure);
+    final session = _FakeSession(closure, delayClose: delayClose);
     sessions.add(session);
     return ProjectTerminalController(
       workingDirectory: target.workingDirectory ?? '',
@@ -499,9 +558,11 @@ final class _DockFixture {
 }
 
 final class _FakeSession implements TerminalSession {
-  _FakeSession(this._closure);
+  _FakeSession(this._closure, {required bool delayClose})
+    : _closeCompleter = delayClose ? Completer<TerminalClosure>() : null;
 
   final TerminalClosure _closure;
+  final Completer<TerminalClosure>? _closeCompleter;
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
   var closeCallCount = 0;
@@ -521,11 +582,16 @@ final class _FakeSession implements TerminalSession {
   @override
   Future<TerminalClosure> close() async {
     closeCallCount++;
-    if (_closure == TerminalClosure.closed) exitWith(0);
-    return _closure;
+    final result = _closeCompleter == null
+        ? _closure
+        : await _closeCompleter.future;
+    if (result == TerminalClosure.closed) exitWith(0);
+    return result;
   }
 
   void emit(List<int> bytes) => _output.add(Uint8List.fromList(bytes));
+
+  void completeClose() => _closeCompleter?.complete(_closure);
 
   void exitWith(int code) {
     if (!_exit.isCompleted) _exit.complete(TerminalExit(code));
