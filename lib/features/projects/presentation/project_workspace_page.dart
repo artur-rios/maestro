@@ -22,12 +22,13 @@ typedef RunStartWorkspaceBuilder =
       ProjectRecord project,
     );
 
-typedef ProjectTerminalWorkspaceBuilder =
+typedef WorkbenchTerminalBuilder =
     Widget Function(
       BuildContext context,
       String actorId,
-      ProjectRecord project,
+      ProjectRecord? availableProject,
       ProjectTerminalDrawerController drawerController,
+      VoidCallback onWorkbenchFocusRequested,
     );
 
 enum _WorkbenchDestination { tasks, automations, health }
@@ -101,7 +102,7 @@ final class ProjectWorkspacePage extends StatelessWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final WorkbenchTerminalBuilder? terminalBuilder;
   final ValueChanged<String?>? onWorkspaceLabelChanged;
 
   @override
@@ -149,7 +150,7 @@ final class _ProjectWorkspaceView extends ConsumerStatefulWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final WorkbenchTerminalBuilder? terminalBuilder;
   final ValueChanged<String?>? onWorkspaceLabelChanged;
 
   @override
@@ -161,6 +162,7 @@ final class _ProjectWorkspacePageState
     extends ConsumerState<_ProjectWorkspaceView> {
   final _workbenchScaffoldKey = GlobalKey<ScaffoldState>();
   final _terminalDrawerController = ProjectTerminalDrawerController();
+  final _workbenchFocusNode = FocusNode(debugLabel: 'Authenticated workbench');
   var _destination = _WorkbenchDestination.tasks;
   var _selectedProjectPane = _SelectedProjectPane.project;
   String? _selectedProjectId;
@@ -177,6 +179,12 @@ final class _ProjectWorkspacePageState
     Future<void>.microtask(
       () => ref.read(projectControllerProvider.notifier).load(),
     );
+  }
+
+  @override
+  void dispose() {
+    _workbenchFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -206,28 +214,26 @@ final class _ProjectWorkspacePageState
       runObservationBuilder: widget.runObservationBuilder,
       historyBuilder: widget.historyBuilder,
     );
-    final selected = state.selected;
     final destinationContent = switch (_destination) {
       _WorkbenchDestination.tasks => projectContent,
       _WorkbenchDestination.automations => _workflowEditor(state),
       _WorkbenchDestination.health => widget.emptyContent,
     };
+    final availableProject = state.selected?.folderActionsEnabled == true
+        ? state.selected!.record
+        : null;
     final content = _WorkbenchMainPane(
       destinationContent: WorkbenchInspectorScope(
         onInspectorChanged: _changeInspector,
         child: destinationContent,
       ),
-      terminal:
-          selected != null &&
-              selected.folderActionsEnabled &&
-              widget.terminalBuilder != null
-          ? widget.terminalBuilder!(
-              context,
-              widget.actorId,
-              selected.record,
-              _terminalDrawerController,
-            )
-          : null,
+      terminal: widget.terminalBuilder?.call(
+        context,
+        widget.actorId,
+        availableProject,
+        _terminalDrawerController,
+        _workbenchFocusNode.requestFocus,
+      ),
     );
     final workbench = _ProjectWorkbench(
       scaffoldKey: _workbenchScaffoldKey,
@@ -251,23 +257,24 @@ final class _ProjectWorkspacePageState
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.backquote, control: true):
-            _ToggleProjectTerminalIntent(),
+            _ToggleWorkbenchTerminalIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          _ToggleProjectTerminalIntent:
-              CallbackAction<_ToggleProjectTerminalIntent>(
+          _ToggleWorkbenchTerminalIntent:
+              CallbackAction<_ToggleWorkbenchTerminalIntent>(
                 onInvoke: (_) {
-                  if (state.selected?.folderActionsEnabled == true) {
-                    _terminalDrawerController.toggle();
-                  } else {
-                    _showTerminalSelectionFeedback();
-                  }
+                  _terminalDrawerController.toggle();
                   return null;
                 },
               ),
         },
-        child: Focus(autofocus: true, child: workbench),
+        child: Focus(
+          key: const Key('workbench-focus'),
+          focusNode: _workbenchFocusNode,
+          autofocus: true,
+          child: workbench,
+        ),
       ),
     );
   }
@@ -296,7 +303,6 @@ final class _ProjectWorkspacePageState
   }
 
   void _selectDestination(_WorkbenchDestination value) {
-    _terminalDrawerController.hide();
     setState(() {
       _destination = value;
       _inspectorSnapshot = switch (value) {
@@ -321,7 +327,6 @@ final class _ProjectWorkspacePageState
   }
 
   void _selectProject(String projectId) {
-    _terminalDrawerController.hide();
     setState(() {
       _selectedProjectPane = _SelectedProjectPane.project;
     });
@@ -335,7 +340,6 @@ final class _ProjectWorkspacePageState
   }
 
   void _selectProjectPane(_SelectedProjectPane pane) {
-    _terminalDrawerController.hide();
     setState(() {
       _selectedProjectPane = pane;
       _inspectorSnapshot = _projectInspectorSnapshot(
@@ -396,21 +400,10 @@ final class _ProjectWorkspacePageState
     if (!mounted || snapshot == _inspectorSnapshot) return;
     setState(() => _inspectorSnapshot = snapshot);
   }
-
-  void _showTerminalSelectionFeedback() {
-    const message = 'Select an available project to open its terminal.';
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Semantics(liveRegion: true, child: const Text(message)),
-        ),
-      );
-  }
 }
 
-final class _ToggleProjectTerminalIntent extends Intent {
-  const _ToggleProjectTerminalIntent();
+final class _ToggleWorkbenchTerminalIntent extends Intent {
+  const _ToggleWorkbenchTerminalIntent();
 }
 
 String _availabilityLabel(ProjectAvailability availability) =>

@@ -124,12 +124,67 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
+
+  test('GivenTwoLiveTerminals_WhenOneIsClosed_'
+      'ThenTheSiblingRemainsInteractive', () async {
+    if (!Platform.isWindows && !Platform.isLinux) return;
+    final firstFolder = await Directory.systemTemp.createTemp('maestro-first-');
+    final secondFolder = await Directory.systemTemp.createTemp(
+      'maestro-second-',
+    );
+    TerminalSession? first;
+    TerminalSession? second;
+    _Transcript? firstTranscript;
+    _Transcript? secondTranscript;
+    addTearDown(() async {
+      await firstTranscript?.cancel();
+      await secondTranscript?.cancel();
+      await _closeSilently(first);
+      await _closeSilently(second);
+      await _deleteSilently(firstFolder);
+      await _deleteSilently(secondFolder);
+    });
+
+    // Given: separate real PTYs, each with a descendant in its own tree.
+    first = await _open(firstFolder);
+    second = await _open(secondFolder);
+    firstTranscript = _Transcript(first);
+    secondTranscript = _Transcript(second);
+    await firstTranscript.waitUntilReady();
+    await secondTranscript.waitUntilReady();
+    final firstChild =
+        'maestro-first-child-${DateTime.now().microsecondsSinceEpoch}';
+    final secondChild =
+        'maestro-second-child-${DateTime.now().microsecondsSinceEpoch}';
+    await _type(first, _backgroundLongLivedChild(firstChild));
+    await _type(second, _backgroundLongLivedChild(secondChild));
+    expect(await _hasProcess(firstChild), isTrue);
+    expect(await _hasProcess(secondChild), isTrue);
+
+    // When: only the first terminal's process tree is terminated.
+    expect(await first.close(), TerminalClosure.closed);
+    await first.exit.timeout(const Duration(seconds: 10));
+    expect(await _hasProcess(firstChild, expected: false), isFalse);
+
+    // Then: the sibling shell and its child remain live and interactive.
+    const marker = 'maestro-sibling-alive';
+    await _type(second, 'echo $marker');
+    expect(await secondTranscript.waitFor(marker, occurrences: 2), isTrue);
+    expect(await _hasProcess(secondChild), isTrue);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 /// A child that outlives the test unless the terminal's tree is terminated.
 String _longLivedChild(String marker) => Platform.isWindows
     ? 'pwsh -NoLogo -Command "Start-Sleep -Seconds 600 # $marker"'
     : "bash -c 'sleep 600 # $marker'";
+
+/// Starts a descendant without blocking the interactive parent shell.
+String _backgroundLongLivedChild(String marker) => Platform.isWindows
+    ? 'Start-Process -FilePath (Get-Process -Id \$PID).Path '
+          '-ArgumentList \'-NoLogo\', \'-NoProfile\', \'-Command\', '
+          '\'Start-Sleep -Seconds 600 # $marker\''
+    : 'bash -c \'sleep 600 # $marker\' &';
 
 /// Polls for a process whose command line carries [marker].
 Future<bool> _hasProcess(String marker, {bool expected = true}) async {
@@ -172,6 +227,31 @@ Future<Directory> _sandbox() async {
     }
   });
   return directory;
+}
+
+/// Best-effort cleanup prevents a failed Windows test from retaining a shell
+/// or its working directory long enough to interfere with the next test run.
+Future<void> _closeSilently(TerminalSession? session) async {
+  if (session == null) return;
+  try {
+    await session.close();
+    await session.exit.timeout(const Duration(seconds: 10));
+  } on Object {
+    // The session's own close operation has already attempted tree cleanup.
+  }
+}
+
+Future<void> _deleteSilently(Directory directory) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (true) {
+    try {
+      if (await directory.exists()) await directory.delete(recursive: true);
+      return;
+    } on FileSystemException {
+      if (DateTime.now().isAfter(deadline)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
 }
 
 Future<TerminalSession> _open(Directory sandbox) => PtyTerminalPort(

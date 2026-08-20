@@ -52,7 +52,7 @@ class MaestroApp extends StatefulWidget {
   final RunStartWorkspaceBuilder? runStartBuilder;
   final RunStartWorkspaceBuilder? runObservationBuilder;
   final RunStartWorkspaceBuilder? historyBuilder;
-  final ProjectTerminalWorkspaceBuilder? terminalBuilder;
+  final WorkbenchTerminalBuilder? terminalBuilder;
   final List<FoundationProbe> foundationProbes;
   final DesktopWindowPort window;
   final VoidCallback? onDispose;
