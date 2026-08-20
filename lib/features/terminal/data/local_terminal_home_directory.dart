@@ -8,9 +8,11 @@ abstract interface class TerminalHomeDirectory {
 }
 
 final class LocalTerminalHomeDirectory implements TerminalHomeDirectory {
-  LocalTerminalHomeDirectory({Map<String, String>? environment, bool? isWindows})
-    : _environment = environment ?? Platform.environment,
-      _isWindows = isWindows ?? Platform.isWindows;
+  LocalTerminalHomeDirectory({
+    Map<String, String>? environment,
+    bool? isWindows,
+  }) : _environment = environment ?? Platform.environment,
+       _isWindows = isWindows ?? Platform.isWindows;
 
   final Map<String, String> _environment;
   final bool _isWindows;
