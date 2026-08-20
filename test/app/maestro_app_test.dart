@@ -216,6 +216,37 @@ void main() {
   );
 
   testWidgets(
+    'GivenAuthenticatedWorkbenchTerminal_WhenUserSignsOut_ThenTerminalHostDisposes',
+    (tester) async {
+      var disposeCount = 0;
+      await tester.pumpWidget(
+        MaestroApp(
+          appearanceController: _appearanceController(),
+          authenticationService: _authenticationService(),
+          authenticationPort: const _OperatingSystemAuthenticator(),
+          authenticationSettingsRepository:
+              const _AuthenticationSettingsRepository(),
+          projectService: _projectService(),
+          projectLifecycleService: _projectLifecycleService(),
+          projectFolderPicker: const _ProjectFolderPicker(),
+          terminalBuilder: (_, _, _, _) => _DisposeProbe(
+            key: const Key('terminal-disposal-probe'),
+            onDispose: () => disposeCount++,
+          ),
+        ),
+      );
+      await tester.tap(find.bySemanticsLabel('Sign in with Windows'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('terminal-disposal-probe')), findsOneWidget);
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+
+      expect(disposeCount, 1);
+    },
+  );
+
+  testWidgets(
     'GivenDarkAppearance_WhenAuthenticated_ThenWorkbenchUsesDarkSurfaces',
     (tester) async {
       await tester.pumpWidget(
@@ -573,6 +604,26 @@ final class _AppearancePreferenceRepository
 
   @override
   Future<void> save(AppearanceMode mode) async {}
+}
+
+final class _DisposeProbe extends StatefulWidget {
+  const _DisposeProbe({required this.onDispose, super.key});
+
+  final VoidCallback onDispose;
+
+  @override
+  State<_DisposeProbe> createState() => _DisposeProbeState();
+}
+
+final class _DisposeProbeState extends State<_DisposeProbe> {
+  @override
+  void dispose() {
+    widget.onDispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>

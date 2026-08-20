@@ -58,10 +58,13 @@ import 'package:maestro/features/runs/presentation/run_observation_controller.da
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_panel.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
+import 'package:maestro/features/terminal/data/local_terminal_home_directory.dart';
 import 'package:maestro/features/terminal/data/local_terminal_project_folder.dart';
+import 'package:maestro/features/terminal/domain/terminal_launch_target.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
-import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
+import 'package:maestro/features/terminal/presentation/workbench_terminal_dock.dart';
+import 'package:maestro/features/terminal/presentation/workbench_terminal_manager.dart';
 import 'package:maestro/features/updates/data/drift_update_audit_recorder.dart';
 import 'package:maestro/features/updates/presentation/update_controller.dart';
 import 'package:maestro/features/updates/presentation/update_panel.dart';
@@ -156,7 +159,7 @@ final class ProductionAppComposition {
   final RunStartWorkspaceBuilder runStartBuilder;
   final RunStartWorkspaceBuilder runObservationBuilder;
   final RunStartWorkspaceBuilder historyBuilder;
-  final ProjectTerminalWorkspaceBuilder terminalBuilder;
+  final WorkbenchTerminalBuilder terminalBuilder;
   final ActiveProjectRunReader activeProjectRuns;
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
@@ -492,21 +495,36 @@ Future<ProductionAppComposition> composeProductionApp({
     terminals: terminals,
     folders: terminalFolders,
   );
+  final homeDirectories = LocalTerminalHomeDirectory();
   Widget terminalBuilder(
     BuildContext context,
     String actorId,
-    ProjectRecord project,
+    ProjectRecord? project,
     ProjectTerminalDrawerController drawerController,
-  ) => ProjectTerminalPanel(
-    key: ValueKey<String>('project-terminal-${project.id}'),
-    drawerController: drawerController,
-    createController: () => ProjectTerminalController(
-      workingDirectory: project.folderPath,
-      open: openProjectTerminal.call,
-      folderAvailability: () =>
-          terminalFolders.availability(project.folderPath),
-    ),
-  );
+  ) {
+    final target = project == null
+        ? homeDirectories.resolve()
+        : TerminalLaunchTarget.project(
+            projectName: project.name,
+            workingDirectory: project.folderPath,
+          );
+    return WorkbenchTerminalDock(
+      key: const ValueKey<String>('workbench-terminal-dock'),
+      drawerController: drawerController,
+      launchTarget: target,
+      createManager: () => WorkbenchTerminalManager(
+        factory: (entryTarget) => ProjectTerminalController(
+          workingDirectory: entryTarget.workingDirectory ?? '',
+          initialFailure: entryTarget.failure,
+          open: openProjectTerminal.call,
+          folderAvailability: entryTarget.workingDirectory == null
+              ? null
+              : () =>
+                    terminalFolders.availability(entryTarget.workingDirectory!),
+        ),
+      ),
+    );
+  }
 
   return ProductionAppComposition._(
     database: database,

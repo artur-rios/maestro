@@ -23,10 +23,12 @@ import 'package:maestro/features/projects/presentation/project_tools_layout.dart
 import 'package:maestro/features/projects/presentation/project_workspace_page.dart';
 import 'package:maestro/features/terminal/application/open_project_terminal.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
+import 'package:maestro/features/terminal/domain/terminal_launch_target.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
-import 'package:maestro/features/terminal/presentation/project_terminal_panel.dart';
+import 'package:maestro/features/terminal/presentation/workbench_terminal_dock.dart';
+import 'package:maestro/features/terminal/presentation/workbench_terminal_manager.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:xterm/xterm.dart';
@@ -918,23 +920,20 @@ void main() {
     },
   );
 
-  testWidgets(
-    'GivenNoSelectedProject_WhenCtrlBackquotePressed_ThenFeedbackIsAnnounced',
-    (tester) async {
-      await tester.pumpWidget(_app());
-      await tester.pumpAndSettle();
+  testWidgets('GivenNoProject_WhenCtrlBackquotePressed_ThenHomeTerminalOpens', (
+    tester,
+  ) async {
+    final probe = _GlobalTerminalProbe();
+    await tester.pumpWidget(_app(terminalBuilder: probe.build));
+    await tester.pumpAndSettle();
 
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pump();
+    await _toggleTerminalShortcut(tester);
 
-      expect(
-        find.text('Select an available project to open its terminal.'),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(probe.buildCallCount, greaterThan(0));
+    expect(probe.lastAvailableProject, isNull);
+    expect(find.text('Home terminal'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+  });
 
   testWidgets(
     'GivenOpenAssociatedWorkflow_WhenProjectPermanentlyDeleted_ThenRemountReconcilesBeforeEditSave',
@@ -1217,105 +1216,68 @@ void main() {
   });
 
   testWidgets(
-    'GivenATerminalBuilder_WhenAnAvailableProjectIsSelected_ThenTheTerminalPanelIsShown',
+    'GivenTasksDestination_WhenCtrlBackquotePressed_ThenGlobalDockOpens',
     (tester) async {
-      // Given: a workspace composed with the embedded terminal.
       final repository = _Repository()..records.add(_record());
+      final probe = _GlobalTerminalProbe();
       await tester.pumpWidget(
-        _app(
-          repository: repository,
-          terminalBuilder: (_, _, project, _) =>
-              Text('terminal for ${project.name}'),
-        ),
+        _app(repository: repository, terminalBuilder: probe.build),
       );
       await tester.pumpAndSettle();
-
-      // When: an available project is selected.
       await tester.tap(find.text('Demo').first);
       await tester.pumpAndSettle();
 
-      // Then: its terminal is offered (FR-TE-01).
-      expect(find.text('terminal for Demo'), findsOneWidget);
+      await _toggleTerminalShortcut(tester);
+
+      expect(probe.lastAvailableProject?.name, 'Demo');
+      expect(find.text('Global terminal for Demo'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'GivenAnUnavailableProjectFolder_WhenItIsSelected_ThenNoTerminalPanelIsShown',
+    'GivenAutomationsDestination_WhenCtrlBackquotePressed_ThenGlobalDockOpens',
     (tester) async {
-      // Given: a project whose folder is gone (AF-02).
+      final probe = _GlobalTerminalProbe();
+      await tester.pumpWidget(
+        _app(workflowService: _workflowService(), terminalBuilder: probe.build),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Automations'));
+      await tester.pumpAndSettle();
+
+      await _toggleTerminalShortcut(tester);
+
+      expect(find.text('Global terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenHealthDestination_WhenCtrlBackquotePressed_ThenGlobalDockOpens',
+    (tester) async {
+      final probe = _GlobalTerminalProbe();
+      await tester.pumpWidget(_app(terminalBuilder: probe.build));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+
+      await _toggleTerminalShortcut(tester);
+
+      expect(find.text('Global terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenUnavailableSelectedProject_WhenCtrlBackquotePressed_ThenHomeTerminalOpens',
+    (tester) async {
       final repository = _Repository()..records.add(_record());
       final validator = _Validator()
         ..availability = ProjectAvailability.missing;
+      final probe = _GlobalTerminalProbe();
       await tester.pumpWidget(
         _app(
           repository: repository,
           validator: validator,
-          terminalBuilder: (_, _, project, _) =>
-              Text('terminal for ${project.name}'),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // When: it is selected.
-      await tester.tap(find.text('Demo').first);
-      await tester.pumpAndSettle();
-
-      // Then: a folder Maestro cannot reach roots no shell.
-      expect(find.text('terminal for Demo'), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'GivenASelectedAvailableProject_WhenCtrlBackquotePressed_ThenItsTerminalToggles',
-    (tester) async {
-      final repository = _Repository()..records.add(_record());
-      await tester.pumpWidget(
-        _app(
-          repository: repository,
-          terminalBuilder: (_, _, project, drawerController) =>
-              _ToggleTerminalProbe(
-                key: ValueKey<String>('terminal-${project.id}'),
-                drawerController: drawerController,
-                label: 'terminal for ${project.name}',
-              ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Demo').first);
-      await tester.pumpAndSettle();
-
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pump();
-      expect(find.text('terminal for Demo'), findsOneWidget);
-
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.backquote);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pump();
-      expect(find.text('terminal for Demo'), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'GivenARealFocusedTerminal_WhenCtrlBackquotePressed_ThenTheDrawerHides',
-    (tester) async {
-      final repository = _Repository()..records.add(_record());
-      final opener = _WorkspaceTerminalOpener();
-      await tester.pumpWidget(
-        _app(
-          repository: repository,
-          terminalBuilder: (_, _, project, drawerController) =>
-              ProjectTerminalPanel(
-                key: ValueKey<String>('terminal-${project.id}'),
-                drawerController: drawerController,
-                createController: () => ProjectTerminalController(
-                  workingDirectory: project.folderPath,
-                  open: opener.call,
-                  terminal: Terminal(maxLines: 200),
-                ),
-              ),
+          terminalBuilder: probe.build,
         ),
       );
       await tester.pumpAndSettle();
@@ -1323,27 +1285,33 @@ void main() {
       await tester.pumpAndSettle();
 
       await _toggleTerminalShortcut(tester);
+
+      expect(probe.buildCallCount, greaterThan(0));
+      expect(probe.lastAvailableProject, isNull);
+      expect(find.text('Home terminal'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'GivenARealFocusedTerminal_WhenCtrlBackquotePressed_ThenTheDrawerHides',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final probe = _WorkbenchTerminalProbe();
+      await tester.pumpWidget(
+        _app(repository: repository, terminalBuilder: probe.build),
+      );
       await tester.pumpAndSettle();
-      final terminalView = find.byKey(const Key('terminal-view'));
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+      final terminalView = find.byType(TerminalView);
       expect(terminalView, findsOneWidget);
       await tester.tap(terminalView);
       await tester.pump(const Duration(milliseconds: 301));
-      final focusedContext = tester.binding.focusManager.primaryFocus?.context;
-      expect(focusedContext, isNotNull);
-      final terminalElement = terminalView.evaluate().single;
-      var terminalHasFocus = false;
-      (focusedContext! as Element).visitAncestorElements((element) {
-        terminalHasFocus = identical(element, terminalElement);
-        return !terminalHasFocus;
-      });
-      expect(terminalHasFocus, isTrue);
 
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      final terminalKeyHandler = tester
-          .widget<TerminalView>(terminalView)
-          .onKeyEvent;
-      expect(terminalKeyHandler, isNotNull);
-      final result = terminalKeyHandler!(
+      final result = tester.widget<TerminalView>(terminalView).onKeyEvent!(
         tester.binding.focusManager.primaryFocus!,
         const KeyDownEvent(
           physicalKey: PhysicalKeyboardKey.backquote,
@@ -1356,30 +1324,21 @@ void main() {
 
       expect(result, KeyEventResult.handled);
       expect(find.byKey(const Key('terminal-drawer')), findsNothing);
-      expect(opener.callCount, 1);
-      expect(opener.session.closeCallCount, 0);
+      expect(probe.openRequests, hasLength(1));
+      expect(probe.sessions.single.closeCallCount, 0);
     },
   );
 
   testWidgets(
-    'GivenARunningProjectTerminal_WhenDestinationsChange_ThenItsSessionSurvivesAndShortcutStillWorks',
+    'GivenRunningGlobalTerminal_WhenDestinationsChange_ThenSessionStaysVisible',
     (tester) async {
       final repository = _Repository()..records.add(_record());
-      final opener = _WorkspaceTerminalOpener();
+      final probe = _WorkbenchTerminalProbe();
       await tester.pumpWidget(
         _app(
           repository: repository,
           workflowService: _workflowService(),
-          terminalBuilder: (_, _, project, drawerController) =>
-              ProjectTerminalPanel(
-                key: ValueKey<String>('terminal-${project.id}'),
-                drawerController: drawerController,
-                createController: () => ProjectTerminalController(
-                  workingDirectory: project.folderPath,
-                  open: opener.call,
-                  terminal: Terminal(maxLines: 200),
-                ),
-              ),
+          terminalBuilder: probe.build,
         ),
       );
       await tester.pumpAndSettle();
@@ -1390,66 +1349,105 @@ void main() {
 
       await tester.tap(find.text('Automations'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('terminal-drawer')), findsNothing);
-      expect(opener.session.closeCallCount, 0);
-
-      await _toggleTerminalShortcut(tester);
       expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
-      expect(opener.callCount, 1);
-      expect(opener.session.closeCallCount, 0);
+      expect(probe.sessions.single.closeCallCount, 0);
 
-      await tester.tap(find.text('Tasks'));
+      await tester.tap(find.text('Health'));
       await tester.pumpAndSettle();
-      await _toggleTerminalShortcut(tester);
       expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
-      expect(opener.callCount, 1);
-      expect(opener.session.closeCallCount, 0);
+      expect(probe.openRequests, hasLength(1));
+      expect(probe.sessions.single.closeCallCount, 0);
     },
   );
 
   testWidgets(
-    'GivenAProjectTerminal_WhenAnotherProjectIsSelected_ThenShortcutTargetsTheNewProject',
+    'GivenRunningProjectTerminal_WhenProjectChanges_ThenExistingSessionSurvives',
     (tester) async {
       final repository = _Repository()
         ..records.addAll(<ProjectRecord>[
-          _record(),
+          _record(folderPath: r'C:\projects\demo'),
           _record(id: 'two', name: 'Second', folderPath: r'C:\projects\second'),
         ]);
+      final probe = _WorkbenchTerminalProbe();
+      await tester.pumpWidget(
+        _app(repository: repository, terminalBuilder: probe.build),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo').first);
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+      final firstSession = probe.sessions.single;
+
+      await tester.tap(find.text('Second').first);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('new-terminal')));
+      await tester.pumpAndSettle();
+
+      expect(probe.createManagerCallCount, 1);
+      expect(firstSession.closeCallCount, 0);
+      expect(
+        probe.openRequests.map((request) => request.workingDirectory),
+        <String>[r'C:\projects\demo', r'C:\projects\second'],
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenVisibleGlobalTerminal_WhenProjectPaneChanges_ThenSessionStaysVisible',
+    (tester) async {
+      final repository = _Repository()..records.add(_record());
+      final probe = _WorkbenchTerminalProbe();
       await tester.pumpWidget(
         _app(
           repository: repository,
-          terminalBuilder: (_, _, project, drawerController) =>
-              _ToggleTerminalProbe(
-                key: ValueKey<String>('terminal-${project.id}'),
-                drawerController: drawerController,
-                label: 'terminal for ${project.name}',
-              ),
+          terminalBuilder: probe.build,
+          historyBuilder: (_, _, _) => const Text('History content'),
         ),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Demo').first);
       await tester.pumpAndSettle();
       await _toggleTerminalShortcut(tester);
-      expect(find.text('terminal for Demo'), findsOneWidget);
-
-      await tester.tap(find.text('Second').first);
       await tester.pumpAndSettle();
-      await _toggleTerminalShortcut(tester);
 
-      expect(find.text('terminal for Demo'), findsNothing);
-      expect(find.text('terminal for Second'), findsOneWidget);
+      await tester.tap(find.text('Project tools'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History & audit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('History content'), findsOneWidget);
+      expect(find.byKey(const Key('terminal-drawer')), findsOneWidget);
+      expect(probe.openRequests, hasLength(1));
+      expect(probe.sessions.single.closeCallCount, 0);
     },
   );
 
   testWidgets(
-    'GivenASelectedProject_WhenTerminalIsBuilt_ThenItIsBottomDockedOutsideProjectScrolling',
+    'GivenRunningGlobalTerminal_WhenWorkspaceDisposes_ThenSessionCloses',
+    (tester) async {
+      final probe = _WorkbenchTerminalProbe();
+      await tester.pumpWidget(_app(terminalBuilder: probe.build));
+      await tester.pumpAndSettle();
+      await _toggleTerminalShortcut(tester);
+      await tester.pumpAndSettle();
+      final session = probe.sessions.single;
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      expect(session.closeCallCount, 1);
+    },
+  );
+
+  testWidgets(
+    'GivenGlobalTerminal_WhenBuilt_ThenItIsBottomDockedOutsideProjectScrolling',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final repository = _Repository()..records.add(_record());
       await tester.pumpWidget(
         _app(
-          repository: repository,
           terminalBuilder: (_, _, _, _) => const SizedBox(
             key: Key('terminal-dock-probe'),
             width: double.infinity,
@@ -1457,8 +1455,6 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Demo').first);
       await tester.pumpAndSettle();
 
       final mainPane = find.byKey(const Key('workbench-main-pane'));
@@ -1769,7 +1765,7 @@ Widget _app({
   ProjectFolderPicker picker = const _Picker(null),
   WorkflowDesignService? workflowService,
   _LifecycleStore? lifecycleStore,
-  ProjectTerminalWorkspaceBuilder? terminalBuilder,
+  WorkbenchTerminalBuilder? terminalBuilder,
   RunStartWorkspaceBuilder? runStartBuilder,
   RunStartWorkspaceBuilder? runObservationBuilder,
   RunStartWorkspaceBuilder? historyBuilder,
@@ -1820,15 +1816,37 @@ WorkflowDesignService _workflowService([_WorkflowRepository? repository]) =>
       newId: () => 'workflow-id',
     );
 
+final class _GlobalTerminalProbe {
+  ProjectRecord? lastAvailableProject;
+  var buildCallCount = 0;
+
+  Widget build(
+    BuildContext context,
+    String actorId,
+    ProjectRecord? availableProject,
+    ProjectTerminalDrawerController drawerController,
+  ) {
+    buildCallCount++;
+    lastAvailableProject = availableProject;
+    return _ToggleTerminalProbe(
+      key: const ValueKey<String>('global-terminal-probe'),
+      drawerController: drawerController,
+      detailLabel: availableProject == null
+          ? 'Home terminal'
+          : 'Global terminal for ${availableProject.name}',
+    );
+  }
+}
+
 final class _ToggleTerminalProbe extends StatefulWidget {
   const _ToggleTerminalProbe({
     required this.drawerController,
-    required this.label,
+    required this.detailLabel,
     super.key,
   });
 
   final ProjectTerminalDrawerController drawerController;
-  final String label;
+  final String detailLabel;
 
   @override
   State<_ToggleTerminalProbe> createState() => _ToggleTerminalProbeState();
@@ -1888,22 +1906,72 @@ final class _ToggleTerminalProbeState extends State<_ToggleTerminalProbe> {
 
   @override
   Widget build(BuildContext context) => _visible
-      ? SizedBox(height: 80, child: Center(child: Text(widget.label)))
+      ? SizedBox(
+          height: 80,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text('Global terminal'),
+                Text(widget.detailLabel),
+              ],
+            ),
+          ),
+        )
       : const SizedBox.shrink();
 }
 
-final class _WorkspaceTerminalOpener {
-  var callCount = 0;
-  late _WorkspaceTerminalSession session;
+final class _WorkbenchTerminalProbe {
+  var createManagerCallCount = 0;
+  final sessions = <_WorkspaceTerminalSession>[];
+  final openRequests = <({String workingDirectory, int columns, int rows})>[];
 
-  Future<TerminalOpenResult> call({
-    required String workingDirectory,
-    required int columns,
-    required int rows,
-  }) async {
-    callCount++;
-    session = _WorkspaceTerminalSession();
-    return TerminalOpenResult.opened(session);
+  Widget build(
+    BuildContext context,
+    String actorId,
+    ProjectRecord? availableProject,
+    ProjectTerminalDrawerController drawerController,
+  ) {
+    final target = availableProject == null
+        ? TerminalLaunchTarget.home(workingDirectory: r'C:\Users\tester')
+        : TerminalLaunchTarget.project(
+            projectName: availableProject.name,
+            workingDirectory: availableProject.folderPath,
+          );
+    return WorkbenchTerminalDock(
+      key: const ValueKey<String>('workbench-terminal-dock'),
+      createManager: _createManager,
+      launchTarget: target,
+      drawerController: drawerController,
+    );
+  }
+
+  WorkbenchTerminalManager _createManager() {
+    createManagerCallCount++;
+    return WorkbenchTerminalManager(factory: _createController);
+  }
+
+  ProjectTerminalController _createController(TerminalLaunchTarget target) {
+    final session = _WorkspaceTerminalSession();
+    sessions.add(session);
+    return ProjectTerminalController(
+      workingDirectory: target.workingDirectory ?? '',
+      initialFailure: target.failure,
+      terminal: Terminal(maxLines: 200),
+      open:
+          ({
+            required String workingDirectory,
+            required int columns,
+            required int rows,
+          }) async {
+            openRequests.add((
+              workingDirectory: workingDirectory,
+              columns: columns,
+              rows: rows,
+            ));
+            return TerminalOpenResult.opened(session);
+          },
+    );
   }
 }
 
