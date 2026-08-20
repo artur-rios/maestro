@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-/// Connects the project workspace shortcut to a mounted terminal drawer.
+/// Connects workbench terminal actions to the mounted terminal dock.
 ///
-/// It deliberately owns no terminal state, so calls made after the panel is
+/// It deliberately owns no terminal state, so calls made after the dock is
 /// disposed are inert.
 final class ProjectTerminalDrawerController {
   ProjectTerminalDrawerAttachment? _attachment;
@@ -28,7 +28,7 @@ final class ProjectTerminalDrawerController {
   void toggle() => _attachment?._toggle();
 }
 
-/// Identifies one mounted terminal panel's controller callbacks.
+/// Identifies one mounted terminal dock's controller callbacks.
 final class ProjectTerminalDrawerAttachment {
   const ProjectTerminalDrawerAttachment._(this._show, this._hide, this._toggle);
 
