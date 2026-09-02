@@ -41,7 +41,7 @@ dependencies:
   xterm: ^4.0.0
   flutter_pty: ^0.4.2
   flutter_secure_storage: ^10.3.1
-  sodium: ^4.0.4
+  sodium: ^4.1.0+1
   uuid: ^4.6.0
   path_provider: ^2.1.6
   package_info_plus: ^10.2.1
