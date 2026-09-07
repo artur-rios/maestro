@@ -33,6 +33,7 @@ import 'package:maestro/features/foundation/data/drift_diagnostic_log_sink.dart'
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/history/data/drift_history_repository.dart';
+import 'package:maestro/features/history/data/retention_maintenance_scheduler.dart';
 import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
 import 'package:maestro/features/history/presentation/history_panel.dart';
@@ -143,6 +144,7 @@ final class ProductionAppComposition {
     required this.window,
     required this.updateService,
     required this.diagnostics,
+    required this.retentionMaintenance,
     required this._closeDatabase,
   });
 
@@ -174,6 +176,9 @@ final class ProductionAppComposition {
   /// [ReleaseUpdateConfiguration].
   final UpdateService? updateService;
   final DiagnosticLog diagnostics;
+
+  /// Applies the saved retention policy once per signed-in session.
+  final RetentionMaintenanceScheduler retentionMaintenance;
   final DatabaseCloser _closeDatabase;
   Future<void>? _closeFuture;
 
@@ -199,6 +204,9 @@ final class ProductionAppComposition {
   Future<void> close() {
     return _closeFuture ??= Future<void>.microtask(() async {
       appearanceController.dispose();
+      // Stop listening before the service that publishes sessions is torn
+      // down, so no maintenance pass starts against a closing database.
+      retentionMaintenance.stop();
       authenticationService.dispose();
       // The update service owns HTTP transports and the diagnostics log owns a
       // buffer; both outlive any single view, so the composition releases them.
@@ -484,6 +492,16 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
   );
+  // A policy nothing applies is a stored preference. The history panel applies
+  // it when opened; this applies it for every session, including the ones
+  // where nobody opens that view.
+  final retentionMaintenance = RetentionMaintenanceScheduler(
+    service: retentionService,
+    actors: authenticationService.sessionChanges.map(
+      (session) => session?.userId,
+    ),
+    diagnostics: diagnostics,
+  )..start();
   Widget historyBuilder(
     BuildContext context,
     String actorId,
@@ -590,6 +608,7 @@ Future<ProductionAppComposition> composeProductionApp({
     window: window,
     updateService: updateService,
     diagnostics: diagnostics,
+    retentionMaintenance: retentionMaintenance,
     closeDatabase: closeDatabase,
   );
 }

@@ -12,8 +12,13 @@ final RegExp _secretKeyPattern = RegExp(
 );
 
 /// Names that end in a secret-shaped word but never hold one.
+///
+/// Every entry has to be reachable: [_secretKeyPattern] only matches names
+/// ending in one of its own words, so `KEYMAP` and `KEYBOARD` — which end in
+/// neither `KEY` nor anything else it lists — could never have been excluded
+/// by this, and their presence only suggested a breadth it did not have.
 final RegExp _publicKeyPattern = RegExp(
-  r'(?:^|_)(?:PUBLIC_KEY|SSH_AUTH|HOST_KEY|KEYMAP|KEYBOARD)$',
+  r'(?:^|_)(?:PUBLIC_KEY|SSH_AUTH|HOST_KEY)$',
   caseSensitive: false,
 );
 

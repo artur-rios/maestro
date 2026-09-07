@@ -1116,7 +1116,12 @@ final class DriftRunRepository
       _database.workflowRuns,
     )..where((table) => table.id.equals(runId))).getSingleOrNull();
     if (row == null || row.deletedAt != null) return false;
-    return domain.RunStatus.values.byName(row.status).retainsResources;
+    // A status string this build does not know — a row written by a newer
+    // build, or a damaged one — cannot prove the run released anything, so it
+    // is treated as still holding its resources. `byName` would throw here and
+    // take reconciliation down over a single unreadable row.
+    final status = domain.RunStatus.values.asNameMap()[row.status];
+    return status?.retainsResources ?? true;
   }
 
   @override

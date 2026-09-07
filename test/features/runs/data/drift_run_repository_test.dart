@@ -1632,6 +1632,23 @@ void main() {
       expect(await repository.isActive('run-1'), isTrue);
     },
   );
+
+  test('GivenAStatusThisBuildDoesNotKnow_WhenAskingIfARunIsActive_'
+      'ThenItsResourcesAreRetained', () async {
+    // A row written by a newer build, or a damaged one, cannot prove the run
+    // released anything. Deriving the answer by name used to throw here and
+    // take the whole reconciliation sweep down with it.
+    await _createRun(
+      repository,
+      run: _run(status: domain.RunStatus.running),
+      snapshot: _snapshot(),
+    );
+    await database.customStatement(
+      "UPDATE workflow_runs SET status = 'delivering' WHERE id = 'run-1'",
+    );
+
+    expect(await repository.isActive('run-1'), isTrue);
+  });
 }
 
 ProjectRecord _project({

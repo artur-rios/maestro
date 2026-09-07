@@ -84,20 +84,27 @@ final class RetentionMaintenanceResult {
   const RetentionMaintenanceResult({
     required this.compaction,
     required this.prune,
+    this.prunedDiagnosticBatches = 0,
   });
 
   final CompactionResult compaction;
   final PruneResult prune;
 
+  /// Diagnostic batches removed for age, so the one store retention never
+  /// touched stops growing for the life of the installation.
+  final int prunedDiagnosticBatches;
+
   String get summary {
     final compacted = compaction.compactedSegmentIds.length;
     final pruned = prune.prunedRunIds.length;
-    if (compacted == 0 && pruned == 0) {
+    if (compacted == 0 && pruned == 0 && prunedDiagnosticBatches == 0) {
       return 'History is already within its retention settings.';
     }
     final parts = <String>[
       if (compacted > 0) 'compacted $compacted log segment(s)',
       if (pruned > 0) 'removed logs for $pruned older run(s)',
+      if (prunedDiagnosticBatches > 0)
+        'removed $prunedDiagnosticBatches diagnostic batch(es)',
     ];
     return 'Retention applied: ${parts.join(' and ')}.';
   }
@@ -211,7 +218,38 @@ final class RetentionService {
       actorId: actorId,
       policy: effective,
     );
-    return RetentionMaintenanceResult(compaction: compaction, prune: prune);
+    final diagnostics = await pruneDiagnostics(
+      actorId: actorId,
+      policy: effective,
+    );
+    return RetentionMaintenanceResult(
+      compaction: compaction,
+      prune: prune,
+      prunedDiagnosticBatches: diagnostics,
+    );
+  }
+
+  /// Removes diagnostic batches older than the configured retention age.
+  ///
+  /// Diagnostics are appended on every launch and were the one store nothing
+  /// ever deleted, so the table grew for the life of the installation. They
+  /// age out on the same policy as run evidence.
+  ///
+  /// Nothing is kept back for the sake of having something to show: this pass
+  /// runs at session start, just after the startup probes wrote the current
+  /// launch's diagnostics, so what a user opens the panel to read is always
+  /// newer than any cutoff.
+  Future<int> pruneDiagnostics({
+    required String actorId,
+    required RetentionPolicy policy,
+  }) async {
+    if (actorId.trim().isEmpty || policy.validationError != null) return 0;
+    final cutoff = _clock().toUtc().subtract(
+      Duration(days: policy.retentionDays),
+    );
+    return (_database.delete(
+      _database.diagnosticLogSegments,
+    )..where((row) => row.createdAt.isSmallerThanValue(cutoff))).go();
   }
 
   Future<CompactionResult> compactEligible({

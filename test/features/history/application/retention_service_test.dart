@@ -196,7 +196,100 @@ void main() {
       expect(await service.storedLogBytes(), greaterThan(0));
     },
   );
+
+  test('GivenDiagnosticsOlderThanThePolicy_WhenApplyingIt_'
+      'ThenTheyArePrunedAndRecentOnesAreKept', () async {
+    // Diagnostics were appended on every launch and deleted by nothing, so the
+    // one store retention never touched grew for the life of the install.
+    await _insertDiagnostic(database, id: 'aged', createdAt: _aged);
+    await _insertDiagnostic(database, id: 'fresh', createdAt: _fresh);
+    final service = RetentionService(
+      database: database,
+      clock: () => _now,
+      newId: _ids(),
+    );
+
+    final removed = await service.pruneDiagnostics(
+      actorId: 'user-1',
+      policy: const RetentionPolicy(
+        retentionDays: 30,
+        storageLimitBytes: 1048576,
+      ),
+    );
+
+    expect(removed, 1);
+    final remaining = await database
+        .select(database.diagnosticLogSegments)
+        .get();
+    expect(remaining.map((row) => row.id), <String>['fresh']);
+  });
+
+  test('GivenAgedDiagnostics_WhenApplyingThePolicy_'
+      'ThenTheMaintenanceResultReportsWhatItRemoved', () async {
+    await _insertDiagnostic(database, id: 'aged', createdAt: _aged);
+    final service = RetentionService(
+      database: database,
+      clock: () => _now,
+      newId: _ids(),
+    );
+
+    final result = await service.applyPolicy(
+      actorId: 'user-1',
+      policy: const RetentionPolicy(
+        retentionDays: 30,
+        storageLimitBytes: 1048576,
+      ),
+    );
+
+    expect(result.prunedDiagnosticBatches, 1);
+    expect(result.summary, contains('1 diagnostic batch(es)'));
+    expect(
+      await database.select(database.diagnosticLogSegments).get(),
+      isEmpty,
+    );
+  });
+
+  test(
+    'GivenNothingToRemove_WhenApplyingThePolicy_ThenTheSummarySaysSo',
+    () async {
+      final result = await service.applyPolicy(
+        actorId: 'user-1',
+        policy: const RetentionPolicy(
+          retentionDays: 30,
+          storageLimitBytes: 1048576,
+        ),
+      );
+
+      expect(
+        result.summary,
+        'History is already within its retention settings.',
+      );
+    },
+  );
 }
+
+final DateTime _now = DateTime.utc(2026, 8, 11, 12);
+final DateTime _aged = DateTime.utc(2026, 6, 1);
+final DateTime _fresh = DateTime.utc(2026, 8, 10);
+
+/// Seeds one stored diagnostic batch.
+Future<void> _insertDiagnostic(
+  MaestroDatabase database, {
+  required String id,
+  required DateTime createdAt,
+}) => database
+    .into(database.diagnosticLogSegments)
+    .insert(
+      DiagnosticLogSegmentsCompanion.insert(
+        id: id,
+        sequenceStart: 0,
+        sequenceEnd: 0,
+        originalByteLength: 4,
+        compressedByteLength: 4,
+        compressedBytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+        createdAt: Value<DateTime>(createdAt),
+      ),
+    );
 
 Future<String?> _setting(MaestroDatabase database, String key) async =>
     (await (database.select(

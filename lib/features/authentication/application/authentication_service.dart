@@ -340,7 +340,7 @@ final class AuthenticationService {
         if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidCredentials();
       }
-      return _completeLocalSignIn(
+      return await _completeLocalSignIn(
         user,
         generation,
         AuthenticationSource.localPassword,
@@ -382,7 +382,7 @@ final class AuthenticationService {
           _localWindowsFailure(verified.failure),
         );
       }
-      return _completeLocalSignIn(
+      return await _completeLocalSignIn(
         user,
         generation,
         AuthenticationSource.localWindows,
@@ -452,7 +452,7 @@ final class AuthenticationService {
       return switch (verified) {
         FailureResult<void>(:final failure) =>
           FailureResult<AuthenticatedSession>(failure),
-        Success<void>() => _signInVerifiedOperatingSystemUser(generation),
+        Success<void>() => await _signInVerifiedOperatingSystemUser(generation),
       };
     } catch (error) {
       if (!_owns(generation)) return _stale<AuthenticatedSession>();

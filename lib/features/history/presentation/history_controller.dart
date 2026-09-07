@@ -62,13 +62,16 @@ final class HistoryController extends ChangeNotifier {
   }
 
   Future<void> select(String runId) async {
-    _publish(selected: runId, loadingDetail: true);
+    // The previous run's evidence is dropped as the new selection opens, so a
+    // slow read never shows one run's transcript under another's heading.
+    _publish(selected: runId, loadingDetail: true, clearDetail: true);
     try {
       final detail = await _repository.detail(runId);
       _publish(selected: runId, detail: detail);
     } on Object {
       _publish(
         selected: runId,
+        clearDetail: true,
         failure:
             'Run evidence could not be loaded. Existing evidence remains '
             'unchanged.',
@@ -76,33 +79,35 @@ final class HistoryController extends ChangeNotifier {
     }
   }
 
-  void search(String value) {
-    state = HistoryState(
-      entries: state.entries,
-      diagnostics: state.diagnostics,
-      filter: HistoryFilter(query: value, statuses: state.filter.statuses),
-    );
-    notifyListeners();
-  }
+  void search(String value) => _publish(
+    filter: HistoryFilter(query: value, statuses: state.filter.statuses),
+  );
 
   /// Rebuilds the state, carrying forward what this transition does not touch.
+  ///
+  /// The open run's evidence is part of what a refresh or a search does not
+  /// touch: rebuilding without it closed the detail pane every time the list
+  /// reloaded, so reading a transcript meant re-selecting the run. Clearing it
+  /// is therefore explicit, through [clearDetail].
   void _publish({
     List<HistorySummary>? entries,
     List<DiagnosticEntry>? diagnostics,
+    HistoryFilter? filter,
     bool loading = false,
     String? failure,
     String? selected,
     HistoryDetail? detail,
+    bool clearDetail = false,
     bool loadingDetail = false,
   }) {
     state = HistoryState(
       entries: entries ?? state.entries,
       diagnostics: diagnostics ?? state.diagnostics,
-      filter: state.filter,
+      filter: filter ?? state.filter,
       loading: loading,
       failure: failure,
-      selected: selected,
-      detail: detail,
+      selected: selected ?? state.selected,
+      detail: clearDetail ? null : detail ?? state.detail,
       loadingDetail: loadingDetail,
     );
     notifyListeners();

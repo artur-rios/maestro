@@ -34,6 +34,7 @@ final class HttpUpdateDownloader
     RandomAccessFile? output;
     try {
       await updatesDirectory.create(recursive: true);
+      await _discardEarlierStagings(keep: target);
       final request = await _client.getUrl(artifact.url);
       final response = await request.close();
       if (response.statusCode != HttpStatus.ok) {
@@ -78,6 +79,34 @@ final class HttpUpdateDownloader
           cause: error,
         ),
       );
+    }
+  }
+}
+
+/// Removes packages staged by earlier update attempts.
+///
+/// A staged package is needed only between its own download and the installer
+/// that consumes it moments later, but nothing deleted them: every update the
+/// user ever installed left its package — tens of megabytes each — in the
+/// application data root forever. Starting a new download is the one moment
+/// every earlier staging is provably superseded.
+///
+/// Failure is ignored. A leftover that will not delete, because a helper from
+/// the previous update still holds it open, must not fail the update the user
+/// asked for.
+extension on HttpUpdateDownloader {
+  Future<void> _discardEarlierStagings({required File keep}) async {
+    try {
+      await for (final entity in updatesDirectory.list(followLinks: false)) {
+        if (entity is! File || entity.path == keep.path) continue;
+        try {
+          await entity.delete();
+        } on Object {
+          // Keep sweeping: one undeletable leftover is not the others' problem.
+        }
+      }
+    } on Object {
+      // The directory could not be listed; staging the new package continues.
     }
   }
 }

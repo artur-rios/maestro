@@ -706,6 +706,11 @@ final class RunOrchestrator implements RunExecutionControl {
     RunExecutionAggregate aggregate,
     Iterable<RunAttempt> attempts,
   ) async {
+    // A cancellation asked for before delivery began is honored by not
+    // beginning it: opening a pull request, merging it and closing an issue
+    // are the least reversible things a run does, and the user has said stop.
+    // The terminal state belongs to the cancel transaction (FR-RC-04).
+    if (_cancelRequested.contains(aggregate.run.id)) return;
     final delivery = _autonomousDelivery;
     if (delivery == null || !_requiresAutonomousDelivery(aggregate)) {
       // A run already sitting in deliveryPending reaches this only when the
@@ -732,6 +737,7 @@ final class RunOrchestrator implements RunExecutionControl {
       attempts,
     );
     if (attestation case DeliveryAttestationBlocked(:final recovery)) {
+      if (_cancelRequested.contains(aggregate.run.id)) return;
       final nextStatus = recovery == DeliveryAttestationRecovery.fail
           ? RunStatus.failed
           : RunStatus.running;
@@ -782,6 +788,12 @@ final class RunOrchestrator implements RunExecutionControl {
         ),
       );
     }
+    // A cancellation that arrived while GitHub was being called cannot undo
+    // what GitHub already accepted, and the delivery record above keeps that
+    // evidence. What it does decide is the run's terminal state, which the
+    // cancel transaction owns: settling here would race it, and the repository
+    // would reject whichever write arrived second.
+    if (_cancelRequested.contains(aggregate.run.id)) return;
     if (outcome case AutonomousDeliveryBlocked(:final recovery)) {
       final nextStatus = recovery == AutonomousDeliveryRecovery.fail
           ? RunStatus.failed

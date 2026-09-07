@@ -95,11 +95,17 @@ final class DriftAuthenticationRepository
     required String target,
     required DateTime since,
   }) async {
-    final rows =
-        await (_database.select(_database.auditEvents)
+    // Aggregated in SQLite rather than by loading the rows: throttling needs a
+    // count and a latest instant, and reading every failure to compute them
+    // makes the sign-in path cost grow with the size of the audit trail.
+    final table = _database.auditEvents;
+    final count = table.id.count();
+    final latest = table.occurredAt.max();
+    final row =
+        await (_database.selectOnly(table)
+              ..addColumns(<Expression<Object>>[count, latest])
               ..where(
-                (table) =>
-                    table.target.equals(target) &
+                table.target.equals(target) &
                     table.action.equals(
                       AuthenticationAuditAction.signInFailed.name,
                     ) &
@@ -107,14 +113,11 @@ final class DriftAuthenticationRepository
                       AuthenticationAuditOutcome.failure.name,
                     ) &
                     table.occurredAt.isBiggerOrEqualValue(since.toUtc()),
-              )
-              ..orderBy(<OrderingTerm Function(db.AuditEvents)>[
-                (table) => OrderingTerm.desc(table.occurredAt),
-              ]))
-            .get();
+              ))
+            .getSingle();
     return FailedAuthenticationHistory(
-      count: rows.length,
-      lastAt: rows.isEmpty ? null : rows.first.occurredAt.toUtc(),
+      count: row.read(count) ?? 0,
+      lastAt: row.read(latest)?.toUtc(),
     );
   }
 

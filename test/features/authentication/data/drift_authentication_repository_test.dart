@@ -201,6 +201,59 @@ void main() {
     },
   );
 
+  test('GivenFailuresInsideAndOutsideTheWindow_WhenCountingThem_'
+      'ThenOnlyTheRecentOnesCount', () async {
+    // The throttle reads its evidence from the audit trail, and it reads it
+    // with an aggregate: loading every failure to count them made the sign-in
+    // path cost grow with the size of that trail.
+    for (final entry in <(String, DateTime)>[
+      ('audit-old', DateTime.utc(2026, 8, 5, 11)),
+      ('audit-1', DateTime.utc(2026, 8, 5, 14)),
+      ('audit-2', DateTime.utc(2026, 8, 5, 15)),
+    ]) {
+      await repository.append(
+        _audit(
+          id: entry.$1,
+          occurredAt: entry.$2,
+          action: AuthenticationAuditAction.signInFailed,
+          outcome: AuthenticationAuditOutcome.failure,
+          details: '{"principal":"known"}',
+        ),
+      );
+    }
+    // A success inside the window is not a failed attempt.
+    await repository.append(
+      _audit(
+        id: 'audit-3',
+        occurredAt: DateTime.utc(2026, 8, 5, 16),
+        action: AuthenticationAuditAction.signIn,
+        outcome: AuthenticationAuditOutcome.success,
+        details: '{"principal":"known"}',
+      ),
+    );
+
+    final history = await repository.recentFailedAuthentications(
+      target: 'unknown',
+      since: DateTime.utc(2026, 8, 5, 13),
+    );
+
+    expect(history.count, 2);
+    expect(history.lastAt, DateTime.utc(2026, 8, 5, 15));
+  });
+
+  test(
+    'GivenNoRecordedFailures_WhenCountingThem_ThenNothingIsReported',
+    () async {
+      final history = await repository.recentFailedAuthentications(
+        target: 'unknown',
+        since: DateTime.utc(2026, 8, 5, 13),
+      );
+
+      expect(history.count, 0);
+      expect(history.lastAt, isNull);
+    },
+  );
+
   test(
     'GivenTwoAuditEvents_WhenOneIsDeleted_ThenOnlyThatEventIsRemoved',
     () async {

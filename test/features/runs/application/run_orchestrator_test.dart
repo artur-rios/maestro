@@ -20,6 +20,67 @@ import 'package:path/path.dart' as p;
 const int _unlimitedAppendFailures = 1 << 30;
 
 void main() {
+  group('autonomous delivery cancellation', () {
+    const attestations = <_Script>[
+      _Script(context: 'execute evidence'),
+      _Script(
+        context:
+            '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
+      ),
+      _Script(
+        context:
+            '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+      ),
+    ];
+
+    test(
+      'GivenACancelDuringDelivery_WhenItCompletes_ThenTheRunIsNotSettled',
+      () async {
+        // Delivery ignored the cancel flag entirely, so a run the user
+        // cancelled still settled as succeeded — racing the cancel
+        // transaction over the same run (FR-RC-04, AF-01).
+        late final _Fixture fixture;
+        final port = _DeliveringPort(
+          onOpen: () => unawaited(fixture.orchestrator.requestCancel('run-1')),
+        );
+        fixture = _autonomousFixture(port: port);
+        fixture.launcher.results.addAll(attestations);
+
+        await fixture.orchestrator.execute('run-1');
+
+        expect(fixture.repository.autonomousSettlements, isEmpty);
+      },
+    );
+
+    test('GivenACancelledDeliveryPendingRun_WhenItIsReDriven_'
+        'ThenNeitherGitHubNorTheRecordIsTouched', () async {
+      // A stalled delivery is re-driven from its own status, with no workflow
+      // step in between to notice the cancel. Without a gate of its own it
+      // would deliver, and then settle over the cancel transaction (AF-01).
+      late final _Fixture fixture;
+      final port = _DeliveringPort(onOpen: () {});
+      fixture = _Fixture(
+        stepCount: 3,
+        // Attested and ready: nothing but the cancel stands between this run
+        // and a pull request.
+        aggregate: _autonomousAggregate(
+          status: RunStatus.deliveryPending,
+          attempts: _attestedAttempts(),
+        ),
+        autonomousDelivery: AutonomousDelivery(port: port),
+        useScriptContexts: true,
+      );
+      // The cancel lands while the run is loading, before delivery is reached.
+      fixture.repository.onLoad = () =>
+          unawaited(fixture.orchestrator.requestCancel('run-1'));
+
+      await fixture.orchestrator.execute('run-1');
+
+      expect(port.calls, isEmpty);
+      expect(fixture.repository.autonomousSettlements, isEmpty);
+    });
+  });
+
   group('autonomous delivery attestation recovery', () {
     test(
       'GivenRejectedReviewAttestation_WhenDeliveryIsReached_ThenRunReturnsToExecute',
@@ -1763,52 +1824,148 @@ RunExecutionAggregate _aggregate(
   attempts: attempts,
 );
 
-RunExecutionAggregate _autonomousAggregate({String reviewer = 'reviewer'}) =>
-    RunExecutionAggregate(
-      run: WorkflowRun(
-        id: 'run-1',
-        projectId: 'p',
-        workflowId: 'w',
-        label: 'run-1',
-        status: RunStatus.starting,
-        currentStepPosition: 0,
-        branchName: 'feature/uc-11',
-        worktreePath: '/tmp/run-1',
-        createdAt: DateTime.utc(2026),
-        updatedAt: DateTime.utc(2026),
-      ),
-      snapshot: RunSnapshot(
-        schemaVersion: 1,
-        projectId: 'p',
-        projectName: 'project',
-        canonicalSourcePath: '/source',
-        sourceRevision: 'abc',
-        workflowId: 'w',
-        workflowRevision: 1,
-        workflowName: 'flow',
-        workItem: GitHubIssueRunWorkItem(
-          repository: 'acme/maestro',
-          number: 11,
-          title: 'Deliver',
-          url: 'https://github.com/acme/maestro/issues/11',
-        ),
-        deliveryMode: DeliveryMode.autonomous,
-        branchWorkType: BranchWorkType.feature,
-        steps: <RunSnapshotStep>[
-          _step(0, 'execute', 'executor'),
-          _step(1, 'test', 'tester'),
-          _step(2, 'review', reviewer),
-        ],
-      ),
-      attempts: const <RunAttempt>[],
-    );
+/// Attempts carrying the test and review attestations delivery requires.
+List<RunAttempt> _attestedAttempts() => <RunAttempt>[
+  RunAttempt(
+    id: 'a-test',
+    runId: 'run-1',
+    snapshotStepId: 's1',
+    attemptNumber: 1,
+    status: AttemptStatus.succeeded,
+    startedAt: DateTime.utc(2026, 8, 10),
+    completedAt: DateTime.utc(2026, 8, 10),
+    exitCode: 0,
+    declaredContext: DeclaredContext.parse(
+      '{"schema":1,"kind":"test","headCommit":"abc",'
+      '"passedAt":"2026-08-10T12:00:00Z"}',
+    ),
+  ),
+  RunAttempt(
+    id: 'a-review',
+    runId: 'run-1',
+    snapshotStepId: 's2',
+    attemptNumber: 1,
+    status: AttemptStatus.succeeded,
+    startedAt: DateTime.utc(2026, 8, 10),
+    completedAt: DateTime.utc(2026, 8, 10),
+    exitCode: 0,
+    declaredContext: DeclaredContext.parse(
+      '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+    ),
+  ),
+];
 
-_Fixture _autonomousFixture({String reviewModel = 'reviewer'}) => _Fixture(
+RunExecutionAggregate _autonomousAggregate({
+  String reviewer = 'reviewer',
+  RunStatus status = RunStatus.starting,
+  List<RunAttempt> attempts = const <RunAttempt>[],
+}) => RunExecutionAggregate(
+  run: WorkflowRun(
+    id: 'run-1',
+    projectId: 'p',
+    workflowId: 'w',
+    label: 'run-1',
+    status: status,
+    currentStepPosition: 0,
+    branchName: 'feature/uc-11',
+    worktreePath: '/tmp/run-1',
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+  ),
+  snapshot: RunSnapshot(
+    schemaVersion: 1,
+    projectId: 'p',
+    projectName: 'project',
+    canonicalSourcePath: '/source',
+    sourceRevision: 'abc',
+    workflowId: 'w',
+    workflowRevision: 1,
+    workflowName: 'flow',
+    workItem: GitHubIssueRunWorkItem(
+      repository: 'acme/maestro',
+      number: 11,
+      title: 'Deliver',
+      url: 'https://github.com/acme/maestro/issues/11',
+    ),
+    deliveryMode: DeliveryMode.autonomous,
+    branchWorkType: BranchWorkType.feature,
+    steps: <RunSnapshotStep>[
+      _step(0, 'execute', 'executor'),
+      _step(1, 'test', 'tester'),
+      _step(2, 'review', reviewer),
+    ],
+  ),
+  attempts: attempts,
+);
+
+_Fixture _autonomousFixture({
+  String reviewModel = 'reviewer',
+  AutonomousDeliveryPort? port,
+}) => _Fixture(
   stepCount: 3,
   aggregate: _autonomousAggregate(reviewer: reviewModel),
-  autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+  autonomousDelivery: AutonomousDelivery(port: port ?? _DeliveryPort()),
   useScriptContexts: true,
 );
+
+/// A port that delivers successfully, running [onOpen] as it starts.
+///
+/// The hook is where a test stands in for the user pressing cancel while
+/// GitHub is being called.
+final class _DeliveringPort implements AutonomousDeliveryPort {
+  _DeliveringPort({required this.onOpen});
+
+  final void Function() onOpen;
+  final List<String> calls = <String>[];
+
+  @override
+  Future<AutonomousPullRequestResult> openPullRequest(
+    CompletedRunDeliveryRequest request,
+  ) async {
+    calls.add('openPullRequest');
+    onOpen();
+    return AutonomousPullRequestOpened(
+      AutonomousPullRequest(
+        number: 7,
+        url: 'https://github.com/acme/maestro/pull/7',
+        headCommit: request.headCommit,
+      ),
+    );
+  }
+
+  @override
+  Future<AutonomousReviewResult> review(
+    AutonomousPullRequest pullRequest,
+    AutonomousReviewer reviewer,
+  ) async {
+    calls.add('review');
+    return const AutonomousReviewApproved();
+  }
+
+  @override
+  Future<AutonomousOperationResult> approveAndMerge(
+    AutonomousPullRequest pullRequest,
+  ) async {
+    calls.add('approveAndMerge');
+    return const AutonomousOperationSuccess(mergeCommit: 'merge');
+  }
+
+  @override
+  Future<AutonomousOperationResult> closeIssue(
+    CompletedRunDeliveryRequest request,
+  ) async {
+    calls.add('closeIssue');
+    return const AutonomousOperationSuccess();
+  }
+
+  @override
+  Future<AutonomousOperationResult> deleteBranch(
+    CompletedRunDeliveryRequest request,
+  ) async {
+    calls.add('deleteBranch');
+    return const AutonomousOperationSuccess();
+  }
+}
 
 RunSnapshotStep _step(int position, String kind, String model) =>
     RunSnapshotStep(
@@ -1861,8 +2018,16 @@ final class _Repository implements RunExecutionRepository {
   /// recovers.
   int appendFailures = 0;
   int appendAttempts = 0;
+
+  /// Runs as the aggregate is read, so a test can land a control request in
+  /// the window between entering execution and reaching a gate.
+  void Function()? onLoad;
   @override
-  Future<RunExecutionAggregate?> load(String id) async => aggregates[id];
+  Future<RunExecutionAggregate?> load(String id) async {
+    onLoad?.call();
+    return aggregates[id];
+  }
+
   @override
   Future<void> markRunning(String id, DateTime at) async {}
   @override
