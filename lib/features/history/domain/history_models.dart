@@ -40,6 +40,14 @@ final class HistoryDetail {
   final List<HistoryLogSegment> logSegments;
 }
 
+/// One expanded diagnostic line, newest first when listed.
+final class DiagnosticEntry {
+  const DiagnosticEntry({required this.recordedAt, required this.text});
+
+  final DateTime recordedAt;
+  final String text;
+}
+
 final class HistoryLogSegment {
   HistoryLogSegment({
     required this.id,

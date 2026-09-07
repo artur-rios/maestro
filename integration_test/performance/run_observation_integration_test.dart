@@ -61,7 +61,6 @@ void main() {
             runId: 'run-1',
             attemptId: 'attempt-1',
             lastSequence: round,
-            tailBytes: 32,
           ),
         );
         events.add(
@@ -69,7 +68,6 @@ void main() {
             runId: 'run-2',
             attemptId: 'attempt-2',
             lastSequence: round,
-            tailBytes: 32,
           ),
         );
         if (round % 50 == 0) {
@@ -161,7 +159,6 @@ void main() {
               runId: 'run-1',
               attemptId: 'attempt-1',
               lastSequence: round,
-              tailBytes: 32,
             ),
           )
           ..add(
@@ -169,7 +166,6 @@ void main() {
               runId: 'run-2',
               attemptId: 'attempt-2',
               lastSequence: round,
-              tailBytes: 32,
             ),
           );
         if (round == 100) {
@@ -267,6 +263,9 @@ final class _ControlExecution implements RunExecutionControl {
 
   @override
   void requestPause(String runId) => paused.add(runId);
+
+  @override
+  void cancelPause(String runId) => paused.remove(runId);
 
   @override
   Future<CancellationOutcome> requestCancel(String runId) async {

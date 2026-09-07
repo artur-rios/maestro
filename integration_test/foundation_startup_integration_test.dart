@@ -218,6 +218,12 @@ final class _ReadyProbe implements FoundationProbe {
 
 final class _AuthenticationRepository
     implements LocalUserRepository, AuditRepository {
+  @override
+  Future<FailedAuthenticationHistory> recentFailedAuthentications({
+    required String target,
+    required DateTime since,
+  }) async => FailedAuthenticationHistory.none;
+
   LocalUser? operatingSystemUser;
 
   @override

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart' as db;
+import 'package:maestro/core/storage/log_compaction.dart';
 import 'package:maestro/features/foundation/application/reconcile_resources.dart';
 import 'package:maestro/features/projects/application/project_service.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
@@ -544,12 +545,14 @@ final class DriftRunRepository
   }) async {
     return _database.transaction(() async {
       // A pause request means a step really was executing, so the run is as
-      // orphaned by a restart as any other active run. A deliberately paused
-      // run is not swept: BR-14 keeps it continuable.
+      // orphaned by a restart as any other active run. So is a delivery left
+      // in flight: nothing re-drives it after the process that owned it died.
+      // A deliberately paused run is not swept: BR-14 keeps it continuable.
       final activeNames = <String>[
         domain.RunStatus.starting.name,
         domain.RunStatus.running.name,
         domain.RunStatus.pauseRequested.name,
+        domain.RunStatus.deliveryPending.name,
       ];
       final runs = await (_database.select(
         _database.workflowRuns,
@@ -1083,6 +1086,17 @@ final class DriftRunRepository
     domain.RunStatus.pauseRequested.name,
   };
 
+  /// The statuses a user can still act on, derived rather than enumerated.
+  ///
+  /// Listing members by hand is what left `pauseRequested` and
+  /// `deliveryPending` out of the guard that blocks permanent project
+  /// deletion; deriving them means a new status is covered on the day it is
+  /// added.
+  static final List<String> _actionableStatusNames = domain.RunStatus.values
+      .where((status) => status.isActionable)
+      .map((status) => status.name)
+      .toList(growable: false);
+
   Future<void> _insertRecovery(domain.RunRecoveryRequest request) => _database
       .into(_database.runRecoveryRequests)
       .insert(
@@ -1102,13 +1116,7 @@ final class DriftRunRepository
       _database.workflowRuns,
     )..where((table) => table.id.equals(runId))).getSingleOrNull();
     if (row == null || row.deletedAt != null) return false;
-    return <String>{
-      domain.RunStatus.queued.name,
-      domain.RunStatus.starting.name,
-      domain.RunStatus.running.name,
-      domain.RunStatus.paused.name,
-      domain.RunStatus.interrupted.name,
-    }.contains(row.status);
+    return domain.RunStatus.values.byName(row.status).retainsResources;
   }
 
   @override
@@ -1129,12 +1137,7 @@ final class DriftRunRepository
                 (table) =>
                     table.projectId.equals(projectId) &
                     table.deletedAt.isNull() &
-                    table.status.isIn(<String>[
-                      domain.RunStatus.queued.name,
-                      domain.RunStatus.starting.name,
-                      domain.RunStatus.running.name,
-                      domain.RunStatus.paused.name,
-                    ]),
+                    table.status.isIn(_actionableStatusNames),
               )
               ..orderBy(<OrderingTerm Function(db.WorkflowRuns)>[
                 (table) => OrderingTerm.asc(table.createdAt),
@@ -1334,24 +1337,49 @@ final class DriftRunRepository
         completedAt: row.completedAt?.toUtc(),
         exitCode: row.exitCode,
         failureCode: row.failureCode,
-        declaredContext: row.declaredContext == null
-            ? null
-            : domain.DeclaredContext.parse(row.declaredContext!),
+        declaredContext: _declaredContextFromRow(row.declaredContext),
       );
 
-  static domain.RunLogSegment _logFromRow(db.RunLogSegment row) =>
-      domain.RunLogSegment(
-        id: row.id,
-        runId: row.runId,
-        attemptId: row.attemptId,
-        snapshotStepId: row.snapshotStepId,
-        sequence: row.sequence,
-        channel: domain.RunLogChannel.values.byName(row.channel),
-        bytes: row.bytes,
-        compression: row.compression,
-        originalByteLength: row.originalByteLength,
-        createdAt: row.createdAt.toUtc(),
-      );
+  /// Reads persisted declared context, treating an unreadable value as absent.
+  ///
+  /// AF-04 already says a context that cannot be reconstituted counts as
+  /// unavailable, which is how the recovery-availability check reads it.
+  /// Throwing here instead would take down loading, execution and observation
+  /// for the whole run over the same condition.
+  static domain.DeclaredContext? _declaredContextFromRow(String? value) {
+    if (value == null) return null;
+    try {
+      return domain.DeclaredContext.parse(value);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Reads one stored log segment, expanding compaction on the way out.
+  ///
+  /// Retention rewrites older segments as gzip in place, so compression is a
+  /// storage detail that must not cross this boundary: every reader — the
+  /// observation window as much as the history panel — receives the bytes the
+  /// step actually produced.
+  static domain.RunLogSegment _logFromRow(db.RunLogSegment row) {
+    final bytes = expandLogSegment(
+      bytes: row.bytes,
+      compression: row.compression,
+      segmentId: row.id,
+    );
+    return domain.RunLogSegment(
+      id: row.id,
+      runId: row.runId,
+      attemptId: row.attemptId,
+      snapshotStepId: row.snapshotStepId,
+      sequence: row.sequence,
+      channel: domain.RunLogChannel.values.byName(row.channel),
+      bytes: bytes,
+      compression: uncompactedEncoding,
+      originalByteLength: bytes.length,
+      createdAt: row.createdAt.toUtc(),
+    );
+  }
 
   static domain.RunRecoveryRequest _recoveryFromRow(
     db.RunRecoveryRequest row,

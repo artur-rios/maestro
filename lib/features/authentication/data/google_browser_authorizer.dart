@@ -89,12 +89,15 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
       final challenge = _base64Url(sha256.convert(utf8.encode(verifier)).bytes);
       final server = await _bind(operation);
       final redirectUri = server.redirectUri;
+      // Captured before the launch: opening a browser can take a noticeable
+      // slice of the deadline, and the callback wait is what the deadline is
+      // meant to bound.
+      final started = _clock();
       final opened = await _launch(
         operation,
         _authorizationUri(configuration, redirectUri, challenge, state),
       );
       if (!opened) throw const OAuthBrowserCancelled();
-      final started = _clock();
       final remaining = callbackTimeout - _clock().difference(started);
       if (remaining <= Duration.zero) throw const OAuthAuthorizationTimedOut();
       final callback = await _callback(operation, server, remaining);

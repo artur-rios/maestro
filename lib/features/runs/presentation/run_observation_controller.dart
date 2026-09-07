@@ -97,7 +97,9 @@ final class RunObservationController extends ChangeNotifier {
 
   final String projectId;
   final ObserveRuns _observe;
-  // Retaining the event owner makes the subscription lifetime explicit.
+  // Retaining the event owner documents that this controller's subscription
+  // outlives any single callback and is cancelled against that owner.
+  // ignore: unused_field
   final RunSummaryEvents _events;
   final Duration _refreshInterval;
   late final RunSummarySubscription _subscription;
@@ -407,8 +409,6 @@ final class RunObservationController extends ChangeNotifier {
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _subscription.cancel();
-    // Access keeps the retained owner intentional under strict analysis.
-    _events.hashCode;
     super.dispose();
   }
 }

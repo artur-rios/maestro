@@ -32,6 +32,19 @@ enum RunStatus {
     _ => false,
   };
 
+  /// Whether the run is still moving, or waiting on the user to move it.
+  ///
+  /// Derived from [isTerminal] rather than listed, so a status added later is
+  /// treated as active by default instead of silently omitted from the checks
+  /// that guard project deletion and resource reclamation.
+  bool get isActionable => !isTerminal;
+
+  /// Whether the run still owns a branch, a worktree, or result files.
+  ///
+  /// Every nonterminal status qualifies, and so does [interrupted]: a run held
+  /// for a recovery decision has not released anything it created (BR-14).
+  bool get retainsResources => isActionable || this == interrupted;
+
   bool canTransitionTo(RunStatus next) => switch ((this, next)) {
     (queued, starting) || (queued, canceled) => true,
     (starting, running) ||
@@ -64,6 +77,10 @@ enum RunStatus {
     (deliveryPending, running) ||
     (deliveryPending, succeeded) ||
     (deliveryPending, failed) => true,
+    // A delivery that stalls on a retryable GitHub failure must remain
+    // cancellable and must be swept by a restart, or the run is stranded in a
+    // nonterminal status with nothing able to move it (AF-01).
+    (deliveryPending, canceled) || (deliveryPending, interrupted) => true,
     _ => false,
   };
 }

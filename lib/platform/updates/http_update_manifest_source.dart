@@ -4,15 +4,27 @@ import 'dart:typed_data';
 
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/platform/updates/closable_update_transport.dart';
 import 'package:maestro/platform/updates/update_service.dart';
 
 /// Fetches a manifest and detached base64 signature from immutable release URLs.
-final class HttpUpdateManifestSource implements UpdateManifestSource {
+final class HttpUpdateManifestSource
+    implements UpdateManifestSource, ClosableUpdateTransport {
   HttpUpdateManifestSource({
     required this.manifestUri,
     required this.signatureUri,
     HttpClient? client,
   }) : _client = client ?? HttpClient();
+
+  /// The ceiling on an unverified response body.
+  ///
+  /// Both documents are read before any signature has been checked, so a host
+  /// that has been compromised or has simply gone wrong must not be able to
+  /// stream unbounded bytes into memory. A release manifest is kilobytes and a
+  /// detached signature is under a hundred bytes; this is orders of magnitude
+  /// of headroom.
+  static const int maximumDocumentBytes = 256 * 1024;
+
   final Uri manifestUri;
   final Uri signatureUri;
   final HttpClient _client;
@@ -41,6 +53,9 @@ final class HttpUpdateManifestSource implements UpdateManifestSource {
     }
   }
 
+  @override
+  Future<void> close() async => _client.close(force: true);
+
   Future<Uint8List> _bytes(Uri uri) async {
     final response = await (await _client.getUrl(uri)).close();
     if (response.statusCode != HttpStatus.ok) {
@@ -49,10 +64,24 @@ final class HttpUpdateManifestSource implements UpdateManifestSource {
         uri: uri,
       );
     }
-    final chunks = <int>[];
-    await for (final chunk in response) {
-      chunks.addAll(chunk);
+    final declared = response.contentLength;
+    if (declared > maximumDocumentBytes) {
+      throw HttpException(
+        'Manifest declared ${declared}B, above the '
+        '${maximumDocumentBytes}B ceiling.',
+        uri: uri,
+      );
     }
-    return Uint8List.fromList(chunks);
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in response) {
+      if (builder.length + chunk.length > maximumDocumentBytes) {
+        throw HttpException(
+          'Manifest exceeded the ${maximumDocumentBytes}B ceiling.',
+          uri: uri,
+        );
+      }
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
   }
 }

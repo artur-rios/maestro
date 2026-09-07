@@ -660,6 +660,11 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(self->window, "Maestro");
   }
 
+  // Name the icon rather than loading a file: the packages install
+  // `maestro` into the hicolor theme, so the shell, the switcher and the
+  // window all resolve the same artwork at whatever size they need.
+  gtk_window_set_icon_name(self->window, "maestro");
+
   gtk_window_set_default_size(self->window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

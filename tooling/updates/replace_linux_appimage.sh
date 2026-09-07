@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The caller must supply all three: package, install path, and the parent
+# process id to wait on. Failing loudly here is what keeps an installer that
+# forgot one from looking like a working update.
+if [[ $# -ne 3 ]]; then
+  echo "usage: replace_linux_appimage.sh <package_path> <install_path> <parent_pid>" >&2
+  exit 64
+fi
+
 package_path="$1"
 install_path="$2"
 # parent-pid is supplied by the running app so replacement begins only after exit.

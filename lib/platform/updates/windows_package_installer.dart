@@ -14,6 +14,10 @@ final class WindowsPackageInstaller implements PackageInstaller {
     required this.relaunchPath,
   });
 
+  /// Carries the staged package path to the MSIX installer without passing it
+  /// through PowerShell's command-line parser.
+  static const String packagePathVariable = 'MAESTRO_UPDATE_PACKAGE_PATH';
+
   final CommandRunner runner;
   final DetachedProcessLauncher detachedLauncher;
   final String zipReplacementHelper;
@@ -22,15 +26,20 @@ final class WindowsPackageInstaller implements PackageInstaller {
   @override
   Future<Result<void>> install(StagedUpdate update) async {
     return switch (update.artifact.packageType) {
+      // `-Command` folds every remaining token into one command string rather
+      // than binding it to `$args`, so the package path travels in the
+      // environment instead. That also keeps a path containing spaces or
+      // quotes out of PowerShell's parser entirely.
       'msix' => _run(
         CommandRequest(
           executable: 'powershell.exe',
           arguments: <String>[
             '-NoProfile',
+            '-NonInteractive',
             '-Command',
-            'Add-AppxPackage -LiteralPath \$args[0]',
-            update.path,
+            r'Add-AppxPackage -LiteralPath $env:MAESTRO_UPDATE_PACKAGE_PATH',
           ],
+          environment: <String, String>{packagePathVariable: update.path},
           timeout: const Duration(minutes: 5),
         ),
       ),

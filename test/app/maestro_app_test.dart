@@ -833,6 +833,12 @@ ProjectRecord _projectRecord() => ProjectRecord(
 
 final class _AuthenticationRepository
     implements LocalUserRepository, AuditRepository {
+  @override
+  Future<FailedAuthenticationHistory> recentFailedAuthentications({
+    required String target,
+    required DateTime since,
+  }) async => FailedAuthenticationHistory.none;
+
   final List<LocalUser> users = <LocalUser>[];
 
   @override

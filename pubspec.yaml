@@ -31,9 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   flutter_riverpod: 3.4.2
   drift: 2.34.0
   drift_flutter: ^0.3.1
@@ -44,8 +41,6 @@ dependencies:
   sodium: ^4.0.4
   uuid: ^4.6.0
   path_provider: ^2.1.6
-  package_info_plus: ^10.2.1
-  logging: ^1.3.0
   path: ^1.9.1
   crypto: ^3.0.7
   archive: ^4.0.9
@@ -105,7 +100,11 @@ msix_config:
   publisher_display_name: Artur Rios
   identity_name: dev.artur-rios.maestro
   msix_version: 0.1.0.0
-  logo_path: windows/runner/resources/app_icon.ico
+  # A large square PNG, not the .ico: the packager scales one source up to
+  # 2480px, and trimming is disabled so it keeps the tile's rounded corners
+  # instead of cropping to the mark.
+  logo_path: tooling/packaging/icons/maestro-1024.png
+  trim_logo: false
   capabilities: internetClient
 
   # To add assets to your application, add an assets section, like this:

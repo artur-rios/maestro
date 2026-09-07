@@ -198,33 +198,29 @@ void main() {
           ],
         ),
       );
-      final tails = <List<RunOutputChunk>>[];
-      fixture.orchestrator.events.listen(
-        (_) => tails.add(fixture.orchestrator.outputTailFor('run-1')),
-      );
-
       // When: the run executes.
       await fixture.orchestrator.execute('run-1');
 
-      // Then: the tail observed during the run kept each channel distinct.
-      final observed = tails.lastWhere((tail) => tail.isNotEmpty);
-      expect(observed.map((chunk) => chunk.channel), <RunLogChannel>[
-        RunLogChannel.stdout,
-        RunLogChannel.stderr,
-        RunLogChannel.stdout,
-      ]);
-      expect(observed.map((chunk) => chunk.text), <String>[
-        'building\n',
-        'warning\n',
-        'done\n',
-      ]);
+      // Then: the durable record kept each channel distinct (FR-OB-05).
+      expect(
+        fixture.repository.logs.map((segment) => segment.channel),
+        <RunLogChannel>[
+          RunLogChannel.stdout,
+          RunLogChannel.stderr,
+          RunLogChannel.stdout,
+        ],
+      );
+      expect(
+        fixture.repository.logs.map((segment) => utf8.decode(segment.bytes)),
+        <String>['building\n', 'warning\n', 'done\n'],
+      );
     },
   );
 
   test(
-    'GivenTailOverflow_WhenReadingOutputTail_ThenOldestChunksAreDropped',
+    'GivenHighVolumeOutput_WhenExecuting_ThenEveryByteIsPersisted',
     () async {
-      // Given: a step producing more output than the live tail may retain.
+      // Given: a step producing far more output than one batch may hold.
       final fixture = _Fixture(stepCount: 1);
       fixture.launcher.results.add(
         _Script(
@@ -237,24 +233,11 @@ void main() {
           ],
         ),
       );
-      final sizes = <int>[];
-      fixture.orchestrator.events.listen(
-        (_) => sizes.add(
-          fixture.orchestrator
-              .outputTailFor('run-1')
-              .fold<int>(0, (total, chunk) => total + chunk.byteLength),
-        ),
-      );
 
       // When: the run executes.
       await fixture.orchestrator.execute('run-1');
 
-      // Then: the tail stayed bounded while every byte reached storage.
-      expect(sizes, isNotEmpty);
-      expect(
-        sizes.reduce((a, b) => a > b ? a : b),
-        lessThanOrEqualTo(64 * 1024),
-      );
+      // Then: nothing was dropped on the way to storage.
       expect(
         fixture.repository.logs.fold<int>(
           0,
@@ -264,28 +247,6 @@ void main() {
       );
     },
   );
-
-  test('GivenCompletedRun_WhenExecutionFinishes_ThenTailIsReleased', () async {
-    // Given: a run that streams output and then completes.
-    final fixture = _Fixture(stepCount: 1);
-    fixture.launcher.results.add(
-      _Script(
-        frames: <StepOutputFrame>[
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(utf8.encode('output\n')),
-          ),
-        ],
-      ),
-    );
-
-    // When: execution finishes.
-    await fixture.orchestrator.execute('run-1');
-
-    // Then: no live tail memory is retained for a finished run.
-    expect(fixture.orchestrator.outputTailFor('run-1'), isEmpty);
-    expect(fixture.orchestrator.retainedTailRunCount, 0);
-  });
 
   test(
     'GivenRunMarkedRunning_WhenExecuting_ThenAnAnnouncementSummaryIsPublished',
@@ -484,12 +445,6 @@ void main() {
       );
       expect(output, contains('[REDACTED]'));
       expect(output, isNot(contains('split-secret')));
-      expect(
-        fixture.orchestrator
-            .outputTailFor('run-1')
-            .fold<int>(0, (total, chunk) => total + chunk.byteLength),
-        lessThanOrEqualTo(64 * 1024),
-      );
     },
   );
 
@@ -995,7 +950,6 @@ void main() {
     );
     expect(fixture.repository.logs.length, lessThan(10));
     expect(summaries, lessThan(10));
-    expect(fixture.orchestrator.retainedTailRunCount, 0);
   });
 
   test(
@@ -1053,7 +1007,6 @@ void main() {
           runId: 'run-1',
           attemptId: 'attempt-1',
           lastSequence: sequence,
-          tailBytes: sequence,
         ),
       );
     }
@@ -1486,43 +1439,39 @@ void main() {
     );
   });
 
-  test(
-    'settles a surviving child before quarantining its result',
-    () async {
-      final real = await _RealFixture.create(
-        mode: 'survivingChildSwap',
-        stepCount: 1,
-      );
-      addTearDown(real.dispose);
-      final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
+  test('settles a surviving child before quarantining its result', () async {
+    final real = await _RealFixture.create(
+      mode: 'survivingChildSwap',
+      stepCount: 1,
+    );
+    addTearDown(real.dispose);
+    final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
 
-      await real.orchestrator.execute('run-1');
-      final childPid = int.parse(
-        (await File('$resultPath.child.pid').readAsString()).trim(),
-      );
+    await real.orchestrator.execute('run-1');
+    final childPid = int.parse(
+      (await File('$resultPath.child.pid').readAsString()).trim(),
+    );
 
-      // Settlement is asserted by the child being gone, not by outrunning it.
-      // The child would only swap the result long after this poll expires, so a
-      // surviving child fails here rather than by winning a race. Report the
-      // recorded outcome first: a settlement that reported termination failure
-      // fails the attempt, and naming that code distinguishes an unsettled tree
-      // from a swap that landed.
-      expect(
-        real.repository.failed,
-        isEmpty,
-        reason: '${real.repository.failed}',
-      );
-      expect(real.repository.completed, <String>['attempt-1']);
-      expect(
-        await _waitUntilProcessExits(childPid),
-        isTrue,
-        reason: 'child $childPid survived settlement',
-      );
-      expect(await File('$resultPath.swap-marker').exists(), isFalse);
-      expect(await File(resultPath).exists(), isFalse);
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    // Settlement is asserted by the child being gone, not by outrunning it.
+    // The child would only swap the result long after this poll expires, so a
+    // surviving child fails here rather than by winning a race. Report the
+    // recorded outcome first: a settlement that reported termination failure
+    // fails the attempt, and naming that code distinguishes an unsettled tree
+    // from a swap that landed.
+    expect(
+      real.repository.failed,
+      isEmpty,
+      reason: '${real.repository.failed}',
+    );
+    expect(real.repository.completed, <String>['attempt-1']);
+    expect(
+      await _waitUntilProcessExits(childPid),
+      isTrue,
+      reason: 'child $childPid survived settlement',
+    );
+    expect(await File('$resultPath.swap-marker').exists(), isFalse);
+    expect(await File(resultPath).exists(), isFalse);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test(
     'two real owned processes overlap instead of serializing globally',
@@ -1540,6 +1489,53 @@ void main() {
       expect(real.repository.failed, isEmpty);
     },
   );
+
+  test('GivenCancelWithNoLiveProcess_WhenTheRunIsExecutedLater_'
+      'ThenTheStaleRequestDoesNotVoidIt', () async {
+    // Given: a cancellation arrives while nothing is executing — the run was
+    // queued or paused — so no execution ever clears the request.
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('output\n')),
+          ),
+        ],
+      ),
+    );
+    expect(
+      await fixture.orchestrator.requestCancel('run-1'),
+      CancellationOutcome.cancelled,
+    );
+
+    // When: the run is retried and executes to completion.
+    await fixture.orchestrator.execute('run-1');
+
+    // Then: the step's success is recorded, not silently discarded.
+    expect(fixture.repository.completed, isNotEmpty);
+    expect(fixture.repository.failed, isEmpty);
+  });
+
+  test('GivenAPauseWithdrawnBeforeTheStepEnds_WhenExecuting_'
+      'ThenTheRunIsNotPaused', () async {
+    // Given: a pause request whose durable transition did not land, so the
+    // control withdrew it.
+    final fixture = _Fixture(stepCount: 2);
+    fixture.launcher.results
+      ..add(_Script())
+      ..add(_Script());
+    fixture.orchestrator.requestPause('run-1');
+    fixture.orchestrator.cancelPause('run-1');
+
+    // When: the run executes.
+    await fixture.orchestrator.execute('run-1');
+
+    // Then: both steps ran and nothing was paused.
+    expect(fixture.repository.paused, isEmpty);
+    expect(fixture.repository.completed, hasLength(2));
+  });
 }
 
 final class _RealFixture {

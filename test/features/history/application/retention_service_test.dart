@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -114,6 +113,89 @@ void main() {
       expect(utf8.decode(segment.bytes), 'durable evidence');
     },
   );
+
+  test(
+    'GivenASavedPolicy_WhenLoadingIt_ThenTheStoredValuesAreReturned',
+    () async {
+      // The settings form reads this on open; seeding it with constants hid a
+      // saved policy and let a careless re-save revert it.
+      await service.savePolicy(
+        actorId: 'user-1',
+        policy: const RetentionPolicy(
+          retentionDays: 45,
+          storageLimitBytes: 2048,
+        ),
+      );
+
+      final loaded = await service.loadPolicy();
+
+      expect(loaded.retentionDays, 45);
+      expect(loaded.storageLimitBytes, 2048);
+    },
+  );
+
+  test('GivenNoSavedPolicy_WhenLoadingIt_ThenTheDefaultsAreReturned', () async {
+    final loaded = await service.loadPolicy();
+
+    expect(loaded.retentionDays, RetentionPolicy.defaults.retentionDays);
+    expect(
+      loaded.storageLimitBytes,
+      RetentionPolicy.defaults.storageLimitBytes,
+    );
+  });
+
+  test('GivenStoredOutputAboveTheLimit_WhenEnforcingIt_'
+      'ThenFinishedRunsArePrunedOldestFirst', () async {
+    // The storage limit was validated and stored but read by nothing, so
+    // history could grow without bound whatever the user configured.
+    await _seedRunWithOutput(database, runId: 'old', status: 'succeeded');
+    await _seedRunWithOutput(database, runId: 'new', status: 'succeeded');
+    final service = RetentionService(
+      database: database,
+      clock: () => DateTime.utc(2026, 8, 6),
+      newId: _ids(),
+    );
+    final before = await service.storedLogBytes();
+    expect(before, greaterThan(0));
+
+    final result = await service.enforceStorageLimit(
+      actorId: 'user-1',
+      policy: RetentionPolicy(
+        retentionDays: 30,
+        storageLimitBytes: 1024 > before ~/ 2 ? 1024 : before ~/ 2,
+      ),
+    );
+
+    expect(result.prunedRunIds, <String>['old']);
+    expect(result.withinLimit, isTrue);
+    expect(await service.storedLogBytes(), lessThan(before));
+  });
+
+  test(
+    'GivenAnActiveRunHoldingOutput_WhenEnforcingTheLimit_ThenItIsNotPruned',
+    () async {
+      // Deleting a running run's transcript would destroy the evidence it is
+      // still producing.
+      await _seedRunWithOutput(database, runId: 'live', status: 'running');
+      final service = RetentionService(
+        database: database,
+        clock: () => DateTime.utc(2026, 8, 6),
+        newId: _ids(),
+      );
+
+      final result = await service.enforceStorageLimit(
+        actorId: 'user-1',
+        policy: const RetentionPolicy(
+          retentionDays: 30,
+          storageLimitBytes: 1024,
+        ),
+      );
+
+      expect(result.prunedRunIds, isEmpty);
+      expect(result.withinLimit, isFalse);
+      expect(await service.storedLogBytes(), greaterThan(0));
+    },
+  );
 }
 
 Future<String?> _setting(MaestroDatabase database, String key) async =>
@@ -139,6 +221,54 @@ Future<void> _insertSegment(
           bytes: Uint8List.fromList(utf8.encode('durable evidence')),
           originalByteLength: 16,
           createdAt: createdAt,
+        ),
+      );
+  await database.customStatement('PRAGMA foreign_keys = ON');
+}
+
+/// Distinct identifiers, so audit rows written in one pass never collide.
+String Function() _ids() {
+  var next = 0;
+  return () => 'audit-${next++}';
+}
+
+/// Seeds one run that holds durable output, in the given lifecycle status.
+Future<void> _seedRunWithOutput(
+  MaestroDatabase database, {
+  required String runId,
+  required String status,
+}) async {
+  await database.customStatement('PRAGMA foreign_keys = OFF');
+  await database
+      .into(database.workflowRuns)
+      .insert(
+        WorkflowRunsCompanion.insert(
+          id: runId,
+          label: runId,
+          status: status,
+          currentStepPosition: 0,
+          createdAt: DateTime.utc(2026, 8, 1),
+          updatedAt: DateTime.utc(2026, 8, 1),
+          completedAt: Value<DateTime?>(
+            runId == 'old'
+                ? DateTime.utc(2026, 8, 1)
+                : DateTime.utc(2026, 8, 5),
+          ),
+        ),
+      );
+  await database
+      .into(database.runLogSegments)
+      .insert(
+        RunLogSegmentsCompanion.insert(
+          id: 'segment-$runId',
+          runId: runId,
+          attemptId: 'attempt-$runId',
+          snapshotStepId: 'step-$runId',
+          sequence: 0,
+          channel: 'stdout',
+          bytes: Uint8List.fromList(List<int>.filled(4096, 0x61)),
+          originalByteLength: 4096,
+          createdAt: DateTime.utc(2026, 8, 1),
         ),
       );
   await database.customStatement('PRAGMA foreign_keys = ON');

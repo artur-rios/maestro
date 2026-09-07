@@ -175,7 +175,11 @@ final class ProcessCommandRunner implements CommandRunner {
             stdoutDone,
             stderrDone,
           ]).timeout(const Duration(milliseconds: 500));
-        } on TimeoutException {
+        } on Object {
+          // A stream that stalled and a stream that failed mean the same thing
+          // here: the capture is incomplete. The process itself started and
+          // reported an exit code, so reporting a start failure — which is
+          // where an escaping error would land — would misstate what happened.
           streamsCompleted = false;
           await activeProcess.terminateTree();
         }
@@ -188,10 +192,15 @@ final class ProcessCommandRunner implements CommandRunner {
         );
       } on TimeoutException {
         await activeProcess.terminateTree();
-        await Future.wait(<Future<void>>[
-          stdoutDone,
-          stderrDone,
-        ]).timeout(const Duration(seconds: 2), onTimeout: () => const <void>[]);
+        try {
+          await Future.wait(<Future<void>>[stdoutDone, stderrDone]).timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => const <void>[],
+          );
+        } on Object {
+          // The timeout is already the outcome; a stream error while draining
+          // must not replace it with a start failure.
+        }
         return CommandResult(
           exitCode: null,
           stdout: stdout.text,

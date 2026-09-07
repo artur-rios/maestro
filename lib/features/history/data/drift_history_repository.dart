@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart' as db;
+import 'package:maestro/core/storage/log_compaction.dart';
 import 'package:maestro/features/history/domain/history_models.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 
@@ -34,6 +38,40 @@ final class DriftHistoryRepository {
         ),
       ),
     );
+  }
+
+  /// The most recent diagnostic lines, newest batch first.
+  ///
+  /// This is what "review the diagnostics log" in Maestro's remediation text
+  /// refers to; without a reader that advice named nothing a user could open.
+  Future<List<DiagnosticEntry>> recentDiagnostics({int limit = 200}) async {
+    final rows =
+        await (_database.select(_database.diagnosticLogSegments)
+              ..orderBy(<OrderingTerm Function(db.DiagnosticLogSegments)>[
+                (row) => OrderingTerm.desc(row.createdAt),
+                (row) => OrderingTerm.desc(row.sequenceStart),
+              ])
+              ..limit(limit))
+            .get();
+    final entries = <DiagnosticEntry>[];
+    for (final row in rows) {
+      final text = _expandDiagnostic(row.compressedBytes);
+      for (final line in const LineSplitter().convert(text)) {
+        if (line.trim().isEmpty) continue;
+        entries.add(
+          DiagnosticEntry(recordedAt: row.createdAt.toUtc(), text: line),
+        );
+      }
+    }
+    return List<DiagnosticEntry>.unmodifiable(entries);
+  }
+
+  static String _expandDiagnostic(List<int> bytes) {
+    try {
+      return utf8.decode(gzip.decode(bytes), allowMalformed: true);
+    } on Object {
+      return '[a diagnostic batch could not be expanded]';
+    }
   }
 
   Future<HistoryDetail?> detail(String runId) async {
@@ -88,14 +126,20 @@ final class DriftHistoryRepository {
           details: row.details,
         ),
       ),
+      // Compaction is a storage detail. Expanding here keeps the history view
+      // from having to know that older evidence is stored as gzip.
       logSegments: logs.map(
         (row) => HistoryLogSegment(
           id: row.id,
           attemptId: row.attemptId,
           sequence: row.sequence,
           channel: row.channel,
-          bytes: row.bytes,
-          compression: row.compression,
+          bytes: expandLogSegment(
+            bytes: row.bytes,
+            compression: row.compression,
+            segmentId: row.id,
+          ),
+          compression: uncompactedEncoding,
         ),
       ),
     );

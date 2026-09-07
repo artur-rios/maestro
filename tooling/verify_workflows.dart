@@ -77,6 +77,7 @@ Future<void> main() async {
 void _verifyReleaseWorkflow(YamlMap document, String workflowPath) {
   final jobs = document['jobs'] as YamlMap;
   final validation = _job(jobs, 'validate-release', workflowPath);
+  final verify = _job(jobs, 'verify', workflowPath);
   final windowsPackage = _job(jobs, 'windows-package', workflowPath);
   final linuxPackage = _job(jobs, 'linux-package', workflowPath);
   final release = _job(jobs, 'release', workflowPath);
@@ -148,18 +149,33 @@ void _verifyReleaseWorkflow(YamlMap document, String workflowPath) {
     );
   }
 
+  // The release must run the same gate CI runs. Without this, a tag publishes
+  // a commit that nothing analyzed or tested.
+  if (verify['uses'] != './.github/workflows/verify.yml') {
+    throw FormatException(
+      '$workflowPath verify must call the shared analyze-and-test workflow.',
+    );
+  }
   _requireNeeds(
     windowsPackage,
-    const <String>{'validate-release'},
+    const <String>{'validate-release', 'verify'},
     'windows-package',
     workflowPath,
   );
   _requireNeeds(
     linuxPackage,
-    const <String>{'validate-release'},
+    const <String>{'validate-release', 'verify'},
     'linux-package',
     workflowPath,
   );
+  // A packaged build without these carries no runtime updater at all, which is
+  // exactly the silent regression this check exists to prevent.
+  _requireReleaseUpdateEnvironment(
+    windowsPackage,
+    'windows-package',
+    workflowPath,
+  );
+  _requireReleaseUpdateEnvironment(linuxPackage, 'linux-package', workflowPath);
   _requireNeeds(
     release,
     const <String>{'validate-release', 'windows-package', 'linux-package'},
@@ -285,6 +301,28 @@ bool _hasFailClosedSigning(String command, String semanticVersion) {
       failureIndex > incompleteIndex &&
       endIndex > failureIndex &&
       verifyIndex > endIndex;
+}
+
+/// Requires a packaging job to forward the defines that enable the updater.
+void _requireReleaseUpdateEnvironment(
+  YamlMap job,
+  String jobName,
+  String workflowPath,
+) {
+  const expected = <String, String>{
+    'MAESTRO_RELEASE_PUBLIC_KEY_BASE64':
+        r'${{ secrets.MAESTRO_RELEASE_PUBLIC_KEY_BASE64 }}',
+    'MAESTRO_RELEASE_MANIFEST_URL': r'${{ vars.MAESTRO_RELEASE_MANIFEST_URL }}',
+    'MAESTRO_RELEASE_SIGNATURE_URL':
+        r'${{ vars.MAESTRO_RELEASE_SIGNATURE_URL }}',
+  };
+  final environment = job['env'];
+  if (environment is! YamlMap ||
+      expected.entries.any((entry) => environment[entry.key] != entry.value)) {
+    throw FormatException(
+      '$workflowPath $jobName must forward the release update configuration.',
+    );
+  }
 }
 
 YamlMap _job(YamlMap jobs, String name, String workflowPath) {

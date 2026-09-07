@@ -20,25 +20,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The same gate the release pipeline calls, so a tag can never publish a
+  # commit that these checks have not passed.
   analyze-test:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.44.8'
-          channel: stable
-          cache: true
-      - name: Install Linux test prerequisites
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libsecret-1-dev
-      - run: flutter pub get
-      - run: dart run build_runner build --delete-conflicting-outputs
-      - run: git diff --exit-code
-      - run: dart format --output=none --set-exit-if-changed lib test integration_test test_support tooling
-      - run: dart run tooling/verify_architecture.dart
-      - run: dart run tooling/verify_workflows.dart
-      - run: flutter analyze
-      - run: flutter test --coverage
+    uses: ./.github/workflows/verify.yml
 
   windows-platform:
     runs-on: windows-2025
@@ -54,6 +39,8 @@ jobs:
       - run: flutter test integration_test/platform/detached_process_launcher_integration_test.dart -d windows --dart-define=MAESTRO_TEST_DART="$env:FLUTTER_ROOT\bin\cache\dart-sdk\bin\dart.exe"
       - run: flutter test integration_test/foundation_startup_integration_test.dart -d windows
       - run: flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows
+      - run: flutter test integration_test/performance/run_observation_integration_test.dart -d windows
+      - run: flutter test integration_test/terminal/embedded_terminal_integration_test.dart -d windows
       - run: flutter test integration_test/projects/git_project_validation_integration_test.dart -d windows
       - run: flutter test integration_test/projects/project_lifecycle_non_ownership_integration_test.dart -d windows
       - run: flutter test integration_test/workflows/workflow_design_persistence_integration_test.dart -d windows
@@ -149,6 +136,8 @@ jobs:
             xvfb-run -a flutter test integration_test/foundation_startup_integration_test.dart -d linux
           '
       - run: xvfb-run -a flutter test integration_test/performance/concurrent_streams_integration_test.dart -d linux
+      - run: xvfb-run -a flutter test integration_test/performance/run_observation_integration_test.dart -d linux
+      - run: xvfb-run -a flutter test integration_test/terminal/embedded_terminal_integration_test.dart -d linux
       - run: xvfb-run -a flutter test integration_test/projects/git_project_validation_integration_test.dart -d linux
       - run: xvfb-run -a flutter test integration_test/projects/project_lifecycle_non_ownership_integration_test.dart -d linux
       - run: xvfb-run -a flutter test integration_test/workflows/workflow_design_persistence_integration_test.dart -d linux

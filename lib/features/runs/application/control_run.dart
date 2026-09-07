@@ -98,6 +98,9 @@ abstract interface class RunWorktreeProbe {
 /// The live side of a run: the loop, its pause flag, and its process tree.
 abstract interface class RunExecutionControl {
   void requestPause(String runId);
+
+  /// Withdraws a pause request whose durable transition did not land.
+  void cancelPause(String runId);
   Future<CancellationOutcome> requestCancel(String runId);
   Future<void>? activeExecution(String runId);
   Future<void> execute(
@@ -166,8 +169,22 @@ final class ControlRun {
     final view = await _repository.controlViewOf(runId);
     final rejection = _reject(view, RunControlAction.pause);
     if (rejection != null) return rejection;
-    await _repository.requestPauseRun(runId, _now());
+    // The flag is raised before the record is written. The other order leaves a
+    // window in which the record already says pauseRequested while the loop
+    // still believes it may advance: it would then open an attempt the
+    // repository refuses, wedging the run in pauseRequested with no attempt to
+    // show for it (FR-RC-02).
     _execution.requestPause(runId);
+    try {
+      await _repository.requestPauseRun(runId, _now());
+    } on Object {
+      _execution.cancelPause(runId);
+      return const RunControlFailure(
+        code: 'run.control.pause_failed',
+        message: 'This run changed before the pause could be recorded.',
+        remediation: 'Refresh the run and review its current status.',
+      );
+    }
     return null;
   }
 
@@ -175,7 +192,15 @@ final class ControlRun {
     final view = await _repository.controlViewOf(runId);
     final rejection = _reject(view, RunControlAction.resume);
     if (rejection != null) return rejection;
-    final worktreePath = view!.worktreePath;
+    // A stalled delivery resumes from its own durable progress rather than from
+    // a workflow step, so it neither needs the worktree nor may leave
+    // deliveryPending: that status is what tells the loop to re-enter delivery
+    // instead of re-running the workflow.
+    if (view!.status == RunStatus.deliveryPending) {
+      _drive(runId, RecoveryContextPolicy.preserved);
+      return null;
+    }
+    final worktreePath = view.worktreePath;
     // Resume re-drives execution from the persisted position, including in a
     // later session, so the worktree the run left behind may be gone.
     if (worktreePath == null || !await _worktrees.exists(worktreePath)) {

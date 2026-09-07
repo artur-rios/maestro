@@ -135,7 +135,6 @@ void main() {
         runId: 'run-1',
         attemptId: 'attempt-1',
         lastSequence: 1,
-        tailBytes: 7,
       ),
     );
     await Future<void>.delayed(_settle);
@@ -211,7 +210,6 @@ void main() {
           runId: 'run-1',
           attemptId: 'attempt-1',
           lastSequence: index + 1,
-          tailBytes: 5,
         ),
       );
     }
@@ -265,7 +263,6 @@ void main() {
           runId: 'run-1',
           attemptId: 'attempt-1',
           lastSequence: 0,
-          tailBytes: 0,
           durability: OutputDurability.degraded,
         ),
       );
@@ -379,7 +376,6 @@ void main() {
           runId: 'run-1',
           attemptId: 'attempt-1',
           lastSequence: 1,
-          tailBytes: 6,
         ),
       );
       await Future<void>.delayed(_settle);

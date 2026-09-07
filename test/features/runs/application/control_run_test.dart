@@ -393,6 +393,75 @@ void main() {
     // Then: the caller gets a typed rejection rather than an exception.
     expect(failure?.code, 'run.control.not_found');
   });
+
+  test(
+    'GivenRunningRun_WhenPausing_ThenTheFlagIsRaisedBeforeTheRecordIsWritten',
+    () async {
+      // The other order leaves a window in which the record says
+      // pauseRequested while the loop still believes it may advance, which
+      // wedges the run with no attempt to show for it.
+      final fixture = _Fixture(status: RunStatus.running);
+      final order = <String>[];
+      fixture.execution.onPauseRequested = () => order.add('flag');
+      fixture.repository.onPausePersisted = () => order.add('record');
+
+      await fixture.control.pause('run-1');
+
+      expect(order, <String>['flag', 'record']);
+    },
+  );
+
+  test(
+    'GivenTheDurablePauseFails_WhenPausing_ThenTheRequestIsWithdrawn',
+    () async {
+      final fixture = _Fixture(status: RunStatus.running);
+      fixture.repository.pauseError = true;
+
+      final failure = await fixture.control.pause('run-1');
+
+      expect(failure?.code, 'run.control.pause_failed');
+      expect(fixture.execution.paused, isEmpty);
+    },
+  );
+
+  test(
+    'GivenDeliveryPendingRun_WhenResuming_ThenDeliveryIsRedrivenInPlace',
+    () async {
+      // A stalled delivery resumes from its own durable progress. Moving it out
+      // of deliveryPending would make the loop re-run workflow steps instead.
+      final fixture = _Fixture(status: RunStatus.deliveryPending);
+
+      final failure = await fixture.control.resume('run-1');
+
+      expect(failure, isNull);
+      expect(fixture.repository.resumed, isEmpty);
+      expect(fixture.execution.executed, <(String, RecoveryContextPolicy)>[
+        ('run-1', RecoveryContextPolicy.preserved),
+      ]);
+    },
+  );
+
+  test(
+    'GivenDeliveryPendingRunWithoutAWorktree_WhenResuming_ThenItStillResumes',
+    () async {
+      // Delivery talks to GitHub, not to the worktree, so a reclaimed worktree
+      // must not strand a run mid-delivery.
+      final fixture = _Fixture(status: RunStatus.deliveryPending);
+      fixture.probe.present = false;
+
+      expect(await fixture.control.resume('run-1'), isNull);
+      expect(fixture.execution.executed, hasLength(1));
+    },
+  );
+
+  test('GivenDeliveryPendingRun_WhenCancelling_ThenItIsCancelled', () async {
+    final fixture = _Fixture(status: RunStatus.deliveryPending);
+
+    final result = await fixture.control.cancel('run-1');
+
+    expect(result.outcome, CancellationOutcome.cancelled);
+    expect(fixture.repository.canceled, <String>['run-1']);
+  });
 }
 
 final DateTime _updatedAt = DateTime.utc(2026, 8, 7, 12);
@@ -431,6 +500,8 @@ final class _Repository implements RunControlRepository {
   RunControlView? view;
   RunRecoveryEvidence? evidence;
   bool recoveryError = false;
+  bool pauseError = false;
+  void Function()? onPausePersisted;
   final List<String> pauseRequested = <String>[];
   final List<String> resumed = <String>[];
   final List<String> canceled = <String>[];
@@ -443,8 +514,11 @@ final class _Repository implements RunControlRepository {
   Future<RunControlView?> controlViewOf(String runId) async => view;
 
   @override
-  Future<void> requestPauseRun(String runId, DateTime at) async =>
-      pauseRequested.add(runId);
+  Future<void> requestPauseRun(String runId, DateTime at) async {
+    if (pauseError) throw StateError('Run state changed concurrently.');
+    pauseRequested.add(runId);
+    onPausePersisted?.call();
+  }
 
   @override
   Future<void> resumeRun(String runId, DateTime at) async => resumed.add(runId);
@@ -482,6 +556,7 @@ final class _Repository implements RunControlRepository {
 
 final class _Execution implements RunExecutionControl {
   final List<String> paused = <String>[];
+  void Function()? onPauseRequested;
   final List<String> cancelled = <String>[];
   final List<(String, RecoveryContextPolicy)> executed =
       <(String, RecoveryContextPolicy)>[];
@@ -489,7 +564,13 @@ final class _Execution implements RunExecutionControl {
   Future<void>? active;
 
   @override
-  void requestPause(String runId) => paused.add(runId);
+  void requestPause(String runId) {
+    paused.add(runId);
+    onPauseRequested?.call();
+  }
+
+  @override
+  void cancelPause(String runId) => paused.remove(runId);
 
   @override
   Future<CancellationOutcome> requestCancel(String runId) async {

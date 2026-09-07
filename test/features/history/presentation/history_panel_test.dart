@@ -6,6 +6,7 @@ import 'package:maestro/features/history/data/drift_history_repository.dart';
 import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
 import 'package:maestro/features/history/presentation/history_panel.dart';
+import 'package:maestro/features/history/presentation/storage_limit_mb.dart';
 
 void main() {
   testWidgets(
@@ -61,13 +62,56 @@ void main() {
         find.byKey(const Key('retention-storage-limit')),
         '1024',
       );
-      await tester.tap(find.text('Save retention settings'));
+      await tester.tap(find.text('Save and apply retention'));
       await tester.pumpAndSettle();
 
       final values = await database.select(database.settings).get();
       expect(
         values.map((setting) => setting.value),
         containsAll(<String>['45', '1024000000']),
+      );
+    },
+  );
+
+  testWidgets(
+    'GivenASavedPolicy_WhenTheHistoryPanelReopens_ThenTheFormShowsIt',
+    (tester) async {
+      // Seeding the fields with constants hid the saved policy and let a
+      // careless re-save revert it (UC-13).
+      final database = MaestroDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      await RetentionService(
+        database: database,
+        clock: DateTime.now,
+        newId: () => 'seed-audit',
+      ).savePolicy(
+        actorId: 'user-1',
+        policy: const RetentionPolicy(
+          retentionDays: 7,
+          storageLimitBytes: 5242880,
+        ),
+      );
+
+      await tester.pumpWidget(_host(database));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<TextField>(find.byKey(const Key('retention-days'))),
+        isA<TextField>().having(
+          (field) => field.controller?.text,
+          'retention days',
+          '7',
+        ),
+      );
+      expect(
+        tester.widget<TextField>(
+          find.byKey(const Key('retention-storage-limit')),
+        ),
+        isA<TextField>().having(
+          (field) => field.controller?.text,
+          'storage limit',
+          StorageLimitMb.formatBytes(5242880),
+        ),
       );
     },
   );
@@ -83,7 +127,7 @@ void main() {
       final title = find.text('Retention settings');
       final days = find.byKey(const Key('retention-days'));
       final storage = find.byKey(const Key('retention-storage-limit'));
-      final save = find.widgetWithText(TextButton, 'Save retention settings');
+      final save = find.widgetWithText(TextButton, 'Save and apply retention');
       final search = find.widgetWithText(TextField, 'Search history');
 
       expect(

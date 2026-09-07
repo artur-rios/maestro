@@ -87,7 +87,6 @@ void main() {
           runId: 'run-1',
           attemptId: 'attempt-1',
           lastSequence: 0,
-          tailBytes: 8,
         ),
       );
       await Future<void>.delayed(Duration.zero);
@@ -321,7 +320,6 @@ void main() {
           runId: 'run-1',
           attemptId: 'attempt-1',
           lastSequence: 0,
-          tailBytes: 0,
         ),
       );
       await Future<void>.delayed(Duration.zero);

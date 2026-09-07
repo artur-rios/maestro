@@ -3,7 +3,14 @@ param(
   [Parameter(Mandatory = $true)][string]$CoreVersion,
   [Parameter(Mandatory = $true)][string]$WindowsVersion,
   [switch]$SkipBuild,
-  [string]$InnoCompiler = $env:INNO_SETUP_COMPILER
+  [string]$InnoCompiler = $env:INNO_SETUP_COMPILER,
+  # The in-application updater composes only when all four release defines are
+  # stamped into the build. They are all-or-nothing: a partially configured
+  # build would ship an updater that cannot verify what it downloads.
+  [string]$UpdatePublicKeyBase64 = $env:MAESTRO_RELEASE_PUBLIC_KEY_BASE64,
+  [string]$UpdateManifestUrl = $env:MAESTRO_RELEASE_MANIFEST_URL,
+  [string]$UpdateSignatureUrl = $env:MAESTRO_RELEASE_SIGNATURE_URL,
+  [string]$UpdatePackageType = 'zip'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,8 +44,28 @@ if ($env:MAESTRO_PACKAGING_PREFLIGHT_ONLY -eq '1') {
   exit 0
 }
 
+$defines = @("--dart-define=MAESTRO_INSTALLED_VERSION=$SemanticVersion")
+# The package type carries a platform default, so only the three published
+# release inputs decide whether this build gets a runtime updater.
+$updateInputs = @($UpdatePublicKeyBase64, $UpdateManifestUrl, $UpdateSignatureUrl)
+$supplied = @($updateInputs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+if ($supplied -eq $updateInputs.Count) {
+  if ([string]::IsNullOrWhiteSpace($UpdatePackageType)) { throw 'Runtime update package type must not be empty.' }
+  $defines += "--dart-define=MAESTRO_RELEASE_PUBLIC_KEY_BASE64=$UpdatePublicKeyBase64"
+  $defines += "--dart-define=MAESTRO_RELEASE_MANIFEST_URL=$UpdateManifestUrl"
+  $defines += "--dart-define=MAESTRO_RELEASE_SIGNATURE_URL=$UpdateSignatureUrl"
+  $defines += "--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=$UpdatePackageType"
+  Write-Output 'runtime-updates: configured'
+}
+elseif ($supplied -ne 0) {
+  throw 'Runtime update configuration is incomplete: supply the public key, manifest URL, and signature URL together, or none of them.'
+}
+else {
+  Write-Output 'runtime-updates: unconfigured'
+}
+
 if (-not $SkipBuild) {
-  & $flutter build windows --release --build-name $CoreVersion "--dart-define=MAESTRO_INSTALLED_VERSION=$SemanticVersion"
+  & $flutter build windows --release --build-name $CoreVersion @defines
   if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows release build failed.' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $bundle 'maestro.exe'))) {

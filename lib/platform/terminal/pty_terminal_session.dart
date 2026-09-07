@@ -5,9 +5,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:maestro/features/foundation/application/owned_resource_store.dart';
 import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
 import 'package:maestro/features/foundation/domain/reconciliation_report.dart';
-import 'package:maestro/features/runs/application/start_isolated_run.dart';
 import 'package:maestro/features/terminal/application/terminal_port.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/platform/process/owned_process_recovery.dart';
@@ -87,7 +87,10 @@ final class PtyTerminalSession implements TerminalSession {
        _resourceId = resourceId {
     _exit = _handle.exitCode.then((code) {
       _exited = true;
-      unawaited(_resolveOwnership());
+      // A shell that ends during application teardown may find the store
+      // already closed. That is not the exit's problem to report, and an
+      // unhandled rejection here would surface as a crash in the zone.
+      unawaited(_resolveOwnership().catchError((Object _) {}));
       return TerminalExit(code);
     });
   }
@@ -221,7 +224,10 @@ final class PtyTerminalSession implements TerminalSession {
     try {
       await _exit.timeout(timeout);
       return true;
-    } on TimeoutException {
+    } on Object {
+      // A timeout, or a pseudo-terminal that failed to report an exit at all,
+      // both mean the same thing here: this signal did not prove the shell is
+      // gone, so the caller escalates or reports an incomplete closure.
       return false;
     }
   }

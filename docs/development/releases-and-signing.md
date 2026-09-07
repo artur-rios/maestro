@@ -124,6 +124,23 @@ dart run tooling/release/create_manifest.dart dist 0.1.0 \
 dart run tooling/release/verify_release.dart dist
 ```
 
+## Application icon
+
+Every platform's icon is generated from one geometry definition in
+`tooling/packaging/icons/generate_icons.py`, so the Windows `.ico`, the scalable
+SVG and the hicolor PNGs cannot drift apart:
+
+```bash
+python3 tooling/packaging/icons/generate_icons.py
+```
+
+It writes `windows/runner/resources/app_icon.ico` (16 through 256),
+`tooling/packaging/maestro.svg`, and `tooling/packaging/icons/maestro-N.png`
+(16 through 1024). The generated files are committed, so no build or CI job
+depends on Python being present; regenerate and commit whenever the mark
+changes. `flutter test test/tooling/update_helper_assets_test.dart` fails if a
+size goes missing or the MSIX logo stops pointing at the 1024px source.
+
 ## Manifest signing
 
 Update manifests use detached Ed25519 signatures. Configure these GitHub secrets as base64-encoded libsodium keys:
@@ -136,6 +153,36 @@ Manifest signing is optional only when both secrets are absent. If exactly one
 secret is configured, or signing or verification fails, the release fails
 closed. GitHub artifact attestations are produced independently with OIDC
 provenance.
+
+## Enabling the in-application updater
+
+Signing a manifest is only half of it. A packaged build can check, verify and
+install updates only when the packaging step stamps four values into it, and a
+build missing any of them composes no update service at all and reports
+`Updates are unavailable in this build`:
+
+| Define | Source | Meaning |
+| --- | --- | --- |
+| `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | secret `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | The key every manifest signature is checked against. |
+| `MAESTRO_RELEASE_MANIFEST_URL` | repository variable | Where a running Maestro looks for the current manifest. |
+| `MAESTRO_RELEASE_SIGNATURE_URL` | repository variable | The detached signature beside it. |
+| `MAESTRO_RELEASE_PACKAGE_TYPE` | packaging default (`zip` on Windows, `appimage` on Linux) | Which artifact this build may install into itself. |
+
+The two URLs must be stable across releases, because a build published today
+has to find the manifest published months later. GitHub's redirect for the most
+recent release is the intended shape:
+
+```
+https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.json
+https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.json.sig
+```
+
+The packaging scripts treat the three published inputs as all-or-nothing and
+report which case applied — `runtime-updates: configured` or
+`runtime-updates: unconfigured`. Supplying some but not all of them fails the
+packaging step rather than shipping a build that cannot verify what it
+downloads. `dart run tooling/verify_workflows.dart` checks that both packaging
+jobs still forward them.
 
 There is currently no trusted Windows publisher certificate. Local MSIX files are test-signed and must not be described as publisher-trusted. Unsigned manifest verification prints `publisher-signing: unconfigured`; it never implies trust.
 

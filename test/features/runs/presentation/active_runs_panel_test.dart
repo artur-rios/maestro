@@ -297,7 +297,6 @@ void main() {
         runId: 'run-1',
         attemptId: 'attempt-1',
         lastSequence: 0,
-        tailBytes: 0,
         durability: OutputDurability.degraded,
       ),
     );
@@ -805,6 +804,9 @@ final class _ControlExecution implements RunExecutionControl {
 
   @override
   void requestPause(String runId) {}
+
+  @override
+  void cancelPause(String runId) {}
 
   @override
   Future<CancellationOutcome> requestCancel(String runId) async => outcome;

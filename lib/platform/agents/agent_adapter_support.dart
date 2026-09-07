@@ -21,13 +21,6 @@ final class AgentAdapterSupport {
   final CommandRunner runner;
   final ExecutableLocator resolver;
 
-  Future<ResolvedExecutable?> resolveOrNull(
-    AgentCliCatalog Function(ExecutableResolution resolution) onFailure,
-  ) async {
-    final resolution = await resolver.resolve(command);
-    return resolution is ResolvedExecutable ? resolution : null;
-  }
-
   Future<DiscoveryStart> begin() async {
     final resolution = await resolver.resolve(command);
     if (resolution is MissingExecutable) {

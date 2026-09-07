@@ -1188,6 +1188,12 @@ LocalUser _passwordUser({required String email}) {
 
 final class _MemoryAuthenticationRepository
     implements LocalUserRepository, AuditRepository {
+  @override
+  Future<FailedAuthenticationHistory> recentFailedAuthentications({
+    required String target,
+    required DateTime since,
+  }) async => FailedAuthenticationHistory.none;
+
   final List<LocalUser> users = <LocalUser>[];
   final List<AuthenticationAuditEvent> events = <AuthenticationAuditEvent>[];
 

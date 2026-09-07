@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_form_spacing.dart';
@@ -25,15 +25,81 @@ final class HistoryPanel extends StatefulWidget {
 final class _HistoryPanelState extends State<HistoryPanel> {
   late final HistoryController controller = widget.createController()
     ..addListener(_changed);
-  final _retentionDays = TextEditingController(text: '30');
+  final _retentionDays = TextEditingController(
+    text: '${RetentionPolicy.defaults.retentionDays}',
+  );
   final _storageLimit = TextEditingController(
-    text: StorageLimitMb.formatBytes(1073741824),
+    text: StorageLimitMb.formatBytes(
+      RetentionPolicy.defaults.storageLimitBytes,
+    ),
   );
   String? _retentionFeedback;
+  bool _applyingRetention = false;
+
   @override
   void initState() {
     super.initState();
     controller.load();
+    unawaited(_hydrateRetentionPolicy());
+  }
+
+  /// Shows the policy actually in force, and applies it once per panel.
+  ///
+  /// Seeding the fields with constants would hide a saved policy and let a
+  /// careless re-save revert it, and a policy nothing ever applies is a stored
+  /// preference rather than a retention control (UC-13).
+  Future<void> _hydrateRetentionPolicy() async {
+    final service = widget.retentionService;
+    final actorId = widget.actorId;
+    if (service == null || actorId == null) return;
+    final RetentionPolicy policy;
+    try {
+      policy = await service.loadPolicy();
+    } on Object {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _retentionDays.text = '${policy.retentionDays}';
+      _storageLimit.text = StorageLimitMb.formatBytes(policy.storageLimitBytes);
+    });
+    await _applyRetentionPolicy(service, actorId, policy, announce: false);
+  }
+
+  /// Applies the policy, reporting only what the user needs to read.
+  ///
+  /// The pass that runs when the panel opens stays silent unless it actually
+  /// removed something: announcing "already within settings" on every open
+  /// would be noise the user has to read past to reach the history itself.
+  Future<void> _applyRetentionPolicy(
+    RetentionService service,
+    String actorId,
+    RetentionPolicy policy, {
+    required bool announce,
+  }) async {
+    if (_applyingRetention) return;
+    _applyingRetention = true;
+    try {
+      final result = await service.applyPolicy(
+        actorId: actorId,
+        policy: policy,
+      );
+      if (!mounted) return;
+      final removedSomething =
+          result.compaction.compactedSegmentIds.isNotEmpty ||
+          result.prune.prunedRunIds.isNotEmpty;
+      if (!announce && !removedSomething) return;
+      setState(() => _retentionFeedback = result.summary);
+    } on Object {
+      if (!mounted) return;
+      setState(
+        () => _retentionFeedback =
+            'Retention settings are saved, but applying them did not finish. '
+            'Try again.',
+      );
+    } finally {
+      _applyingRetention = false;
+    }
   }
 
   void _changed() {
@@ -58,13 +124,11 @@ final class _HistoryPanelState extends State<HistoryPanel> {
       setState(() => _retentionFeedback = error);
       return;
     }
-    final result = await service.savePolicy(
-      actorId: actorId,
-      policy: RetentionPolicy(
-        retentionDays: int.tryParse(_retentionDays.text) ?? 0,
-        storageLimitBytes: storageLimit.bytes!,
-      ),
+    final policy = RetentionPolicy(
+      retentionDays: int.tryParse(_retentionDays.text) ?? 0,
+      storageLimitBytes: storageLimit.bytes!,
     );
+    final result = await service.savePolicy(actorId: actorId, policy: policy);
     if (!mounted) return;
     setState(() {
       _retentionFeedback = switch (result) {
@@ -72,6 +136,11 @@ final class _HistoryPanelState extends State<HistoryPanel> {
         RetentionRejected(:final message) => message,
       };
     });
+    // Saving a policy that nothing enforces would leave the user believing
+    // history is bounded when it is not, so the new policy is applied now.
+    if (result is RetentionSucceeded) {
+      await _applyRetentionPolicy(service, actorId, policy, announce: true);
+    }
   }
 
   @override
@@ -143,7 +212,7 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                           alignment: Alignment.centerLeft,
                           child: TextButton(
                             onPressed: _saveRetentionPolicy,
-                            child: const Text('Save retention settings'),
+                            child: const Text('Save and apply retention'),
                           ),
                         ),
                         if (_retentionFeedback case final feedback?)
@@ -170,6 +239,22 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                           padding: EdgeInsets.only(top: 12),
                           child: Text('No history matches your filters.'),
                         ),
+                      if (state.diagnostics.isNotEmpty) ...<Widget>[
+                        const SizedBox(
+                          height: MaestroFormSpacing.sectionToControl,
+                        ),
+                        Text(
+                          'Diagnostics',
+                          key: const Key('diagnostics-section'),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        for (final entry in state.diagnostics.take(50))
+                          SelectableText(
+                            '${entry.recordedAt.toIso8601String()}  '
+                            '${entry.text}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
                       for (final entry in state.visible)
                         Column(
                           children: <Widget>[
@@ -203,10 +288,7 @@ final class _HistoryPanelState extends State<HistoryPanel> {
                           Text('${audit.action} · ${audit.outcome}'),
                         Text('Log segments: ${detail.logSegments.length}'),
                         for (final log in detail.logSegments)
-                          SelectableText(
-                            _displayLog(log.bytes, log.compression) ??
-                                'Log segment ${log.id} is corrupt or cannot be expanded.',
-                          ),
+                          SelectableText(_displayLog(log.bytes)),
                       ],
                     ],
                   ),
@@ -220,11 +302,8 @@ final class _HistoryPanelState extends State<HistoryPanel> {
   }
 }
 
-String? _displayLog(List<int> bytes, String compression) {
-  try {
-    final decoded = compression == 'none' ? bytes : gzip.decode(bytes);
-    return utf8.decode(decoded, allowMalformed: true);
-  } on Object {
-    return null;
-  }
-}
+/// Renders one stored log segment.
+///
+/// The repository already expanded any compaction, so this only has to survive
+/// bytes that are not valid UTF-8 — an agent may emit anything.
+String _displayLog(List<int> bytes) => utf8.decode(bytes, allowMalformed: true);

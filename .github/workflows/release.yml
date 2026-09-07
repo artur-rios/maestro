@@ -31,9 +31,21 @@ jobs:
       - id: version
         run: dart tooling/release/validate_release_tag.dart "$GITHUB_REF_NAME" "$GITHUB_OUTPUT"
 
+  # The release must run the same analyze-and-test gate CI runs, so a tag can
+  # never publish a commit nothing verified.
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   windows-package:
-    needs: validate-release
+    needs: [validate-release, verify]
     runs-on: windows-2025
+    env:
+      # Stamped into the build so the shipped application can check, verify and
+      # install signed updates. Unset variables leave the updater out of the
+      # build; the packaging script reports which case applied.
+      MAESTRO_RELEASE_PUBLIC_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_PUBLIC_KEY_BASE64 }}
+      MAESTRO_RELEASE_MANIFEST_URL: ${{ vars.MAESTRO_RELEASE_MANIFEST_URL }}
+      MAESTRO_RELEASE_SIGNATURE_URL: ${{ vars.MAESTRO_RELEASE_SIGNATURE_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -64,11 +76,16 @@ jobs:
           if-no-files-found: error
 
   linux-package:
-    needs: validate-release
+    needs: [validate-release, verify]
     runs-on: ubuntu-24.04
     env:
       APPIMAGE_EXTRACT_AND_RUN: '1'
       APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+      # See windows-package: all three must be present for the shipped build to
+      # carry a runtime updater at all.
+      MAESTRO_RELEASE_PUBLIC_KEY_BASE64: ${{ secrets.MAESTRO_RELEASE_PUBLIC_KEY_BASE64 }}
+      MAESTRO_RELEASE_MANIFEST_URL: ${{ vars.MAESTRO_RELEASE_MANIFEST_URL }}
+      MAESTRO_RELEASE_SIGNATURE_URL: ${{ vars.MAESTRO_RELEASE_SIGNATURE_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2

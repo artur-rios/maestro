@@ -1580,6 +1580,85 @@ void main() {
       expect(service.currentSession, isNull);
     },
   );
+
+  // Failures were audited but never counted, so an attacker holding the device
+  // could try passwords as fast as the hasher allowed.
+  test(
+    'GivenRepeatedFailures_WhenSigningInAgain_ThenTheAttemptIsThrottled',
+    () async {
+      users.existingEmail = 'user@example.com';
+      verifiers.values['verifier-user-1'] = 'hashed:password1';
+      for (
+        var attempt = 0;
+        attempt < AuthenticationService.failureThreshold;
+        attempt++
+      ) {
+        await service.signInWithEmail('user@example.com', 'wrong');
+      }
+
+      final result = await service.signInWithEmail(
+        'user@example.com',
+        'password1',
+      );
+
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure.code,
+        'authentication.attempts.throttled',
+      );
+      expect(service.currentSession, isNull);
+    },
+  );
+
+  test(
+    'GivenTheLockoutHasElapsed_WhenSigningIn_ThenTheAttemptIsRead',
+    () async {
+      users.existingEmail = 'user@example.com';
+      verifiers.values['verifier-user-1'] = 'hashed:password1';
+      for (
+        var attempt = 0;
+        attempt < AuthenticationService.failureThreshold;
+        attempt++
+      ) {
+        await service.signInWithEmail('user@example.com', 'wrong');
+      }
+
+      // A lockout that never expires would be a denial of service against the
+      // only account, so it is bounded and the window rolls.
+      now = now.add(AuthenticationService.failureWindow);
+      final result = await service.signInWithEmail(
+        'user@example.com',
+        'password1',
+      );
+
+      expect(result, isA<Success<AuthenticatedSession>>());
+    },
+  );
+
+  test(
+    'GivenAnUnknownEmail_WhenSigningIn_ThenVerificationWorkIsStillSpent',
+    () async {
+      // Returning before any verification made response time an email
+      // enumeration oracle.
+      await service.signInWithEmail('unknown@example.com', 'wrong');
+
+      expect(hasher.verifications, isNotEmpty);
+    },
+  );
+
+  test(
+    'GivenAnUnknownEmail_WhenAuditingTheFailure_ThenOneReservedActorIsUsed',
+    () async {
+      await service.signInWithEmail('unknown@example.com', 'wrong');
+      await service.signInWithEmail('other@example.com', 'wrong');
+
+      // Minting a fresh identifier per attempt filled the trail with actors
+      // that name nobody and cannot be queried.
+      expect(audits.events.map((event) => event.actorId).toSet(), <String>{
+        AuthenticationService.unknownPrincipalActor,
+      });
+    },
+  );
 }
 
 final class _DeterministicIds {
@@ -1727,6 +1806,7 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
 
 final class _FakePasswordHasher implements PasswordHasher {
   final List<String> createInputs = <String>[];
+  final List<(String, String)> verifications = <(String, String)>[];
 
   @override
   Future<String> create(String password) async {
@@ -1736,12 +1816,36 @@ final class _FakePasswordHasher implements PasswordHasher {
 
   @override
   Future<bool> verify(String verifier, String password) async {
+    verifications.add((verifier, password));
     return verifier == 'hashed:$password';
   }
 }
 
 final class _FakeAuditRepository implements AuditRepository {
   final List<AuthenticationAuditEvent> events = <AuthenticationAuditEvent>[];
+
+  @override
+  Future<FailedAuthenticationHistory> recentFailedAuthentications({
+    required String target,
+    required DateTime since,
+  }) async {
+    final matching =
+        events
+            .where(
+              (event) =>
+                  event.target == target &&
+                  event.action == AuthenticationAuditAction.signInFailed &&
+                  event.outcome == AuthenticationAuditOutcome.failure &&
+                  !event.occurredAt.isBefore(since),
+            )
+            .toList(growable: false)
+          ..sort((left, right) => right.occurredAt.compareTo(left.occurredAt));
+    return FailedAuthenticationHistory(
+      count: matching.length,
+      lastAt: matching.isEmpty ? null : matching.first.occurredAt,
+    );
+  }
+
   bool failWhenAppending = false;
   bool failWhenDeleting = false;
   Future<void> Function(AuthenticationAuditEvent event)? afterAppend;

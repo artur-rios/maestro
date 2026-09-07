@@ -112,6 +112,39 @@ void main() {
       expect(candidate, isNull);
     },
   );
+
+  test(
+    'GivenAMalformedInstalledVersion_WhenChecking_ThenATypedFailureIsReturned',
+    () async {
+      // The installed version comes from a build-time define, so a build
+      // stamped with something unparseable must not escape a method whose
+      // whole contract is to return a result.
+      final verified = VerifiedReleaseManifest(
+        manifest: ReleaseManifest(
+          version: '1.2.3',
+          publishedAt: DateTime.utc(2026, 8, 5),
+          keyExpiresAt: DateTime.utc(2030),
+          artifacts: <ReleaseArtifact>[artifact],
+        ),
+        artifact: artifact,
+      );
+      final service = UpdateService(
+        installedVersion: '1.2.3+7',
+        source: _FakeSource(),
+        verifier: _FakeVerifier(verified),
+        downloader: _FakeDownloader(artifact),
+        installer: _FakeInstaller(),
+      );
+
+      final result = await service.check(UpdateCheckReason.manual);
+
+      expect(result, isA<FailureResult<UpdateCandidate?>>());
+      expect(
+        (result as FailureResult<UpdateCandidate?>).failure.code,
+        'update.installed_version.invalid',
+      );
+    },
+  );
 }
 
 Future<UpdateCandidate?> _check({

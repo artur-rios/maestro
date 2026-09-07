@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/platform/updates/closable_update_transport.dart';
 import 'package:maestro/platform/updates/manifest_verifier.dart';
 import 'package:maestro/platform/updates/package_installer.dart';
 import 'package:maestro/platform/updates/release_manifest.dart';
@@ -100,6 +101,18 @@ final class UpdateService {
     }
   }
 
+  /// Releases the transports the service opened, when they hold any.
+  ///
+  /// A fake source or downloader supplies no transport, so a test composition
+  /// needs no closing ceremony to stay leak-free.
+  Future<void> close() async {
+    for (final resource in <Object?>[source, downloader]) {
+      if (resource is ClosableUpdateTransport) {
+        await resource.close();
+      }
+    }
+  }
+
   Result<UpdateCandidate?> _verifiedCandidate(
     Result<VerifiedReleaseManifest> result,
     UpdateCheckReason reason,
@@ -107,13 +120,37 @@ final class UpdateService {
     return switch (result) {
       FailureResult<VerifiedReleaseManifest>(:final failure) =>
         FailureResult<UpdateCandidate?>(failure),
-      Success<VerifiedReleaseManifest>(:final value) =>
-        Success<UpdateCandidate?>(
-          _isNewer(value.manifest.version, installedVersion)
-              ? UpdateCandidate(verified: value, reason: reason)
-              : null,
-        ),
+      Success<VerifiedReleaseManifest>(:final value) => _compared(
+        value,
+        reason,
+      ),
     };
+  }
+
+  /// Compares a verified manifest against the version this build reports.
+  ///
+  /// The installed version arrives from a build-time define, so a build stamped
+  /// with something [ReleaseVersion] cannot parse must surface as a typed
+  /// configuration failure rather than escape a method that promises a result.
+  Result<UpdateCandidate?> _compared(
+    VerifiedReleaseManifest value,
+    UpdateCheckReason reason,
+  ) {
+    final bool newer;
+    try {
+      newer = _isNewer(value.manifest.version, installedVersion);
+    } on FormatException {
+      return const FailureResult<UpdateCandidate?>(
+        ValidationFailure(
+          code: 'update.installed_version.invalid',
+          message: 'This build reports a version Maestro cannot compare.',
+          remediation: 'Reinstall Maestro from a published release package.',
+        ),
+      );
+    }
+    return Success<UpdateCandidate?>(
+      newer ? UpdateCandidate(verified: value, reason: reason) : null,
+    );
   }
 
   static bool _isNewer(String candidate, String installed) =>

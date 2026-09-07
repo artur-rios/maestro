@@ -182,6 +182,10 @@ final class ProjectTerminalController extends ChangeNotifier
       );
       return closure;
     }
+    // Invalidate the exit callback before detaching. The shell ended because
+    // the user closed it, so what they should see is an idle terminal, not the
+    // exit code of the session they just dismissed (AF-03).
+    _generation++;
     await _detach();
     _publish(const ProjectTerminalState());
     return closure;

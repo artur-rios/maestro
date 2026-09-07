@@ -1,3 +1,40 @@
+/// Whether an environment variable's name marks its value as a secret.
+///
+/// Matching on shape rather than a fixed list means a token this build has
+/// never heard of — `GH_TOKEN`, a provider key added next month — is redacted
+/// on the day it appears rather than the day someone remembers to list it.
+bool isSecretEnvironmentKey(String key) =>
+    _secretKeyPattern.hasMatch(key) && !_publicKeyPattern.hasMatch(key);
+
+final RegExp _secretKeyPattern = RegExp(
+  r'(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASSWD|PWD|APIKEY|KEY|CREDENTIAL|CREDENTIALS|AUTH)$',
+  caseSensitive: false,
+);
+
+/// Names that end in a secret-shaped word but never hold one.
+final RegExp _publicKeyPattern = RegExp(
+  r'(?:^|_)(?:PUBLIC_KEY|SSH_AUTH|HOST_KEY|KEYMAP|KEYBOARD)$',
+  caseSensitive: false,
+);
+
+/// The shortest value worth redacting.
+///
+/// A one- or two-character value is far more likely to be a flag than a
+/// credential, and blanking those would turn ordinary output into noise.
+const int minimumRedactableSecretLength = 8;
+
+/// The secret values carried by [environment], by key shape and length.
+List<String> secretValuesIn(Map<String, String> environment) => environment
+    .entries
+    .where(
+      (entry) =>
+          isSecretEnvironmentKey(entry.key) &&
+          entry.value.length >= minimumRedactableSecretLength,
+    )
+    .map((entry) => entry.value)
+    .toSet()
+    .toList(growable: false);
+
 final class SecretRedactor {
   static final RegExp _authorization = RegExp(
     r'(authorization\s*:\s*(?:bearer|basic)\s+)([^\s,;]+)',
@@ -22,10 +59,9 @@ final class SecretRedactor {
     );
 
     final secrets =
-        environment.values
-            .where((value) => value.isNotEmpty && value != '[REDACTED]')
-            .toSet()
-            .toList()
+        secretValuesIn(
+            environment,
+          ).where((value) => value != '[REDACTED]').toList()
           ..sort((left, right) => right.length.compareTo(left.length));
     for (final secret in secrets) {
       output = output.replaceAll(secret, '[REDACTED]');

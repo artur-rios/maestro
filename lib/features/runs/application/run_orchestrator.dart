@@ -145,7 +145,6 @@ final class RunLogSummary {
     required this.runId,
     required this.attemptId,
     required this.lastSequence,
-    required this.tailBytes,
     this.durability = OutputDurability.durable,
   });
 
@@ -157,13 +156,11 @@ final class RunLogSummary {
   const RunLogSummary.announcement(this.runId)
     : attemptId = '',
       lastSequence = -1,
-      tailBytes = 0,
       durability = OutputDurability.durable;
 
   final String runId;
   final String attemptId;
   final int lastSequence;
-  final int tailBytes;
   final OutputDurability durability;
 
   bool get isAnnouncement => lastSequence < 0;
@@ -283,8 +280,6 @@ final class RunOrchestrator implements RunExecutionControl {
        _deliveryRecords = deliveryRecords;
 
   static const int maximumPersistedFrameBytes = 16 * 1024;
-  static const int maximumTailBytes = 64 * 1024;
-  static const int maximumTailRuns = 8;
 
   /// The ceiling on output whose durable write has failed and is awaiting a
   /// retry.
@@ -305,9 +300,6 @@ final class RunOrchestrator implements RunExecutionControl {
   final AutonomousDelivery? _autonomousDelivery;
   final DeliveryRecordRepository? _deliveryRecords;
   final RunSummaryEvents _events = RunSummaryEvents();
-  final Map<String, Queue<RunOutputChunk>> _tails =
-      <String, Queue<RunOutputChunk>>{};
-  final Map<String, int> _tailSizes = <String, int>{};
   final Map<String, Future<void>> _active = <String, Future<void>>{};
   final Set<String> _pauseRequested = <String>{};
   final Set<String> _cancelRequested = <String>{};
@@ -321,17 +313,6 @@ final class RunOrchestrator implements RunExecutionControl {
   /// already stood down and cannot race the cancel transaction.
   @override
   Future<void>? activeExecution(String runId) => _active[runId];
-  int get retainedTailRunCount => _tails.length;
-
-  /// The live tail for one run, with each fragment's channel preserved.
-  ///
-  /// FR-OB-05 requires stdout, stderr, and system output to stay
-  /// distinguishable, so the tail is a sequence of channel-tagged chunks rather
-  /// than a flat byte run.
-  List<RunOutputChunk> outputTailFor(String runId) =>
-      List<RunOutputChunk>.unmodifiable(
-        _tails[runId] ?? const <RunOutputChunk>[],
-      );
 
   /// Asks a run to pause once its active step finishes (FR-RC-01, FR-RC-02).
   ///
@@ -340,6 +321,14 @@ final class RunOrchestrator implements RunExecutionControl {
   /// paused (AF-02), which the flag's placement in the loop guarantees.
   @override
   void requestPause(String runId) => _pauseRequested.add(runId);
+
+  /// Withdraws a pause request whose durable transition did not land.
+  ///
+  /// The flag is raised before the record is written, so a rejected write must
+  /// be able to take it back; otherwise the run would pause at the next step
+  /// boundary with nothing in its record explaining why.
+  @override
+  void cancelPause(String runId) => _pauseRequested.remove(runId);
 
   /// Terminates a run's live process tree immediately (FR-RC-04).
   ///
@@ -370,12 +359,16 @@ final class RunOrchestrator implements RunExecutionControl {
   }) {
     final existing = _active[runId];
     if (existing != null) return existing;
+    // A pause or cancel that was never honored belongs to an execution that has
+    // already ended — or to no execution at all, when the run was cancelled
+    // while queued or paused. Clearing on entry as well as on completion keeps
+    // such a request from silently voiding this execution's evidence.
+    _pauseRequested.remove(runId);
+    _cancelRequested.remove(runId);
     final future = _execute(runId, contextPolicy);
     _active[runId] = future;
     return future.whenComplete(() {
       _active.remove(runId);
-      _tails.remove(runId);
-      _tailSizes.remove(runId);
       // A request that never got honored — because the run failed, or ended —
       // must not survive to pause or cancel a later execution of the same run.
       _pauseRequested.remove(runId);
@@ -525,7 +518,6 @@ final class RunOrchestrator implements RunExecutionControl {
             runId: runId,
             attemptId: attemptId,
             lastSequence: sequence - 1,
-            tailBytes: _tailSizes[runId] ?? 0,
             durability: durability,
           ),
         );
@@ -716,6 +708,18 @@ final class RunOrchestrator implements RunExecutionControl {
   ) async {
     final delivery = _autonomousDelivery;
     if (delivery == null || !_requiresAutonomousDelivery(aggregate)) {
+      // A run already sitting in deliveryPending reaches this only when the
+      // composition that could deliver it is gone. Every workflow step
+      // succeeded, so it settles as succeeded rather than resting forever in a
+      // nonterminal status nothing can leave (AF-01).
+      if (aggregate.run.status == RunStatus.deliveryPending) {
+        await _repository.settleAutonomousDelivery(
+          runId: aggregate.run.id,
+          nextStatus: RunStatus.succeeded,
+          nextStepPosition: aggregate.snapshot.steps.length,
+          at: _now(),
+        );
+      }
       return;
     }
     final workItem = aggregate.snapshot.workItem;
@@ -954,40 +958,9 @@ final class RunOrchestrator implements RunExecutionControl {
           createdAt: _now(),
         ),
       );
-      _appendTail(runId, channel, part);
       sequence++;
     }
     return sequence;
-  }
-
-  void _appendTail(String runId, RunLogChannel channel, Uint8List bytes) {
-    final existing = _tails.remove(runId);
-    final tail = existing ?? Queue<RunOutputChunk>();
-    _tails[runId] = tail;
-    while (_tails.length > maximumTailRuns) {
-      final oldest = _tails.keys.first;
-      _tails.remove(oldest);
-      _tailSizes.remove(oldest);
-    }
-    tail.add(RunOutputChunk(channel: channel, bytes: bytes));
-    var size = (_tailSizes[runId] ?? 0) + bytes.length;
-    while (size > maximumTailBytes && tail.isNotEmpty) {
-      final excess = size - maximumTailBytes;
-      final first = tail.first;
-      if (first.byteLength <= excess) {
-        size -= tail.removeFirst().byteLength;
-      } else {
-        tail.removeFirst();
-        tail.addFirst(
-          RunOutputChunk(
-            channel: first.channel,
-            bytes: Uint8List.sublistView(first.bytes, excess),
-          ),
-        );
-        size -= excess;
-      }
-    }
-    _tailSizes[runId] = size;
   }
 
   static String _prompt(
@@ -1011,15 +984,10 @@ Do not add fields and do not write this protocol to stdout.
 
 final class _StreamingFrameRedactor {
   factory _StreamingFrameRedactor(Map<String, String> environment) {
-    const secretKeys = <String>{'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'};
-    final secretValues = environment.entries
-        .where(
-          (entry) =>
-              secretKeys.contains(entry.key.toUpperCase()) &&
-              entry.value.isNotEmpty,
-        )
-        .map((entry) => entry.value)
-        .toList(growable: false);
+    // Two hardcoded provider keys let a `GITHUB_TOKEN` an agent echoed reach
+    // durable storage verbatim. The shape rule is shared with SecretRedactor so
+    // both paths agree on what a secret is.
+    final secretValues = secretValuesIn(environment);
     return _StreamingFrameRedactor._(
       secretValues,
       secretValues.map(utf8.encode).toList(growable: false),
@@ -1424,8 +1392,12 @@ final class _LogBatcher {
     ];
     _pending.clear();
     _pendingBytes = 0;
-    _serial = _serial.then((_) => persist(parts));
-    await _serial;
+    // The chain exists to order writes, not to carry a failure forward. Left
+    // poisoned, every later flush would re-raise the first error without ever
+    // calling `persist` again — dropping output instead of retrying it.
+    final next = _serial.then((_) => persist(parts));
+    _serial = next.catchError((Object _) {});
+    await next;
   }
 
   Future<void> close() async {

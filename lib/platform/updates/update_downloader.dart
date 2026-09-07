@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/platform/updates/closable_update_transport.dart';
 import 'package:maestro/platform/updates/package_installer.dart';
 import 'package:maestro/platform/updates/release_manifest.dart';
 import 'package:path/path.dart' as p;
@@ -11,12 +12,16 @@ abstract interface class UpdateDownloader {
   Future<Result<StagedUpdate>> download(ReleaseArtifact artifact);
 }
 
-final class HttpUpdateDownloader implements UpdateDownloader {
+final class HttpUpdateDownloader
+    implements UpdateDownloader, ClosableUpdateTransport {
   HttpUpdateDownloader({required this.updatesDirectory, HttpClient? client})
     : _client = client ?? HttpClient();
 
   final Directory updatesDirectory;
   final HttpClient _client;
+
+  @override
+  Future<void> close() async => _client.close(force: true);
 
   @override
   Future<Result<StagedUpdate>> download(ReleaseArtifact artifact) async {

@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
+import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/projects/data/drift_project_repository.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/runs/data/drift_run_repository.dart';
@@ -1517,6 +1518,120 @@ void main() {
       hasLength(1),
     );
   });
+
+  test(
+    'GivenCompactedSegments_WhenReadingOutput_ThenPlaintextIsReturned',
+    () async {
+      // Retention rewrites older segments as gzip in place. A reader that hands
+      // those bytes straight to the view renders binary as text.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      final attempt = _attempt();
+      await repository.beginAttempt(attempt);
+      await _appendOutput(
+        repository,
+        attempt: attempt,
+        fragments: <(domain.RunLogChannel, String)>[
+          (domain.RunLogChannel.stdout, 'compacted output'),
+        ],
+      );
+      await RetentionService(
+        database: database,
+        clock: () => DateTime.utc(2026, 12),
+        newId: () => 'compaction-audit',
+      ).compactEligible(
+        actorId: 'user-1',
+        policy: const RetentionPolicy(
+          retentionDays: 1,
+          storageLimitBytes: 1024 * 1024,
+        ),
+      );
+
+      final tail = await repository.readOutputTail(
+        runId: 'run-1',
+        attemptId: attempt.id,
+      );
+
+      expect(tail.chunks.single.text, 'compacted output');
+    },
+  );
+
+  test(
+    'GivenAPauseRequestedRun_WhenListingActiveRuns_ThenItBlocksDeletion',
+    () async {
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.requestPauseRun('run-1', DateTime.utc(2026, 8, 6, 13));
+
+      expect(
+        (await repository.listActiveForProject(
+          'project-1',
+        )).map((run) => run.id),
+        <String>['run-1'],
+      );
+      expect(await repository.isActive('run-1'), isTrue);
+    },
+  );
+
+  test(
+    'GivenADeliveryPendingRun_WhenSweepingInterruptions_ThenItIsSwept',
+    () async {
+      // Nothing re-drives a delivery after the process that owned it died, so
+      // a restart must not leave the run resting in a nonterminal status.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.transitionRun(
+        runId: 'run-1',
+        expectedStatus: domain.RunStatus.running,
+        nextStatus: domain.RunStatus.deliveryPending,
+        at: DateTime.utc(2026, 8, 6, 13),
+      );
+
+      final swept = await repository.interruptActive(
+        at: DateTime.utc(2026, 8, 6, 14),
+        newLogId: () => 'log-sweep-${_sweepId++}',
+      );
+
+      expect(swept, 1);
+      expect(await repository.isInterrupted('run-1'), isTrue);
+    },
+  );
+
+  test(
+    'GivenADeliveryPendingRun_WhenListingActiveRuns_ThenItBlocksDeletion',
+    () async {
+      // A run mid-merge still owns its branch and must not be silently
+      // orphaned by permanently deleting its project.
+      await _createRun(
+        repository,
+        run: _run(status: domain.RunStatus.running),
+        snapshot: _snapshot(),
+      );
+      await repository.transitionRun(
+        runId: 'run-1',
+        expectedStatus: domain.RunStatus.running,
+        nextStatus: domain.RunStatus.deliveryPending,
+        at: DateTime.utc(2026, 8, 6, 13),
+      );
+
+      expect(
+        (await repository.listActiveForProject(
+          'project-1',
+        )).map((run) => run.id),
+        <String>['run-1'],
+      );
+      expect(await repository.isActive('run-1'), isTrue);
+    },
+  );
 }
 
 ProjectRecord _project({
@@ -1706,3 +1821,5 @@ Future<void> _createRun(
     at: run.createdAt.add(const Duration(seconds: 3)),
   );
 }
+
+int _sweepId = 0;

@@ -181,6 +181,29 @@ void main() {
       },
     );
 
+    test(
+      'GivenAClosedSession_WhenTheExitArrives_ThenTheStateStaysIdle',
+      () async {
+        // Closing completes the shell's exit, and the exit handler registered
+        // when the session attached is still armed. Without invalidating it the
+        // panel flips back from idle to the exit code of the session the user
+        // just dismissed.
+        final opener = _FakeOpener(deferExit: true);
+        final controller = _controller(opener);
+        await controller.open();
+
+        await controller.close();
+        // The shell's exit lands after the close returned. The handler armed
+        // when the session attached must no longer own the controller.
+        opener.session.exitWith(0);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(controller.state.status, TerminalSessionStatus.idle);
+        expect(controller.state.exit, isNull);
+        controller.dispose();
+      },
+    );
+
     test('GivenNoLiveSession_WhenClosing_ThenClosedIsReturned', () async {
       final result = await _controller(_FakeOpener()).close();
 
@@ -404,11 +427,17 @@ ProjectTerminalController _controller(_FakeOpener opener) =>
     );
 
 final class _FakeOpener {
-  _FakeOpener({this.failure, this.error, this.cancelOutputError = false});
+  _FakeOpener({
+    this.failure,
+    this.error,
+    this.cancelOutputError = false,
+    this.deferExit = false,
+  });
 
   final TerminalFailure? failure;
   final Object? error;
   final bool cancelOutputError;
+  final bool deferExit;
   TerminalClosure closure = TerminalClosure.closed;
   Object? closeError;
   final requests = <({String workingDirectory, int columns, int rows})>[];
@@ -430,6 +459,7 @@ final class _FakeOpener {
       closure,
       closeError: closeError,
       cancelOutputError: cancelOutputError,
+      deferExit: deferExit,
     );
     return TerminalOpenResult.opened(session);
   }
@@ -440,10 +470,15 @@ final class _FakeSession implements TerminalSession {
     this._closure, {
     this.closeError,
     this._cancelOutputError = false,
+    this.deferExit = false,
   });
 
   final TerminalClosure _closure;
   final bool _cancelOutputError;
+
+  /// Withholds the shell's exit until the test releases it, so a late exit can
+  /// be delivered after `close()` has already returned.
+  final bool deferExit;
   Object? closeError;
   final _output = StreamController<Uint8List>.broadcast();
   final _exit = Completer<TerminalExit>();
@@ -473,7 +508,7 @@ final class _FakeSession implements TerminalSession {
     if (closeError case final error?) throw error;
     if (_closure == TerminalClosure.closed) {
       closed = true;
-      exitWith(0);
+      if (!deferExit) exitWith(0);
     }
     return _closure;
   }

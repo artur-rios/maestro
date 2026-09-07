@@ -189,7 +189,6 @@ void main() {
         composition.foundation.runRepository,
         same(composition.runRepository),
       );
-      expect(composition.runOrchestrator.retainedTailRunCount, 0);
       expect(
         await composition.activeProjectRuns.listActiveForProject(project.id),
         isEmpty,

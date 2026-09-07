@@ -53,6 +53,12 @@ Set<RunControlAction> availableControls(RunStatus status) => switch (status) {
   RunStatus.failed ||
   RunStatus.canceled ||
   RunStatus.interrupted => const <RunControlAction>{RunControlAction.retry},
-  RunStatus.deliveryPending => const <RunControlAction>{},
+  // Delivery can stall on a retryable GitHub failure. Resume re-drives it from
+  // its own durable progress — never reopening a merged pull request — and
+  // cancel remains available so the run is not stranded (AF-01).
+  RunStatus.deliveryPending => const <RunControlAction>{
+    RunControlAction.resume,
+    RunControlAction.cancel,
+  },
   RunStatus.succeeded => const <RunControlAction>{},
 };

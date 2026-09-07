@@ -58,9 +58,31 @@ final class AuthenticationAuditEvent {
   final String details;
 }
 
+/// What the audit trail knows about recent failures against one principal.
+final class FailedAuthenticationHistory {
+  const FailedAuthenticationHistory({required this.count, this.lastAt});
+
+  static const FailedAuthenticationHistory none = FailedAuthenticationHistory(
+    count: 0,
+  );
+
+  final int count;
+  final DateTime? lastAt;
+}
+
 abstract interface class AuditRepository {
   Future<void> append(AuthenticationAuditEvent event);
   Future<void> deleteEvent(String eventId);
+
+  /// Failed sign-ins recorded against [target] at or after [since].
+  ///
+  /// The audit trail is already written on every failure, so throttling reads
+  /// the count from there rather than keeping a second, weaker record that a
+  /// restart would clear.
+  Future<FailedAuthenticationHistory> recentFailedAuthentications({
+    required String target,
+    required DateTime since,
+  });
 }
 
 typedef SessionExpiryCancellation = void Function();
@@ -99,9 +121,22 @@ final class AuthenticationService {
   final NewRecoveryCodeSet Function() _newRecoveryCodeSet;
   final DateTime Function() _clock;
   final String Function() _newId;
+
+  /// Consecutive failures inside [failureWindow] before a delay is imposed.
+  static const int failureThreshold = 5;
+
+  /// The rolling window over which failures are counted.
+  static const Duration failureWindow = Duration(minutes: 15);
+
+  /// The ceiling on the imposed delay, so a locked account still recovers.
+  static const Duration maximumLockout = Duration(minutes: 5);
+
   final SessionExpiryScheduler _scheduleExpiry;
   final StreamController<AuthenticatedSession?> _sessionChanges =
       StreamController<AuthenticatedSession?>.broadcast(sync: true);
+
+  static const String _decoySecret = 'maestro.decoy.verifier';
+  String? _decoyVerifier;
 
   AuthenticatedSession? _currentSession;
   ManagedAuthenticatedSession? _currentSessionAuthority;
@@ -284,10 +319,17 @@ final class AuthenticationService {
       if (user == null ||
           user.authenticationMethod != AuthenticationMethod.emailPassword ||
           user.verifierKey == null) {
+        // Verifying against a decoy costs what a real verification costs, so
+        // response time does not tell an attacker which addresses exist.
+        await _burnVerificationTime(password);
+        if (!_owns(generation)) return _stale<AuthenticatedSession>();
         await _appendFailedAuthentication(user?.id, source: 'local_password');
         if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidCredentials();
       }
+      final lockout = await _lockoutFor(user.id);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (lockout > Duration.zero) return _lockedOut(lockout);
       final verifier = await _verifiers.read(user.verifierKey!);
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
       final matches =
@@ -327,6 +369,9 @@ final class AuthenticationService {
         if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidCredentials();
       }
+      final lockout = await _lockoutFor(user.id);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (lockout > Duration.zero) return _lockedOut(lockout);
       final verified = await _operatingSystemAuthentication
           .authenticateCurrentUser();
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
@@ -629,6 +674,9 @@ final class AuthenticationService {
         if (!_owns(generation)) return _stale<AuthenticatedSession>();
         return _invalidRecoveryCode();
       }
+      final lockout = await _lockoutFor(user.id);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      if (lockout > Duration.zero) return _lockedOut(lockout);
       RecoveryCode parsed;
       try {
         parsed = RecoveryCode.parse(recoveryCode);
@@ -767,16 +815,79 @@ final class AuthenticationService {
     }
   }
 
+  /// The actor recorded for a failure against an account that does not exist.
+  ///
+  /// Minting a fresh identifier per attempt filled the trail with unique
+  /// actors that name nobody and cannot be queried; the principal is already
+  /// carried by the target and the details.
+  static const String unknownPrincipalActor = 'authentication.unknown';
+
   Future<void> _appendFailedAuthentication(
     String? userId, {
     required String source,
   }) => _appendAudit(
-    actorId: userId ?? _newId(),
+    actorId: userId ?? unknownPrincipalActor,
     action: AuthenticationAuditAction.signInFailed,
-    target: userId ?? 'unknown',
+    target: userId ?? unknownPrincipalActor,
     outcome: AuthenticationAuditOutcome.failure,
     details: _auditDetails(source, known: userId != null),
   );
+
+  /// Spends the same work a real verification would, for an account that does
+  /// not exist.
+  ///
+  /// The decoy verifier is created once and reused, so only the first unknown
+  /// address pays to build it.
+  Future<void> _burnVerificationTime(String password) async {
+    try {
+      final decoy = _decoyVerifier ??= await _hasher.create(_decoySecret);
+      await _hasher.verify(decoy, password);
+    } on Object {
+      // Equalising response time is a hardening measure, never a reason to
+      // fail a sign-in that was going to be refused anyway.
+    }
+  }
+
+  /// How long [userId] must wait before another credential attempt is read.
+  ///
+  /// Failures are audited but were never counted, so an attacker holding the
+  /// device could try passwords as fast as the hasher allowed. The delay grows
+  /// with consecutive failures inside a rolling window and is reported rather
+  /// than slept through, so the interface stays responsive and the user is
+  /// told what is happening.
+  Future<Duration> _lockoutFor(String userId) async {
+    final now = _clock();
+    final FailedAuthenticationHistory history;
+    try {
+      history = await _audits.recentFailedAuthentications(
+        target: userId,
+        since: now.subtract(failureWindow),
+      );
+    } on Object {
+      // A throttle that cannot read its own evidence must not lock the only
+      // account out of the application.
+      return Duration.zero;
+    }
+    final last = history.lastAt;
+    if (history.count < failureThreshold || last == null) return Duration.zero;
+    final steps = history.count - failureThreshold;
+    var lockout = Duration(seconds: 1 << (steps > 8 ? 8 : steps));
+    if (lockout > maximumLockout) lockout = maximumLockout;
+    final remaining = lockout - now.difference(last);
+    return remaining > Duration.zero ? remaining : Duration.zero;
+  }
+
+  FailureResult<AuthenticatedSession> _lockedOut(Duration remaining) {
+    final seconds = remaining.inSeconds < 1 ? 1 : remaining.inSeconds;
+    return FailureResult<AuthenticatedSession>(
+      SecurityFailure(
+        code: 'authentication.attempts.throttled',
+        message: 'Too many failed attempts for this account.',
+        remediation: 'Wait $seconds second(s) and try again.',
+      ),
+    );
+  }
+
   static String _auditDetails(String source, {required bool known}) =>
       jsonEncode(<String, String>{
         'principal': known ? 'known' : 'unknown',

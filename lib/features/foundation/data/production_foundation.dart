@@ -1,6 +1,7 @@
 // Public constructor names describe ports; stored fields remain private.
 // ignore_for_file: prefer_initializing_formals
 
+import 'package:maestro/core/logging/diagnostic_log.dart';
 import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
@@ -35,7 +36,9 @@ final class ProductionFoundation {
         const PlatformOwnedProcessRecovery(),
     RunRecoveryStarter? recoveryStarter,
     CapabilityProbe? shellProbe,
-  }) : _shellProbe =
+    DiagnosticLog diagnostics = const NoopDiagnosticLog(),
+  }) : _diagnostics = diagnostics,
+       _shellProbe =
            shellProbe ??
            PtyTerminalPort(
              shells: ShellResolver(locator: ExecutableResolver()),
@@ -62,6 +65,7 @@ final class ProductionFoundation {
   final OwnedProcessRecoveryAdapter _processRecovery;
   final RunRecoveryStarter? _recoveryStarter;
   final CapabilityProbe _shellProbe;
+  final DiagnosticLog _diagnostics;
   late final RunInterruptionReconciler _runReconciler;
   late final StartupRunRecoveryCoordinator _startupRecovery;
   List<RunRecoveryOffer> recoveryOffers = const <RunRecoveryOffer>[];
@@ -92,7 +96,16 @@ final class ProductionFoundation {
         .toList(growable: false);
   }
 
+  /// Every startup probe, each one recording its own outcome.
+  ///
+  /// The remediation text these probes hand the user says to review the
+  /// diagnostics log, so every probe result is written to it — a probe that
+  /// only reports into the interface leaves nothing to review later.
   List<FoundationProbe> get probes => <FoundationProbe>[
+    for (final probe in _probes) _RecordingFoundationProbe(probe, _diagnostics),
+  ];
+
+  List<FoundationProbe> get _probes => <FoundationProbe>[
     _CallbackFoundationProbe('paths', true, _initializePaths),
     _CallbackFoundationProbe('logging', true, _initializeLogging),
     _CallbackFoundationProbe('settings', true, _initializeSettings),
@@ -146,7 +159,10 @@ final class ProductionFoundation {
   }
 
   Future<String> _openDatabase() async {
-    final result = await database.integrityCheck();
+    // Opening the database already runs the integrity check. This probe reports
+    // that verdict instead of running a second full-database page scan on every
+    // launch.
+    final result = await database.openIntegrityCheck();
     if (result != 'ok') {
       throw StateError('SQLite integrity check failed.');
     }
@@ -193,6 +209,26 @@ final class ProductionFoundation {
 
   Future<String> beginStartupReconciliation() =>
       _startupReconciliation ??= _reconcile();
+}
+
+/// Wraps a probe so its verdict reaches the diagnostics log as well as the UI.
+final class _RecordingFoundationProbe implements FoundationProbe {
+  const _RecordingFoundationProbe(this._probe, this._diagnostics);
+
+  final FoundationProbe _probe;
+  final DiagnosticLog _diagnostics;
+
+  @override
+  String get id => _probe.id;
+
+  @override
+  Future<FoundationCheck> probe() async {
+    final check = await _probe.probe();
+    await _diagnostics.record(
+      'foundation ${check.id}: ${check.health.name} — ${check.message}',
+    );
+    return check;
+  }
 }
 
 final class StaticFoundationProbe implements FoundationProbe {
@@ -258,5 +294,15 @@ final class _CapabilityFoundationProbe implements FoundationProbe {
 
 DateTime _utcNow() => DateTime.now().toUtc();
 
+int _fallbackIdSequence = 0;
+
+/// The identifier source used when no generator is supplied.
+///
+/// A timestamp alone is not unique: the interruption sweep mints several
+/// identifiers inside one transaction, and `DateTime.now()` is coarser than a
+/// microsecond on Windows, so two of them would collide on a primary key. The
+/// counter makes every value distinct within a process; production supplies a
+/// UUIDv7 generator and never reaches this.
 String _fallbackId() =>
-    'foundation-${DateTime.now().toUtc().microsecondsSinceEpoch}';
+    'foundation-${DateTime.now().toUtc().microsecondsSinceEpoch}-'
+    '${_fallbackIdSequence++}';

@@ -205,6 +205,56 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 15)),
   );
+
+  test('GivenAWindowsRecord_WhenTheCreationTimeMatches_ThenItIsRetained', () {
+    // A bare existence check held the record open against whatever process
+    // later inherited the identifier, which after a reboot is anything.
+    expect(
+      windowsRecoveryOutcome(
+        liveCreationTicks: 4242,
+        fingerprint: 'windows-create:4242',
+      ),
+      ProcessRecoveryOutcome.retainedFailure,
+    );
+  });
+
+  test('GivenAWindowsRecord_WhenTheIdentifierWasReused_ThenItIsResolved', () {
+    expect(
+      windowsRecoveryOutcome(
+        liveCreationTicks: 9999,
+        fingerprint: 'windows-create:4242',
+      ),
+      ProcessRecoveryOutcome.resolved,
+    );
+  });
+
+  test('GivenAWindowsRecord_WhenNoSuchProcessRuns_ThenItIsResolved', () {
+    expect(
+      windowsRecoveryOutcome(
+        liveCreationTicks: null,
+        fingerprint: 'windows-create:4242',
+      ),
+      ProcessRecoveryOutcome.resolved,
+    );
+  });
+
+  test('GivenAnUnprovableWindowsRecord_WhenReconciling_ThenItIsRetained', () {
+    // Falling back to existence is conservative: it may retain a record it
+    // cannot prove, never release one.
+    expect(
+      windowsRecoveryOutcome(
+        liveCreationTicks: 4242,
+        fingerprint: unknownWindowsFingerprint,
+      ),
+      ProcessRecoveryOutcome.retainedFailure,
+    );
+  });
+
+  test('GivenAWindowsFingerprint_WhenParsed_ThenTicksAreRecovered', () {
+    expect(parseWindowsFingerprint('windows-create:4242'), 4242);
+    expect(parseWindowsFingerprint(unknownWindowsFingerprint), isNull);
+    expect(parseWindowsFingerprint('linux-start:1:session:2'), isNull);
+  });
 }
 
 DurableProcessIdentity _identity() => const DurableProcessIdentity(

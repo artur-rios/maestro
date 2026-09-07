@@ -445,8 +445,24 @@ final class MaestroDatabase extends _$MaestroDatabase {
       if (result != 'ok') {
         throw StateError('SQLite integrity check failed: $result');
       }
+      _openIntegrity = result;
     },
   );
+
+  String? _openIntegrity;
+
+  /// The verdict from the integrity check this database ran when it opened.
+  ///
+  /// `beforeOpen` already reads every page, and this store's bulk is run-log
+  /// blobs. Reporting the recorded verdict rather than running the pragma a
+  /// second time halves what a launch pays to say the same thing.
+  Future<String> openIntegrityCheck() async {
+    // A trivial statement does two jobs: it forces a first open, which is what
+    // records the verdict, and it proves the connection is still usable — a
+    // cached verdict alone would report a closed database as healthy.
+    await customSelect('SELECT 1 AS probe').getSingle();
+    return _openIntegrity ?? await integrityCheck();
+  }
 
   Future<String> integrityCheck() async {
     final row = await customSelect('PRAGMA integrity_check').getSingle();

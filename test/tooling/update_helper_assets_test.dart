@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/platform/updates/production_update_service.dart';
 
 void main() {
   test(
@@ -64,6 +65,100 @@ void main() {
       expect(result.exitCode, 0, reason: '${result.stderr}');
       expect('${result.stdout}', contains('semantic_version=1.2.3-rc.4'));
       expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
+    },
+  );
+
+  test(
+    'GivenAppImageHelper_WhenInvokedWithTwoArguments_ThenItRefuses',
+    () async {
+      // The installer passes package, install path and parent pid. A helper
+      // that silently accepted fewer would hide exactly the mismatch that made
+      // Linux self-update impossible.
+      if (!Platform.isLinux && !Platform.isMacOS) return;
+      final result = await Process.run('/bin/bash', <String>[
+        'tooling/updates/replace_linux_appimage.sh',
+        '/tmp/maestro-absent.AppImage',
+        '/tmp/maestro-absent',
+      ], runInShell: false);
+
+      expect(result.exitCode, 64);
+      expect('${result.stderr}', contains('<parent_pid>'));
+    },
+  );
+
+  test(
+    'GivenTheApplicationIcon_WhenInspected_ThenEveryPlatformAssetIsPresent',
+    () async {
+      // A missing size is invisible until a shell picks exactly that one, so
+      // the set is asserted rather than trusted.
+      const sizes = <int>[16, 24, 32, 48, 64, 128, 256, 512, 1024];
+      for (final size in sizes) {
+        final png = File('tooling/packaging/icons/maestro-$size.png');
+        expect(
+          await png.exists(),
+          isTrue,
+          reason: '${png.path} must be generated',
+        );
+        expect(await png.length(), greaterThan(0));
+      }
+
+      final svg = await File('tooling/packaging/maestro.svg').readAsString();
+      expect(svg, contains('viewBox="0 0 128 128"'));
+      // The mark is the application's own accent, not a stock template colour.
+      expect(svg, contains('#B9C3FF'));
+
+      final ico = await File(
+        'windows/runner/resources/app_icon.ico',
+      ).readAsBytes();
+      expect(ico.length, greaterThan(0));
+      // An ICO header is: reserved 0, type 1, then the image count.
+      expect(ico[0] | ico[1], 0);
+      expect(ico[2] | (ico[3] << 8), 1);
+      expect(ico[4] | (ico[5] << 8), sizes.length - 2);
+
+      final linuxPackage = await File(
+        'tooling/packaging/package_linux.sh',
+      ).readAsString();
+      expect(linuxPackage, contains('hicolor/scalable/apps/maestro.svg'));
+      expect(linuxPackage, contains(r'maestro-$size.png'));
+
+      final pubspec = await File('pubspec.yaml').readAsString();
+      expect(
+        pubspec,
+        contains('logo_path: tooling/packaging/icons/maestro-1024.png'),
+      );
+      // Trimming would crop the tile's rounded corners away.
+      expect(pubspec, contains('trim_logo: false'));
+    },
+  );
+
+  test(
+    'GivenPackagingScripts_WhenInspected_ThenReleaseDefinesAreForwarded',
+    () async {
+      // Without these the shipped build composes no update service at all, and
+      // the whole signed-update path is unreachable in every release.
+      final windows = await File(
+        'tooling/packaging/package_windows.ps1',
+      ).readAsString();
+      final linux = await File(
+        'tooling/packaging/package_linux.sh',
+      ).readAsString();
+      for (final define in ReleaseUpdateConfiguration.requiredDefines) {
+        expect(
+          windows,
+          contains('--dart-define=$define='),
+          reason: 'package_windows.ps1 must forward $define',
+        );
+        expect(
+          linux,
+          contains('--dart-define=$define='),
+          reason: 'package_linux.sh must forward $define',
+        );
+      }
+      // All or nothing: a half-configured build would ship an updater that
+      // cannot verify what it downloads.
+      expect(windows, contains('runtime-updates: unconfigured'));
+      expect(linux, contains('runtime-updates: unconfigured'));
     },
   );
 

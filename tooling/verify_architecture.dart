@@ -19,9 +19,8 @@ Future<List<ArchitectureViolation>> verifyArchitecture(Directory root) async {
       continue;
     }
     final normalized = p.posix.normalize(entity.path.replaceAll('\\', '/'));
-    final isDomain = normalized.contains('/domain/');
-    final isApplication = normalized.contains('/application/');
-    if (!isDomain && !isApplication) {
+    final layer = _layerOf(normalized);
+    if (layer == null) {
       continue;
     }
     final source = await entity.readAsString();
@@ -29,7 +28,7 @@ Future<List<ArchitectureViolation>> verifyArchitecture(Directory root) async {
       r'''(?:import|export)\s+['"]([^'"]+)['"]''',
     ).allMatches(source)) {
       final import = match.group(1)!;
-      if (_isForbidden(import, isDomain: isDomain)) {
+      if (_isForbidden(import, layer)) {
         violations.add(
           ArchitectureViolation(path: entity.path, import: import),
         );
@@ -40,18 +39,42 @@ Future<List<ArchitectureViolation>> verifyArchitecture(Directory root) async {
   return violations;
 }
 
-bool _isForbidden(String import, {required bool isDomain}) {
-  if (import == 'dart:io' ||
-      import.startsWith('package:flutter') ||
-      import.startsWith('package:drift') ||
-      import.startsWith('package:maestro/platform/')) {
-    return true;
-  }
-  return isDomain &&
-      (import.contains('/application/') ||
-          import.contains('/data/') ||
-          import.contains('/presentation/'));
+enum _Layer { domain, application, data, presentation }
+
+_Layer? _layerOf(String normalized) {
+  if (normalized.contains('/domain/')) return _Layer.domain;
+  if (normalized.contains('/application/')) return _Layer.application;
+  if (normalized.contains('/data/')) return _Layer.data;
+  if (normalized.contains('/presentation/')) return _Layer.presentation;
+  return null;
 }
+
+/// Whether [import] is one [layer] must not reach for.
+///
+/// Checking only domain and application left the two layers that actually
+/// touch the outside world unconstrained: a repository was free to import
+/// widgets, and a widget was free to import the ORM.
+bool _isForbidden(String import, _Layer layer) => switch (layer) {
+  // The core: no platform, no framework, no storage, and no outward layers.
+  _Layer.domain =>
+    _isOutsideWorld(import) ||
+        import.contains('/application/') ||
+        import.contains('/data/') ||
+        import.contains('/presentation/'),
+  // Use cases own ports; adapters implement them.
+  _Layer.application => _isOutsideWorld(import),
+  // Adapters may use storage and the platform, but never the interface.
+  _Layer.data => import.startsWith('package:flutter/'),
+  // Views may use the framework, but never the ORM or the filesystem.
+  _Layer.presentation =>
+    import == 'dart:io' || import.startsWith('package:drift'),
+};
+
+bool _isOutsideWorld(String import) =>
+    import == 'dart:io' ||
+    import.startsWith('package:flutter') ||
+    import.startsWith('package:drift') ||
+    import.startsWith('package:maestro/platform/');
 
 Future<void> main(List<String> arguments) async {
   final root = Directory(arguments.isEmpty ? 'lib' : arguments.single);

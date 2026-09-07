@@ -8,6 +8,7 @@ import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/app/maestro_window_chrome.dart';
 import 'package:maestro/core/errors/result.dart';
+import 'package:maestro/core/logging/diagnostic_log.dart';
 import 'package:maestro/core/security/platform_protected_storage.dart';
 import 'package:maestro/core/storage/application_paths.dart';
 import 'package:maestro/core/storage/database/database_factory.dart';
@@ -28,6 +29,7 @@ import 'package:maestro/features/delivery/application/autonomous_delivery.dart';
 import 'package:maestro/features/delivery/data/command_runner_autonomous_delivery_port.dart';
 import 'package:maestro/features/delivery/data/drift_delivery_repository.dart';
 import 'package:maestro/features/delivery/presentation/delivery_controller.dart';
+import 'package:maestro/features/foundation/data/drift_diagnostic_log_sink.dart';
 import 'package:maestro/features/foundation/data/drift_owned_resource_store.dart';
 import 'package:maestro/features/foundation/data/production_foundation.dart';
 import 'package:maestro/features/history/data/drift_history_repository.dart';
@@ -87,6 +89,7 @@ import 'package:maestro/platform/terminal/platform_shell.dart';
 import 'package:maestro/platform/terminal/pty_terminal_port.dart';
 import 'package:maestro/platform/updates/production_update_service.dart';
 import 'package:maestro/platform/updates/update_readiness_signal.dart';
+import 'package:maestro/platform/updates/update_service.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 import 'package:maestro/platform/window/window_manager_desktop_window.dart';
 import 'package:path/path.dart' as p;
@@ -138,6 +141,8 @@ final class ProductionAppComposition {
     required this.projectFolderPicker,
     required this.foundation,
     required this.window,
+    required this.updateService,
+    required this.diagnostics,
     required this._closeDatabase,
   });
 
@@ -164,6 +169,11 @@ final class ProductionAppComposition {
   final ProjectFolderPicker projectFolderPicker;
   final ProductionFoundation foundation;
   final DesktopWindowPort window;
+
+  /// Null in a build with no release update configuration; see
+  /// [ReleaseUpdateConfiguration].
+  final UpdateService? updateService;
+  final DiagnosticLog diagnostics;
   final DatabaseCloser _closeDatabase;
   Future<void>? _closeFuture;
 
@@ -190,8 +200,21 @@ final class ProductionAppComposition {
     return _closeFuture ??= Future<void>.microtask(() async {
       appearanceController.dispose();
       authenticationService.dispose();
+      // The update service owns HTTP transports and the diagnostics log owns a
+      // buffer; both outlive any single view, so the composition releases them.
+      await _closeQuietly(() async => updateService?.close());
+      await _closeQuietly(diagnostics.close);
       await _closeDatabase(database);
     });
+  }
+
+  static Future<void> _closeQuietly(Future<void> Function() close) async {
+    try {
+      await close();
+    } on Object {
+      // Shutdown continues: a resource that will not close must not keep the
+      // database open behind it.
+    }
   }
 }
 
@@ -298,6 +321,13 @@ Future<ProductionAppComposition> composeProductionApp({
     ],
     workflowDesignService: workflowDesignService,
   );
+  // The diagnostics log the remediation text points users at. Composed before
+  // the foundation so startup probe verdicts are the first thing it records.
+  final diagnostics = BoundedDiagnosticLog(
+    sink: DriftDiagnosticLogSink(database: database, clock: now, newId: newId),
+    clock: now,
+    environment: Platform.environment,
+  );
   final ownership = DriftOwnedResourceStore(database);
   final runOrchestrator = RunOrchestrator(
     repository: runRepository,
@@ -350,6 +380,7 @@ Future<ProductionAppComposition> composeProductionApp({
     clock: now,
     newId: newId,
     shellProbe: terminals,
+    diagnostics: diagnostics,
     // Startup offers and in-session retries share one execution path, so a
     // scope chosen at startup actually drives the run.
     recoveryStarter: (offer, action) async {
@@ -442,6 +473,11 @@ Future<ProductionAppComposition> composeProductionApp({
       defaultValue: '0.1.0',
     ),
     runner: commandRunner,
+  );
+  await diagnostics.record(
+    updateService == null
+        ? 'updates: unavailable — this build carries no release configuration'
+        : 'updates: configured',
   );
   final retentionService = RetentionService(
     database: database,
@@ -552,6 +588,8 @@ Future<ProductionAppComposition> composeProductionApp({
     projectFolderPicker: projectFolderPicker,
     foundation: foundation,
     window: window,
+    updateService: updateService,
+    diagnostics: diagnostics,
     closeDatabase: closeDatabase,
   );
 }

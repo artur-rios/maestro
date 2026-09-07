@@ -90,6 +90,34 @@ final class DriftAuthenticationRepository
     )..where((table) => table.id.equals(eventId))).go();
   }
 
+  @override
+  Future<FailedAuthenticationHistory> recentFailedAuthentications({
+    required String target,
+    required DateTime since,
+  }) async {
+    final rows =
+        await (_database.select(_database.auditEvents)
+              ..where(
+                (table) =>
+                    table.target.equals(target) &
+                    table.action.equals(
+                      AuthenticationAuditAction.signInFailed.name,
+                    ) &
+                    table.outcome.equals(
+                      AuthenticationAuditOutcome.failure.name,
+                    ) &
+                    table.occurredAt.isBiggerOrEqualValue(since.toUtc()),
+              )
+              ..orderBy(<OrderingTerm Function(db.AuditEvents)>[
+                (table) => OrderingTerm.desc(table.occurredAt),
+              ]))
+            .get();
+    return FailedAuthenticationHistory(
+      count: rows.length,
+      lastAt: rows.isEmpty ? null : rows.first.occurredAt.toUtc(),
+    );
+  }
+
   static auth.LocalUser _toDomain(db.LocalUser row) {
     return auth.LocalUser(
       id: row.id,

@@ -63,7 +63,15 @@ final class DriftProjectRepository
         return const FailureResult<void>(
           StorageFailure(
             code: ProjectRepositoryFailureCodes.duplicateName,
-            message: 'A retained project already uses this name.',
+            // The uniqueness index is not scoped to retained rows, so a
+            // deleted project holds its name too. Saying "retained" sent the
+            // user looking through a list the conflict is not in.
+            message:
+                'Another project already uses this name, including a deleted '
+                'one.',
+            remediation:
+                'Choose a different name, or permanently delete the project '
+                'holding it.',
           ),
         );
       }

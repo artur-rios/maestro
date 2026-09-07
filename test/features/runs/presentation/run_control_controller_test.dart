@@ -296,6 +296,9 @@ final class _Execution implements RunExecutionControl {
   void requestPause(String runId) {}
 
   @override
+  void cancelPause(String runId) {}
+
+  @override
   Future<CancellationOutcome> requestCancel(String runId) async => outcome;
 
   @override

@@ -1,11 +1,12 @@
 // Public constructor names describe ports; stored fields remain private.
 // ignore_for_file: prefer_initializing_formals
 
-import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
-import 'dart:math';
 
+import 'package:ffi/ffi.dart';
 import 'package:maestro/features/foundation/application/reconcile_owned_processes.dart';
+import 'package:win32/win32.dart';
 
 final class LinuxProcessSnapshot {
   const LinuxProcessSnapshot({
@@ -59,8 +60,57 @@ final class LinuxProcessSnapshot {
   }
 }
 
+/// Reads a Windows process's creation time.
+///
+/// The creation time is what distinguishes an owned process from an unrelated
+/// one that later inherited its identifier: a bare process id proves nothing
+/// after a reboot, and 32 random bytes prove nothing at all.
+abstract interface class WindowsProcessTimes {
+  /// The process's creation instant in 100-nanosecond ticks, or null when no
+  /// such process is running or its times cannot be read.
+  int? creationTicks(int pid);
+}
+
+final class Win32ProcessTimes implements WindowsProcessTimes {
+  const Win32ProcessTimes();
+
+  @override
+  int? creationTicks(int pid) {
+    if (!Platform.isWindows) return null;
+    final opened = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+    final handle = opened.value;
+    if (!handle.isValid) return null;
+    final creation = calloc<FILETIME>();
+    final exit = calloc<FILETIME>();
+    final kernel = calloc<FILETIME>();
+    final user = calloc<FILETIME>();
+    try {
+      final read = GetProcessTimes(handle, creation, exit, kernel, user);
+      if (!read.value) return null;
+      return (creation.ref.dwHighDateTime << 32) | creation.ref.dwLowDateTime;
+    } finally {
+      calloc
+        ..free(creation)
+        ..free(exit)
+        ..free(kernel)
+        ..free(user);
+      handle.close();
+    }
+  }
+}
+
+/// The fingerprint recorded when a process's creation time cannot be read.
+///
+/// Reconciliation falls back to a bare existence check for these, which is
+/// conservative: it may retain a record it cannot prove, never release one.
+const String unknownWindowsFingerprint = 'windows-create:unknown';
+
 final class PlatformProcessIdentityProvider implements ProcessIdentityProvider {
-  const PlatformProcessIdentityProvider();
+  const PlatformProcessIdentityProvider({
+    WindowsProcessTimes processTimes = const Win32ProcessTimes(),
+  }) : _processTimes = processTimes;
+
+  final WindowsProcessTimes _processTimes;
 
   @override
   Future<DurableProcessIdentity> capture(int pid) async {
@@ -74,20 +124,23 @@ final class PlatformProcessIdentityProvider implements ProcessIdentityProvider {
       );
     }
     if (Platform.isWindows) {
+      final ticks = _processTimes.creationTicks(pid);
       return DurableProcessIdentity(
         platform: 'windows-job',
         pid: pid,
-        fingerprint: _randomFingerprint(),
+        fingerprint: ticks == null
+            ? unknownWindowsFingerprint
+            : 'windows-create:$ticks',
         groupId: null,
       );
     }
     throw UnsupportedError('Owned process identity is unsupported.');
   }
+}
 
-  static String _randomFingerprint() {
-    final random = Random.secure();
-    return base64UrlEncode(List<int>.generate(32, (_) => random.nextInt(256)));
-  }
+int? parseWindowsFingerprint(String value) {
+  final match = RegExp(r'^windows-create:([0-9]+)$').firstMatch(value);
+  return match == null ? null : int.tryParse(match.group(1)!);
 }
 
 abstract interface class LinuxProcessTable {
@@ -268,7 +321,11 @@ final class LinuxOwnedProcessRecovery implements OwnedProcessRecoveryAdapter {
 
 final class PlatformOwnedProcessRecovery
     implements OwnedProcessRecoveryAdapter {
-  const PlatformOwnedProcessRecovery();
+  const PlatformOwnedProcessRecovery({
+    WindowsProcessTimes processTimes = const Win32ProcessTimes(),
+  }) : _processTimes = processTimes;
+
+  final WindowsProcessTimes _processTimes;
 
   @override
   Future<ProcessRecoveryOutcome> reconcile(
@@ -278,18 +335,32 @@ final class PlatformOwnedProcessRecovery
       return const LinuxOwnedProcessRecovery().reconcile(identity);
     }
     if (identity.platform == 'windows-job' && Platform.isWindows) {
-      final result = await Process.run('tasklist', <String>[
-        '/FI',
-        'PID eq ${identity.pid}',
-        '/FO',
-        'CSV',
-        '/NH',
-      ], runInShell: false);
-      final output = result.stdout.toString().trim();
-      return output.isEmpty || output.startsWith('INFO:')
-          ? ProcessRecoveryOutcome.resolved
-          : ProcessRecoveryOutcome.retainedFailure;
+      return windowsRecoveryOutcome(
+        liveCreationTicks: _processTimes.creationTicks(identity.pid),
+        fingerprint: identity.fingerprint,
+      );
     }
     return ProcessRecoveryOutcome.retainedFailure;
   }
+}
+
+/// Decides a Windows record's fate from the live process's creation time.
+///
+/// Identity, not just existence: after a reboot the operating system hands out
+/// the same process ids again, and a bare existence check would hold a record
+/// open forever against an unrelated process. Kept separate from the platform
+/// call so the rule is testable on any host.
+ProcessRecoveryOutcome windowsRecoveryOutcome({
+  required int? liveCreationTicks,
+  required String fingerprint,
+}) {
+  // Nothing is running under that identifier, so the record is settled.
+  if (liveCreationTicks == null) return ProcessRecoveryOutcome.resolved;
+  final persisted = parseWindowsFingerprint(fingerprint);
+  // An identity we cannot prove falls back to existence, which is
+  // conservative: it may retain a record it cannot prove, never release one.
+  if (persisted == null) return ProcessRecoveryOutcome.retainedFailure;
+  return liveCreationTicks == persisted
+      ? ProcessRecoveryOutcome.retainedFailure
+      : ProcessRecoveryOutcome.resolved;
 }
