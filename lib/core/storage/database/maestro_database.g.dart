@@ -9175,7 +9175,16 @@ class $$SettingsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SettingsTable, Setting>(table),
+                  BaseReferences<_$MaestroDatabase, $SettingsTable, Setting>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -9454,7 +9463,19 @@ class $$DiagnosticLogSegmentsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $DiagnosticLogSegmentsTable,
+                    DiagnosticLogSegment
+                  >(table),
+                  BaseReferences<
+                    _$MaestroDatabase,
+                    $DiagnosticLogSegmentsTable,
+                    DiagnosticLogSegment
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -9723,7 +9744,16 @@ class $$OwnedResourcesTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$OwnedResourcesTable, OwnedResource>(table),
+                  BaseReferences<
+                    _$MaestroDatabase,
+                    $OwnedResourcesTable,
+                    OwnedResource
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -10024,7 +10054,7 @@ class $$LocalUsersTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$LocalUsersTable, LocalUser>(table),
                   $$LocalUsersTableReferences(db, table, e),
                 ),
               )
@@ -10348,7 +10378,9 @@ class $$LocalRecoveryCodesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$LocalRecoveryCodesTable, LocalRecoveryCode>(
+                    table,
+                  ),
                   $$LocalRecoveryCodesTableReferences(db, table, e),
                 ),
               )
@@ -10630,7 +10662,16 @@ class $$AuditEventsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$AuditEventsTable, AuditEvent>(table),
+                  BaseReferences<
+                    _$MaestroDatabase,
+                    $AuditEventsTable,
+                    AuditEvent
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -11022,7 +11063,7 @@ class $$ProjectsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$ProjectsTable, Project>(table),
                   $$ProjectsTableReferences(db, table, e),
                 ),
               )
@@ -11581,7 +11622,7 @@ class $$WorkflowsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$WorkflowsTable, Workflow>(table),
                   $$WorkflowsTableReferences(db, table, e),
                 ),
               )
@@ -12010,7 +12051,7 @@ class $$WorkflowStepsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$WorkflowStepsTable, WorkflowStep>(table),
                   $$WorkflowStepsTableReferences(db, table, e),
                 ),
               )
@@ -12360,7 +12401,9 @@ class $$WorkflowProjectRefsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$WorkflowProjectRefsTable, WorkflowProjectRef>(
+                    table,
+                  ),
                   $$WorkflowProjectRefsTableReferences(db, table, e),
                 ),
               )
@@ -13360,7 +13403,7 @@ class $$WorkflowRunsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$WorkflowRunsTable, WorkflowRun>(table),
                   $$WorkflowRunsTableReferences(db, table, e),
                 ),
               )
@@ -13834,7 +13877,7 @@ class $$RunSnapshotsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$RunSnapshotsTable, RunSnapshot>(table),
                   $$RunSnapshotsTableReferences(db, table, e),
                 ),
               )
@@ -14383,7 +14426,7 @@ class $$RunSnapshotStepsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$RunSnapshotStepsTable, RunSnapshotStep>(table),
                   $$RunSnapshotStepsTableReferences(db, table, e),
                 ),
               )
@@ -15083,7 +15126,7 @@ class $$RunAttemptsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$RunAttemptsTable, RunAttempt>(table),
                   $$RunAttemptsTableReferences(db, table, e),
                 ),
               )
@@ -15733,7 +15776,7 @@ class $$RunLogSegmentsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$RunLogSegmentsTable, RunLogSegment>(table),
                   $$RunLogSegmentsTableReferences(db, table, e),
                 ),
               )
@@ -16195,7 +16238,9 @@ class $$RunRecoveryRequestsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$RunRecoveryRequestsTable, RunRecoveryRequest>(
+                    table,
+                  ),
                   $$RunRecoveryRequestsTableReferences(db, table, e),
                 ),
               )
@@ -16815,7 +16860,7 @@ class $$DeliveryRecordsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$DeliveryRecordsTable, DeliveryRecord>(table),
                   $$DeliveryRecordsTableReferences(db, table, e),
                 ),
               )

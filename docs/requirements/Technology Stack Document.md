@@ -35,8 +35,19 @@ document changes first.
 | **sodium** | `latest stable at implementation time` | Authentication and updates | Password hashing and update-manifest signature verification. |
 | **uuid** | `latest stable at implementation time` | Domain layer | UUIDv7 identifier generation. |
 | **path_provider** | `latest stable at implementation time` | Data and runtime services | Application-data, log, update, and worktree locations. |
-| **package_info_plus** | `latest stable at implementation time` | Update service | Installed application version discovery. |
-| **logging** | `latest stable at implementation time` | Cross-cutting logging | Structured application and audit event emission. |
+| **path** | `latest stable at implementation time` | Data and platform adapters | Platform-correct path composition. |
+| **crypto** | `latest stable at implementation time` | Update service, authentication | SHA-256 digests for staged updates and PKCE challenges. |
+| **archive** | `latest stable at implementation time` | History retention | Lossless compaction of stored run-log segments. |
+| **http** | `latest stable at implementation time` | Authentication | Heimdall and Google token-exchange requests. |
+| **url_launcher** | `latest stable at implementation time` | Authentication | Opens the system browser for the Google authorization code flow. |
+| **file_selector** | `latest stable at implementation time` | Project registration | Native project-folder picker. |
+| **window_manager** | `latest stable at implementation time` | Application shell | Custom desktop window chrome. |
+| **win32**, **ffi** | `latest stable at implementation time` | Process adapter | Windows job objects and process-identity calls through Dart FFI. |
+
+The installed application version is stamped in at build time through
+`MAESTRO_INSTALLED_VERSION` rather than read from package metadata, and
+diagnostics are written through Maestro's own bounded, redacted diagnostic log
+rather than a logging package.
 
 The PTY package is isolated behind a Maestro-owned interface. Platform-specific process-group handling uses
 Windows job objects and Unix process groups through Dart FFI when the package API cannot guarantee whole-tree
@@ -75,7 +86,7 @@ and prevent UI and orchestration code from depending on database APIs.
 | Concern | Technology | Version | How it is used |
 | --- | --- | --- | --- |
 | Input validation | Dart domain value objects and form validators | `Dart SDK` | Validation occurs before commands reach repositories or platform adapters. |
-| Logging | `logging` plus Maestro sinks | `latest stable at implementation time` | Structured local application, execution, and audit records with redaction. |
+| Logging | Maestro bounded log buffer and SQLite-backed sinks | `first-party` | Structured local application, execution, and audit records with redaction. |
 | OS authentication | Windows Hello and Linux PAM adapters | `operating-system supplied` | Verifies the current local user through native platform boundaries. |
 | Email/password authentication | `sodium` password hashing plus protected storage | `latest stable at implementation time` | Stores salted password verifiers; plaintext passwords are never retained. |
 | Authorization | Maestro domain policies | `Dart SDK` | Every authenticated local user receives the single full-control role. |
@@ -115,9 +126,9 @@ The [Testing Specification Document](Testing%20Specification%20Document.md) defi
 | Secure storage | flutter_secure_storage | `latest stable at implementation time` |
 | Cryptography | sodium | `latest stable at implementation time` |
 | Identifiers | uuid | `latest stable at implementation time` |
-| Platform paths | path_provider | `latest stable at implementation time` |
-| Package metadata | package_info_plus | `latest stable at implementation time` |
-| Logging | logging | `latest stable at implementation time` |
+| Platform paths | path_provider, path | `latest stable at implementation time` |
+| Installed version | `MAESTRO_INSTALLED_VERSION` build define | `stamped by the packaging scripts` |
+| Diagnostics | Maestro bounded diagnostic log (SQLite-backed) | `first-party` |
 | Unit and widget tests | flutter_test | `bundled with selected Flutter SDK` |
 | Dart tests | test | `latest stable at implementation time` |
 | Desktop integration tests | integration_test | `bundled with selected Flutter SDK` |
