@@ -55,18 +55,55 @@ final class PlatformTerminalTreeTerminator implements TerminalTreeTerminator {
         ], runInShell: false);
         return;
       }
-      // `flutter_pty` gives the shell its own session on Unix, so the leader's
-      // process group is the terminal's tree.
-      Process.killPid(
-        -pid,
-        signal == TerminalSignal.kill
-            ? ProcessSignal.sigkill
-            : ProcessSignal.sigterm,
-      );
+      // `flutter_pty` gives the shell its own session on Unix, so the session
+      // is the terminal's tree — but the leader's process group is not. An
+      // interactive shell turns job control on and puts every background job
+      // in a process group of its own, so signalling `-pid` alone reaches the
+      // foreground group and leaves `sleep 600 &` running after the terminal
+      // is closed, which is the orphan FR-TE-05 exists to prevent.
+      final target = signal == TerminalSignal.kill
+          ? ProcessSignal.sigkill
+          : ProcessSignal.sigterm;
+      // Read the membership before signalling anything: once the shell dies
+      // its children are reparented, and a pid read afterwards could name a
+      // process this terminal never started.
+      final members = await _sessionMembers(pid);
+      Process.killPid(-pid, target);
+      for (final member in members) {
+        if (member == pid) continue;
+        Process.killPid(member, target);
+      }
     } on Object {
       // A tree that cannot be signalled is reported through the closure
       // outcome, which is decided by whether the shell actually exits.
     }
+  }
+
+  /// Every process in the session [leader] leads.
+  ///
+  /// Session membership is what makes this safe: the pseudo-terminal put the
+  /// shell in a session of its own, so nothing outside the terminal's own tree
+  /// can match, whatever else is running on the machine.
+  static Future<List<int>> _sessionMembers(int leader) async {
+    final members = <int>[];
+    try {
+      await for (final entry in Directory('/proc').list(followLinks: false)) {
+        final pid = int.tryParse(
+          entry.uri.pathSegments.lastWhere((segment) => segment.isNotEmpty),
+        );
+        if (pid == null) continue;
+        try {
+          final snapshot = await LinuxProcessSnapshot.read(pid);
+          if (snapshot.sessionId == leader) members.add(pid);
+        } on Object {
+          // The process exited while the scan was reading it.
+        }
+      }
+    } on Object {
+      // Without a readable process table the group signal above is all this
+      // can do; the closure outcome still reports what actually exited.
+    }
+    return members;
   }
 }
 

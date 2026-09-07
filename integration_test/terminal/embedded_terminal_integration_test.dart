@@ -175,16 +175,25 @@ void main() {
 }
 
 /// A child that outlives the test unless the terminal's tree is terminated.
+/// Starts a descendant that stays discoverable by [_findProcess].
+///
+/// The marker has to survive in a live process's own command line. On Linux a
+/// trailing no-op is what keeps it there: bash exec-optimises `bash -c 'sleep
+/// 600 # marker'` into a bare `sleep 600`, and the marker — a comment — goes
+/// with the shell that read it, so nothing could ever be found.
 String _longLivedChild(String marker) => Platform.isWindows
     ? 'pwsh -NoLogo -Command "Start-Sleep -Seconds 600 # $marker"'
-    : "bash -c 'sleep 600 # $marker'";
+    : "bash -c ': $marker; sleep 600; :'";
 
 /// Starts a descendant without blocking the interactive parent shell.
+///
+/// The Linux form carries the marker for the same reason [_longLivedChild]
+/// does.
 String _backgroundLongLivedChild(String marker) => Platform.isWindows
     ? 'Start-Process -FilePath (Get-Process -Id \$PID).Path '
           '-ArgumentList \'-NoLogo\', \'-NoProfile\', \'-Command\', '
           '\'Start-Sleep -Seconds 600 # $marker\''
-    : 'bash -c \'sleep 600 # $marker\' &';
+    : 'bash -c \': $marker; sleep 600; :\' &';
 
 /// Polls for a process whose command line carries [marker].
 Future<bool> _hasProcess(String marker, {bool expected = true}) async {
