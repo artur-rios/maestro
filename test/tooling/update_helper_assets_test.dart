@@ -129,6 +129,25 @@ void main() {
       );
       // Trimming would crop the tile's rounded corners away.
       expect(pubspec, contains('trim_logo: false'));
+
+      // The Linux window falls back to the bundled copy wherever no installed
+      // icon theme carries the mark, which is every build nobody installed.
+      final bundled = File('assets/icons/maestro.png');
+      expect(
+        await bundled.exists(),
+        isTrue,
+        reason: '${bundled.path} must be generated',
+      );
+      expect(await bundled.length(), greaterThan(0));
+      expect(pubspec, contains('- assets/icons/maestro.png'));
+
+      final linuxRunner = await File(
+        'linux/runner/my_application.cc',
+      ).readAsString();
+      expect(linuxRunner, contains('gtk_window_set_icon_name(window,'));
+      expect(linuxRunner, contains('gtk_window_set_icon_from_file'));
+      // The fallback has to name the path the bundle actually ships.
+      expect(linuxRunner, contains('"data", "flutter_assets", "assets"'));
     },
   );
 

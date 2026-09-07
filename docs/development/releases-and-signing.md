@@ -135,11 +135,29 @@ python3 tooling/packaging/icons/generate_icons.py
 ```
 
 It writes `windows/runner/resources/app_icon.ico` (16 through 256),
-`tooling/packaging/maestro.svg`, and `tooling/packaging/icons/maestro-N.png`
-(16 through 1024). The generated files are committed, so no build or CI job
-depends on Python being present; regenerate and commit whenever the mark
-changes. `flutter test test/tooling/update_helper_assets_test.dart` fails if a
-size goes missing or the MSIX logo stops pointing at the 1024px source.
+`tooling/packaging/maestro.svg`, `tooling/packaging/icons/maestro-N.png`
+(16 through 1024), and `assets/icons/maestro.png`. The generated files are
+committed, so no build or CI job depends on Python being present; regenerate
+and commit whenever the mark changes.
+`flutter test test/tooling/update_helper_assets_test.dart` fails if a size goes
+missing or the MSIX logo stops pointing at the 1024px source.
+
+Each platform picks the icon up differently:
+
+| Where | How it resolves |
+| --- | --- |
+| Windows executable, taskbar, installer | `app_icon.ico`, linked into the runner |
+| MSIX tile | `logo_path` in `msix_config`, scaled from the 1024px source |
+| Debian package | the hicolor theme, which the package installs |
+| AppImage | the desktop entry names it, and the window falls back to the bundled copy |
+| `flutter run -d linux` | the bundled copy |
+
+The last two matter: `gtk_window_set_icon_name` only resolves a name an
+installed icon theme carries, so a build nobody installed — a development run,
+or the AppImage, which ships its own hicolor tree without joining it to the
+icon search path — had no window icon at all. The Linux runner therefore falls
+back to `assets/icons/maestro.png`, which the Flutter bundle places beside the
+executable in every build.
 
 ## Manifest signing
 

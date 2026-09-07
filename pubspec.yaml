@@ -82,6 +82,10 @@ flutter:
   assets:
     - assets/fonts/meslo/LICENSE.txt
     - assets/fonts/meslo/notices/
+    # The window icon the Linux runner falls back to when no installed icon
+    # theme carries the mark. Shipping it in the bundle is what puts it beside
+    # the executable in a development run and inside the AppImage alike.
+    - assets/icons/maestro.png
 
   fonts:
     - family: MesloLGM Nerd Font

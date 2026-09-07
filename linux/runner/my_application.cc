@@ -627,6 +627,34 @@ static void authentication_method_call_cb(FlMethodChannel* channel,
   }
 }
 
+// Gives the window the application's own mark.
+//
+// Naming the icon is the right thing for an installed build: the Debian
+// package puts `maestro` in the hicolor theme, so the shell, the switcher and
+// the window all resolve the same artwork at whatever size they need. Nothing
+// resolves it in a build that was never installed, though — a `flutter run`,
+// or the AppImage, which carries its own hicolor tree but never joins it to
+// the icon search path — and those windows came up with the toolkit's default
+// icon. The copy shipped in the bundle is what they fall back to.
+static void maestro_apply_window_icon(GtkWindow* window) {
+  gtk_window_set_icon_name(window, "maestro");
+  if (gtk_icon_theme_has_icon(gtk_icon_theme_get_default(), "maestro")) {
+    return;
+  }
+  g_autoptr(GError) error = nullptr;
+  g_autofree gchar* executable = g_file_read_link("/proc/self/exe", &error);
+  if (executable == nullptr) {
+    return;
+  }
+  g_autofree gchar* directory = g_path_get_dirname(executable);
+  g_autofree gchar* icon =
+      g_build_filename(directory, "data", "flutter_assets", "assets", "icons",
+                       "maestro.png", nullptr);
+  // A failure here leaves the window with the toolkit default, which is what
+  // it had before: an icon is not worth refusing to start over.
+  gtk_window_set_icon_from_file(window, icon, nullptr);
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -660,10 +688,7 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(self->window, "Maestro");
   }
 
-  // Name the icon rather than loading a file: the packages install
-  // `maestro` into the hicolor theme, so the shell, the switcher and the
-  // window all resolve the same artwork at whatever size they need.
-  gtk_window_set_icon_name(self->window, "maestro");
+  maestro_apply_window_icon(self->window);
 
   gtk_window_set_default_size(self->window, 1280, 720);
 

@@ -12,6 +12,9 @@ Outputs, all regenerated in place:
     windows/runner/resources/app_icon.ico   Windows executable and taskbar icon
     tooling/packaging/maestro.svg           Linux scalable icon (deb, AppImage)
     tooling/packaging/icons/maestro-N.png   Linux hicolor sizes and the MSIX logo
+    assets/icons/maestro.png                Shipped in the bundle, for the GTK
+                                            window of a build that was never
+                                            installed into an icon theme
 
 Run from the repository root:
 
@@ -53,6 +56,9 @@ ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 # 1024 is the MSIX source: the packager scales a single logo up to 2480px
 # wide, so it wants the largest square we can honestly give it.
 PNG_SIZES = (16, 24, 32, 48, 64, 128, 256, 512, 1024)
+# One size for the bundled window icon: GTK scales it down for the title bar
+# and the switcher, and 256 is large enough that it never scales up.
+BUNDLED_SIZE = 256
 
 # ----------------------------------------------------------------- drawing --
 
@@ -231,7 +237,17 @@ def main() -> int:
     for size in PNG_SIZES:
         render(full, size).save(icons / f'maestro-{size}.png')
 
-    print(f'icons: wrote svg, ico ({len(ICO_SIZES)} sizes), {len(PNG_SIZES)} pngs')
+    # The Linux runner falls back to this when no icon theme carries the mark,
+    # which is every build nobody installed: a `flutter run`, and the AppImage,
+    # which mounts its own hicolor tree without joining the icon search path.
+    bundled = root / 'assets' / 'icons'
+    bundled.mkdir(parents=True, exist_ok=True)
+    render(full, BUNDLED_SIZE).save(bundled / 'maestro.png')
+
+    print(
+        f'icons: wrote svg, ico ({len(ICO_SIZES)} sizes), {len(PNG_SIZES)} pngs, '
+        'and the bundled window icon'
+    )
     return 0
 
 
