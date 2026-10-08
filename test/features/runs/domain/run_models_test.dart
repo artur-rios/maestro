@@ -38,6 +38,24 @@ void main() {
   );
 
   test(
+    'GivenEachBranchWorkType_WhenNamingItsBranch_ThenOnlyFeatureAndFixPrefixesAreUsed',
+    () {
+      expect(
+        <String, String>{
+          for (final type in BranchWorkType.values)
+            type.name: type.branchPrefix,
+        },
+        <String, String>{
+          'feature': 'feature',
+          'fix': 'fix',
+          'refactor': 'feature',
+          'hotfix': 'fix',
+        },
+      );
+    },
+  );
+
+  test(
     'GivenUnsupportedOrInvalidWorkItems_WhenCreated_ThenTheyAreRejected',
     () {
       expect(
@@ -171,6 +189,64 @@ void main() {
       expect(status.canTransitionTo(RunStatus.succeeded), isTrue);
     },
   );
+
+  test(
+    'GivenAStoredSnapshotNamingAnUnknownValue_WhenDecoded_ThenItIsAFormatException',
+    () {
+      // Given: a stored snapshot whose branch work type or delivery mode this
+      // build no longer knows, as after a value is removed.
+      final snapshot = RunSnapshot(
+        schemaVersion: 1,
+        projectId: 'project-1',
+        projectName: 'Maestro',
+        canonicalSourcePath: r'C:\source\maestro',
+        sourceRevision: 'abc123',
+        workflowId: 'workflow-1',
+        workflowRevision: 3,
+        workflowName: 'Delivery',
+        workItem: FreeFormRunWorkItem(text: 'Ship'),
+        deliveryMode: DeliveryMode.supervised,
+        branchWorkType: BranchWorkType.feature,
+        steps: <RunSnapshotStep>[
+          RunSnapshotStep(
+            id: 'snapshot-step-1',
+            sourceWorkflowStepId: 'workflow-step-1',
+            position: 0,
+            kind: 'execute',
+            name: 'Execute',
+            cli: 'codex',
+            model: 'gpt-5',
+            configuration: const <String, Object?>{},
+          ),
+        ],
+      ).toCanonicalJson();
+
+      // When / Then: decoding reports unreadable evidence as a format error,
+      // like every other malformed field, naming the offending value.
+      for (final (from, to) in <(String, String)>[
+        ('"branchWorkType":"feature"', '"branchWorkType":"chore"'),
+        ('"deliveryMode":"supervised"', '"deliveryMode":"manual"'),
+      ]) {
+        expect(snapshot, contains(from));
+        expect(
+          () => RunSnapshot.fromCanonicalJson(snapshot.replaceFirst(from, to)),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains(to.split(':').last.replaceAll('"', '')),
+            ),
+          ),
+        );
+      }
+    },
+  );
+
+  test('GivenQueuedRun_WhenItsStartCannotProceed_ThenFailedIsLegal', () {
+    // Given: a queued intent whose start could not be recorded.
+    // When / Then: it can be settled as failed rather than left queued.
+    expect(RunStatus.queued.canTransitionTo(RunStatus.failed), isTrue);
+  });
 
   test('GivenQueuedOrStartingRun_WhenCancelling_ThenTheTransitionIsLegal', () {
     // Given: a run cancelled before it produced any output.

@@ -12,6 +12,54 @@ final class CommandRunnerRunGitPort implements RunGitPort {
 
   final CommandRunner _runner;
 
+  /// Asks the remote for its HEAD first: the `refs/remotes/<remote>/HEAD` a
+  /// clone records is never updated when the default branch changes later.
+  /// The recorded one is used only when the remote cannot be asked.
+  @override
+  Future<String?> defaultBranch(String sourcePath) async {
+    final remote = await _defaultRemote(sourcePath);
+    if (remote == null) return null;
+    final advertised = await _run(sourcePath, <String>[
+      'ls-remote',
+      '--symref',
+      remote,
+      'HEAD',
+    ]);
+    if (advertised.succeeded && !advertised.stdoutTruncated) {
+      final symref = RegExp(
+        r'^ref: refs/heads/(\S+)\s+HEAD$',
+        multiLine: true,
+      ).firstMatch(advertised.stdout);
+      if (symref != null) return symref.group(1);
+    }
+    final recorded = await _run(sourcePath, <String>[
+      'symbolic-ref',
+      '--quiet',
+      'refs/remotes/$remote/HEAD',
+    ]);
+    final prefix = 'refs/remotes/$remote/';
+    final reference = recorded.stdout.trim();
+    if (recorded.succeeded &&
+        reference.startsWith(prefix) &&
+        reference.length > prefix.length) {
+      return reference.substring(prefix.length);
+    }
+    return null;
+  }
+
+  /// `origin`, or the only remote when the repository has exactly one.
+  Future<String?> _defaultRemote(String sourcePath) async {
+    final result = await _run(sourcePath, const <String>['remote']);
+    if (!result.succeeded) return null;
+    final remotes = result.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (remotes.contains('origin')) return 'origin';
+    return remotes.length == 1 ? remotes.single : null;
+  }
+
   @override
   Future<RunGitSourceState> inspectSource(
     String sourcePath, {
