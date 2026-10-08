@@ -7,9 +7,11 @@ import 'package:maestro/platform/common/command_runner.dart';
 import 'package:maestro/platform/updates/http_update_manifest_source.dart';
 import 'package:maestro/platform/updates/linux_package_installer.dart';
 import 'package:maestro/platform/updates/manifest_verifier.dart';
+import 'package:maestro/platform/updates/package_installer.dart';
 import 'package:maestro/platform/updates/update_downloader.dart';
 import 'package:maestro/platform/updates/update_service.dart';
 import 'package:maestro/platform/updates/windows_package_installer.dart';
+import 'package:path/path.dart' as p;
 import 'package:sodium/sodium.dart';
 
 /// The build-time configuration that enables the in-application updater.
@@ -93,24 +95,13 @@ Future<UpdateService?> createProductionUpdateService({
     return null;
   }
   final sodium = await SodiumInit.init();
-  final executableDirectory = File(Platform.resolvedExecutable).parent.path;
-  final installer = switch (Platform.operatingSystem) {
-    'windows' => WindowsPackageInstaller(
-      runner: runner,
-      detachedLauncher: detachedLauncher,
-      zipReplacementHelper:
-          '$executableDirectory${Platform.pathSeparator}replace_windows_zip.ps1',
-      relaunchPath: Platform.resolvedExecutable,
-    ),
-    'linux' => LinuxPackageInstaller(
-      runner: runner,
-      detachedLauncher: detachedLauncher,
-      appImageReplacementHelper:
-          '$executableDirectory${Platform.pathSeparator}replace_linux_appimage.sh',
-      appImageInstallPath: Platform.resolvedExecutable,
-    ),
-    _ => null,
-  };
+  final installer = createPlatformPackageInstaller(
+    operatingSystem: Platform.operatingSystem,
+    resolvedExecutable: Platform.resolvedExecutable,
+    environment: Platform.environment,
+    runner: runner,
+    detachedLauncher: detachedLauncher,
+  );
   if (installer == null) return null;
   return UpdateService(
     installedVersion: installedVersion,
@@ -129,3 +120,40 @@ Future<UpdateService?> createProductionUpdateService({
     installer: installer,
   );
 }
+
+/// The installer for this platform, or null where Maestro does not update
+/// itself. The process facts are parameters so each composition can be checked
+/// on any host.
+PackageInstaller? createPlatformPackageInstaller({
+  required String operatingSystem,
+  required String resolvedExecutable,
+  required Map<String, String> environment,
+  required CommandRunner runner,
+  required DetachedProcessLauncher detachedLauncher,
+}) => switch (operatingSystem) {
+  'windows' => WindowsPackageInstaller(
+    runner: runner,
+    detachedLauncher: detachedLauncher,
+    zipReplacementHelper: p.windows.join(
+      p.windows.dirname(resolvedExecutable),
+      'replace_windows_zip.ps1',
+    ),
+    relaunchPath: resolvedExecutable,
+  ),
+  'linux' => LinuxPackageInstaller(
+    runner: runner,
+    detachedLauncher: detachedLauncher,
+    // Inside an AppImage this is the image's read-only mount. The helper only
+    // reads itself from there, and the script it has opened stays readable
+    // after Maestro exits and the runtime lets the mount go.
+    appImageReplacementHelper: p.posix.join(
+      p.posix.dirname(resolvedExecutable),
+      'replace_linux_appimage.sh',
+    ),
+    // The AppImage runtime names the .AppImage file it started from in
+    // APPIMAGE. The resolved executable is the copy inside the read-only mount
+    // (or the extraction directory), which the update must not target.
+    appImageInstallPath: environment['APPIMAGE'],
+  ),
+  _ => null,
+};

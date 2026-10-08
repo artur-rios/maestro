@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/core/errors/failure.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/updates/presentation/update_controller.dart';
 import 'package:maestro/platform/updates/manifest_verifier.dart';
@@ -52,6 +53,33 @@ void main() {
       await controller.install(approved: true);
       expect(installer.calls, hasLength(1));
       expect(controller.state.message, contains('0.2.0'));
+    },
+  );
+
+  test(
+    'GivenTheInstallerFailsWithRemediation_WhenApproved_ThenTheMessageSaysWhatToDo',
+    () async {
+      final controller = UpdateController(
+        service: _service(
+          installer: _Installer(
+            failure: const PlatformFailure(
+              code: 'update.install.failed',
+              message: 'Linux update installer failed.',
+              remediation: 'Install it with: sudo apt install ./maestro.deb',
+            ),
+          ),
+        ),
+      );
+      await controller.check();
+      await controller.install(approved: true);
+      expect(
+        controller.state.message,
+        allOf(
+          contains('Linux update installer failed.'),
+          contains('sudo apt install ./maestro.deb'),
+          contains('preserved'),
+        ),
+      );
     },
   );
 }
@@ -107,10 +135,13 @@ final class _Downloader implements UpdateDownloader {
 }
 
 final class _Installer implements PackageInstaller {
+  _Installer({this.failure});
+  final MaestroFailure? failure;
   final calls = <StagedUpdate>[];
   @override
   Future<Result<void>> install(StagedUpdate value) async {
     calls.add(value);
-    return const Success(null);
+    final failure = this.failure;
+    return failure == null ? const Success(null) : FailureResult(failure);
   }
 }
