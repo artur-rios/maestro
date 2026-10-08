@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:maestro/core/logging/diagnostic_log.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart' as db;
 import 'package:maestro/core/storage/log_compaction.dart';
 import 'package:maestro/features/foundation/application/reconcile_resources.dart';
@@ -53,9 +54,22 @@ final class DriftRunRepository
         RunInterruptionStateReader,
         RunObservationRepository,
         RunControlRepository {
-  const DriftRunRepository(this._database);
+  DriftRunRepository(
+    this._database, {
+    DiagnosticLog diagnostics = const NoopDiagnosticLog(),
+    // The parameter name describes the injected port; the field stays private.
+    // ignore: prefer_initializing_formals
+  }) : _diagnostics = diagnostics;
 
   final db.MaestroDatabase _database;
+
+  /// Where a run left out of the run list because it cannot be read is
+  /// recorded, so skipping it never hides the loss.
+  final DiagnosticLog _diagnostics;
+
+  /// Runs already recorded as unreadable, so a list refreshed many times a
+  /// second records each loss once per session rather than flooding the log.
+  final Set<String> _reportedUnreadable = <String>{};
 
   @override
   Future<void> create({
@@ -544,6 +558,7 @@ final class DriftRunRepository
     required String Function() newLogId,
   }) async {
     return _database.transaction(() async {
+      final abandoned = await _failAbandonedStarts(at: at, newId: newLogId);
       // A pause request means a step really was executing, so the run is as
       // orphaned by a restart as any other active run. So is a delivery left
       // in flight: nothing re-drives it after the process that owned it died.
@@ -672,8 +687,99 @@ final class DriftRunRepository
           ),
         );
       }
-      return runs.length;
+      return runs.length + abandoned;
     });
+  }
+
+  /// Fails every run whose start stopped before it left the queue.
+  ///
+  /// A run is created queued and moved to starting by a second write, so a
+  /// stop between the two leaves an intent nothing will ever drive. It never
+  /// registered a branch or worktree, so there is nothing to recover and it
+  /// is failed rather than interrupted. Like an interruption, the reason is
+  /// recorded on the step it would have started with, so the run's history
+  /// says why it failed.
+  Future<int> _failAbandonedStarts({
+    required DateTime at,
+    required String Function() newId,
+  }) async {
+    final runs =
+        await (_database.select(_database.workflowRuns)..where(
+              (table) => table.status.equals(domain.RunStatus.queued.name),
+            ))
+            .get();
+    for (final run in runs) {
+      final step =
+          await (_database.select(_database.runSnapshotSteps)
+                ..where(
+                  (table) =>
+                      table.runId.equals(run.id) &
+                      table.position.equals(run.currentStepPosition),
+                )
+                ..limit(1))
+              .getSingleOrNull();
+      if (step != null) {
+        final attemptId = newId();
+        final previous =
+            await (_database.selectOnly(_database.runAttempts)
+                  ..addColumns(<Expression<Object>>[
+                    _database.runAttempts.attemptNumber.max(),
+                  ])
+                  ..where(_database.runAttempts.snapshotStepId.equals(step.id)))
+                .map(
+                  (row) =>
+                      row.read(_database.runAttempts.attemptNumber.max()) ?? 0,
+                )
+                .getSingle();
+        await _database
+            .into(_database.runAttempts)
+            .insert(
+              db.RunAttemptsCompanion.insert(
+                id: attemptId,
+                runId: run.id,
+                snapshotStepId: step.id,
+                attemptNumber: previous + 1,
+                status: domain.AttemptStatus.failed.name,
+                startedAt: run.updatedAt.toUtc(),
+                completedAt: Value<DateTime?>(at.toUtc()),
+                failureCode: const Value<String?>('run.start.incomplete'),
+              ),
+            );
+        final message = Uint8List.fromList(
+          utf8.encode(
+            'The run start did not finish, so the run never left the queue. '
+            'No branch or worktree was created for it; start a new run.',
+          ),
+        );
+        await _insertLog(
+          domain.RunLogSegment(
+            id: newId(),
+            runId: run.id,
+            attemptId: attemptId,
+            snapshotStepId: step.id,
+            sequence: 0,
+            channel: domain.RunLogChannel.system,
+            bytes: message,
+            compression: 'none',
+            originalByteLength: message.length,
+            createdAt: at.toUtc(),
+          ),
+        );
+      }
+      await (_database.update(_database.workflowRuns)..where(
+            (table) =>
+                table.id.equals(run.id) &
+                table.status.equals(domain.RunStatus.queued.name),
+          ))
+          .write(
+            db.WorkflowRunsCompanion(
+              status: Value<String>(domain.RunStatus.failed.name),
+              updatedAt: Value<DateTime>(at.toUtc()),
+              completedAt: Value<DateTime?>(at.toUtc()),
+            ),
+          );
+    }
+    return runs.length;
   }
 
   @override
@@ -1252,14 +1358,35 @@ final class DriftRunRepository
     final attempts = await (_database.select(
       _database.runAttempts,
     )..where((table) => table.runId.equals(row.id))).get();
-    return deriveTopology(
-      run: _runFromRow(row),
-      snapshot: domain.RunSnapshot.fromCanonicalJson(
-        snapshotRow.canonicalPayload,
-      ),
-      attempts: attempts.map(_attemptFromRow),
-    );
+    // Decoding is the only part guarded: a status or snapshot value this
+    // build cannot read (one written by a newer build, or a value since
+    // removed) leaves this run out instead of failing the whole project's
+    // list. Storage failures above still propagate.
+    try {
+      return deriveTopology(
+        run: _runFromRow(row),
+        snapshot: domain.RunSnapshot.fromCanonicalJson(
+          snapshotRow.canonicalPayload,
+        ),
+        attempts: attempts.map(_attemptFromRow),
+      );
+    } on Object catch (error) {
+      if (_reportedUnreadable.add(row.id)) {
+        await _diagnostics.record(
+          'run ${row.id} of project ${row.projectId} could not be read and '
+          'is left out of the run list: ${_describeUnreadable(error)}',
+        );
+      }
+      return null;
+    }
   }
+
+  /// Names why stored run evidence could not be read, without echoing the
+  /// stored payload a [FormatException] may carry.
+  static String _describeUnreadable(Object error) => switch (error) {
+    FormatException(:final message) => 'FormatException: $message',
+    _ => '$error',
+  };
 
   static ObservedOutput _outputFrom(List<domain.RunLogSegment> segments) {
     if (segments.isEmpty) return ObservedOutput.empty;

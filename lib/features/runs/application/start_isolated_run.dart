@@ -92,7 +92,7 @@ final class StartIsolatedRun {
     required RunGitPort git,
     required RunWorktreePathInspector pathInspector,
     required String worktreesRoot,
-    required String baseBranch,
+    required String fallbackBaseBranch,
     required DateTime Function() clock,
     required String Function() newId,
   }) : _projectPreflight = projectPreflight,
@@ -105,7 +105,7 @@ final class StartIsolatedRun {
        _git = git,
        _pathInspector = pathInspector,
        _worktreesRoot = p.normalize(p.absolute(worktreesRoot)),
-       _baseBranch = baseBranch,
+       _fallbackBaseBranch = fallbackBaseBranch,
        _clock = clock,
        _newId = newId;
 
@@ -117,7 +117,9 @@ final class StartIsolatedRun {
   final RunGitPort _git;
   final RunWorktreePathInspector _pathInspector;
   final String _worktreesRoot;
-  final String _baseBranch;
+
+  /// The base used when the repository does not name a default branch.
+  final String _fallbackBaseBranch;
   final DateTime Function() _clock;
   final String Function() _newId;
 
@@ -137,17 +139,23 @@ final class StartIsolatedRun {
         'Repair or reselect the project folder.',
       );
     }
+    // Work is cut from, and delivered to, the repository's default branch, so
+    // a repository that integrates on develop receives its pull requests
+    // there.
+    final baseBranch =
+        await _git.defaultBranch(request.project.folderPath) ??
+        _fallbackBaseBranch;
     final source = await _git.inspectSource(
       request.project.folderPath,
-      baseBranch: _baseBranch,
+      baseBranch: baseBranch,
     );
     if (source.code == RunGitSourceStateCode.ready &&
         source.advertisedRevision != null &&
         source.advertisedRevision != source.localRevision) {
-      return _sourceRejection(RunGitSourceStateCode.baseStale);
+      return _sourceRejection(RunGitSourceStateCode.baseStale, baseBranch);
     }
     if (source.code != RunGitSourceStateCode.ready) {
-      return _sourceRejection(source.code);
+      return _sourceRejection(source.code, baseBranch);
     }
     final resolver = _workItemResolvers[request.workflow.unitType];
     if (resolver == null) {
@@ -253,14 +261,35 @@ final class StartIsolatedRun {
       ),
       snapshot: snapshot,
     );
-    await _repository.transitionRun(
-      runId: runId,
-      expectedStatus: RunStatus.queued,
-      nextStatus: RunStatus.starting,
-      at: now,
-      branchName: branchName,
-      worktreePath: worktreePath,
-    );
+    try {
+      await _repository.transitionRun(
+        runId: runId,
+        expectedStatus: RunStatus.queued,
+        nextStatus: RunStatus.starting,
+        at: now,
+        branchName: branchName,
+        worktreePath: worktreePath,
+      );
+    } on Object {
+      // Nothing has been created yet. Settle the intent as failed so it is
+      // not left queued with nothing to drive it; if that write fails too,
+      // startup reconciliation fails it with the reason recorded.
+      try {
+        await _repository.transitionRun(
+          runId: runId,
+          expectedStatus: RunStatus.queued,
+          nextStatus: RunStatus.failed,
+          at: now,
+        );
+      } on Object {
+        // Left to startup reconciliation.
+      }
+      return _reject(
+        'run.start.failed',
+        'Could not start the workflow run.',
+        'Retry, and review the diagnostics log if it keeps failing.',
+      );
+    }
 
     final branchRecord = OwnedResourceRecord(
       id: '$runId:branch',
@@ -365,6 +394,24 @@ final class StartIsolatedRun {
           );
           break;
         case RunGitMutationEffect.unknown:
+          // The branch is proven this run's, but the worktree is not. Only
+          // when Git shows nothing registered at the run's path is the
+          // pending worktree resolved and the branch deleted; a registration
+          // there cannot be proven this run's, so it and the branch it may
+          // hold are kept and reported for cleanup.
+          if (await _worktreeAbsent(
+            sourcePath: request.project.folderPath,
+            worktreePath: worktreePath,
+          )) {
+            await _ownership.markResolved(worktreeRecord.id);
+            cleanupRequired = !await _tryDeleteBranch(
+              sourcePath: request.project.folderPath,
+              branchName: branchName,
+              recordId: branchRecord.id,
+            );
+          } else {
+            cleanupRequired = true;
+          }
           break;
       }
       await _markGitFailed(runId, now);
@@ -390,6 +437,20 @@ final class StartIsolatedRun {
         nextStatus: RunStatus.failed,
         at: at,
       );
+
+  /// Whether Git positively reports no worktree registered at [worktreePath];
+  /// an inspection that fails proves nothing.
+  Future<bool> _worktreeAbsent({
+    required String sourcePath,
+    required String worktreePath,
+  }) async {
+    try {
+      final presence = await _git.worktreePresence(sourcePath, worktreePath);
+      return presence.code == RunGitPresenceCode.absent;
+    } on Object {
+      return false;
+    }
+  }
 
   Future<bool> _tryRemoveWorktree({
     required String sourcePath,
@@ -525,7 +586,9 @@ final class StartIsolatedRun {
     final safeSuffix = suffix.length <= 32
         ? suffix
         : suffix.substring(suffix.length - 32);
-    return '${type.name}/$slug-$safeSuffix';
+    // The slug starts with [a-z0-9] and holds only [a-z0-9-], so the name
+    // satisfies `^(feature|fix)/[a-z0-9][a-z0-9._-]*$`.
+    return '${type.branchPrefix}/$slug-$safeSuffix';
   }
 
   static String _workItemTitle(RunWorkItem item) => switch (item) {
@@ -540,32 +603,34 @@ final class StartIsolatedRun {
     return p.equals(a, b) || p.isWithin(a, b) || p.isWithin(b, a);
   }
 
-  static RunStartRejected _sourceRejection(RunGitSourceStateCode code) =>
-      switch (code) {
-        RunGitSourceStateCode.dirty => _reject(
-          'run.source.dirty',
-          'The source worktree has changes.',
-          'Commit or explicitly discard them, then retry validation.',
-        ),
-        RunGitSourceStateCode.baseStale => _reject(
-          'run.git.base_stale',
-          'The local base branch is not current.',
-          'Update the base branch from its remote, then retry.',
-        ),
-        RunGitSourceStateCode.baseMissing => _reject(
-          'run.git.base_missing',
-          'The required base branch is missing.',
-          'Create or fetch the required base branch.',
-        ),
-        RunGitSourceStateCode.inaccessible => _reject(
-          'run.git.inaccessible',
-          'Git could not inspect the project.',
-          'Check repository and remote access, then retry.',
-        ),
-        RunGitSourceStateCode.ready => throw StateError(
-          'A ready source is not a rejection.',
-        ),
-      };
+  static RunStartRejected _sourceRejection(
+    RunGitSourceStateCode code,
+    String baseBranch,
+  ) => switch (code) {
+    RunGitSourceStateCode.dirty => _reject(
+      'run.source.dirty',
+      'The source worktree has changes.',
+      'Commit or explicitly discard them, then retry validation.',
+    ),
+    RunGitSourceStateCode.baseStale => _reject(
+      'run.git.base_stale',
+      'The local base branch "$baseBranch" is not current.',
+      'Update "$baseBranch" from its remote, then retry.',
+    ),
+    RunGitSourceStateCode.baseMissing => _reject(
+      'run.git.base_missing',
+      'The required base branch "$baseBranch" is missing.',
+      'Create or fetch "$baseBranch" so it tracks its remote branch.',
+    ),
+    RunGitSourceStateCode.inaccessible => _reject(
+      'run.git.inaccessible',
+      'Git could not inspect the project.',
+      'Check repository and remote access, then retry.',
+    ),
+    RunGitSourceStateCode.ready => throw StateError(
+      'A ready source is not a rejection.',
+    ),
+  };
 
   static RunStartRejected _pathRejection(
     RunWorktreePathInspection inspection,

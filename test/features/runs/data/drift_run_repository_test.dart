@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maestro/core/logging/diagnostic_log.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/projects/data/drift_project_repository.dart';
@@ -124,6 +125,79 @@ void main() {
     // Then: another project's run never leaks into this one's view.
     expect(runs.map((run) => run.runId), <String>['run-1']);
   });
+
+  test(
+    'GivenAnUndecodableSnapshot_WhenListingObservable_ThenTheOtherRunsListAndTheLossIsRecorded',
+    () async {
+      // Given: two runs, one of whose snapshot names a branch work type this
+      // build no longer knows.
+      final diagnostics = _RecordingDiagnostics();
+      repository = DriftRunRepository(database, diagnostics: diagnostics);
+      await _createRun(repository, run: _run(), snapshot: _snapshot());
+      await _createRun(
+        repository,
+        run: _run(id: 'run-2', createdAt: DateTime.utc(2026, 8, 6, 13)),
+        snapshot: _snapshot(stepIdPrefix: 'run-2-step'),
+      );
+      final stored = await (database.select(
+        database.runSnapshots,
+      )..where((table) => table.runId.equals('run-2'))).getSingle();
+      await database
+          .update(database.runSnapshots)
+          .replace(
+            stored.copyWith(
+              canonicalPayload: stored.canonicalPayload.replaceFirst(
+                '"branchWorkType":"feature"',
+                '"branchWorkType":"chore"',
+              ),
+            ),
+          );
+
+      // When: observable runs are listed, twice, and the run is asked for.
+      final runs = await repository.listObservable('project-1');
+      final again = await repository.listObservable('project-1');
+      final direct = await repository.topologyFor('run-2');
+
+      // Then: the readable run is still listed, the unreadable one is left
+      // out rather than failing the whole list, and its loss is recorded once
+      // in the diagnostics log with the reason.
+      expect(runs.map((run) => run.runId), <String>['run-1']);
+      expect(again.map((run) => run.runId), <String>['run-1']);
+      expect(direct, isNull);
+      expect(diagnostics.lines, hasLength(1));
+      expect(diagnostics.lines.single, contains('run-2'));
+      expect(diagnostics.lines.single, contains('chore'));
+    },
+  );
+
+  test(
+    'GivenARunWithAnUnknownStatus_WhenListingObservable_ThenTheOtherRunsListAndTheLossIsRecorded',
+    () async {
+      // Given: a run whose stored status this build does not know, as one
+      // written by a newer build.
+      final diagnostics = _RecordingDiagnostics();
+      repository = DriftRunRepository(database, diagnostics: diagnostics);
+      await _createRun(repository, run: _run(), snapshot: _snapshot());
+      await _createRun(
+        repository,
+        run: _run(id: 'run-2'),
+        snapshot: _snapshot(stepIdPrefix: 'run-2-step'),
+      );
+      await (database.update(
+        database.workflowRuns,
+      )..where((table) => table.id.equals('run-2'))).write(
+        const WorkflowRunsCompanion(status: Value<String>('archived')),
+      );
+
+      // When: observable runs are listed.
+      final runs = await repository.listObservable('project-1');
+
+      // Then: only the readable run is listed and the skipped one is recorded.
+      expect(runs.map((run) => run.runId), <String>['run-1']);
+      expect(diagnostics.lines.single, contains('run-2'));
+      expect(diagnostics.lines.single, contains('archived'));
+    },
+  );
 
   test(
     'GivenStoredSegments_WhenReadingOutputTail_ThenNewestWindowAndChannelsReturn',
@@ -1102,6 +1176,39 @@ void main() {
   });
 
   test(
+    'GivenAQueuedRun_WhenReconcilingAtStartup_ThenItFailsWithTheReasonRecorded',
+    () async {
+      // Given: a run whose start stopped before it left the queue, so nothing
+      // will ever drive it.
+      await _createRun(repository, run: _run(), snapshot: _snapshot());
+      final ids = <String>['abandoned-attempt', 'abandoned-log'];
+
+      // When: startup reconciliation sweeps active runs.
+      final swept = await repository.interruptActive(
+        at: DateTime.utc(2026, 8, 6, 13),
+        newLogId: () => ids.removeAt(0),
+      );
+
+      // Then: the run is failed, not interrupted (it holds no resources to
+      // recover), and the failure carries its reason on the first step.
+      expect(swept, 1);
+      final aggregate = (await repository.findById('run-1'))!;
+      expect(aggregate.run.status, domain.RunStatus.failed);
+      expect(aggregate.run.completedAt, DateTime.utc(2026, 8, 6, 13));
+      expect(aggregate.attempts.single.status, domain.AttemptStatus.failed);
+      expect(aggregate.attempts.single.failureCode, 'run.start.incomplete');
+      expect(aggregate.attempts.single.snapshotStepId, 'snapshot-step-1');
+      final log = await repository.readLogTail(
+        runId: 'run-1',
+        attemptId: 'abandoned-attempt',
+      );
+      expect(log.single.channel, domain.RunLogChannel.system);
+      expect(utf8.decode(log.single.bytes), contains('never left the queue'));
+      expect(await repository.listInterrupted(), isEmpty);
+    },
+  );
+
+  test(
     'GivenRunningRun_WhenCancelling_ThenTheAttemptAndRunAreTerminal',
     () async {
       // Given: a run with an active attempt.
@@ -1840,3 +1947,13 @@ Future<void> _createRun(
 }
 
 int _sweepId = 0;
+
+final class _RecordingDiagnostics implements DiagnosticLog {
+  final lines = <String>[];
+
+  @override
+  Future<void> record(String message) async => lines.add(message);
+
+  @override
+  Future<void> close() async {}
+}

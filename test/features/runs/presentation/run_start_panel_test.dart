@@ -71,6 +71,43 @@ void main() {
   });
 
   testWidgets(
+    'GivenBranchTypeChoices_WhenOpened_ThenEachShowsTheBranchPrefixItIsDeliveredOn',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = RunStartController(
+        actorId: 'actor-1',
+        project: _project(),
+        loadWorkflows: () async => <WorkflowDefinition>[_workflow()],
+        starter: (_) async => const RunStartRejected(
+          code: 'unused',
+          message: 'unused',
+          remediation: 'unused',
+        ),
+        execute: (_) async {},
+        events: RunSummaryEvents(),
+        statusFor: (_) async => null,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RunStartPanel(createController: () => controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('run-branch-type')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('feature'), findsWidgets);
+      expect(find.text('fix'), findsOneWidget);
+      expect(find.text('refactor (feature/)'), findsOneWidget);
+      expect(find.text('hotfix (fix/)'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'GivenNarrowRunForm_WhenRendered_ThenItUsesAvailableWidthWithoutOverflow',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 900));
