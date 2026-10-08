@@ -19,7 +19,17 @@ The supported CI baseline is Ubuntu 24.04. Install Flutter 3.47.2 plus:
 sudo apt-get update
 sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
   libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
-  libayatana-appindicator3-dev xvfb
+  libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
+```
+
+The production startup integration test needs a Secret Service. Run it inside a
+D-Bus session with an unlocked keyring, as CI does:
+
+```bash
+dbus-run-session -- bash -euc '
+  printf "\n" | gnome-keyring-daemon --unlock
+  xvfb-run -a flutter test integration_test/foundation_startup_integration_test.dart -d linux
+'
 ```
 
 ## Clean-clone setup
@@ -60,4 +70,4 @@ flutter build windows --release
 
 Use `-d linux` under `xvfb-run -a` for the matching Ubuntu commands, followed by `flutter build linux --release`.
 
-Generated Drift code must remain deterministic. After regeneration, `git diff --exit-code` must be clean unless the schema change is intentional and includes a migration fixture.
+Generated Drift code must remain deterministic. After regeneration, `git status --porcelain` must print nothing — CI fails on modified and on new, uncommitted generated files — unless the schema change is intentional and includes a migration fixture.

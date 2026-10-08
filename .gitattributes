@@ -1,0 +1,11 @@
+# Line endings are LF in the repository and in the working tree, on every
+# platform. The index is already entirely LF (PowerShell scripts included), so
+# this codifies what is there rather than changing it. CI fails when generated
+# code differs from what is committed, and the Windows jobs would otherwise see
+# CRLF checkouts as drift.
+* text=auto eol=lf
+
+# Binaries — never converted, never diffed as text.
+*.png    binary
+*.ico    binary
+*.ttf    binary

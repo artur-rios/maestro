@@ -83,6 +83,47 @@ void main() {
 
   group('autonomous delivery attestation recovery', () {
     test(
+      'GivenReviewRequestsChanges_WhenTheRunReturnsToExecute_ThenTheLoopDrivesItAgainToDelivery',
+      () async {
+        // Given: a review that requests changes once and approves the rework.
+        final port = _DeliveringPort(onOpen: () {});
+        final fixture = _autonomousFixture(port: port);
+        const testEvidence =
+            '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}';
+        fixture.launcher.results.addAll(<_Script>[
+          const _Script(context: 'execute evidence'),
+          const _Script(context: testEvidence),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Fix the validation."}',
+          ),
+          const _Script(context: 'reworked evidence'),
+          const _Script(context: testEvidence),
+          const _Script(
+            context:
+                '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+          ),
+        ]);
+
+        // When: the run executes.
+        await fixture.orchestrator.execute('run-1');
+
+        // Then: the run sent back to execute is not stranded in running with
+        // no loop behind it; it is executed again and delivered.
+        expect(fixture.launcher.requests, hasLength(6));
+        expect(fixture.repository.failed, isEmpty);
+        expect(
+          fixture.repository.autonomousSettlements,
+          <(String, RunStatus, int)>[
+            ('run-1', RunStatus.running, 0),
+            ('run-1', RunStatus.succeeded, 3),
+          ],
+        );
+        expect(port.calls, contains('approveAndMerge'));
+      },
+    );
+
+    test(
       'GivenRejectedReviewAttestation_WhenDeliveryIsReached_ThenRunReturnsToExecute',
       () async {
         final fixture = _autonomousFixture();
@@ -647,6 +688,35 @@ void main() {
       expect(output, isNot(contains('split-')));
     },
   );
+
+  test('redacts a prefixed secret key whose value spans frames', () async {
+    // GITHUB_TOKEN= has no word boundary before TOKEN, so the streaming
+    // hold-back never recognised it and flushed the first half verbatim.
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('export GITHUB_TOKEN=first-half')),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('-second-half done\n')),
+          ),
+        ],
+      ),
+    );
+
+    await fixture.orchestrator.execute('run-1');
+
+    final output = utf8.decode(
+      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(output, isNot(contains('first-half')));
+    expect(output, isNot(contains('second-half')));
+    expect(output, contains('GITHUB_TOKEN=[REDACTED]'));
+  });
 
   test('resolves a pattern candidate before an interleaved channel', () async {
     final fixture = _Fixture(stepCount: 1);
@@ -1299,6 +1369,41 @@ void main() {
       // Then: the tree is gone, so the cancellation is complete (FR-RC-04).
       expect(outcome, CancellationOutcome.cancelled);
       expect(fixture.launcher.terminated, hasLength(1));
+    },
+  );
+
+  test(
+    'GivenACancelWhileTheStepIsLaunching_WhenTheProcessStarts_ThenItIsTerminatedAndNoLaterStepRuns',
+    () async {
+      // Given: a cancel that lands while the first step is being launched, so
+      // there is no live process for it to terminate yet.
+      final fixture = _Fixture(stepCount: 2);
+      final gate = Completer<void>();
+      final cancellations = <CancellationOutcome>[];
+      fixture.launcher.results.addAll(<_Script>[
+        _Script(gate: gate, exitCode: 143),
+        const _Script(),
+      ]);
+      fixture.launcher.onStarted = (_) => unawaited(
+        fixture.orchestrator.requestCancel('run-1').then(cancellations.add),
+      );
+
+      // When: the launch completes.
+      final execution = fixture.orchestrator.execute('run-1');
+      await pumpEventQueue();
+
+      // Then: the process the cancel could not reach is killed as soon as it
+      // exists, and the loop stands down instead of opening the next step.
+      expect(cancellations, <CancellationOutcome>[
+        CancellationOutcome.cancelled,
+      ]);
+      expect(fixture.launcher.terminated, hasLength(1));
+      gate.complete();
+      await execution;
+      expect(fixture.launcher.requests, hasLength(1));
+      expect(fixture.repository.begun, hasLength(1));
+      expect(fixture.repository.failed, isEmpty);
+      expect(fixture.repository.completed, isEmpty);
     },
   );
 

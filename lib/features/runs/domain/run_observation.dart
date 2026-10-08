@@ -75,7 +75,13 @@ final class RunTopology {
       : null;
 
   /// The attempt whose output the observation view follows by default.
+  ///
+  /// The step the run is positioned on comes first: after a workflow restart
+  /// or a delivery gate sends the run back, a later step still holds the
+  /// previous pass's attempt, which is not the one producing output now.
   String? get latestAttemptId {
+    final current = currentStep?.latestAttemptId;
+    if (current != null) return current;
     for (final step in steps.reversed) {
       final attemptId = step.latestAttemptId;
       if (attemptId != null) return attemptId;

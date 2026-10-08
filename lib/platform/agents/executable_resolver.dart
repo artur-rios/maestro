@@ -43,8 +43,7 @@ final class ExecutableResolver implements ExecutableLocator {
       return const InaccessibleExecutable();
     }
     var inaccessibleCandidateFound = false;
-    for (final directory in _path.split(_isWindows ? ';' : ':')) {
-      if (directory.trim().isEmpty) continue;
+    for (final directory in _searchDirectories) {
       if (_isWindows) {
         for (final extension in const <String>['.exe', '.com']) {
           final candidate = File(p.join(directory, '$command$extension'));
@@ -108,7 +107,7 @@ final class ExecutableResolver implements ExecutableLocator {
   /// machines that have nothing else.
   Future<File?> _findPowerShell() async {
     for (final name in const <String>['pwsh.exe', 'powershell.exe']) {
-      for (final directory in _path.split(';')) {
+      for (final directory in _searchDirectories) {
         final candidate = File(p.join(directory, name));
         if (await candidate.exists() && await _canExecute(candidate)) {
           return candidate;
@@ -116,6 +115,19 @@ final class ExecutableResolver implements ExecutableLocator {
       }
     }
     return null;
+  }
+
+  /// The absolute `PATH` entries. An empty or relative entry names the
+  /// current directory, so whatever folder Maestro was started from could
+  /// supply the agent or the PowerShell host that runs its wrapper.
+  Iterable<String> get _searchDirectories {
+    final style = _isWindows ? p.windows : p.posix;
+    return _path
+        .split(_isWindows ? ';' : ':')
+        .where(
+          (directory) =>
+              directory.trim().isNotEmpty && style.isAbsolute(directory),
+        );
   }
 
   Future<bool> _canExecute(File file) async {

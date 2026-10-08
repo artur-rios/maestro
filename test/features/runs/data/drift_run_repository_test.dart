@@ -1519,6 +1519,38 @@ void main() {
     );
   });
 
+  test('GivenAPausedRun_WhenBeginningRecovery_ThenItIsRejected', () async {
+    // Given: a paused run, which may move to running only through resume.
+    await _createRun(
+      repository,
+      run: _run(status: domain.RunStatus.paused),
+      snapshot: _snapshot(),
+    );
+
+    // When / Then: it offers no recovery evidence, and a recovery is refused
+    // rather than rewriting its position.
+    expect(await repository.recoveryEvidenceFor('run-1'), isNull);
+    await expectLater(
+      repository.beginRecovery(
+        request: domain.RunRecoveryRequest(
+          id: 'recovery-1',
+          runId: 'run-1',
+          attemptId: null,
+          action: domain.RecoveryAction.restartWorkflow,
+          status: domain.RecoveryRequestStatus.accepted,
+          requestedAt: DateTime.utc(2026, 8, 6, 14),
+        ),
+        targetPosition: 0,
+        at: DateTime.utc(2026, 8, 6, 14),
+      ),
+      throwsStateError,
+    );
+    expect(
+      (await repository.findById('run-1'))!.run.status,
+      domain.RunStatus.paused,
+    );
+  });
+
   test(
     'GivenCompactedSegments_WhenReadingOutput_ThenPlaintextIsReturned',
     () async {
