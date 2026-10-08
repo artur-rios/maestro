@@ -2,19 +2,20 @@ name: CI
 
 on:
   pull_request:
+    branches: [develop, main]
   # Work branches are covered by their pull request. Listing them here as well
   # ran every commit twice, which doubled cost and doubled exposure to
   # infrastructure flake in the native-asset and desktop build steps.
   push:
-    branches: [main]
+    branches: [develop, main]
 
 permissions:
   contents: read
 
 # A newer commit supersedes an in-flight run for the same pull request, whose
-# earlier result delivery would never be judged on. Runs on main are never
-# cancelled: a superseded run leaves that commit with no verification at all,
-# which is how UC-05 reached main without a completed check.
+# earlier result delivery would never be judged on. Runs on develop and main
+# are never cancelled: a superseded run leaves that commit with no verification
+# at all, which is how UC-05 reached main without a completed check.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
