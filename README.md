@@ -67,9 +67,49 @@ administrator rights. Launch Maestro from the Start Menu after setup.
 > publisher-trusted installer.
 
 ZIP and MSIX packages remain available on the Releases page as alternatives.
-The ZIP package also remains the payload used by Maestro's in-application
-runtime updater; the setup EXE is for distribution and is excluded from the
-runtime update manifest.
+
+Every Windows package updates from inside Maestro. A setup EXE or ZIP install
+updates from the ZIP: once you close Maestro, it swaps in the new files and
+restarts, so a ZIP must be extracted to a folder you can write to. The setup
+EXE itself is for distribution and is excluded from the runtime update
+manifest. An MSIX install updates from the MSIX, which Maestro hands to Windows;
+Windows applies it once Maestro is closed, so restart Maestro to run it. If
+Windows refuses it, open the new `maestro-windows-x64.msix` from the release to
+install it by hand.
+
+### Linux
+
+Two x64 packages are published on
+[GitHub Releases](https://github.com/artur-rios/maestro/releases). The Debian
+package, `maestro-linux-amd64.deb`, is for Debian, Ubuntu and other
+Debian-family distributions:
+
+```bash
+sudo apt install ./maestro-linux-amd64.deb
+```
+
+It installs Maestro under `/opt/maestro`, puts `maestro` on `PATH`, and adds a
+desktop entry and icon so it appears in the applications menu. It depends on
+`libgtk-3-0` and `libsecret-1-0`, which `apt` installs when they are missing.
+Remove it with `sudo apt remove maestro`.
+
+The AppImage, `maestro-linux-x64.AppImage`, is a single file that runs without
+being installed:
+
+```bash
+chmod +x maestro-linux-x64.AppImage
+./maestro-linux-x64.AppImage
+```
+
+Both packages update from inside Maestro. The AppImage replaces its own
+`.AppImage` file and restarts from it, so keep it in a folder you can write to,
+such as `~/Applications`. The Debian package hands the new `.deb` to the system
+package manager, which asks for your password through `pkexec`; restart Maestro
+afterwards. Where that isn't possible, install the new package by hand as above.
+
+Either way, Maestro keeps its secrets through the desktop's Secret Service
+(GNOME Keyring or a compatible keyring). Startup is blocked, and says so in its
+diagnostics, when protected storage cannot be reached.
 
 ### Build from source
 
@@ -117,11 +157,9 @@ flutter run -d windows --dart-define=HEIMDALL_API_BASE_URL=https://heimdall.exam
 
 After **Continue with Google**, Maestro opens the system browser, waits for the
 Google authorization-code callback on a temporary `127.0.0.1` loopback port,
-and exchanges the resulting ID token with Heimdall. A mock Heimdall endpoint
-for development must implement `POST /api/auth/google` and return the standard
-successful `DataOutput` envelope with `token`, future `expiresAt`, and
-`emailVerified`. Browser cancellation, a timeout, callback-state mismatch, or
-a rejected/malformed gateway response leaves the app signed out.
+and exchanges the resulting ID token with Heimdall. Browser cancellation, a
+timeout, callback-state mismatch, or a rejected/malformed gateway response
+leaves the app signed out.
 
 When creating a local password account, record the ten recovery codes shown
 before acknowledging the dialog; they are displayed only once. To recover,
@@ -129,29 +167,6 @@ choose **Recover local account**, provide the local email, one unused recorded
 code, and a new valid password. The existing **Sign in with Windows** path
 remains available, while **Use Windows credentials** verifies an existing
 local email account on supported platforms.
-
-### Publishing releases
-
-Pushing a supported `v<major>.<minor>.<patch>` stable, `-alpha.<sequence>`,
-`-beta.<sequence>`, or `-rc.<sequence>` tag publishes the five release
-packages (Windows ZIP, MSIX, and setup EXE; Linux AppImage and DEB). Stable
-tags create normal GitHub Releases; prerelease tags create GitHub prereleases;
-both receive generated release notes. The complete tag ranges, native version
-mappings, local packaging commands, and signing policy are in [Releases and
-Signing](docs/development/releases-and-signing.md).
-
-## Testing
-
-Run the complete default suite described in the
-[Testing Specification Document](docs/requirements/Testing%20Specification%20Document.md):
-
-```bash
-flutter test
-```
-
-The testing strategy covers unit, widget, persistence integration, platform contract, desktop integration,
-and concurrency/performance evidence. Every unit of work ships with tests for its main flow, applicable
-alternative flows, traced requirements, and meaningful resilience boundaries before delivery.
 
 ## Roadmap
 
@@ -214,9 +229,19 @@ alternative flows, traced requirements, and meaningful resilience boundaries bef
 The counts above are updated as work is delivered. GitHub milestone pages remain the live source for
 completion counts.
 
+## Changelog
+
+Notable changes in each release are recorded in [CHANGELOG.md](./CHANGELOG.md). Releases follow
+[Semantic Versioning](https://semver.org/); no release has been tagged yet.
+
 ## Contributing
 
-One unit of work equals one workflow run, one branch, one GitHub issue when issue tracking applies, and one
-pull request. Branches use `feature/`, `fix/`, `refactor/`, or `hotfix/` prefixes. The full supervised and
-autonomous process is defined in the
-[Development Workflow Document](docs/requirements/Development%20Workflow%20Document.md).
+Development setup, running the tests, the branching model and the release process are described in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## Legal
+
+Proprietary. See [LICENSE](LICENSE). Copyright (c) 2026 Artur Rios. All rights reserved.
+
+The bundled Meslo LG Nerd Font is third-party work and keeps its own licenses: see
+[`assets/fonts/meslo/LICENSE.txt`](assets/fonts/meslo/LICENSE.txt) and the notices beside it.
