@@ -86,6 +86,115 @@ void main() {
     },
   );
 
+  group('replace_linux_appimage.sh', () {
+    late Directory work;
+    late File installed;
+    late File staged;
+    late File marker;
+
+    setUp(() async {
+      work = await Directory.systemTemp.createTemp('maestro-appimage-update-');
+      installed = File('${work.path}/Applications/maestro-linux-x64.AppImage');
+      await installed.parent.create();
+      await installed.writeAsString('#!/bin/sh\necho old\n');
+      await Process.run('chmod', <String>['0750', installed.path]);
+      // The downloader stages the package with ordinary file permissions.
+      staged = File('${work.path}/updates/${'a' * 64}.appimage');
+      await staged.parent.create();
+      await staged.writeAsString(
+        '#!/bin/sh\nprintf "%s" "\$0" > "\$MAESTRO_TEST_MARKER"\n',
+      );
+      marker = File('${work.path}/relaunched');
+    });
+
+    tearDown(() async {
+      if (await work.exists()) await work.delete(recursive: true);
+    });
+
+    Future<ProcessResult> replace({required int parentPid}) => Process.run(
+      '/bin/bash',
+      <String>[
+        'tooling/updates/replace_linux_appimage.sh',
+        staged.path,
+        installed.path,
+        '$parentPid',
+      ],
+      environment: <String, String>{'MAESTRO_TEST_MARKER': marker.path},
+    );
+
+    test(
+      'GivenAStagedAppImage_WhenMaestroExits_ThenTheAppImageFileIsReplacedInPlaceAndRelaunched',
+      () async {
+        if (!Platform.isLinux) return;
+        final parent = await Process.start('sleep', <String>['1']);
+
+        final replacing = replace(parentPid: parent.pid);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(
+          await installed.readAsString(),
+          '#!/bin/sh\necho old\n',
+          reason: 'nothing is replaced while Maestro is still running',
+        );
+        final result = await replacing;
+
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        expect(await installed.readAsString(), await staged.readAsString());
+        final mode = await Process.run('stat', <String>[
+          '-c',
+          '%a',
+          installed.path,
+        ]);
+        expect(
+          '${mode.stdout}'.trim(),
+          '750',
+          reason: 'the installed file keeps its permissions, execute included',
+        );
+        expect(await marker.readAsString(), installed.path);
+        expect(
+          installed.parent.listSync().map((entity) => entity.path),
+          <String>[installed.path],
+          reason: 'no staging file is left beside the AppImage',
+        );
+      },
+    );
+
+    test(
+      'GivenTheReplacementCannotBeStaged_WhenUpdating_ThenTheInstalledAppImageIsUntouchedAndNotRelaunched',
+      () async {
+        if (!Platform.isLinux) return;
+        await Directory(
+          '${installed.path}.staging/occupied',
+        ).create(recursive: true);
+        final parent = await Process.start('true', const <String>[]);
+        await parent.exitCode;
+
+        final result = await replace(parentPid: parent.pid);
+
+        expect(result.exitCode, isNot(0));
+        expect(await installed.readAsString(), '#!/bin/sh\necho old\n');
+        expect(await marker.exists(), isFalse);
+      },
+    );
+
+    test(
+      'GivenNoInstalledAppImage_WhenUpdating_ThenTheHelperRefusesBeforeWaitingForMaestro',
+      () async {
+        if (!Platform.isLinux) return;
+        await installed.delete();
+        final parent = await Process.start('sleep', <String>['30']);
+        addTearDown(parent.kill);
+
+        final result = await replace(
+          parentPid: parent.pid,
+        ).timeout(const Duration(seconds: 10));
+
+        expect(result.exitCode, 66);
+        expect('${result.stderr}', contains('Installed AppImage'));
+        expect(await installed.exists(), isFalse);
+      },
+    );
+  });
+
   test(
     'GivenTheApplicationIcon_WhenInspected_ThenEveryPlatformAssetIsPresent',
     () async {
@@ -210,7 +319,13 @@ void main() {
       );
       expect(
         linux,
-        allOf(contains('rollback'), contains('exec'), contains('parent-pid')),
+        allOf(<Matcher>[
+          contains('parent-pid'),
+          // One rename(2) swaps the file: never missing, never partial.
+          contains(r'mv -f -- "$staging" "$install_path"'),
+          contains(r'chmod --reference="$install_path"'),
+          contains(r'exec "$install_path"'),
+        ]),
       );
       expect(windowsPackage, contains('replace_windows_zip.ps1'));
       expect(linuxPackage, contains('replace_linux_appimage.sh'));

@@ -95,8 +95,11 @@ final class UpdateController extends ChangeNotifier {
       ),
       FailureResult<UpdateOutcome>(:final failure) => UpdateState(
         candidate: candidate,
-        message:
-            '${failure.message} The current installation and user data were preserved.',
+        message: <String>[
+          failure.message,
+          ?failure.remediation,
+          'The current installation and user data were preserved.',
+        ].join(' '),
       ),
     };
     notifyListeners();

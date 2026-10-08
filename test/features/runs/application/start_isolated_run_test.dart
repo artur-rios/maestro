@@ -122,6 +122,94 @@ void main() {
     );
 
     test(
+      'Given the repository names a default branch_When starting_Then the run is based on it',
+      () async {
+        final fixture = _Fixture(remoteDefaultBranch: 'develop');
+
+        final result = await fixture.service(fixture.request);
+
+        expect(result, isA<RunStartAccepted>());
+        expect(fixture.inspectedBaseBranches, <String>['develop']);
+      },
+    );
+
+    test(
+      'Given the default branch cannot be resolved_When starting_Then the fallback base branch is used',
+      () async {
+        final fixture = _Fixture();
+
+        final result = await fixture.service(fixture.request);
+
+        expect(result, isA<RunStartAccepted>());
+        expect(fixture.inspectedBaseBranches, <String>['main']);
+      },
+    );
+
+    test(
+      'Given the resolved base branch is missing locally_When starting_Then the rejection names that branch',
+      () async {
+        final fixture = _Fixture(
+          remoteDefaultBranch: 'develop',
+          sourceState: const RunGitSourceState.baseMissing(),
+        );
+
+        final result = await fixture.service(fixture.request);
+
+        final rejected = result as RunStartRejected;
+        expect(rejected.code, 'run.git.base_missing');
+        expect(rejected.message, contains('develop'));
+        expect(rejected.remediation, contains('develop'));
+        expect(fixture.createdRuns, isEmpty);
+      },
+    );
+
+    test(
+      'Given each branch work type_When starting_Then the branch is a feature or fix branch the branch policy accepts',
+      () async {
+        const expectedPrefixes = <BranchWorkType, String>{
+          BranchWorkType.feature: 'feature/',
+          BranchWorkType.fix: 'fix/',
+          BranchWorkType.refactor: 'feature/',
+          BranchWorkType.hotfix: 'fix/',
+        };
+        for (final type in BranchWorkType.values) {
+          final fixture = _Fixture(branchWorkType: type);
+
+          final result =
+              await fixture.service(fixture.request) as RunStartAccepted;
+
+          expect(result.branchName, startsWith(expectedPrefixes[type]!));
+          expect(result.branchName, matches(_branchPolicy));
+          expect(
+            fixture.createdRuns.single.snapshot.branchWorkType,
+            type,
+            reason: 'the chosen work type remains run evidence',
+          );
+        }
+      },
+    );
+
+    test(
+      'Given work-item text with no branch-safe characters_When starting_Then the branch still satisfies the branch policy',
+      () async {
+        for (final text in <String>['***', '  Ünïcødé — Ação!  ', '-._-']) {
+          final fixture = _Fixture(
+            runId: 'Run-ABCD.1234',
+            branchWorkType: BranchWorkType.hotfix,
+            workItemResult: WorkItemResolutionResolved(
+              FreeFormRunWorkItem(text: text),
+            ),
+          );
+
+          final result =
+              await fixture.service(fixture.request) as RunStartAccepted;
+
+          expect(result.branchName, matches(_branchPolicy), reason: text);
+        }
+      },
+    );
+
+    test(
       'Given the same work item_When two runs start_Then branch and worktree identities remain isolated',
       () async {
         final first = _Fixture(runId: 'run-aaaaaaaa');
@@ -261,16 +349,80 @@ void main() {
     );
 
     test(
-      'Given worktree creation outcome is unknown_When starting_Then pending worktree and proven branch are retained',
+      'Given worktree creation outcome is unknown and no worktree is registered_When starting_Then the branch this run created is deleted',
       () async {
         final fixture = _Fixture(worktreeMutationUnknown: true);
 
         final result = await fixture.service(fixture.request);
 
         expect((result as RunStartRejected).code, 'run.git.worktree_create');
+        expect(fixture.gitMutations, <String>[
+          'createBranch',
+          'addWorktree',
+          'deleteBranch',
+        ]);
+        expect(fixture.branches, isEmpty);
+        expect(fixture.events, contains('resolved:worktree'));
+        expect(fixture.events, contains('resolved:branch'));
+        expect(fixture.events.last, 'transition:starting-failed');
+      },
+    );
+
+    test(
+      'Given worktree creation outcome is unknown and a worktree is registered at the run path_When starting_Then nothing is removed and cleanup is required',
+      () async {
+        final fixture = _Fixture(
+          worktreeMutationUnknown: true,
+          worktreeRegisteredBeforeUnknown: true,
+        );
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.cleanup_required');
+        expect(fixture.gitMutations, <String>['createBranch', 'addWorktree']);
+        expect(fixture.branches, isNotEmpty);
+        expect(fixture.worktrees, isNotEmpty);
+        expect(fixture.events, isNot(contains('resolved:worktree')));
+        expect(fixture.events, isNot(contains('resolved:branch')));
+        expect(fixture.events.last, 'transition:starting-failed');
+      },
+    );
+
+    test(
+      'Given worktree creation outcome is unknown and registration cannot be inspected_When starting_Then nothing is removed and cleanup is required',
+      () async {
+        final fixture = _Fixture(
+          worktreeMutationUnknown: true,
+          worktreeProbeInaccessible: true,
+        );
+
+        final result = await fixture.service(fixture.request);
+
+        expect((result as RunStartRejected).code, 'run.git.cleanup_required');
         expect(fixture.gitMutations, <String>['createBranch', 'addWorktree']);
         expect(fixture.events, isNot(contains('resolved:worktree')));
         expect(fixture.events, isNot(contains('resolved:branch')));
+        expect(fixture.events.last, 'transition:starting-failed');
+      },
+    );
+
+    test(
+      'Given the run cannot leave the queue_When starting_Then it is failed and the start is rejected before any Git mutation',
+      () async {
+        final fixture = _Fixture(failStartingTransition: true);
+
+        final result = await fixture.service(fixture.request);
+
+        final rejected = result as RunStartRejected;
+        expect(rejected.code, 'run.start.failed');
+        expect(rejected.remediation, contains('diagnostics'));
+        expect(fixture.events, <String>[
+          'create:run-12345678',
+          'transition:queued-starting',
+          'transition:queued-failed',
+        ]);
+        expect(fixture.gitMutations, isEmpty);
+        expect(fixture.ownership, isEmpty);
       },
     );
 
@@ -325,9 +477,14 @@ final class _Fixture
     this.worktreePresenceInaccessible = false,
     this.branchMutationUnknown = false,
     this.worktreeMutationUnknown = false,
+    this.worktreeRegisteredBeforeUnknown = false,
+    this.worktreeProbeInaccessible = false,
+    this.failStartingTransition = false,
     this.unsafeOnPathInspection = 0,
     this.failRemoveWorktree = false,
     this.failDeleteBranch = false,
+    this.remoteDefaultBranch,
+    this.branchWorkType = BranchWorkType.feature,
   }) : workflow = workflow ?? _workflow();
 
   final String runId;
@@ -342,10 +499,16 @@ final class _Fixture
   final bool worktreePresenceInaccessible;
   final bool branchMutationUnknown;
   final bool worktreeMutationUnknown;
+  final bool worktreeRegisteredBeforeUnknown;
+  final bool worktreeProbeInaccessible;
+  final bool failStartingTransition;
   final int unsafeOnPathInspection;
   final bool failRemoveWorktree;
   final bool failDeleteBranch;
+  final String? remoteDefaultBranch;
+  final BranchWorkType branchWorkType;
   var pathInspections = 0;
+  final inspectedBaseBranches = <String>[];
   final calls = <String>[];
   final events = <String>[];
   final gitMutations = <String>[];
@@ -365,7 +528,7 @@ final class _Fixture
     git: this,
     pathInspector: this,
     worktreesRoot: r'C:\app-data\maestro\worktrees',
-    baseBranch: 'main',
+    fallbackBaseBranch: 'main',
     clock: () => DateTime.utc(2026, 8, 6, 12),
     newId: () => runId,
   );
@@ -384,7 +547,7 @@ final class _Fixture
     workflow: workflow,
     rawWorkItem: 'UC-06 Build Run',
     deliveryMode: DeliveryMode.supervised,
-    branchWorkType: BranchWorkType.feature,
+    branchWorkType: branchWorkType,
   );
 
   @override
@@ -399,8 +562,12 @@ final class _Fixture
     required String baseBranch,
   }) async {
     calls.add('source');
+    inspectedBaseBranches.add(baseBranch);
     return sourceState;
   }
+
+  @override
+  Future<String?> defaultBranch(String sourcePath) async => remoteDefaultBranch;
 
   @override
   Future<WorkItemResolution> resolve(String raw) async {
@@ -431,7 +598,9 @@ final class _Fixture
   Future<RunGitPresence> worktreePresence(
     String sourcePath,
     String worktreePath,
-  ) async => worktreePresenceInaccessible
+  ) async =>
+      worktreePresenceInaccessible ||
+          (worktreeProbeInaccessible && gitMutations.contains('addWorktree'))
       ? const RunGitPresence.inaccessible('worktree inspection failed')
       : worktrees.contains(worktreePath)
       ? const RunGitPresence.present()
@@ -471,6 +640,7 @@ final class _Fixture
     events.add('git:addWorktree');
     gitMutations.add('addWorktree');
     if (worktreeMutationUnknown) {
+      if (worktreeRegisteredBeforeUnknown) worktrees.add(worktreePath);
       return const RunGitMutationFailed(
         'ambiguous',
         effect: RunGitMutationEffect.unknown,
@@ -529,8 +699,12 @@ final class _Fixture
     required DateTime at,
     String? branchName,
     String? worktreePath,
-  }) async =>
-      events.add('transition:${expectedStatus.name}-${nextStatus.name}');
+  }) async {
+    events.add('transition:${expectedStatus.name}-${nextStatus.name}');
+    if (failStartingTransition && nextStatus == RunStatus.starting) {
+      throw StateError('database unavailable');
+    }
+  }
 
   @override
   Future<void> registerPending(OwnedResourceRecord record) async {
@@ -562,6 +736,10 @@ final class _Fixture
         : const RunWorktreePathInspection.safe();
   }
 }
+
+/// The rule `.github/workflows/branch-policy.yml` applies to a pull request
+/// into the default branch.
+final _branchPolicy = RegExp(r'^(feature|fix)/[a-z0-9][a-z0-9._-]*$');
 
 WorkflowDefinition _workflow({bool assigned = true}) => WorkflowDefinition(
   id: 'workflow-1',

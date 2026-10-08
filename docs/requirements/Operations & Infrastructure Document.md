@@ -180,7 +180,7 @@ The GitHub Actions pipeline performs:
 5. Portable archive, installable package, AppImage, and Debian-family package creation.
 6. Clean-machine install, launch, update, and data-preservation smoke tests.
 7. Checksums, signed release manifest, provenance metadata, and artifact signing.
-8. GitHub Release publication only after all required jobs pass.
+8. GitHub Release publication, from a `v*` tag on a commit on `main`, only after all required jobs pass.
 
 Maestro checks the signed manifest on a configurable schedule and manual request. It downloads only the
 matching platform, architecture, and installation type; verifies signature and checksum; asks the user; then

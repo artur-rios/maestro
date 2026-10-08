@@ -66,15 +66,22 @@ configuration, and project reference.
 
 ### Step 3 — Create the Isolated Branch
 
-Create an isolated Git worktree in Maestro's application-data area from an up-to-date main branch. Use the
-prefix matching the work type:
+Create an isolated Git worktree in Maestro's application-data area from the repository's up-to-date default
+branch: the branch its remote names as `HEAD` — `develop` in a develop/release branching model — or `main` when no
+remote names one. The local branch must exist and match its remote. The pull request targets the same default
+branch.
+
+Name the branch with one of the two prefixes branch policies accept for work merged into the default branch:
 
 ```text
 feature/<descriptive-slug>
 fix/<descriptive-slug>
-refactor/<descriptive-slug>
-hotfix/<descriptive-slug>
 ```
+
+The user chooses the work type — feature, fix, refactor, or hotfix — and the run snapshot keeps it. A refactor is
+delivered on a `feature/` branch and a hotfix on a `fix/` branch. The slug holds only lowercase letters, digits,
+and hyphens, starts with a letter or digit, and ends with the run identity, so every name matches
+`^(feature|fix)/[a-z0-9][a-z0-9._-]*$`.
 
 If a GitHub issue and project status apply, move the issue to In Progress.
 
@@ -127,7 +134,8 @@ after merge. Clean the isolated worktree after the applicable mode completes its
 ## 6. Definition of Done
 
 - [ ] The selected unit of work and delivery mode are retained in an immutable snapshot.
-- [ ] Work used an isolated branch with the correct `feature/`, `fix/`, `refactor/`, or `hotfix/` prefix.
+- [ ] Work used an isolated branch cut from the default branch, with the `feature/` or `fix/` prefix its work type
+      maps to.
 - [ ] Main flow and applicable alternative flows are implemented.
 - [ ] Required tests cover the work and all required suites pass.
 - [ ] A traceable pull request exists.
@@ -137,7 +145,22 @@ after merge. Clean the isolated worktree after the applicable mode completes its
 - [ ] The branch and isolated worktree were cleaned by the actor authorized for the selected mode.
 - [ ] Final execution and delivery evidence is available in history.
 
-## 7. References
+## 7. Maestro's Own Repository
+
+The steps above specify what a Maestro run does in the project it is pointed at. This repository applies them under a
+develop/release branching model, defined in [CONTRIBUTING.md](../../CONTRIBUTING.md#branching-and-pull-requests) and
+enforced by `.github/workflows/branch-policy.yml` on every pull request:
+
+- `develop` is the default branch. Work branches are cut from an up-to-date `develop` and merged back into it by pull
+  request — which is what Step 3 does in any repository whose remote names `develop` as its default branch, this one
+  included.
+- Only `feature/<name>` and `fix/<name>` branches (and Dependabot's) may open a pull request into `develop`; these are
+  the only prefixes Step 3 produces. Refactoring goes on a `feature/` branch, and a fix for a released version on a
+  `fix/` branch into `develop`.
+- `main` receives only `release/<major>.<minor>.<patch>` branches cut from `develop`, carrying no commits of their
+  own, and every release is tagged `v<major>.<minor>.<patch>` on its merge commit on `main`.
+
+## 8. References
 
 - [Use Case Specification Document](Use%20Case%20Specification%20Document.md)
 - [System Requirements Document](System%20Requirements%20Document.md)
