@@ -1,7 +1,10 @@
 # Releases and Signing
 
-Pushing a supported release tag starts the GitHub release workflow. The
-validator accepts exactly these forms:
+Pushing a supported release tag starts the GitHub release workflow. The tag
+must point at a commit on `main` — the merge commit of a `release/x.y.z` pull
+request, as described under *Releasing* in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#releasing) — or the workflow fails
+before anything is built. The validator accepts exactly these forms:
 
 - Stable: `v<major>.<minor>.<patch>`
 - Alpha: `v<major>.<minor>.<patch>-alpha.<sequence>`
