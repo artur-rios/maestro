@@ -70,9 +70,12 @@ available for recovery or a later installation. See
 [Application Data and Recovery](application-data.md) for data locations and
 manual deletion guidance.
 
-The setup EXE is a distribution artifact only. The ZIP package remains the
-payload used by Maestro's in-application runtime updater, and the setup EXE is
-not included in the runtime update manifest.
+The setup EXE is a distribution artifact only and is not included in the
+runtime update manifest. It installs the same files as the ZIP, so an installed
+copy updates itself from the ZIP (see [Windows packages](#windows-packages)).
+The uninstaller lives beside the install folder, in `Maestro-uninstall`, so an
+in-application update keeps it. Installed apps keeps showing the version the
+setup EXE installed until the next setup EXE runs.
 
 ## Local packaging
 
@@ -187,7 +190,7 @@ build missing any of them composes no update service at all and reports
 | `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | secret `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | The key every manifest signature is checked against. |
 | `MAESTRO_RELEASE_MANIFEST_URL` | repository variable | Where a running Maestro looks for the current manifest. |
 | `MAESTRO_RELEASE_SIGNATURE_URL` | repository variable | The detached signature beside it. |
-| `MAESTRO_RELEASE_PACKAGE_TYPE` | packaging default (`zip` on Windows, `appimage` on Linux) | Which artifact this build may install into itself. |
+| `MAESTRO_RELEASE_PACKAGE_TYPE` | set by the packaging script for each package: `zip` for the ZIP and the setup EXE, `msix` for the MSIX, `appimage` for the AppImage, and `deb` for the Debian package | Which artifact this build may install into itself, and how. |
 
 The two URLs must be stable across releases, because a build published today
 has to find the manifest published months later. GitHub's redirect for the most
@@ -208,3 +211,62 @@ jobs still forward them.
 There is currently no trusted Windows publisher certificate. Local MSIX files are test-signed and must not be described as publisher-trusted. Unsigned manifest verification prints `publisher-signing: unconfigured`; it never implies trust.
 
 Maestro downloads only the artifact matching its platform, architecture, and installed package type. It enforces the signed size and SHA-256, stages under the application data root, and requires approval tied to that exact digest before invoking an installer.
+
+The package type is compiled into the build, so when updates are configured
+each packaging script builds its bundle once per package type and reports
+`runtime-update-package-type:` for each. Without update configuration the
+bundles would be identical, and one build serves every package — which is what
+CI packages. A build configured for updates cannot be packaged with
+`-SkipBuild`, because one prebuilt bundle cannot carry two package types.
+
+### Windows packages
+
+`package_windows.ps1` builds the Windows bundle twice when updates are
+configured: once with `zip` for the ZIP and the setup EXE, and once with `msix`
+for the MSIX.
+
+- **ZIP and setup EXE.** Maestro launches the bundled
+  `replace_windows_zip.ps1`, which waits for Maestro to exit, extracts the
+  verified ZIP beside the install folder, swaps the folders, starts the new
+  version, and restores the previous folder if it does not start. The folder
+  must be writable by the user: a ZIP extracted anywhere the user owns, or the
+  setup EXE's `%LocalAppData%\Programs\Maestro`.
+- **MSIX.** An MSIX install lives under `WindowsApps`, which Windows keeps
+  read-only, so Maestro never writes to it. It hands the verified `.msix` to
+  `Add-AppxPackage -Path ... -DeferRegistrationWhenPackagesAreInUse`: Windows
+  stages the new version and registers it once Maestro is no longer running, so
+  restart Maestro to run it (this needs Windows 10 version 2004 or later).
+  Windows accepts the package as an update only when it has the installed
+  package's identity (`dev.artur-rios.maestro`) and publisher and a signature
+  the machine already trusts. Releases are signed with the `msix` tool's test
+  certificate, whose publisher is `CN=Msix Testing, O=Msix Testing Corporation,
+  S=Some-State, C=US`; moving to a real certificate changes the publisher, and
+  Windows then treats the new package as a different app rather than an update.
+  When Windows refuses the package, Maestro says so and how to install it by
+  hand: open `maestro-windows-x64.msix` from the release with App Installer.
+  A ZIP update offered to a copy running from `WindowsApps` is refused before
+  anything is launched.
+
+### Linux packages
+
+`package_linux.sh` builds the Linux bundle twice when updates are configured:
+once for the AppImage and once for the Debian package.
+
+- **AppImage.** Maestro replaces the `.AppImage` file it was started from,
+  which the AppImage runtime names in `APPIMAGE`. The running executable cannot
+  be the target: inside an AppImage it lives in a read-only squashfs mount (or,
+  with `APPIMAGE_EXTRACT_AND_RUN`, a temporary extraction the runtime deletes on
+  exit). The bundled `replace_linux_appimage.sh` waits for Maestro to exit,
+  copies the verified download beside the installed file with that file's
+  permissions, makes sure it stays executable, renames it over the installed
+  file in one step, and starts the new version. A failure before the rename
+  leaves the installed AppImage unchanged. The folder holding the AppImage must
+  be writable by the user. A copy that was not started from an AppImage file
+  refuses the update rather than guess a target.
+- **Debian package.** An install under `/opt/maestro` belongs to the system
+  package manager. Maestro hands the verified `.deb` to
+  `pkexec dpkg --install`, which asks for the user's password through polkit,
+  just as an MSIX update is handed to Windows; the package recommends `pkexec`.
+  Restart Maestro to run the new version. When elevation is refused or
+  unavailable, Maestro says so and how to install the package by hand:
+  `sudo apt install ./maestro-linux-amd64.deb`.
