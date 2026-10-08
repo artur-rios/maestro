@@ -6,7 +6,13 @@ Future<void> main() async {
   final workflowDirectory = Directory('.github/workflows');
   final workflows = await workflowDirectory
       .list()
-      .where((entity) => entity is File && entity.path.endsWith('.yml'))
+      // GitHub runs `.yaml` workflows too; skipping them would leave a whole
+      // workflow unchecked for mutable actions and downloads.
+      .where(
+        (entity) =>
+            entity is File &&
+            (entity.path.endsWith('.yml') || entity.path.endsWith('.yaml')),
+      )
       .cast<File>()
       .toList();
   if (workflows.isEmpty) {
@@ -19,7 +25,7 @@ Future<void> main() async {
   );
   final immutableVersion = RegExp(r'^v?\d+\.\d+\.\d+$');
   final downloadCommand = RegExp(
-    r'\b(?:curl|wget|Invoke-WebRequest|Start-BitsTransfer)\b',
+    r'\b(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|Start-BitsTransfer)\b',
     caseSensitive: false,
   );
   final httpUrl = RegExp(r'''https?://[^\s"']+''');

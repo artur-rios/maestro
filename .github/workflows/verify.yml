@@ -23,7 +23,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libsecret-1-dev
       - run: flutter pub get
       - run: dart run build_runner build
-      - run: git diff --exit-code
+      # Untracked output counts as drift too: a newly generated file that was
+      # never committed leaves `git diff` clean.
+      - name: Check generated code is committed
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
       - run: dart format --output=none --set-exit-if-changed lib test integration_test test_support tooling
       - run: dart run tooling/verify_architecture.dart
       - run: dart run tooling/verify_workflows.dart

@@ -270,6 +270,36 @@ void main() {
     expect(text.startsWith('ok'), isTrue);
     expect(text.contains('\uFFFD'), isTrue);
   });
+  test(
+    'GivenARestartedWorkflow_WhenDerivingTopology_ThenTheLiveAttemptIsFollowed',
+    () {
+      // Given: a run that failed on its last step and was restarted, so step
+      // one is executing again while step three still holds the old attempt.
+      final snapshot = _snapshot(stepCount: 3);
+      final run = _run(status: RunStatus.running, currentStepPosition: 0);
+      final attempts = <RunAttempt>[
+        _attempt(id: 'a1', stepId: 'step-0', status: AttemptStatus.succeeded),
+        _attempt(id: 'a2', stepId: 'step-1', status: AttemptStatus.succeeded),
+        _attempt(id: 'a3', stepId: 'step-2', status: AttemptStatus.failed),
+        _attempt(
+          id: 'a4',
+          stepId: 'step-0',
+          status: AttemptStatus.running,
+          attemptNumber: 2,
+        ),
+      ];
+
+      // When: the topology is derived.
+      final topology = deriveTopology(
+        run: run,
+        snapshot: snapshot,
+        attempts: attempts,
+      );
+
+      // Then: the view follows the attempt producing output now.
+      expect(topology.latestAttemptId, 'a4');
+    },
+  );
 }
 
 RunSnapshot _snapshot({required int stepCount}) => RunSnapshot(

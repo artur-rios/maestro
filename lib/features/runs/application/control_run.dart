@@ -204,13 +204,7 @@ final class ControlRun {
     // Resume re-drives execution from the persisted position, including in a
     // later session, so the worktree the run left behind may be gone.
     if (worktreePath == null || !await _worktrees.exists(worktreePath)) {
-      return const RunControlFailure(
-        code: 'run.control.worktree_missing',
-        message: "This run's isolated worktree is no longer available.",
-        remediation:
-            'Its evidence remains durable. Retry the run to recreate an '
-            'isolated worktree, or start a new run.',
-      );
+      return _worktreeMissing;
     }
     await _repository.resumeRun(runId, _now());
     _drive(runId, RecoveryContextPolicy.preserved);
@@ -277,6 +271,19 @@ final class ControlRun {
         message: 'This run cannot be retried in its current state.',
         remediation: 'Refresh the run list and review its latest status.',
       );
+    }
+    // Retry is offered only for a run that has stopped (AF-01). Recovery
+    // evidence alone also exists for a paused or starting run, which a stale
+    // chooser could otherwise move straight to running.
+    final view = await _repository.controlViewOf(runId);
+    final rejection = _reject(view, RunControlAction.retry);
+    if (rejection != null) return rejection;
+    // A stopped run's worktree is reclaimed at the next startup, so a retry in
+    // a later session would launch agents into a folder that no longer exists
+    // and report it as a missing CLI.
+    final worktreePath = view!.worktreePath;
+    if (worktreePath == null || !await _worktrees.exists(worktreePath)) {
+      return _worktreeMissing;
     }
     final scope = _scopesFor(
       evidence,
@@ -357,6 +364,15 @@ final class ControlRun {
       const RecoveryScope.available(RecoveryAction.restartWorkflow),
     ];
   }
+
+  // Neither resume nor retry recreates a worktree, so the only honest way
+  // forward is a new run; the stopped run's evidence stays readable.
+  static const _worktreeMissing = RunControlFailure(
+    code: 'run.control.worktree_missing',
+    message: "This run's isolated worktree is no longer available.",
+    remediation:
+        'Its evidence remains durable. Start a new run to continue the work.',
+  );
 
   RunControlFailure? _reject(RunControlView? view, RunControlAction action) {
     if (view == null) {

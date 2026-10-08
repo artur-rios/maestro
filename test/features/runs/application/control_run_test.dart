@@ -193,6 +193,59 @@ void main() {
     },
   );
 
+  test(
+    'GivenAStoppedRunWhoseWorktreeWasReclaimed_WhenRetrying_ThenWorktreeMissingIsReported',
+    () async {
+      // Given: a failed run from an earlier session; startup reclaimed its
+      // worktree because a failed run no longer retains resources.
+      final fixture = _Fixture(status: RunStatus.failed);
+      fixture.repository.evidence = RunRecoveryEvidence(
+        runId: 'run-1',
+        status: RunStatus.failed,
+        updatedAt: _updatedAt,
+        affectedStepPosition: 0,
+        affectedAttemptId: 'attempt-1',
+      );
+      fixture.probe.present = false;
+
+      // When: the user restarts the workflow.
+      final failure = await fixture.control.retry(
+        'run-1',
+        RecoveryAction.restartWorkflow,
+      );
+
+      // Then: no recovery is recorded and no agent is launched into a folder
+      // that does not exist.
+      expect(failure?.code, 'run.control.worktree_missing');
+      expect(failure?.remediation, isNot(contains('Retry')));
+      expect(fixture.repository.recoveries, isEmpty);
+      expect(fixture.execution.executed, isEmpty);
+    },
+  );
+
+  test('GivenAPausedRun_WhenRetrying_ThenTheTransitionIsRejected', () async {
+    // Given: a paused run, which has recovery evidence but is resumed rather
+    // than retried.
+    final fixture = _Fixture(status: RunStatus.paused);
+    fixture.repository.evidence = RunRecoveryEvidence(
+      runId: 'run-1',
+      status: RunStatus.paused,
+      updatedAt: _updatedAt,
+      affectedStepPosition: 0,
+    );
+
+    // When: a stale chooser asks to restart it.
+    final failure = await fixture.control.retry(
+      'run-1',
+      RecoveryAction.restartWorkflow,
+    );
+
+    // Then: it is refused, so resume's worktree check cannot be bypassed.
+    expect(failure?.code, 'run.control.invalid_transition');
+    expect(fixture.repository.recoveries, isEmpty);
+    expect(fixture.execution.executed, isEmpty);
+  });
+
   test('GivenUnofferedScope_WhenRetrying_ThenItIsRejected', () async {
     // Given: a run whose preserved-context scope is unavailable.
     final fixture = _Fixture(status: RunStatus.failed);

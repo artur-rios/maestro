@@ -75,6 +75,32 @@ jobs:
   }
 
   test(
+    'GivenAYamlWorkflowWithAMutableDownload_WhenVerified_ThenItIsRejected',
+    () => _withWorkflow(
+      '''
+name: Mutable tool
+jobs:
+  verify:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: iwr -OutFile tool.exe https://example.com/latest/tool.exe
+''',
+      () => expectLater(
+        workflow_verifier.main,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('ci.yaml'),
+          ),
+        ),
+      ),
+      fileName: 'ci.yaml',
+    ),
+  );
+
+  test(
     'GivenImmutableWorkflowDependencies_WhenVerified_ThenValidationPasses',
     () => _withWorkflow('''
 name: Immutable dependencies

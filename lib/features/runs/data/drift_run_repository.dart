@@ -985,7 +985,7 @@ final class DriftRunRepository
     )..where((table) => table.id.equals(runId))).getSingleOrNull();
     if (run == null || run.deletedAt != null) return null;
     final status = domain.RunStatus.values.byName(run.status);
-    if (!status.canTransitionTo(domain.RunStatus.running)) return null;
+    if (!_isRecoverable(status)) return null;
     final steps =
         await (_database.select(_database.runSnapshotSteps)
               ..where((table) => table.runId.equals(runId))
@@ -1034,7 +1034,7 @@ final class DriftRunRepository
         _database.workflowRuns,
       )..where((table) => table.id.equals(request.runId))).getSingle();
       final status = domain.RunStatus.values.byName(run.status);
-      if (!status.canTransitionTo(domain.RunStatus.running)) {
+      if (!_isRecoverable(status)) {
         throw StateError('The run cannot be recovered from ${run.status}.');
       }
       if (expectedRunUpdatedAt != null &&
@@ -1202,6 +1202,16 @@ final class DriftRunRepository
       .where((status) => status.isActionable)
       .map((status) => status.name)
       .toList(growable: false);
+
+  /// Only a stopped run is recovered (BR-16). A paused, starting, or
+  /// delivery-pending run can also move to running, but through resume or its
+  /// own execution, never by rewriting its position as a recovery.
+  static bool _isRecoverable(domain.RunStatus status) => switch (status) {
+    domain.RunStatus.failed ||
+    domain.RunStatus.canceled ||
+    domain.RunStatus.interrupted => true,
+    _ => false,
+  };
 
   Future<void> _insertRecovery(domain.RunRecoveryRequest request) => _database
       .into(_database.runRecoveryRequests)

@@ -40,6 +40,11 @@ final class HeimdallAuthenticationGateway
     } on Object {
       throw const HeimdallAuthenticationTransportFailure();
     }
+    // An unavailable or overloaded service did not reject anyone; reporting
+    // it as a rejected Google identity sends the user after the wrong cause.
+    if (response.statusCode >= 500 || response.statusCode == 429) {
+      throw const HeimdallAuthenticationTransportFailure();
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw const HeimdallAuthenticationRejected();
     }

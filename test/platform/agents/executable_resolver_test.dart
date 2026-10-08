@@ -28,6 +28,30 @@ void main() {
   });
 
   test(
+    'GivenEmptyOrRelativePathEntries_WhenResolved_ThenTheCurrentDirectoryIsNotSearched',
+    () async {
+      if (Platform.isWindows) return;
+      // An empty entry and `.` both name the current directory, so the folder
+      // Maestro was started from could supply the agent.
+      final root = await Directory.systemTemp.createTemp('maestro-resolver-');
+      addTearDown(() => root.delete(recursive: true));
+      final planted = File(p.join(root.path, 'codex'));
+      await planted.writeAsString('fixture');
+      final previous = Directory.current;
+      Directory.current = root;
+      addTearDown(() => Directory.current = previous);
+
+      final result = await ExecutableResolver(
+        path: ':.:codex-bin',
+        isWindows: false,
+        executableCheck: (_) async => true,
+      ).resolve('codex');
+
+      expect(result, isA<MissingExecutable>());
+    },
+  );
+
+  test(
     'GivenPowerShellWrapperOnWindows_WhenResolved_ThenNoShellStringIsUsed',
     () async {
       final root = await Directory.systemTemp.createTemp('maestro-resolver-');

@@ -1442,6 +1442,35 @@ void main() {
   );
 
   test(
+    'GivenUnavailableProtectedStorage_WhenRecovering_ThenTheRecoveryCodeIsNotSpent',
+    () async {
+      // Given: a valid recovery code while the keyring cannot be reached.
+      users.emailUsers['person@example.com'] = _emailUser();
+      verifiers.failWhenReading = true;
+      final code = RecoveryCode.generate(Random(37));
+      recoveryCodes.unusedDigests.add(code.digest);
+
+      // When: the user tries to recover.
+      final result = await service.recoverLocalAccount(
+        'person@example.com',
+        code.display,
+        'new-password',
+      );
+
+      // Then: recovery fails as a storage failure and the code stays usable
+      // for when storage is back.
+      expect(result, isA<FailureResult<AuthenticatedSession>>());
+      expect(
+        (result as FailureResult<AuthenticatedSession>).failure,
+        isA<StorageFailure>(),
+      );
+      expect(recoveryCodes.successfulConsumptions, 0);
+      expect(recoveryCodes.unusedDigests, contains(code.digest));
+      expect(verifiers.writes, isEmpty);
+    },
+  );
+
+  test(
     'GivenRecoveryMetadataUpdateFailure_WhenRecovering_ThenCodeStaysSpentAndFailureIsAudited',
     () async {
       users.emailUsers['person@example.com'] = _emailUser();
@@ -1768,6 +1797,7 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   final List<String> readKeys = <String>[];
   bool failWhenDeleting = false;
   bool failWhenWriting = false;
+  bool failWhenReading = false;
   Future<void> Function(String key, String verifier)? afterWrite;
 
   @override
@@ -1785,6 +1815,12 @@ final class _FakePasswordVerifierStore implements PasswordVerifierStore {
   @override
   Future<String?> read(String key) async {
     readKeys.add(key);
+    if (failWhenReading) {
+      throw const StorageFailure(
+        code: 'storage.verifier_read',
+        message: 'Unavailable.',
+      );
+    }
     return values[key];
   }
 

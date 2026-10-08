@@ -47,17 +47,34 @@ void main() {
 
   test('child environment is an allowlist and disables prompts', () {
     final environment = buildRunEnvironment(<String, String>{
-      'PATH': 'bin',
+      'PATH': '/usr/bin',
       'HOME': '/home/me',
       'OPENAI_API_KEY': 'secret',
       'UNRELATED_SECRET': 'must-not-leak',
-    });
-    expect(environment['PATH'], 'bin');
+    }, windows: false);
+    expect(environment['PATH'], '/usr/bin');
     expect(environment['OPENAI_API_KEY'], 'secret');
     expect(environment['UNRELATED_SECRET'], isNull);
     expect(environment['GIT_TERMINAL_PROMPT'], '0');
     expect(environment['CI'], '1');
   });
+
+  test(
+    'GivenEmptyOrRelativePathEntries_WhenBuildingTheEnvironment_ThenTheWorktreeCannotSupplyTheAgent',
+    () {
+      // An empty entry means the current directory — the run's worktree — so
+      // a repository shipping its own `claude` would run instead of the CLI.
+      final linux = buildRunEnvironment(<String, String>{
+        'PATH': ':/usr/local/bin::node_modules/.bin:.:/usr/bin:',
+      }, windows: false);
+      final windows = buildRunEnvironment(<String, String>{
+        'Path': r'C:\Windows\System32;;.\bin;C:\Tools;',
+      }, windows: true);
+
+      expect(linux['PATH'], '/usr/local/bin:/usr/bin');
+      expect(windows['PATH'], r'C:\Windows\System32;C:\Tools');
+    },
+  );
 
   test('command creation rejects shell-like unsupported CLI identifiers', () {
     expect(

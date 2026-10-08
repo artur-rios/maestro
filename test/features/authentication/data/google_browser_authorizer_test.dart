@@ -291,6 +291,34 @@ void main() {
       );
     },
   );
+  test(
+    'GivenAnUnavailableTokenEndpoint_WhenAuthorized_ThenItIsATransportFailure',
+    () async {
+      for (final (status, expected) in <(int, TypeMatcher<OAuthFailure>)>[
+        (503, isA<OAuthTransportFailure>()),
+        (429, isA<OAuthTransportFailure>()),
+        (400, isA<GoogleTokenExchangeRejected>()),
+      ]) {
+        final server = _FakeServer();
+        final authorizer = GoogleBrowserAuthorizer(
+          browser: (uri) async {
+            server.complete(
+              OAuthCallback(code: 'code', state: uri.queryParameters['state']),
+            );
+            return true;
+          },
+          httpClient: _Client((_) => http.Response('{}', status)),
+          loopbackServerFactory: () async => server,
+          randomBytes: (_) => List<int>.filled(32, 1),
+        );
+
+        await expectLater(
+          authorizer.authorize(configuration),
+          throwsA(expected),
+        );
+      }
+    },
+  );
 }
 
 GoogleBrowserAuthorizer _authorizer(
