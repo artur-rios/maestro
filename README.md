@@ -241,7 +241,9 @@ Development setup, running the tests, the branching model and the release proces
 
 ## Legal
 
-Proprietary. See [LICENSE](LICENSE). Copyright (c) 2026 Artur Rios. All rights reserved.
+This project is licensed under the [Artur Rios Attribution License](LICENSE). It is free and open source: you may view, use, fork, modify, and extend it, provided you credit the author, Artur Rios, with a link to [artur-rios.tech](https://artur-rios.tech) or [github.com/artur-rios](https://github.com/artur-rios).
+
+Copyright (c) 2026 Artur Rios.
 
 The bundled Meslo LG Nerd Font is third-party work and keeps its own licenses: see
 [`assets/fonts/meslo/LICENSE.txt`](assets/fonts/meslo/LICENSE.txt) and the notices beside it.

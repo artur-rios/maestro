@@ -22,7 +22,7 @@ UC-14:
 - Searchable run history and audit evidence, with retention, compaction and deletion controls.
 - Release packages for Windows (setup EXE, ZIP, MSIX) and Linux (AppImage, DEB), and in-application checking,
   verification and installation of signed updates.
-- A proprietary `LICENSE` (all rights reserved), and a Legal section in the README.
+- A `LICENSE` (the Artur Rios Attribution License), and a Legal section in the README.
 
 ### Changed
 
