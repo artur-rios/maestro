@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
 
   flutter_riverpod: 3.4.3
-  drift: 2.34.4
+  drift: 2.35.2
   drift_flutter: ^0.3.1
   sqlite3: ^3.7.0
   xterm: ^4.0.0
