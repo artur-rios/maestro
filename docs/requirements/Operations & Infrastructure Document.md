@@ -179,7 +179,7 @@ The pipeline (yggdrasil's Jenkins, with the Windows jobs on GitHub Actions) perf
 4. Native Windows and Linux release builds on their matching runners.
 5. Portable archive, installable package, AppImage, and Debian-family package creation.
 6. Clean-machine install, launch, update, and data-preservation smoke tests.
-7. Checksums, signed release manifest, provenance metadata, and artifact signing.
+7. Checksums and a signed release manifest. (The GitHub build-provenance attestations the first pipeline made are gone with the move to Jenkins.)
 8. GitHub Release publication, from a `v*` tag on a commit on `main`, only after all required jobs pass.
 
 Maestro checks the signed manifest on a configurable schedule and manual request. It downloads only the

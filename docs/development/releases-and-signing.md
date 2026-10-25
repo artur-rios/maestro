@@ -16,7 +16,9 @@ anything is built. The release is built in two places:
 Jenkins then checks the five packages together (`ci/release-validate.sh`), makes
 and signs the update manifest over all of them (`release.finalize`,
 `ci/release-finalize.sh`) and publishes the release on the git server and, as a
-copy, on GitHub, with the notes of the version's `CHANGELOG.md` section. The validator accepts exactly these forms:
+copy, on GitHub, with the notes of the version's `CHANGELOG.md` section.
+
+The tag validator accepts exactly these forms:
 
 - Stable: `v<major>.<minor>.<patch>`
 - Alpha: `v<major>.<minor>.<patch>-alpha.<sequence>`
@@ -198,9 +200,12 @@ credentials (listed in yggdrasil's catalog as the release credentials of `maestr
   built on GitHub, which keeps its own secret of the same name.
 
 With both configured, `ci/release-finalize.sh` runs
-`dart run tooling/release/sign_manifest.dart` over the manifest. Manifest signing
-is optional only when both are absent. If exactly one is configured, or signing
-or verification fails, the release fails closed.
+`dart run tooling/release/sign_manifest.dart` over the manifest. Signing is
+mandatory on the Jenkins pipeline: `release-manifest.sig` is one of the files the
+release publishes, so a release with neither key, with only one of them, or whose
+signing or verification fails is not published. (Building packages by hand
+without keys still prints `publisher-signing: unconfigured` and an unsigned
+manifest from `verify_release.dart`; that never implies trust.)
 
 ## Enabling the in-application updater
 
