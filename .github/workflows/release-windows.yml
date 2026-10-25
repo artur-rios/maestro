@@ -3,8 +3,8 @@ name: Release Windows
 # The Windows files of a release (release.windows in yggdrasil.yml): the old release.yml's validate-release (the tag
 # and its version projections) and windows-package jobs. Jenkins builds the Linux files from the release's tag
 # (ci/release-build.sh), dispatches this workflow on the tag once the mirror has pushed it, waits for it and downloads
-# the maestro-windows-packages artifact; ci/release-validate.sh then validates the whole set, and Jenkins publishes
-# it. It is not a pull request check.
+# the maestro-windows-packages artifact; ci/release-validate.sh then validates the whole set, ci/release-finalize.sh
+# makes and signs the update manifest over it, and Jenkins publishes it. It is not a pull request check.
 
 on:
   workflow_dispatch:

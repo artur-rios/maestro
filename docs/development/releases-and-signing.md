@@ -13,9 +13,10 @@ anything is built. The release is built in two places:
   dispatches on the tag once the mirror has pushed it) validates the same tag and
   packages the Windows ZIP, MSIX and setup EXE.
 
-Jenkins then checks the five packages together (`ci/release-validate.sh`) and
-publishes the release on the git server and, as a copy, on GitHub, with the notes
-of the version's `CHANGELOG.md` section. The validator accepts exactly these forms:
+Jenkins then checks the five packages together (`ci/release-validate.sh`), makes
+and signs the update manifest over all of them (`release.finalize`,
+`ci/release-finalize.sh`) and publishes the release on the git server and, as a
+copy, on GitHub, with the notes of the version's `CHANGELOG.md` section. The validator accepts exactly these forms:
 
 - Stable: `v<major>.<minor>.<patch>`
 - Alpha: `v<major>.<minor>.<patch>-alpha.<sequence>`
@@ -48,9 +49,9 @@ counterpart.
 
 Every release uses its tag as the release name. Its notes are the version's
 `CHANGELOG.md` section, else the titles of the pull requests merged since the
-previous tag. Yggdrasil's pipeline publishes every release as a normal release:
-it does not mark an alpha, beta or release-candidate tag as a prerelease, as the
-GitHub workflow did.
+previous tag. A tag with a pre-release part (`-alpha.N`, `-beta.N`, `-rc.N`) is
+published as a prerelease on the git server and on its GitHub copy, so GitHub
+never makes it the latest release; a stable tag is a normal release.
 
 The published release must contain exactly these five non-empty packages:
 
@@ -65,14 +66,12 @@ signing is configured, `release-manifest.sig`. The runtime-update manifest
 contains the ZIP, MSIX, AppImage, and DEB; the setup EXE is a
 distribution-only package, though it is still checksummed.
 
-> **Not yet produced by Jenkins:** the manifest, `SHA256SUMS` and the signature
-> cover the Windows packages too, which reach Jenkins only after
-> `release.build` has run, and `release.validate` cannot add files. Until
-> yggdrasil can run a signing step over the whole set, a release published by
-> Jenkins has the five packages and none of the three metadata files, and the
-> in-application updater has nothing to read. Do not tag a release before
-> that is solved. The GitHub build-provenance attestations of the old workflow
-> have no equivalent on the git server and are gone.
+The manifest, `SHA256SUMS` and the signature cover the Windows packages too, so
+`release.finalize` makes them after the Windows files have arrived and
+validation has passed, and the pipeline adds them to the release. A release whose
+Windows files are missing is not published. The GitHub build-provenance
+attestations of the old workflow have no equivalent on the git server and are
+gone.
 
 > **Unsigned Windows installer:** `maestro-windows-x64-setup.exe` is currently
 > unsigned. Windows may display SmartScreen or unknown-publisher warnings. Do
@@ -193,16 +192,15 @@ Update manifests use detached Ed25519 signatures. The keys are base64-encoded li
 credentials (listed in yggdrasil's catalog as the release credentials of `maestro`):
 
 - `maestro-signing-key`, the environment variable `MAESTRO_RELEASE_SECRET_KEY_BASE64`: 64-byte secret key; the
-  release build only.
+  finalize step only (`ci/release-finalize.sh`).
 - `maestro-signing-public-key`, `MAESTRO_RELEASE_PUBLIC_KEY_BASE64`: 32-byte verification key. `ci/release-build.sh`
-  stamps it into the Linux packages. The Windows packages are built on GitHub, which keeps its own secret of the same
-  name.
+  stamps it into the Linux packages, and the finalize step verifies the signature with it. The Windows packages are
+  built on GitHub, which keeps its own secret of the same name.
 
-With both secrets configured, run `dart run tooling/release/sign_manifest.dart dist`.
-Manifest signing is optional only when both secrets are absent. If exactly one
-secret is configured, or signing or verification fails, the release fails
-closed. GitHub artifact attestations are produced independently with OIDC
-provenance.
+With both configured, `ci/release-finalize.sh` runs
+`dart run tooling/release/sign_manifest.dart` over the manifest. Manifest signing
+is optional only when both are absent. If exactly one is configured, or signing
+or verification fails, the release fails closed.
 
 ## Enabling the in-application updater
 

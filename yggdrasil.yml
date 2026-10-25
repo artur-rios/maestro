@@ -26,10 +26,9 @@ checks:
 # Linux on the release agent, Windows by the release-windows.yml workflow on the GitHub mirror; the whole set is
 # validated before anything is published.
 #
-# Not expressible yet, and so not here: the update manifest (release-manifest.json), SHA256SUMS and the manifest's
-# signature, which the old release.yml made and signed after the Windows and Linux packages were together. They
-# cover the Windows files, which reach the pipeline after release.build has run and before release.validate, which
-# cannot add files. The signing key (maestro-signing-key) is therefore bound to nothing: see ci/release-build.sh.
+# The update manifest (release-manifest.json), SHA256SUMS and the manifest's signature cover the Windows files too, so
+# they are made by release.finalize, after the Windows files have arrived and validate has passed (the old
+# release.yml's `release` job).
 release:
   build:
     image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
@@ -43,3 +42,10 @@ release:
   validate:
     image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
     run: ci/release-validate.sh
+  finalize:
+    image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
+    run: ci/release-finalize.sh          # manifest and checksums over the five packages, signed, then verified
+    files: ["dist/finalize/release-manifest.json", "dist/finalize/SHA256SUMS", "dist/finalize/release-manifest.sig"]
+    credentials:
+      MAESTRO_RELEASE_SECRET_KEY_BASE64: maestro-signing-key          # signs the manifest
+      MAESTRO_RELEASE_PUBLIC_KEY_BASE64: maestro-signing-public-key   # verify_release.dart checks the signature with it

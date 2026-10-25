@@ -12,9 +12,9 @@
 # release.validate checks the whole set, and yggdrasil's pipeline uploads and publishes it on the git server and
 # on the GitHub mirror.
 #
-# NOT DONE HERE: the signed update manifest (create_manifest.dart, sign_manifest.dart, verify_release.dart: the old
-# `release` job). It covers the Windows ZIP and MSIX too, which reach the pipeline only after this script has run,
-# and release.validate cannot add files. See the Task 11 report and docs/development/releases-and-signing.md.
+# The signed update manifest (create_manifest.dart, sign_manifest.dart, verify_release.dart: the old `release` job)
+# is not made here: it covers the Windows ZIP and MSIX too, which reach the pipeline after this script has run. It is
+# release.finalize's (ci/release-finalize.sh).
 #
 # RELEASE_TAG (the tag, vX.Y.Z or a pre-release) and RELEASE_VERSION are set by the pipeline; by hand, set
 # RELEASE_TAG. MAESTRO_RELEASE_PUBLIC_KEY_BASE64 is the credential `maestro-signing-public-key`; without it the

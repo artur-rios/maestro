@@ -5,7 +5,8 @@
 # It ports what the old release job's verify_release.dart checked of the packages (validateDistributionPackages in
 # tooling/release/release_artifacts.dart): exactly the five distribution packages of
 # docs/development/releases-and-signing.md, each non-empty, and no other package. The manifest, the checksum list
-# and the signature that verify_release.dart checked next are not here: nothing makes them yet (see ci/release-build.sh).
+# and the signature that verify_release.dart checked next do not exist yet when this runs: release.finalize makes and
+# verifies them (ci/release-finalize.sh).
 #
 # The pipeline puts the release's files under RELEASE_FILES (a copy): release.build's at their paths in the checkout
 # (build/dist/), the Windows workflow's artifact under windows/maestro-windows-packages/. A release whose Windows
