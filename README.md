@@ -5,6 +5,9 @@ local software projects. A user selects a project folder, describes a task, choo
 steps, assigns an AI CLI and model to each step, and lets Maestro execute the workflow on an isolated Git
 branch in the background.
 
+> **Home:** the repository lives at <https://git.techcraftsmen.net/artur-rios/maestro>. GitHub is a read-only
+> mirror of it, and carries the copies of the releases that installed applications update from.
+
 > **Status:** milestones M-01 through M-06 are complete. All first-release use cases, UC-01 through UC-14,
 > have been delivered, including governed delivery, searchable history and audit evidence, retention and
 > deletion controls, and signed application updates.
@@ -119,7 +122,7 @@ on Linux. The exact technology and version policy is defined in the
 [Technology Stack Document](docs/requirements/Technology%20Stack%20Document.md).
 
 ```bash
-git clone https://github.com/artur-rios/maestro.git
+git clone https://git.techcraftsmen.net/artur-rios/maestro.git
 cd maestro
 flutter pub get
 ```

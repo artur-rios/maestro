@@ -149,12 +149,12 @@ after merge. Clean the isolated worktree after the applicable mode completes its
 
 The steps above specify what a Maestro run does in the project it is pointed at. This repository applies them under a
 develop/release branching model, defined in [CONTRIBUTING.md](../../CONTRIBUTING.md#branching-and-pull-requests) and
-enforced by `.github/workflows/branch-policy.yml` on every pull request:
+enforced by yggdrasil's branch policy (the `branch-policy` check) on every pull request:
 
 - `develop` is the default branch. Work branches are cut from an up-to-date `develop` and merged back into it by pull
   request — which is what Step 3 does in any repository whose remote names `develop` as its default branch, this one
   included.
-- Only `feature/<name>` and `fix/<name>` branches (and Dependabot's) may open a pull request into `develop`; these are
+- Only `feature/<name>` and `fix/<name>` branches (and Renovate's) may open a pull request into `develop`; these are
   the only prefixes Step 3 produces. Refactoring goes on a `feature/` branch, and a fix for a released version on a
   `fix/` branch into `develop`.
 - `main` receives only `release/<major>.<minor>.<patch>` branches cut from `develop`, carrying no commits of their

@@ -35,7 +35,7 @@ dbus-run-session -- bash -euc '
 ## Clean-clone setup
 
 ```bash
-git clone https://github.com/artur-rios/maestro.git
+git clone https://git.techcraftsmen.net/artur-rios/maestro.git
 cd maestro
 flutter pub get
 dart run build_runner build

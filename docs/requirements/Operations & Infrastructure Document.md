@@ -112,7 +112,7 @@ maestro/
 | Local credentials and keys | Operating-system protected storage | Password verifiers, update trust key material, and any future external token references. |
 | Project and workflow configuration | SQLite | Non-secret metadata and settings. |
 | CLI environment | Explicit allowlisted environment plus inherited required platform values | Secrets are never copied into logs or snapshots. |
-| CI and release values | GitHub Actions secrets and variables | Signing keys, repository coordinates, and publishing controls. |
+| CI and release values | Jenkins credentials; GitHub Actions secrets and variables for the Windows build | Signing keys, repository coordinates, and publishing controls. |
 | Build identity | Project manifest and CI | Version, commit, platform, architecture, and channel embedded in artifacts. |
 
 Invalid configuration is rejected while the last valid value remains active. Defaults are versioned and
@@ -171,7 +171,7 @@ than a user's projects.
 
 ## 7. Build and Delivery
 
-The GitHub Actions pipeline performs:
+The pipeline (yggdrasil's Jenkins, with the Windows jobs on GitHub Actions) performs:
 
 1. Dependency resolution and lockfile verification.
 2. Static analysis, formatting verification, and unit/widget tests.

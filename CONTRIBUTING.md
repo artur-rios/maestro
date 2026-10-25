@@ -1,5 +1,9 @@
 # Contributing
 
+Maestro's repository lives at <https://git.techcraftsmen.net/artur-rios/maestro>. Open pull requests there: GitHub
+(<https://github.com/artur-rios/maestro>) is a read-only mirror. Its checks run on yggdrasil's Jenkins; only the
+Windows job runs on GitHub Actions, on the mirror.
+
 ## Prerequisites and building
 
 Operational prerequisites and clean-clone commands are documented in
@@ -44,21 +48,21 @@ fix/<name> ─────┴─▶ develop ──▶ release/x.y.z ──▶ ma
 
 `develop` is the default branch. One unit of work equals one branch, one GitHub issue when issue tracking applies,
 and one pull request into `develop`. Branches are created from an up-to-date `develop` and named `feature/<name>`,
-or `fix/<name>` for a defect; names are lowercase: letters, digits, `.`, `_` and `-`. Dependabot's own
-`dependabot/` branches are accepted as well. A `release/` branch is a snapshot of `develop`: a fix for a release
+or `fix/<name>` for a defect; names are lowercase: letters, digits, `.`, `_` and `-`. Renovate's own
+`renovate/` branches are accepted as well. A `release/` branch is a snapshot of `develop`: a fix for a release
 lands on `develop` through a `fix/` branch and a new release branch is cut.
 
-The **Branch Policy** workflow (`.github/workflows/branch-policy.yml`) checks all of this on every pull request into
-`develop` or `main`. It and the three CI jobs — `analyze-test / analyze-test`, `windows-platform` and
-`linux-platform` — are required checks on both branches. The repository owner can bypass these rules; that is for
-emergencies, not for routine work.
+The branch policy (yggdrasil's, run by Jenkins as the `branch-policy` check) checks all of this on every pull request
+into `develop` or `main`. It and the three CI checks — `analyze-test` and `linux-platform` (Jenkins) and
+`windows-platform` (a GitHub Actions job on the mirror) — are required checks on both branches. The repository owner
+can bypass these rules; that is for emergencies, not for routine work.
 
 The [Development Workflow Document](docs/requirements/Development%20Workflow%20Document.md) specifies how a Maestro
 run delivers a unit of work — its supervised and autonomous modes, issue status, testing gate and Definition of
 Done — and its last section records how that applies to this repository.
 
-No pull request may be opened as ready for delivery while required tests fail. The CI workflow runs on every pull
-request into `develop` or `main`, and on every push to them.
+No pull request may be opened as ready for delivery while required tests fail. The CI checks run on every pull
+request into `develop` or `main`; `windows-platform` runs on every push to the mirror, any branch.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) with a lowercase subject, e.g.
 `feat: manage concurrent terminals` or `fix: kill a linux terminal's whole session`.
@@ -126,11 +130,12 @@ after fixes have landed on `develop`.
 
 Pushing a supported `v<major>.<minor>.<patch>` stable, `-alpha.<sequence>`,
 `-beta.<sequence>`, or `-rc.<sequence>` tag publishes the five release
-packages (Windows ZIP, MSIX, and setup EXE; Linux AppImage and DEB). The
-release workflow first refuses a tag whose commit is not on `main`. Stable
-tags create normal GitHub Releases; prerelease tags create GitHub prereleases;
-both receive generated release notes. The release workflow runs the same
-analyze-and-test gate as CI before anything is packaged. The complete tag
+packages (Windows ZIP, MSIX, and setup EXE; Linux AppImage and DEB). Jenkins
+first refuses a tag whose commit is not on `main`, runs the same
+analyze-and-test gate as CI before anything is packaged, and publishes the
+release on the git server and, as a copy, on GitHub, with notes from the
+changelog. The Windows packages are built by the `release-windows.yml`
+GitHub Actions workflow, which Jenkins dispatches on the tag. The complete tag
 ranges, native version mappings, local packaging commands, and signing policy
 are in [Releases and Signing](docs/development/releases-and-signing.md), and the
 release signing key is generated following the
