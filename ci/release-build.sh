@@ -37,7 +37,7 @@ export MAESTRO_RELEASE_SIGNATURE_URL=${MAESTRO_RELEASE_SIGNATURE_URL:-https://gi
 # shellcheck source=ci/apt-packages.sh
 source ci/apt-packages.sh
 ensure_packages clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
-  libayatana-appindicator3-dev
+  libayatana-appindicator3-dev file
 # shellcheck source=ci/flutter-env.sh
 source ci/flutter-env.sh
 # shellcheck source=ci/appimagetool.sh

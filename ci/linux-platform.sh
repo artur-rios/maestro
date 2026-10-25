@@ -6,13 +6,14 @@
 # The Linux desktop prerequisites are installed with apt when this runs as root, as checks do on yggdrasil's
 # agents (ci/apt-packages.sh); libsqlite3-dev is in the list because this job builds and links the application,
 # so it must not rely on the image happening to provide the sqlite3 development files its native assets need.
+# `file` is what appimagetool asks for; the runner had it.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # shellcheck source=ci/apt-packages.sh
 source ci/apt-packages.sh
 ensure_packages clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
-  libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
+  libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb file
 # shellcheck source=ci/flutter-env.sh
 source ci/flutter-env.sh
 # shellcheck source=ci/appimagetool.sh
