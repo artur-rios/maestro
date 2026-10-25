@@ -12,14 +12,18 @@
 #
 # RELEASE_FILES, RELEASE_TAG and RELEASE_VERSION are set by the pipeline. MAESTRO_RELEASE_SECRET_KEY_BASE64 is the
 # credential `maestro-signing-key` and MAESTRO_RELEASE_PUBLIC_KEY_BASE64 `maestro-signing-public-key`. As the old job
-# did: with both, the manifest is signed; with neither, it is published unsigned ("publisher-signing: unconfigured");
-# with only one, the release fails.
+# did, it signs with both and fails with only one. With neither it fails too, unlike the old job (which published an
+# unsigned manifest): `release-manifest.sig` is one of the release's `files`, so an unsigned release could not be
+# published anyway. Signing is mandatory.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 files=${RELEASE_FILES:?ci/release-finalize.sh: RELEASE_FILES is not set}
 tag=${RELEASE_TAG:?ci/release-finalize.sh: RELEASE_TAG is not set}
+# The secret key is read once and then dropped from the environment, so it reaches only the sign_manifest call below,
+# not `flutter pub get` or the other tools.
 secret_key=${MAESTRO_RELEASE_SECRET_KEY_BASE64:-}
+unset MAESTRO_RELEASE_SECRET_KEY_BASE64
 public_key=${MAESTRO_RELEASE_PUBLIC_KEY_BASE64:-}
 # Where the packages are published: the release's GitHub copy, which is what the manifest's URLs and the installed
 # applications use (the old job had it from GITHUB_REPOSITORY and GITHUB_REF_NAME).
@@ -49,7 +53,8 @@ dart run tooling/release/create_manifest.dart "$work" "$semantic_version" "$down
 if [[ -n "$secret_key" && -n "$public_key" ]]; then
   MAESTRO_RELEASE_SECRET_KEY_BASE64=$secret_key dart run tooling/release/sign_manifest.dart "$work"
 elif [[ -z "$secret_key" && -z "$public_key" ]]; then
-  echo 'publisher-signing: unconfigured'
+  echo 'publisher-signing: unconfigured, and a release here must be signed' >&2
+  exit 1
 else
   echo 'publisher-signing: incomplete signing material' >&2
   exit 1
@@ -59,7 +64,5 @@ MAESTRO_RELEASE_PUBLIC_KEY_BASE64=$public_key dart run tooling/release/verify_re
 rm -rf dist/finalize
 mkdir -p dist/finalize
 cp "$work/release-manifest.json" "$work/SHA256SUMS" dist/finalize/
-if [ -f "$work/release-manifest.sig" ]; then
-  cp "$work/release-manifest.sig" dist/finalize/
-fi
+cp "$work/release-manifest.sig" dist/finalize/
 ls -l dist/finalize
