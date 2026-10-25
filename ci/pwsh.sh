@@ -27,5 +27,5 @@ ensure_pwsh() {
     rm -rf "$work"
   fi
   export PATH="$directory:$PATH"
-  pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+  pwsh --version
 }
