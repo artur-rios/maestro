@@ -113,18 +113,33 @@ jobs:
 ''', workflow_verifier.main),
   );
 
+  const windowsReleaseHeader = r'''
+name: Release Windows
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-windows-${{ inputs.tag }}
+  cancel-in-progress: false
+''';
+
   test(
-    'GivenReleaseWithoutValidatedVersions_WhenVerified_ThenWorkflowIsRejected',
+    'GivenWindowsReleaseWithoutValidatedVersions_WhenVerified_ThenWorkflowIsRejected',
     () => _withWorkflow(
       '''
-name: Release
+$windowsReleaseHeader
 jobs:
   windows-package:
     runs-on: windows-2025
     steps:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: windows-packages
+          name: maestro-windows-packages
           path: |
             dist/maestro-windows-x64.zip
             dist/maestro-windows-x64.msix
@@ -136,11 +151,44 @@ jobs:
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('validate-release'),
+            contains('windows-package must run the tag validator'),
           ),
         ),
       ),
-      fileName: 'release.yml',
+      fileName: 'release-windows.yml',
+    ),
+  );
+
+  test(
+    'GivenWindowsReleaseTriggeredByPush_WhenVerified_ThenWorkflowIsRejected',
+    () => _withWorkflow(
+      r'''
+name: Release Windows
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-windows-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  windows-package:
+    runs-on: windows-2025
+    steps:
+      - run: echo packaged
+''',
+      () => expectLater(
+        workflow_verifier.main,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('only on workflow_dispatch with a required tag input'),
+          ),
+        ),
+      ),
+      fileName: 'release-windows.yml',
     ),
   );
 }
