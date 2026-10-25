@@ -1,31 +1,28 @@
 name: CI
 
+# The Windows job, which stays on GitHub Actions: Jenkins runs the Linux checks analyze-test and linux-platform
+# (yggdrasil.yml, from ci/) and copies this job's result ("windows-platform", the catalog's actionsCheck) onto the
+# Forgejo commit.
+#
+# Every branch the mirror pushes: Jenkins copies the result onto the Forgejo pull request by its head commit, and
+# pull requests exist only on Forgejo. No pull_request trigger (it never fires on the mirror) and no paths filter (a
+# commit the filter skips has no run, so its status stays pending).
 on:
-  pull_request:
-    branches: [develop, main]
-  # Work branches are covered by their pull request. Listing them here as well
-  # ran every commit twice, which doubled cost and doubled exposure to
-  # infrastructure flake in the native-asset and desktop build steps.
   push:
-    branches: [develop, main]
+    branches: ['**']
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# A newer commit supersedes an in-flight run for the same pull request, whose
-# earlier result delivery would never be judged on. Runs on develop and main
-# are never cancelled: a superseded run leaves that commit with no verification
-# at all, which is how UC-05 reached main without a completed check.
+# A newer commit supersedes an in-flight run for the same branch, whose earlier result would never be judged on.
+# Runs on develop and main are never cancelled: a superseded run leaves that commit with no verification at all,
+# which is how UC-05 reached main without a completed check.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 jobs:
-  # The same gate the release pipeline calls, so a tag can never publish a
-  # commit that these checks have not passed.
-  analyze-test:
-    uses: ./.github/workflows/verify.yml
-
   windows-platform:
     runs-on: windows-2025
     steps:
@@ -109,53 +106,4 @@ jobs:
             dist/maestro-windows-x64.zip
             dist/maestro-windows-x64.msix
             dist/maestro-windows-x64-setup.exe
-          if-no-files-found: error
-
-  linux-platform:
-    runs-on: ubuntu-24.04
-    env:
-      APPIMAGE_EXTRACT_AND_RUN: '1'
-      APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.47.2'
-          channel: stable
-          cache: true
-      - name: Install Linux build prerequisites
-        # libsqlite3-dev matches analyze-test: this job builds and links the
-        # Linux application, so it must not rely on the runner image happening
-        # to provide the sqlite3 development files its native assets need.
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
-      - run: flutter pub get
-      - run: xvfb-run -a flutter test integration_test/platform/process_tree_integration_test.dart -d linux
-      - name: Run production startup integration with Secret Service
-        run: |
-          dbus-run-session -- bash -euc '
-            printf "\n" | gnome-keyring-daemon --unlock
-            xvfb-run -a flutter test integration_test/foundation_startup_integration_test.dart -d linux
-          '
-      - run: xvfb-run -a flutter test integration_test/performance/concurrent_streams_integration_test.dart -d linux
-      - run: xvfb-run -a flutter test integration_test/performance/run_observation_integration_test.dart -d linux
-      - run: xvfb-run -a flutter test integration_test/terminal/embedded_terminal_integration_test.dart -d linux
-      - run: xvfb-run -a flutter test integration_test/projects/git_project_validation_integration_test.dart -d linux
-      - run: xvfb-run -a flutter test integration_test/projects/project_lifecycle_non_ownership_integration_test.dart -d linux
-      - run: xvfb-run -a flutter test integration_test/workflows/workflow_design_persistence_integration_test.dart -d linux
-      - run: xvfb-run -a flutter test integration_test/workflows/step_agent_process_integration_test.dart -d linux
-      - run: flutter build linux --release
-      - name: Install pinned appimagetool
-        run: |
-          curl --fail --location --output "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum --check --strict
-          chmod 0755 "$RUNNER_TEMP/appimagetool"
-          echo "APPIMAGETOOL_PATH=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
-      - run: bash tooling/packaging/package_linux.sh 0.1.0 0.1.0 0.1.0
-      - run: bash tooling/smoke/linux_install_update.sh dist/maestro-linux-x64.AppImage dist/maestro-linux-amd64.deb
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: linux-packages
-          path: |
-            dist/maestro-linux-x64.AppImage
-            dist/maestro-linux-amd64.deb
           if-no-files-found: error

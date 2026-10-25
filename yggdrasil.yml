@@ -1,0 +1,45 @@
+# What Jenkins checks and releases for this repository, read by the pipeline of the yggdrasil installation that
+# deploys it (yggdrasil's docs/catalog.md, "Repository pipeline file", has every field). It is data, never code:
+# images (pinned by version and digest, which Renovate keeps up to date: the owner merges those changes), commands,
+# globs and the names of Jenkins credentials. The commands are scripts under ci/ that run from the repository's
+# root, so you can run them on your own machine too. Every check the catalog lists in maestro's `checks` is defined
+# here, under the same name; the Windows job stays a GitHub Actions workflow (the catalog's `actionsChecks`,
+# `windows-platform`), run on the GitHub mirror.
+#
+# Flutter 3.47.2 is pinned in ci/flutter-env.sh, not by the image: no Flutter image has that version. The Flutter
+# image (ghcr.io/cirruslabs/flutter) supplies git, curl, xz and Ubuntu 24.04, as the GitHub runner did; the scripts
+# apt-install the Linux desktop packages the workflows installed (checks and release builds run as root on the
+# agents) and fetch the pinned SDK and appimagetool, each checked against its checksum.
+#
+# Check it where the catalog is, in the yggdrasil checkout:
+#   python3 scripts/pipeline_config.py describe maestro <this repository's checkout>
+
+checks:
+  analyze-test:                          # generated code, format, architecture and workflow gates, analyze, tests
+    image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
+    run: ci/analyze-test.sh
+  linux-platform:                        # Linux integration tests under Xvfb, release build, AppImage and deb smoke
+    image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
+    run: ci/linux-platform.sh
+
+# The release files, built from the release's tag once the pull request is merged and the tag pushed by the owner.
+# Linux on the release agent, Windows by the release-windows.yml workflow on the GitHub mirror; the whole set is
+# validated before anything is published.
+#
+# Not expressible yet, and so not here: the update manifest (release-manifest.json), SHA256SUMS and the manifest's
+# signature, which the old release.yml made and signed after the Windows and Linux packages were together. They
+# cover the Windows files, which reach the pipeline after release.build has run and before release.validate, which
+# cannot add files. The signing key (maestro-signing-key) is therefore bound to nothing: see ci/release-build.sh.
+release:
+  build:
+    image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
+    run: ci/release-build.sh             # tag check, the analyze-test gate, AppImage and deb (root: apt)
+    files: ["dist/maestro-linux-x64.AppImage", "dist/maestro-linux-amd64.deb"]
+    credentials:
+      MAESTRO_RELEASE_PUBLIC_KEY_BASE64: maestro-signing-public-key   # stamped into the build: the updater's key
+  windows:
+    workflow: release-windows.yml
+    files: ["maestro-windows-packages/*"]
+  validate:
+    image: ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
+    run: ci/release-validate.sh
