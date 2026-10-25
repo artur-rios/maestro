@@ -5,7 +5,8 @@
 #
 # libsqlite3-dev and libsecret-1-dev are what the workflow apt-installed for the native assets and the secret
 # storage tests; they are installed here with apt when this runs as root, as checks do on yggdrasil's agents
-# (ci/apt-packages.sh).
+# (ci/apt-packages.sh). The Windows packaging tests need PowerShell, which the runner had and the image has not
+# (ci/pwsh.sh).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -14,6 +15,9 @@ source ci/apt-packages.sh
 ensure_packages libsqlite3-dev libsecret-1-dev
 # shellcheck source=ci/flutter-env.sh
 source ci/flutter-env.sh
+# shellcheck source=ci/pwsh.sh
+source ci/pwsh.sh
+ensure_pwsh
 
 flutter pub get
 dart run build_runner build
