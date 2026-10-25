@@ -41,9 +41,9 @@ actual=$(cd "$bundle" && find . -maxdepth 1 -type f \
 if [ "$actual" != "$expected" ]; then
   echo "ci/release-validate.sh: the distribution packages do not match the required package set." >&2
   echo "required:" >&2
-  sed 's/^/  /' <<<"$expected" >&2
+  printf '%s\n' "$expected" | sed 's/^/  /' >&2
   echo "found:" >&2
-  sed 's/^/  /' <<<"$actual" >&2
+  printf '%s\n' "$actual" | sed 's/^/  /' >&2
   exit 1
 fi
 status=0
