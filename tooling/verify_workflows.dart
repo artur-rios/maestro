@@ -73,63 +73,62 @@ Future<void> main() async {
         }
       }
     }
-    if (workflow.path.endsWith('release.yml')) {
-      _verifyReleaseWorkflow(document, workflow.path);
+    if (workflow.path.endsWith('release-windows.yml')) {
+      _verifyWindowsReleaseWorkflow(document, workflow.path);
     }
   }
   stdout.writeln('workflow-verification: passed');
 }
 
-void _verifyReleaseWorkflow(YamlMap document, String workflowPath) {
+/// The Windows half of a release. Jenkins dispatches this workflow on the
+/// release tag (release.windows in yggdrasil.yml); the Linux half, the manifest
+/// and the publication are Jenkins's, so what is checked here is that this
+/// workflow still validates the tag, packages from the projections it yields,
+/// forwards the updater configuration and uploads exactly the Windows packages.
+void _verifyWindowsReleaseWorkflow(YamlMap document, String workflowPath) {
   final jobs = document['jobs'] as YamlMap;
-  final validation = _job(jobs, 'validate-release', workflowPath);
-  final verify = _job(jobs, 'verify', workflowPath);
   final windowsPackage = _job(jobs, 'windows-package', workflowPath);
-  final linuxPackage = _job(jobs, 'linux-package', workflowPath);
-  final release = _job(jobs, 'release', workflowPath);
 
   _requireMap(document['permissions'], const <String, Object?>{
     'contents': 'read',
   }, '$workflowPath top-level permissions');
   _requireMap(document['concurrency'], const <String, Object?>{
-    'group': r'release-${{ github.ref }}',
+    'group': r'release-windows-${{ inputs.tag }}',
     'cancel-in-progress': false,
   }, '$workflowPath concurrency');
   for (final entry in jobs.entries) {
-    if (entry.key != 'release' &&
-        entry.value is YamlMap &&
+    if (entry.value is YamlMap &&
         (entry.value as YamlMap)['permissions'] != null) {
       throw FormatException(
         '$workflowPath ${entry.key} must not elevate job permissions.',
       );
     }
   }
+  // Jenkins starts it with a tag and nothing else; it is not a CI check.
+  final trigger = document['on'];
+  final dispatch = trigger is YamlMap ? trigger['workflow_dispatch'] : null;
+  final inputs = dispatch is YamlMap ? dispatch['inputs'] : null;
+  final tagInput = inputs is YamlMap ? inputs['tag'] : null;
+  if (trigger is! YamlMap ||
+      trigger.length != 1 ||
+      inputs is! YamlMap ||
+      inputs.length != 1 ||
+      tagInput is! YamlMap ||
+      tagInput['required'] != true) {
+    throw FormatException(
+      '$workflowPath must run only on workflow_dispatch with a required tag input.',
+    );
+  }
 
-  const outputNames = <String>[
-    'semantic_version',
-    'core_version',
-    'windows_version',
-    'debian_version',
-    'is_prerelease',
-  ];
-  _requireMap(validation['outputs'], <String, Object?>{
-    for (final name in outputNames)
-      name:
-          r'${{ steps.version.outputs.'
-          '$name }}',
-  }, '$workflowPath validate-release outputs');
-  final validationSteps = _steps(
-    validation,
-    'validate-release',
+  final steps = _steps(
+    windowsPackage,
+    'windows-package',
     workflowPath,
   ).toList();
-  final validationStep = validationSteps
-      .where((step) => step['id'] == 'version')
-      .firstOrNull;
-  final checkoutIndex = validationSteps.indexWhere(
+  final checkoutIndex = steps.indexWhere(
     (step) => '${step['uses']}'.startsWith('actions/checkout@'),
   );
-  final flutterIndex = validationSteps.indexWhere(
+  final flutterIndex = steps.indexWhere(
     (step) =>
         '${step['uses']}'.startsWith('subosito/flutter-action@') &&
         step['with'] is YamlMap &&
@@ -137,43 +136,22 @@ void _verifyReleaseWorkflow(YamlMap document, String workflowPath) {
         (step['with'] as YamlMap)['channel'] == 'stable' &&
         (step['with'] as YamlMap)['cache'] == true,
   );
-  final pubGetIndex = validationSteps.indexWhere(
+  final pubGetIndex = steps.indexWhere(
     (step) => step['run'] == 'flutter pub get',
   );
-  final validatorIndex = validationStep == null
-      ? -1
-      : validationSteps.indexOf(validationStep);
-  if (validation['runs-on'] != 'ubuntu-24.04' ||
+  final validatorIndex = steps.indexWhere((step) => step['id'] == 'version');
+  if (windowsPackage['runs-on'] != 'windows-2025' ||
       checkoutIndex < 0 ||
       flutterIndex <= checkoutIndex ||
       pubGetIndex <= flutterIndex ||
       validatorIndex <= pubGetIndex ||
-      validationStep?['run'] !=
-          r'dart tooling/release/validate_release_tag.dart "$GITHUB_REF_NAME" "$GITHUB_OUTPUT"') {
+      steps[validatorIndex]['run'] !=
+          r'dart tooling/release/validate_release_tag.dart "$env:RELEASE_TAG" "$env:GITHUB_OUTPUT"') {
     throw FormatException(
-      '$workflowPath validate-release must run the tag validator.',
+      '$workflowPath windows-package must run the tag validator.',
     );
   }
 
-  // The release must run the same gate CI runs. Without this, a tag publishes
-  // a commit that nothing analyzed or tested.
-  if (verify['uses'] != './.github/workflows/verify.yml') {
-    throw FormatException(
-      '$workflowPath verify must call the shared analyze-and-test workflow.',
-    );
-  }
-  _requireNeeds(
-    windowsPackage,
-    const <String>{'validate-release', 'verify'},
-    'windows-package',
-    workflowPath,
-  );
-  _requireNeeds(
-    linuxPackage,
-    const <String>{'validate-release', 'verify'},
-    'linux-package',
-    workflowPath,
-  );
   // A packaged build without these carries no runtime updater at all, which is
   // exactly the silent regression this check exists to prevent.
   _requireReleaseUpdateEnvironment(
@@ -181,21 +159,12 @@ void _verifyReleaseWorkflow(YamlMap document, String workflowPath) {
     'windows-package',
     workflowPath,
   );
-  _requireReleaseUpdateEnvironment(linuxPackage, 'linux-package', workflowPath);
-  _requireNeeds(
-    release,
-    const <String>{'validate-release', 'windows-package', 'linux-package'},
-    'release',
-    workflowPath,
-  );
 
-  const semantic = r"${{ needs['validate-release'].outputs.semantic_version }}";
-  const core = r"${{ needs['validate-release'].outputs.core_version }}";
-  const windows = r"${{ needs['validate-release'].outputs.windows_version }}";
-  const debian = r"${{ needs['validate-release'].outputs.debian_version }}";
-  const prerelease = r"${{ needs['validate-release'].outputs.is_prerelease }}";
+  const semantic = r'${{ steps.version.outputs.semantic_version }}';
+  const core = r'${{ steps.version.outputs.core_version }}';
+  const windows = r'${{ steps.version.outputs.windows_version }}';
   _requireCommandArguments(
-    _steps(windowsPackage, 'windows-package', workflowPath),
+    steps,
     'tooling/packaging/package_windows.ps1',
     <String>[
       '-SemanticVersion',
@@ -207,106 +176,11 @@ void _verifyReleaseWorkflow(YamlMap document, String workflowPath) {
     ],
     workflowPath,
   );
-  _requireCommandArguments(
-    _steps(linuxPackage, 'linux-package', workflowPath),
-    'tooling/packaging/package_linux.sh',
-    <String>[semantic, core, debian],
-    workflowPath,
-  );
-
-  _verifyUpload(windowsPackage, 'windows-packages', const <String>{
+  _verifyUpload(windowsPackage, 'maestro-windows-packages', const <String>{
     'dist/maestro-windows-x64.zip',
     'dist/maestro-windows-x64.msix',
     'dist/maestro-windows-x64-setup.exe',
   }, workflowPath);
-  _verifyUpload(linuxPackage, 'linux-packages', const <String>{
-    'dist/maestro-linux-x64.AppImage',
-    'dist/maestro-linux-amd64.deb',
-  }, workflowPath);
-
-  _requireMap(release['permissions'], const <String, Object?>{
-    'contents': 'write',
-    'id-token': 'write',
-    'attestations': 'write',
-  }, '$workflowPath release permissions');
-  final releaseSteps = _steps(release, 'release', workflowPath).toList();
-  final manifestStep = releaseSteps
-      .where(
-        (step) => step['name'] == 'Create and optionally sign release manifest',
-      )
-      .firstOrNull;
-  final manifestCommand = manifestStep?['run'];
-  if (manifestCommand is! String ||
-      !_hasFailClosedSigning(manifestCommand, semantic)) {
-    throw FormatException(
-      '$workflowPath release must fail on incomplete signing material and verify exact artifacts.',
-    );
-  }
-
-  final attestationIndex = releaseSteps.indexWhere(
-    (step) => '${step['uses']}'.startsWith('actions/attest-build-provenance@'),
-  );
-  final publicationIndex = releaseSteps.indexWhere(
-    (step) => '${step['uses']}'.startsWith('softprops/action-gh-release@'),
-  );
-  final manifestIndex = manifestStep == null
-      ? -1
-      : releaseSteps.indexOf(manifestStep);
-  final attestationInputs = attestationIndex < 0
-      ? null
-      : releaseSteps[attestationIndex]['with'];
-  if (manifestIndex < 0 ||
-      attestationIndex <= manifestIndex ||
-      publicationIndex <= attestationIndex ||
-      attestationInputs is! YamlMap ||
-      attestationInputs['subject-path'] != 'dist/*') {
-    throw FormatException(
-      '$workflowPath must attest artifacts before release publication.',
-    );
-  }
-  final publicationInputs = releaseSteps[publicationIndex]['with'];
-  _requireMap(publicationInputs, const <String, Object?>{
-    'name': r'${{ github.ref_name }}',
-    'generate_release_notes': true,
-    'prerelease': prerelease,
-    'files': 'dist/*',
-    'fail_on_unmatched_files': true,
-  }, '$workflowPath release publication inputs');
-}
-
-bool _hasFailClosedSigning(String command, String semanticVersion) {
-  const bothPresent =
-      r'[[ -n "$MAESTRO_RELEASE_SECRET_KEY_BASE64" && -n "$MAESTRO_RELEASE_PUBLIC_KEY_BASE64" ]]';
-  const sign = 'dart run tooling/release/sign_manifest.dart dist';
-  const bothEmpty =
-      r'[[ -z "$MAESTRO_RELEASE_SECRET_KEY_BASE64" && -z "$MAESTRO_RELEASE_PUBLIC_KEY_BASE64" ]]';
-  const unsigned = "echo 'publisher-signing: unconfigured'";
-  const incomplete =
-      "echo 'publisher-signing: incomplete signing material' >&2";
-  const failure = 'exit 1';
-  const branchEnd = '\nfi';
-  const verify = 'dart run tooling/release/verify_release.dart dist';
-  final createIndex = command.indexOf(
-    'dart run tooling/release/create_manifest.dart dist "$semanticVersion"',
-  );
-  final presentIndex = command.indexOf(bothPresent, createIndex + 1);
-  final signIndex = command.indexOf(sign, presentIndex + 1);
-  final emptyIndex = command.indexOf(bothEmpty, signIndex + 1);
-  final unsignedIndex = command.indexOf(unsigned, emptyIndex + 1);
-  final incompleteIndex = command.indexOf(incomplete, unsignedIndex + 1);
-  final failureIndex = command.indexOf(failure, incompleteIndex + 1);
-  final endIndex = command.indexOf(branchEnd, failureIndex + 1);
-  final verifyIndex = command.indexOf(verify, endIndex + 1);
-  return createIndex >= 0 &&
-      presentIndex > createIndex &&
-      signIndex > presentIndex &&
-      command.indexOf(sign, signIndex + 1) < 0 &&
-      emptyIndex > signIndex &&
-      unsignedIndex > emptyIndex &&
-      incompleteIndex > unsignedIndex &&
-      failureIndex > incompleteIndex &&
-      endIndex > failureIndex &&
-      verifyIndex > endIndex;
 }
 
 /// Requires a packaging job to forward the defines that enable the updater.
@@ -352,23 +226,6 @@ void _requireMap(Object? value, Map<String, Object?> expected, String label) {
       value.length != expected.length ||
       expected.entries.any((entry) => value[entry.key] != entry.value)) {
     throw FormatException('$label must equal $expected.');
-  }
-}
-
-void _requireNeeds(
-  YamlMap job,
-  Set<String> expected,
-  String jobName,
-  String workflowPath,
-) {
-  final value = job['needs'];
-  final actual = value is YamlList
-      ? value.whereType<String>().toSet()
-      : value is String
-      ? <String>{value}
-      : const <String>{};
-  if (actual.length != expected.length || !actual.containsAll(expected)) {
-    throw FormatException('$workflowPath $jobName needs must equal $expected.');
   }
 }
 

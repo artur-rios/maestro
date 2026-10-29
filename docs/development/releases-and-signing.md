@@ -1,10 +1,24 @@
 # Releases and Signing
 
-Pushing a supported release tag starts the GitHub release workflow. The tag
-must point at a commit on `main` — the merge commit of a `release/x.y.z` pull
-request, as described under *Releasing* in
-[CONTRIBUTING.md](../../CONTRIBUTING.md#releasing) — or the workflow fails
-before anything is built. The validator accepts exactly these forms:
+Pushing a supported release tag, as the repository owner, starts the release in
+yggdrasil's Jenkins. The tag must point at a commit on `main` — the merge commit
+of a `release/x.y.z` pull request, as described under *Releasing* in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#releasing) — or Jenkins fails before
+anything is built. The release is built in two places:
+
+- **Jenkins** (`release.build` in `yggdrasil.yml`, `ci/release-build.sh`) checks
+  the tag with the validator below, runs the same analyze-and-test gate as CI and
+  packages the Linux AppImage and Debian package.
+- **GitHub Actions** (`.github/workflows/release-windows.yml`, which Jenkins
+  dispatches on the tag once the mirror has pushed it) validates the same tag and
+  packages the Windows ZIP, MSIX and setup EXE.
+
+Jenkins then checks the five packages together (`ci/release-validate.sh`), makes
+and signs the update manifest over all of them (`release.finalize`,
+`ci/release-finalize.sh`) and publishes the release on the git server and, as a
+copy, on GitHub, with the notes of the version's `CHANGELOG.md` section.
+
+The tag validator accepts exactly these forms:
 
 - Stable: `v<major>.<minor>.<patch>`
 - Alpha: `v<major>.<minor>.<patch>-alpha.<sequence>`
@@ -35,9 +49,11 @@ version `1.2.3`, Windows version `1.2.3.30004`, and Debian version
 same core version; Debian's `~` also places every prerelease below its stable
 counterpart.
 
-Stable tags publish normal GitHub Releases. Alpha, beta, and release-candidate
-tags publish GitHub prereleases. Every release uses its tag as the release name
-and has GitHub-generated release notes.
+Every release uses its tag as the release name. Its notes are the version's
+`CHANGELOG.md` section, else the titles of the pull requests merged since the
+previous tag. A tag with a pre-release part (`-alpha.N`, `-beta.N`, `-rc.N`) is
+published as a prerelease on the git server and on its GitHub copy, so GitHub
+never makes it the latest release; a stable tag is a normal release.
 
 The published release must contain exactly these five non-empty packages:
 
@@ -50,7 +66,14 @@ The published release must contain exactly these five non-empty packages:
 It also contains `release-manifest.json`, `SHA256SUMS`, and, when manifest
 signing is configured, `release-manifest.sig`. The runtime-update manifest
 contains the ZIP, MSIX, AppImage, and DEB; the setup EXE is a
-distribution-only package, though it is still checksummed and attested.
+distribution-only package, though it is still checksummed.
+
+The manifest, `SHA256SUMS` and the signature cover the Windows packages too, so
+`release.finalize` makes them after the Windows files have arrived and
+validation has passed, and the pipeline adds them to the release. A release whose
+Windows files are missing is not published. The GitHub build-provenance
+attestations of the old workflow have no equivalent on the git server and are
+gone.
 
 > **Unsigned Windows installer:** `maestro-windows-x64-setup.exe` is currently
 > unsigned. Windows may display SmartScreen or unknown-publisher warnings. Do
@@ -167,16 +190,22 @@ executable in every build.
 
 ## Manifest signing
 
-Update manifests use detached Ed25519 signatures. Configure these GitHub secrets as base64-encoded libsodium keys:
+Update manifests use detached Ed25519 signatures. The keys are base64-encoded libsodium keys, kept as Jenkins
+credentials (listed in yggdrasil's catalog as the release credentials of `maestro`):
 
-- `MAESTRO_RELEASE_SECRET_KEY_BASE64`: 64-byte secret key; release job only.
-- `MAESTRO_RELEASE_PUBLIC_KEY_BASE64`: 32-byte verification key.
+- `maestro-signing-key`, the environment variable `MAESTRO_RELEASE_SECRET_KEY_BASE64`: 64-byte secret key; the
+  finalize step only (`ci/release-finalize.sh`).
+- `maestro-signing-public-key`, `MAESTRO_RELEASE_PUBLIC_KEY_BASE64`: 32-byte verification key. `ci/release-build.sh`
+  stamps it into the Linux packages, and the finalize step verifies the signature with it. The Windows packages are
+  built on GitHub, which keeps its own secret of the same name.
 
-With both secrets configured, run `dart run tooling/release/sign_manifest.dart dist`.
-Manifest signing is optional only when both secrets are absent. If exactly one
-secret is configured, or signing or verification fails, the release fails
-closed. GitHub artifact attestations are produced independently with OIDC
-provenance.
+With both configured, `ci/release-finalize.sh` runs
+`dart run tooling/release/sign_manifest.dart` over the manifest. Signing is
+mandatory on the Jenkins pipeline: `release-manifest.sig` is one of the files the
+release publishes, so a release with neither key, with only one of them, or whose
+signing or verification fails is not published. (Building packages by hand
+without keys still prints `publisher-signing: unconfigured` and an unsigned
+manifest from `verify_release.dart`; that never implies trust.)
 
 ## Enabling the in-application updater
 
@@ -187,9 +216,9 @@ build missing any of them composes no update service at all and reports
 
 | Define | Source | Meaning |
 | --- | --- | --- |
-| `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | secret `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | The key every manifest signature is checked against. |
-| `MAESTRO_RELEASE_MANIFEST_URL` | repository variable | Where a running Maestro looks for the current manifest. |
-| `MAESTRO_RELEASE_SIGNATURE_URL` | repository variable | The detached signature beside it. |
+| `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | Jenkins credential `maestro-signing-public-key` (Linux); GitHub secret of the same name (Windows) | The key every manifest signature is checked against. |
+| `MAESTRO_RELEASE_MANIFEST_URL` | GitHub repository variable (Windows); `ci/release-build.sh` sets the address below unless the variable is in its environment (Linux) | Where a running Maestro looks for the current manifest. |
+| `MAESTRO_RELEASE_SIGNATURE_URL` | the same | The detached signature beside it. |
 | `MAESTRO_RELEASE_PACKAGE_TYPE` | set by the packaging script for each package: `zip` for the ZIP and the setup EXE, `msix` for the MSIX, `appimage` for the AppImage, and `deb` for the Debian package | Which artifact this build may install into itself, and how. |
 
 The two URLs must be stable across releases, because a build published today
@@ -198,15 +227,16 @@ recent release is the intended shape:
 
 ```
 https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.json
-https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.json.sig
+https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.sig
 ```
 
 The packaging scripts treat the three published inputs as all-or-nothing and
 report which case applied — `runtime-updates: configured` or
 `runtime-updates: unconfigured`. Supplying some but not all of them fails the
 packaging step rather than shipping a build that cannot verify what it
-downloads. `dart run tooling/verify_workflows.dart` checks that both packaging
-jobs still forward them.
+downloads. `dart run tooling/verify_workflows.dart` checks that the Windows
+packaging job still forwards them. Keep the Windows variables equal to the
+addresses `ci/release-build.sh` sets.
 
 There is currently no trusted Windows publisher certificate. Local MSIX files are test-signed and must not be described as publisher-trusted. Unsigned manifest verification prints `publisher-signing: unconfigured`; it never implies trust.
 

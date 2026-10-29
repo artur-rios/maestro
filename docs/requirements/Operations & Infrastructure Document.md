@@ -112,7 +112,7 @@ maestro/
 | Local credentials and keys | Operating-system protected storage | Password verifiers, update trust key material, and any future external token references. |
 | Project and workflow configuration | SQLite | Non-secret metadata and settings. |
 | CLI environment | Explicit allowlisted environment plus inherited required platform values | Secrets are never copied into logs or snapshots. |
-| CI and release values | GitHub Actions secrets and variables | Signing keys, repository coordinates, and publishing controls. |
+| CI and release values | Jenkins credentials; GitHub Actions secrets and variables for the Windows build | Signing keys, repository coordinates, and publishing controls. |
 | Build identity | Project manifest and CI | Version, commit, platform, architecture, and channel embedded in artifacts. |
 
 Invalid configuration is rejected while the last valid value remains active. Defaults are versioned and
@@ -171,7 +171,7 @@ than a user's projects.
 
 ## 7. Build and Delivery
 
-The GitHub Actions pipeline performs:
+The pipeline (yggdrasil's Jenkins, with the Windows jobs on GitHub Actions) performs:
 
 1. Dependency resolution and lockfile verification.
 2. Static analysis, formatting verification, and unit/widget tests.
@@ -179,7 +179,7 @@ The GitHub Actions pipeline performs:
 4. Native Windows and Linux release builds on their matching runners.
 5. Portable archive, installable package, AppImage, and Debian-family package creation.
 6. Clean-machine install, launch, update, and data-preservation smoke tests.
-7. Checksums, signed release manifest, provenance metadata, and artifact signing.
+7. Checksums and a signed release manifest. (The GitHub build-provenance attestations the first pipeline made are gone with the move to Jenkins.)
 8. GitHub Release publication, from a `v*` tag on a commit on `main`, only after all required jobs pass.
 
 Maestro checks the signed manifest on a configurable schedule and manual request. It downloads only the
