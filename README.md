@@ -1,18 +1,9 @@
 # Maestro
 
-> [!NOTE]
-> This is the real, open-source code of maestro. Its home is Forgejo, at
-> https://git.techcraftsmen.net/artur-rios/maestro; the copy on GitHub is a read-only mirror, for viewing only, and
-> its issues and pull requests are not followed. If you want to contribute, email me at
-> arturdev@duck.com.
-
 Maestro is a Windows and Linux desktop application for designing and running AI-agent workflows against
 local software projects. A user selects a project folder, describes a task, chooses an ordered set of workflow
 steps, assigns an AI CLI and model to each step, and lets Maestro execute the workflow on an isolated Git
 branch in the background.
-
-> **Home:** the repository lives at <https://git.techcraftsmen.net/artur-rios/maestro>. GitHub is a read-only
-> mirror of it, and carries the copies of the releases that installed applications update from.
 
 > **Status:** milestones M-01 through M-06 are complete. All first-release use cases, UC-01 through UC-14,
 > have been delivered, including governed delivery, searchable history and audit evidence, retention and
@@ -247,6 +238,9 @@ Notable changes in each release are recorded in [CHANGELOG.md](./CHANGELOG.md). 
 
 Development setup, running the tests, the branching model and the release process are described in
 [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+The GitHub repository is a read-only mirror for the real, open-source code of maestro. Its home is Forgejo, at
+https://git.techcraftsmen.net/artur-rios/maestro. If you want to contribute, e-mail me at arturdev@duck.com.
 
 ## Legal
 
