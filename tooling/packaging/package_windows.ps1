@@ -38,7 +38,7 @@ $dart = if ($env:FLUTTER_ROOT) {
 } else {
   (Get-Command dart -ErrorAction Stop).Source
 }
-$projectionOutput = & $dart run (Join-Path $repository 'tooling\release\validate_release_projections.dart') $SemanticVersion --core $CoreVersion --windows $WindowsVersion 2>&1
+$projectionOutput = & $dart (Join-Path $repository 'tooling\release\validate_release_projections.dart') $SemanticVersion --core $CoreVersion --windows $WindowsVersion 2>&1
 if ($LASTEXITCODE -ne 0) { throw "Release projection validation failed: $($projectionOutput -join [Environment]::NewLine)" }
 if ($env:MAESTRO_PACKAGING_PREFLIGHT_ONLY -eq '1') {
   $projectionOutput | Write-Output

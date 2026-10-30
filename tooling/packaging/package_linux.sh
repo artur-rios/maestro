@@ -6,7 +6,7 @@ core_version=${2:?core version is required}
 debian_version=${3:?debian version is required}
 
 repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-projection_output=$(dart run "$repository/tooling/release/validate_release_projections.dart" "$semantic_version" --core "$core_version" --debian "$debian_version")
+projection_output=$(dart "$repository/tooling/release/validate_release_projections.dart" "$semantic_version" --core "$core_version" --debian "$debian_version")
 if [[ ${MAESTRO_PACKAGING_PREFLIGHT_ONLY:-0} == 1 ]]; then
   printf '%s\n' "$projection_output"
   exit 0
