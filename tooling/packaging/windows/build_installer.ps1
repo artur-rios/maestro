@@ -20,7 +20,7 @@ $dart = if ($env:FLUTTER_ROOT) {
 } else {
   (Get-Command dart -ErrorAction Stop).Source
 }
-$projectionOutput = & $dart run (Join-Path $repository 'tooling\release\validate_release_projections.dart') $DisplayVersion --windows $WindowsVersion 2>&1
+$projectionOutput = & $dart (Join-Path $repository 'tooling\release\validate_release_projections.dart') $DisplayVersion --windows $WindowsVersion 2>&1
 if ($LASTEXITCODE -ne 0) { throw "Release projection validation failed: $($projectionOutput -join [Environment]::NewLine)" }
 $source = (Resolve-Path -LiteralPath $Bundle).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)
