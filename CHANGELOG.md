@@ -7,8 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-No release has been tagged yet. What exists so far is the complete first-release scope, use cases UC-01 through
-UC-14:
+## [0.1.0] - 2026-10-31
+
+The first release: use cases UC-01 through UC-14.
 
 ### Added
 
@@ -86,4 +87,5 @@ UC-14:
 - Startup cleanup refuses an ownership record that names the worktrees or run-results folder itself, rather than
   deleting every run's resources.
 
-[Unreleased]: https://github.com/artur-rios/maestro/commits/main
+[Unreleased]: https://github.com/artur-rios/maestro/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/artur-rios/maestro/releases/tag/v0.1.0

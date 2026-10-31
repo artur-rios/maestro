@@ -232,7 +232,7 @@ completion counts.
 ## Changelog
 
 Notable changes in each release are recorded in [CHANGELOG.md](./CHANGELOG.md). Releases follow
-[Semantic Versioning](https://semver.org/); no release has been tagged yet.
+[Semantic Versioning](https://semver.org/).
 
 ## Contributing
 

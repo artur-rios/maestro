@@ -88,8 +88,8 @@ API behind Google sign-in.
   supported AI CLI, a new setting whose default keeps the previous behaviour.
 - **Patch** — fixes with no new capability.
 
-No release has been tagged yet. While a version is `0.x`, SemVer itself allows anything to change at any time; the
-rules above still say which number to move.
+While a version is `0.x`, SemVer itself allows anything to change at any time; the rules above still say which
+number to move.
 
 Release tags take the Semantic Versioning forms `tooling/release/validate_release_tag.dart` accepts:
 `v<major>.<minor>.<patch>`, or a pre-release suffixed `-alpha.<sequence>`, `-beta.<sequence>` or `-rc.<sequence>` —
