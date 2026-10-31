@@ -1,0 +1,26 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>artur-rios/yggdrasil//renovate/default"],
+  "enabledManagers": [
+    "pub",
+    "nuget",
+    "npm",
+    "github-actions",
+    "dockerfile",
+    "docker-compose",
+    "custom.regex"
+  ],
+  "packageRules": [
+    {
+      "description": "Dart and Flutter packages weekly, as Dependabot's pub ecosystem did (the shared preset does not enable the pub manager, so it is listed in enabledManagers above, with the preset's own).",
+      "matchManagers": ["pub"],
+      "schedule": ["on monday"]
+    },
+    {
+      "description": "GitHub Actions weekly and in one pull request, as Dependabot's github-actions group did.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "schedule": ["on monday"]
+    }
+  ]
+}

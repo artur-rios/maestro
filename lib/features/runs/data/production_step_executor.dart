@@ -15,6 +15,7 @@ import 'package:maestro/platform/process/native_process_tree.dart';
 import 'package:maestro/platform/process/owned_process_recovery.dart';
 import 'package:maestro/platform/process/process_supervisor.dart';
 import 'package:maestro/platform/process/process_tree_factory.dart';
+import 'package:path/path.dart' as p;
 
 abstract interface class StepCommandFactory {
   StepCommand create({
@@ -63,7 +64,17 @@ final class ProductionStepCommandFactory implements StepCommandFactory {
   }
 }
 
-Map<String, String> buildRunEnvironment(Map<String, String> ambient) {
+/// The curated environment an agent step runs with.
+///
+/// Steps are launched by bare name from inside the run's worktree, so an
+/// empty or relative `PATH` entry — which resolves against that worktree —
+/// would run a `claude` or `codex` the repository itself supplies. Only
+/// absolute entries are kept. [windows] defaults to the host platform.
+Map<String, String> buildRunEnvironment(
+  Map<String, String> ambient, {
+  bool? windows,
+}) {
+  final isWindows = windows ?? Platform.isWindows;
   const allowed = <String>{
     'PATH',
     'PATHEXT',
@@ -89,11 +100,22 @@ Map<String, String> buildRunEnvironment(Map<String, String> ambient) {
   return <String, String>{
     for (final entry in ambient.entries)
       if (allowed.contains(entry.key.toUpperCase()))
-        entry.key.toUpperCase(): entry.value,
+        entry.key.toUpperCase(): entry.key.toUpperCase() == 'PATH'
+            ? _absoluteSearchPath(entry.value, windows: isWindows)
+            : entry.value,
     'GIT_TERMINAL_PROMPT': '0',
     'CI': '1',
     'NO_COLOR': '1',
   };
+}
+
+String _absoluteSearchPath(String value, {required bool windows}) {
+  final separator = windows ? ';' : ':';
+  final style = windows ? p.windows : p.posix;
+  return value
+      .split(separator)
+      .where((entry) => entry.isNotEmpty && style.isAbsolute(entry))
+      .join(separator);
 }
 
 final class OwnedStepProcessLauncher implements StepProcessLauncher {

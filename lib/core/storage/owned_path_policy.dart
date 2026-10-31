@@ -39,11 +39,15 @@ final class OwnedPathPolicy {
     if (_overlapsAny(resolved, _sourcePaths)) {
       return OwnershipDecision.protectedSource;
     }
-    if (_same(resolved, _applicationRoot)) {
+    // An owned root is a container for every run's resources, never one
+    // resource: a damaged record naming it would otherwise recursively delete
+    // all worktrees, active runs' included.
+    if (_same(resolved, _applicationRoot) ||
+        _ownedRoots.any((root) => _same(root, resolved))) {
       return OwnershipDecision.protectedApplicationRoot;
     }
     final underOwnedRoot = _ownedRoots.any(
-      (root) => _same(root, resolved) || p.isWithin(root, resolved),
+      (root) => p.isWithin(root, resolved),
     );
     if (!underOwnedRoot) {
       return p.isWithin(_applicationRoot, resolved)

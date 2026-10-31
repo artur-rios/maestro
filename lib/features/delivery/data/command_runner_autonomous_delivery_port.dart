@@ -55,7 +55,11 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
       '--body',
       'Closes #${request.issueNumber}',
     ]);
-    final failure = _failure(result);
+    // A pull request already open for the branch — opened by the executing
+    // agent (UC-11 step 1), or by an earlier attempt whose review or merge
+    // failed — is the one to deliver. Treating gh's refusal as a remote
+    // failure would make every retry fail the same way.
+    final failure = _alreadyOpen(result) ? null : _failure(result);
     if (failure != null) return failure.pullRequest;
     // `gh pr create` does not support --json. Query the pull request after
     // creation so the typed evidence comes from a documented JSON command.
@@ -145,11 +149,15 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
     final approvalFailure = _failure(approved);
     if (approvalFailure != null) return approvalFailure.operation;
 
+    // The merge is pinned to the head that was tested and reviewed, so a
+    // commit pushed after approval cannot be merged unreviewed.
     final merged = await _run(<String>[
       'pr',
       'merge',
       pullRequest.url,
       '--merge',
+      '--match-head-commit',
+      pullRequest.headCommit,
     ]);
     final mergeFailure = _failure(merged);
     if (mergeFailure != null) return mergeFailure.operation;
@@ -225,6 +233,14 @@ final class CommandRunnerAutonomousDeliveryPort implements GitHubPort {
     final failure = _failure(await command);
     return failure?.operation ?? const AutonomousOperationResult.success();
   }
+
+  static bool _alreadyOpen(CommandResult result) =>
+      result.failureKind == null &&
+      result.exitCode != 0 &&
+      RegExp(
+        r'a pull request for branch .* already exists',
+        caseSensitive: false,
+      ).hasMatch(result.stderr);
 
   _GitHubFailure? _failure(CommandResult result) {
     if (result.succeeded &&

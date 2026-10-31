@@ -10,7 +10,10 @@ Future<void> main(List<String> arguments) async {
     exitCode = 64;
     return;
   }
-  final encodedKey = Platform.environment['MAESTRO_RELEASE_SECRET_KEY_BASE64'];
+  // Trimmed like the public key verify_release.dart reads: a secret pasted
+  // with a trailing newline is otherwise rejected by base64Decode.
+  final encodedKey = Platform.environment['MAESTRO_RELEASE_SECRET_KEY_BASE64']
+      ?.trim();
   if (encodedKey == null || encodedKey.isEmpty) {
     stderr.writeln('publisher-signing: unconfigured');
     exitCode = 78;

@@ -75,6 +75,9 @@ final class RunGitPresence {
 }
 
 abstract interface class RunGitPort {
+  /// The branch the repository's remote names as its default, which is where
+  /// its pull requests are delivered, or `null` when it cannot be determined.
+  Future<String?> defaultBranch(String sourcePath);
   Future<RunGitSourceState> inspectSource(
     String sourcePath, {
     required String baseBranch,

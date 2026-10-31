@@ -283,6 +283,19 @@ final class AuthenticationController
         remediation: 'Choose a strong, unique password.',
       );
     }
+    // A throttle is not a wrong credential: telling the user to check a
+    // password they typed correctly, and dropping how long to wait, sends
+    // them into more failed attempts.
+    if (failure.code == 'authentication.attempts.throttled') {
+      return AuthenticationError(
+        code: failure.code,
+        category: operation == _AuthenticationOperation.recovery
+            ? AuthenticationFailureCategory.recovery
+            : AuthenticationFailureCategory.credentials,
+        message: 'Too many failed attempts for this account.',
+        remediation: failure.remediation ?? 'Wait and try again.',
+      );
+    }
     if (operation == _AuthenticationOperation.google) {
       if (failure.code == 'authentication.google.configuration.missing') {
         return const AuthenticationError(
@@ -335,6 +348,17 @@ final class AuthenticationController
         remediation:
             failure.remediation ??
             'Try again or use a local password or recovery code.',
+      );
+    }
+    // Protected storage that cannot be read says nothing about the password.
+    if (failure is StorageFailure) {
+      return const AuthenticationError(
+        code: 'authentication.storage.failed',
+        category: AuthenticationFailureCategory.credentials,
+        message: 'Authentication could not be completed.',
+        remediation:
+            'Make sure the system keyring is available and unlocked, then '
+            'try again.',
       );
     }
     return const AuthenticationError(

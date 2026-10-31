@@ -687,6 +687,11 @@ final class AuthenticationService {
       }
       final verifier = await _hasher.create(password.value);
       if (!_owns(generation)) return _stale<AuthenticatedSession>();
+      // Spending a code is irreversible, so protected storage is proven
+      // reachable first. A locked or missing keyring would otherwise burn one
+      // recorded code on every retry while recovery could never finish.
+      await _verifiers.read(user.verifierKey!);
+      if (!_owns(generation)) return _stale<AuthenticatedSession>();
       final consumed = await _recoveryCodes.consumeUnusedDigest(
         user.id,
         parsed.digest,

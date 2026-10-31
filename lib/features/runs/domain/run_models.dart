@@ -3,7 +3,23 @@ import 'dart:typed_data';
 
 enum DeliveryMode { supervised, autonomous }
 
-enum BranchWorkType { feature, fix, refactor, hotfix }
+/// The kind of work a run does, recorded by name in its immutable snapshot.
+///
+/// The kind is run evidence; the branch is named with [branchPrefix]. Branch
+/// policies accept work into the default branch only from `feature/` and
+/// `fix/` branches, so a refactoring is delivered as a feature and a hotfix as
+/// a fix.
+enum BranchWorkType {
+  feature,
+  fix,
+  refactor,
+  hotfix;
+
+  String get branchPrefix => switch (this) {
+    feature || refactor => 'feature',
+    fix || hotfix => 'fix',
+  };
+}
 
 enum RunStatus {
   queued,
@@ -46,7 +62,10 @@ enum RunStatus {
   bool get retainsResources => isActionable || this == interrupted;
 
   bool canTransitionTo(RunStatus next) => switch ((this, next)) {
-    (queued, starting) || (queued, canceled) => true,
+    // A queued intent that never reached starting holds no resources, so a
+    // start that cannot proceed settles it as failed instead of leaving it
+    // queued with nothing to drive it.
+    (queued, starting) || (queued, canceled) || (queued, failed) => true,
     (starting, running) ||
     (starting, failed) ||
     (starting, interrupted) ||
@@ -366,11 +385,11 @@ final class RunSnapshot {
       workItem: RunWorkItem.fromCanonicalJson(
         _encodeCanonical(_requiredMap(decoded, 'workItem')),
       ),
-      deliveryMode: DeliveryMode.values.byName(
-        _requiredString(decoded, 'deliveryMode'),
-      ),
-      branchWorkType: BranchWorkType.values.byName(
-        _requiredString(decoded, 'branchWorkType'),
+      deliveryMode: _requiredName(DeliveryMode.values, decoded, 'deliveryMode'),
+      branchWorkType: _requiredName(
+        BranchWorkType.values,
+        decoded,
+        'branchWorkType',
       ),
       steps: rawSteps.map((value) {
         if (value is! Map<String, Object?>) {
@@ -514,6 +533,20 @@ String _requiredString(Map<String, Object?> map, String key) {
 int _requiredInt(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! int) throw FormatException('Expected integer field $key.');
+  return value;
+}
+
+/// Reads an enum stored by name, reporting a name this build does not know
+/// (one written by a newer build, or a value since removed) as malformed
+/// evidence like any other bad field, rather than an [ArgumentError].
+T _requiredName<T extends Enum>(
+  List<T> values,
+  Map<String, Object?> map,
+  String key,
+) {
+  final name = _requiredString(map, key);
+  final value = values.asNameMap()[name];
+  if (value == null) throw FormatException('Unknown $key "$name".');
   return value;
 }
 

@@ -102,6 +102,31 @@ void main() {
       throwsA(isA<HeimdallAuthenticationEnvelopeMalformed>()),
     );
   });
+  test(
+    'GivenAnUnavailableService_WhenGoogleSignIn_ThenItIsATransportFailureNotARejection',
+    () async {
+      for (final status in <int>[429, 500, 503]) {
+        final gateway = HeimdallAuthenticationGateway(
+          client: _Client((_) => http.Response('unavailable', status)),
+          baseUri: Uri.parse('https://heimdall.example/'),
+          clock: () => DateTime.utc(2026, 8, 18, 11),
+        );
+        await expectLater(
+          gateway.signInWithGoogle(scopeId: scopeId, idToken: 'id-token'),
+          throwsA(isA<HeimdallAuthenticationTransportFailure>()),
+        );
+      }
+      final rejecting = HeimdallAuthenticationGateway(
+        client: _Client((_) => http.Response('denied', 401)),
+        baseUri: Uri.parse('https://heimdall.example/'),
+        clock: () => DateTime.utc(2026, 8, 18, 11),
+      );
+      await expectLater(
+        rejecting.signInWithGoogle(scopeId: scopeId, idToken: 'id-token'),
+        throwsA(isA<HeimdallAuthenticationRejected>()),
+      );
+    },
+  );
 }
 
 String _success() => jsonEncode(<String, Object>{

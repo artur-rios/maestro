@@ -381,11 +381,25 @@ final class RunOrchestrator implements RunExecutionControl {
     String runId,
     RecoveryContextPolicy contextPolicy,
   ) async {
+    // Delivery that sends the run back to a workflow step (UC-11 AF-01, AF-02)
+    // leaves it running at that step. Nothing else drives a running run, so
+    // the loop picks it up again from its persisted position.
+    var policy = contextPolicy;
+    while (await _executeOnce(runId, policy)) {
+      policy = RecoveryContextPolicy.preserved;
+    }
+  }
+
+  /// Runs the workflow from the run's persisted position, and reports whether
+  /// delivery returned the run to a step that must be driven again.
+  Future<bool> _executeOnce(
+    String runId,
+    RecoveryContextPolicy contextPolicy,
+  ) async {
     final aggregate = await _repository.load(runId);
     if (aggregate == null) throw StateError('Unknown run.');
     if (aggregate.run.status == RunStatus.deliveryPending) {
-      await _deliverWhenAttested(aggregate, aggregate.attempts);
-      return;
+      return _deliverWhenAttested(aggregate, aggregate.attempts);
     }
     if (aggregate.run.status == RunStatus.starting) {
       await _repository.markRunning(runId, _now());
@@ -405,6 +419,9 @@ final class RunOrchestrator implements RunExecutionControl {
       position < aggregate.snapshot.steps.length;
       position++
     ) {
+      // A cancel that landed between steps has no live process to kill, so it
+      // is honored here: the next step is never opened (FR-RC-04).
+      if (_cancelRequested.contains(runId)) return false;
       final step = aggregate.snapshot.steps[position];
       final attemptId = _newAttemptId();
       final startedAt = _now();
@@ -431,7 +448,7 @@ final class RunOrchestrator implements RunExecutionControl {
         );
       } on Object {
         await _failAttempt(attemptId, 'run.step.result_prepare');
-        return;
+        return false;
       }
       late final String nonce;
       late final String prompt;
@@ -450,7 +467,7 @@ final class RunOrchestrator implements RunExecutionControl {
       } on Object {
         await _resolveIgnoringErrors(resultPath);
         await _failAttempt(attemptId, 'run.step.executor_lookup');
-        return;
+        return false;
       }
       late final StepProcessStart launch;
       try {
@@ -469,7 +486,7 @@ final class RunOrchestrator implements RunExecutionControl {
       } on Object {
         await _resolveIgnoringErrors(resultPath);
         await _failAttempt(attemptId, 'run.step.spawn_exception');
-        return;
+        return false;
       }
       final process = launch.process;
       if (process == null) {
@@ -480,9 +497,21 @@ final class RunOrchestrator implements RunExecutionControl {
           exitCode: null,
           failureCode: 'run.step.spawn_${launch.failureCode ?? 'failed'}',
         );
-        return;
+        return false;
       }
       _processes[runId] = process;
+      // A cancel that arrived while this step was being prepared or launched
+      // found no process to terminate and was reported complete. The process
+      // exists now, so it is killed before it can do any work; the drain below
+      // then observes the exit and leaves the terminal state to the cancel
+      // transaction.
+      if (_cancelRequested.contains(runId)) {
+        try {
+          await process.terminate();
+        } on Object {
+          // The durable process record remains for startup reconciliation.
+        }
+      }
       var sequence = 0;
       final redactors = <RunLogChannel, _StreamingFrameRedactor>{};
       // Batches whose durable write failed, kept in order so a recovered
@@ -580,21 +609,21 @@ final class RunOrchestrator implements RunExecutionControl {
           // The durable process record remains for startup reconciliation.
         }
         await _resolveIgnoringErrors(resultPath);
-        if (_cancelRequested.contains(runId)) return;
+        if (_cancelRequested.contains(runId)) return false;
         await _failAttempt(
           attemptId,
           durabilityExhausted
               ? 'run.step.log_persist'
               : 'run.step.stream_failed',
         );
-        return;
+        return false;
       }
       // A killed step reports whatever the platform gave it. Recording that as
       // a step failure would bury the user's cancellation under a spurious
       // typed failure, so the cancel transaction owns the terminal state.
       if (_cancelRequested.contains(runId)) {
         await _resolveIgnoringErrors(resultPath);
-        return;
+        return false;
       }
       // A transient outage gets one last chance once the stream is closed and
       // nothing further competes for storage.
@@ -610,7 +639,7 @@ final class RunOrchestrator implements RunExecutionControl {
           'run.step.log_persist',
           exitCode: exitCode,
         );
-        return;
+        return false;
       }
       if (exitCode != 0) {
         await _resolveIgnoringErrors(resultPath);
@@ -620,7 +649,7 @@ final class RunOrchestrator implements RunExecutionControl {
           exitCode: exitCode,
           failureCode: 'run.step.nonzero_exit',
         );
-        return;
+        return false;
       }
       late final AttemptResultRead result;
       try {
@@ -636,7 +665,7 @@ final class RunOrchestrator implements RunExecutionControl {
           'run.step.result_read',
           exitCode: exitCode,
         );
-        return;
+        return false;
       }
       try {
         await _resultFiles.resolve(resultPath);
@@ -646,7 +675,7 @@ final class RunOrchestrator implements RunExecutionControl {
           'run.step.result_cleanup',
           exitCode: exitCode,
         );
-        return;
+        return false;
       }
       if (result is AttemptResultRejected) {
         await _repository.failAttemptAndRun(
@@ -655,7 +684,7 @@ final class RunOrchestrator implements RunExecutionControl {
           exitCode: exitCode,
           failureCode: result.code,
         );
-        return;
+        return false;
       }
       priorContext = (result as AttemptResultAccepted).context;
       final hasNextStep = position + 1 < aggregate.snapshot.steps.length;
@@ -689,12 +718,13 @@ final class RunOrchestrator implements RunExecutionControl {
       // pause on the final step is moot — the run has already succeeded.
       if (hasNextStep && _pauseRequested.remove(runId)) {
         await _repository.pauseRun(runId, _now());
-        return;
+        return false;
       }
       if (!hasNextStep) {
-        await _deliverWhenAttested(aggregate, completedAttempts);
+        return _deliverWhenAttested(aggregate, completedAttempts);
       }
     }
+    return false;
   }
 
   static bool _requiresAutonomousDelivery(RunExecutionAggregate aggregate) =>
@@ -702,7 +732,9 @@ final class RunOrchestrator implements RunExecutionControl {
       aggregate.snapshot.workItem is GitHubIssueRunWorkItem &&
       aggregate.run.branchName != null;
 
-  Future<void> _deliverWhenAttested(
+  /// Delivers an attested run, and reports whether delivery sent the run back
+  /// to a workflow step (`running`) so the caller drives it again.
+  Future<bool> _deliverWhenAttested(
     RunExecutionAggregate aggregate,
     Iterable<RunAttempt> attempts,
   ) async {
@@ -710,7 +742,7 @@ final class RunOrchestrator implements RunExecutionControl {
     // beginning it: opening a pull request, merging it and closing an issue
     // are the least reversible things a run does, and the user has said stop.
     // The terminal state belongs to the cancel transaction (FR-RC-04).
-    if (_cancelRequested.contains(aggregate.run.id)) return;
+    if (_cancelRequested.contains(aggregate.run.id)) return false;
     final delivery = _autonomousDelivery;
     if (delivery == null || !_requiresAutonomousDelivery(aggregate)) {
       // A run already sitting in deliveryPending reaches this only when the
@@ -725,19 +757,19 @@ final class RunOrchestrator implements RunExecutionControl {
           at: _now(),
         );
       }
-      return;
+      return false;
     }
     final workItem = aggregate.snapshot.workItem;
     if (workItem is! GitHubIssueRunWorkItem ||
         aggregate.run.branchName == null) {
-      return;
+      return false;
     }
     final attestation = DeliveryAttestationSet.evaluate(
       aggregate.snapshot,
       attempts,
     );
     if (attestation case DeliveryAttestationBlocked(:final recovery)) {
-      if (_cancelRequested.contains(aggregate.run.id)) return;
+      if (_cancelRequested.contains(aggregate.run.id)) return false;
       final nextStatus = recovery == DeliveryAttestationRecovery.fail
           ? RunStatus.failed
           : RunStatus.running;
@@ -748,7 +780,7 @@ final class RunOrchestrator implements RunExecutionControl {
         nextStepPosition: _positionFor(aggregate.snapshot, stepKind),
         at: _now(),
       );
-      return;
+      return nextStatus == RunStatus.running;
     }
     final evidence = (attestation as DeliveryAttestationReady).evidence;
     final request = CompletedRunDeliveryRequest(
@@ -793,7 +825,7 @@ final class RunOrchestrator implements RunExecutionControl {
     // evidence. What it does decide is the run's terminal state, which the
     // cancel transaction owns: settling here would race it, and the repository
     // would reject whichever write arrived second.
-    if (_cancelRequested.contains(aggregate.run.id)) return;
+    if (_cancelRequested.contains(aggregate.run.id)) return false;
     if (outcome case AutonomousDeliveryBlocked(:final recovery)) {
       final nextStatus = recovery == AutonomousDeliveryRecovery.fail
           ? RunStatus.failed
@@ -805,6 +837,7 @@ final class RunOrchestrator implements RunExecutionControl {
         nextStepPosition: _positionFor(aggregate.snapshot, stepKind),
         at: _now(),
       );
+      return nextStatus == RunStatus.running;
     } else if (outcome case AutonomousDeliveryCompleted()) {
       await _repository.settleAutonomousDelivery(
         runId: aggregate.run.id,
@@ -813,6 +846,7 @@ final class RunOrchestrator implements RunExecutionControl {
         at: _now(),
       );
     }
+    return false;
   }
 
   static int _positionFor(RunSnapshot snapshot, String kind) => snapshot.steps
@@ -1238,13 +1272,17 @@ int _completeUtf8PrefixLength(List<int> bytes, int proposed) {
   return proposed - leader < expected ? leader : proposed;
 }
 
+// These mirror SecretRedactor's rules — a prefixed or quoted key such as
+// `GITHUB_TOKEN=` or `"access_token":`, and GitHub's `token` scheme — so a
+// value split across frames is held back under the same rules that redact it
+// whole.
 final RegExp _patternValueAtEnd = RegExp(
-  r'''(?:authorization\s*:\s*(?:bearer|basic)\s+|\b(?:password|passwd|pwd|token|secret|api[_-]?key)\s*[=:]\s*)(?:"[^"]*|'[^']*'|[^\s,;]*)$''',
+  r'''(?:authorization["']?\s*:\s*["']?(?:bearer|basic|token)\s+|(?<![A-Za-z0-9])[A-Za-z0-9_-]*?(?:password|passwd|pwd|token|secret|api[_-]?key)["']?\s*[=:]\s*)(?:"[^"]*|'[^']*'|[^\s,;]*)$''',
   caseSensitive: false,
 );
 
 final RegExp _patternLeaderAtEnd = RegExp(
-  r'''(?:authorization\s*(?::\s*[a-z]*)?|\b(?:password|passwd|pwd|token|secret|api[_-]?key)\s*(?:[=:]\s*)?)$''',
+  r'''(?:authorization["']?\s*(?::\s*["']?[a-z]*)?|(?<![A-Za-z0-9])[A-Za-z0-9_-]*?(?:password|passwd|pwd|token|secret|api[_-]?key)["']?\s*(?:[=:]\s*)?)$''',
   caseSensitive: false,
 );
 

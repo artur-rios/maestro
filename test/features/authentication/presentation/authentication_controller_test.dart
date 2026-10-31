@@ -265,6 +265,60 @@ void main() {
   );
 
   test(
+    'GivenAThrottledAccount_WhenSigningInWithEmail_ThenTheWaitIsShownInsteadOfInvalidCredentials',
+    () async {
+      final repository = _AuthenticationRepository()
+        ..emailUser = _emailUser()
+        ..failures = FailedAuthenticationHistory(
+          count: 12,
+          lastAt: DateTime.utc(2026, 8, 5),
+        );
+      final service = _authenticationService(
+        _ImmediateOperatingSystemAuthenticator(),
+        repository: repository,
+        verifiers: _PasswordVerifierStore()
+          ..values['verifier-email-user'] = 'hashed:password1',
+      );
+      final container = _container(service);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authenticationControllerProvider.notifier)
+          .signInWithEmail('person@example.com', 'password1');
+
+      final state =
+          container.read(authenticationControllerProvider)
+              as AuthenticationError;
+      expect(state.code, 'authentication.attempts.throttled');
+      expect(state.remediation, contains('second'));
+    },
+  );
+
+  test(
+    'GivenUnavailableProtectedStorage_WhenSigningInWithEmail_ThenItIsNotReportedAsInvalidCredentials',
+    () async {
+      final repository = _AuthenticationRepository()..emailUser = _emailUser();
+      final service = _authenticationService(
+        _ImmediateOperatingSystemAuthenticator(),
+        repository: repository,
+        verifiers: _PasswordVerifierStore()..unavailable = true,
+      );
+      final container = _container(service);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authenticationControllerProvider.notifier)
+          .signInWithEmail('person@example.com', 'password1');
+
+      final state =
+          container.read(authenticationControllerProvider)
+              as AuthenticationError;
+      expect(state.code, 'authentication.storage.failed');
+      expect(state.message, isNot(contains('locked')));
+    },
+  );
+
+  test(
     'GivenMalformedGoogleConfiguration_WhenPresented_ThenConfigurationCodeCrossesTheControllerUnchanged',
     () async {
       final service = _authenticationService(
@@ -485,11 +539,13 @@ LocalUser _operatingSystemUser() {
 
 final class _AuthenticationRepository
     implements LocalUserRepository, AuditRepository {
+  FailedAuthenticationHistory failures = FailedAuthenticationHistory.none;
+
   @override
   Future<FailedAuthenticationHistory> recentFailedAuthentications({
     required String target,
     required DateTime since,
-  }) async => FailedAuthenticationHistory.none;
+  }) async => failures;
 
   LocalUser? emailUser;
   LocalUser? operatingSystemUser;
@@ -526,12 +582,21 @@ final class _AuthenticationRepository
 
 final class _PasswordVerifierStore implements PasswordVerifierStore {
   final Map<String, String> values = <String, String>{};
+  bool unavailable = false;
 
   @override
   Future<void> delete(String key) async => values.remove(key);
 
   @override
-  Future<String?> read(String key) async => values[key];
+  Future<String?> read(String key) async {
+    if (unavailable) {
+      throw const StorageFailure(
+        code: 'storage.unavailable',
+        message: 'The keyring is locked.',
+      );
+    }
+    return values[key];
+  }
 
   @override
   Future<void> write(String key, String verifier) async {

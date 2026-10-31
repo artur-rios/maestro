@@ -64,4 +64,65 @@ void main() {
     // credential, and blanking those would turn ordinary output into noise.
     expect(secretValuesIn(const <String, String>{'CI_TOKEN': '1'}), isEmpty);
   });
+
+  test('GivenCommonCredentialFormats_WhenRedacting_ThenNoneSurvive', () {
+    // A prefixed key, a JSON field, GitHub's token scheme, and credentials
+    // recognisable by shape all reached durable logs verbatim unless the
+    // exact value also happened to be in Maestro's own environment.
+    const secrets = <String>[
+      'ghp_0123456789abcdefghijABCDEFGHIJ',
+      'sk-ant-api03-0123456789abcdefghijkl',
+      'sk-proj-0123456789abcdefghijklmn',
+      'ya29.a0AfB_0123456789abcdefghij',
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl',
+      'github_pat_11ABCDEFG0123456789_abcdefghij',
+      'plain-db-password-1',
+      'oauth-access-value',
+    ];
+    final input = <String>[
+      'GITHUB_TOKEN=${secrets[0]}',
+      'ANTHROPIC_API_KEY="${secrets[1]}"',
+      'key: ${secrets[2]}',
+      '{"access_token":"${secrets[3]}","id_token":"x"}',
+      'Authorization: token ${secrets[4]}',
+      '"Authorization": "Bearer ${secrets[5]}"',
+      'DB_PASSWORD=${secrets[6]}',
+      '{"refresh_token": "${secrets[7]}"}',
+    ].join('\n');
+
+    final redacted = SecretRedactor().redact(input);
+
+    for (final secret in secrets) {
+      expect(redacted, isNot(contains(secret)));
+    }
+    expect(redacted, contains('GITHUB_TOKEN=[REDACTED]'));
+  });
+
+  test('GivenOrdinaryOutput_WhenRedacting_ThenItIsUnchanged', () {
+    const output =
+        '"input_tokens":120 max_tokens: 4096 sk-learn tokenizer=fast '
+        'see /home/user/project/token_store.dart';
+
+    expect(SecretRedactor().redact(output), output);
+  });
+
+  test('GivenTheWorkingDirectory_WhenSelectingSecrets_ThenItIsNotOne', () {
+    // PWD is the launch directory; blanking it mangled every path in output.
+    expect(isSecretEnvironmentKey('PWD'), isFalse);
+    expect(isSecretEnvironmentKey('OLDPWD'), isFalse);
+    expect(isSecretEnvironmentKey('DB_PWD'), isTrue);
+  });
+
+  test(
+    'GivenAnEnvironmentSecretHoldingADelimiter_WhenRedacting_ThenNoPartIsLeft',
+    () {
+      final redacted = SecretRedactor().redact(
+        'password=p@ss;word99 done',
+        environment: const <String, String>{'APP_PASSWORD': 'p@ss;word99'},
+      );
+
+      expect(redacted, isNot(contains('word99')));
+      expect(redacted, contains('done'));
+    },
+  );
 }

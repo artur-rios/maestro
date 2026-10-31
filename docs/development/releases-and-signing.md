@@ -1,7 +1,24 @@
 # Releases and Signing
 
-Pushing a supported release tag starts the GitHub release workflow. The
-validator accepts exactly these forms:
+Pushing a supported release tag, as the repository owner, starts the release in
+yggdrasil's Jenkins. The tag must point at a commit on `main` — the merge commit
+of a `release/x.y.z` pull request, as described under *Releasing* in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#releasing) — or Jenkins fails before
+anything is built. The release is built in two places:
+
+- **Jenkins** (`release.build` in `yggdrasil.yml`, `ci/release-build.sh`) checks
+  the tag with the validator below, runs the same analyze-and-test gate as CI and
+  packages the Linux AppImage and Debian package.
+- **GitHub Actions** (`.github/workflows/release-windows.yml`, which Jenkins
+  dispatches on the tag once the mirror has pushed it) validates the same tag and
+  packages the Windows ZIP, MSIX and setup EXE.
+
+Jenkins then checks the five packages together (`ci/release-validate.sh`), makes
+and signs the update manifest over all of them (`release.finalize`,
+`ci/release-finalize.sh`) and publishes the release on the git server and, as a
+copy, on GitHub, with the notes of the version's `CHANGELOG.md` section.
+
+The tag validator accepts exactly these forms:
 
 - Stable: `v<major>.<minor>.<patch>`
 - Alpha: `v<major>.<minor>.<patch>-alpha.<sequence>`
@@ -32,9 +49,11 @@ version `1.2.3`, Windows version `1.2.3.30004`, and Debian version
 same core version; Debian's `~` also places every prerelease below its stable
 counterpart.
 
-Stable tags publish normal GitHub Releases. Alpha, beta, and release-candidate
-tags publish GitHub prereleases. Every release uses its tag as the release name
-and has GitHub-generated release notes.
+Every release uses its tag as the release name. Its notes are the version's
+`CHANGELOG.md` section, else the titles of the pull requests merged since the
+previous tag. A tag with a pre-release part (`-alpha.N`, `-beta.N`, `-rc.N`) is
+published as a prerelease on the git server and on its GitHub copy, so GitHub
+never makes it the latest release; a stable tag is a normal release.
 
 The published release must contain exactly these five non-empty packages:
 
@@ -47,7 +66,14 @@ The published release must contain exactly these five non-empty packages:
 It also contains `release-manifest.json`, `SHA256SUMS`, and, when manifest
 signing is configured, `release-manifest.sig`. The runtime-update manifest
 contains the ZIP, MSIX, AppImage, and DEB; the setup EXE is a
-distribution-only package, though it is still checksummed and attested.
+distribution-only package, though it is still checksummed.
+
+The manifest, `SHA256SUMS` and the signature cover the Windows packages too, so
+`release.finalize` makes them after the Windows files have arrived and
+validation has passed, and the pipeline adds them to the release. A release whose
+Windows files are missing is not published. The GitHub build-provenance
+attestations of the old workflow have no equivalent on the git server and are
+gone.
 
 > **Unsigned Windows installer:** `maestro-windows-x64-setup.exe` is currently
 > unsigned. Windows may display SmartScreen or unknown-publisher warnings. Do
@@ -67,9 +93,12 @@ available for recovery or a later installation. See
 [Application Data and Recovery](application-data.md) for data locations and
 manual deletion guidance.
 
-The setup EXE is a distribution artifact only. The ZIP package remains the
-payload used by Maestro's in-application runtime updater, and the setup EXE is
-not included in the runtime update manifest.
+The setup EXE is a distribution artifact only and is not included in the
+runtime update manifest. It installs the same files as the ZIP, so an installed
+copy updates itself from the ZIP (see [Windows packages](#windows-packages)).
+The uninstaller lives beside the install folder, in `Maestro-uninstall`, so an
+in-application update keeps it. Installed apps keeps showing the version the
+setup EXE installed until the next setup EXE runs.
 
 ## Local packaging
 
@@ -161,16 +190,22 @@ executable in every build.
 
 ## Manifest signing
 
-Update manifests use detached Ed25519 signatures. Configure these GitHub secrets as base64-encoded libsodium keys:
+Update manifests use detached Ed25519 signatures. The keys are base64-encoded libsodium keys, kept as Jenkins
+credentials (listed in yggdrasil's catalog as the release credentials of `maestro`):
 
-- `MAESTRO_RELEASE_SECRET_KEY_BASE64`: 64-byte secret key; release job only.
-- `MAESTRO_RELEASE_PUBLIC_KEY_BASE64`: 32-byte verification key.
+- `maestro-signing-key`, the environment variable `MAESTRO_RELEASE_SECRET_KEY_BASE64`: 64-byte secret key; the
+  finalize step only (`ci/release-finalize.sh`).
+- `maestro-signing-public-key`, `MAESTRO_RELEASE_PUBLIC_KEY_BASE64`: 32-byte verification key. `ci/release-build.sh`
+  stamps it into the Linux packages, and the finalize step verifies the signature with it. The Windows packages are
+  built on GitHub, which keeps its own secret of the same name.
 
-With both secrets configured, run `dart run tooling/release/sign_manifest.dart dist`.
-Manifest signing is optional only when both secrets are absent. If exactly one
-secret is configured, or signing or verification fails, the release fails
-closed. GitHub artifact attestations are produced independently with OIDC
-provenance.
+With both configured, `ci/release-finalize.sh` runs
+`dart run tooling/release/sign_manifest.dart` over the manifest. Signing is
+mandatory on the Jenkins pipeline: `release-manifest.sig` is one of the files the
+release publishes, so a release with neither key, with only one of them, or whose
+signing or verification fails is not published. (Building packages by hand
+without keys still prints `publisher-signing: unconfigured` and an unsigned
+manifest from `verify_release.dart`; that never implies trust.)
 
 ## Enabling the in-application updater
 
@@ -181,10 +216,10 @@ build missing any of them composes no update service at all and reports
 
 | Define | Source | Meaning |
 | --- | --- | --- |
-| `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | secret `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | The key every manifest signature is checked against. |
-| `MAESTRO_RELEASE_MANIFEST_URL` | repository variable | Where a running Maestro looks for the current manifest. |
-| `MAESTRO_RELEASE_SIGNATURE_URL` | repository variable | The detached signature beside it. |
-| `MAESTRO_RELEASE_PACKAGE_TYPE` | packaging default (`zip` on Windows, `appimage` on Linux) | Which artifact this build may install into itself. |
+| `MAESTRO_RELEASE_PUBLIC_KEY_BASE64` | Jenkins credential `maestro-signing-public-key` (Linux); GitHub secret of the same name (Windows) | The key every manifest signature is checked against. |
+| `MAESTRO_RELEASE_MANIFEST_URL` | GitHub repository variable (Windows); `ci/release-build.sh` sets the address below unless the variable is in its environment (Linux) | Where a running Maestro looks for the current manifest. |
+| `MAESTRO_RELEASE_SIGNATURE_URL` | the same | The detached signature beside it. |
+| `MAESTRO_RELEASE_PACKAGE_TYPE` | set by the packaging script for each package: `zip` for the ZIP and the setup EXE, `msix` for the MSIX, `appimage` for the AppImage, and `deb` for the Debian package | Which artifact this build may install into itself, and how. |
 
 The two URLs must be stable across releases, because a build published today
 has to find the manifest published months later. GitHub's redirect for the most
@@ -192,16 +227,76 @@ recent release is the intended shape:
 
 ```
 https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.json
-https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.json.sig
+https://github.com/artur-rios/maestro/releases/latest/download/release-manifest.sig
 ```
 
 The packaging scripts treat the three published inputs as all-or-nothing and
 report which case applied — `runtime-updates: configured` or
 `runtime-updates: unconfigured`. Supplying some but not all of them fails the
 packaging step rather than shipping a build that cannot verify what it
-downloads. `dart run tooling/verify_workflows.dart` checks that both packaging
-jobs still forward them.
+downloads. `dart run tooling/verify_workflows.dart` checks that the Windows
+packaging job still forwards them. Keep the Windows variables equal to the
+addresses `ci/release-build.sh` sets.
 
 There is currently no trusted Windows publisher certificate. Local MSIX files are test-signed and must not be described as publisher-trusted. Unsigned manifest verification prints `publisher-signing: unconfigured`; it never implies trust.
 
 Maestro downloads only the artifact matching its platform, architecture, and installed package type. It enforces the signed size and SHA-256, stages under the application data root, and requires approval tied to that exact digest before invoking an installer.
+
+The package type is compiled into the build, so when updates are configured
+each packaging script builds its bundle once per package type and reports
+`runtime-update-package-type:` for each. Without update configuration the
+bundles would be identical, and one build serves every package — which is what
+CI packages. A build configured for updates cannot be packaged with
+`-SkipBuild`, because one prebuilt bundle cannot carry two package types.
+
+### Windows packages
+
+`package_windows.ps1` builds the Windows bundle twice when updates are
+configured: once with `zip` for the ZIP and the setup EXE, and once with `msix`
+for the MSIX.
+
+- **ZIP and setup EXE.** Maestro launches the bundled
+  `replace_windows_zip.ps1`, which waits for Maestro to exit, extracts the
+  verified ZIP beside the install folder, swaps the folders, starts the new
+  version, and restores the previous folder if it does not start. The folder
+  must be writable by the user: a ZIP extracted anywhere the user owns, or the
+  setup EXE's `%LocalAppData%\Programs\Maestro`.
+- **MSIX.** An MSIX install lives under `WindowsApps`, which Windows keeps
+  read-only, so Maestro never writes to it. It hands the verified `.msix` to
+  `Add-AppxPackage -Path ... -DeferRegistrationWhenPackagesAreInUse`: Windows
+  stages the new version and registers it once Maestro is no longer running, so
+  restart Maestro to run it (this needs Windows 10 version 2004 or later).
+  Windows accepts the package as an update only when it has the installed
+  package's identity (`dev.artur-rios.maestro`) and publisher and a signature
+  the machine already trusts. Releases are signed with the `msix` tool's test
+  certificate, whose publisher is `CN=Msix Testing, O=Msix Testing Corporation,
+  S=Some-State, C=US`; moving to a real certificate changes the publisher, and
+  Windows then treats the new package as a different app rather than an update.
+  When Windows refuses the package, Maestro says so and how to install it by
+  hand: open `maestro-windows-x64.msix` from the release with App Installer.
+  A ZIP update offered to a copy running from `WindowsApps` is refused before
+  anything is launched.
+
+### Linux packages
+
+`package_linux.sh` builds the Linux bundle twice when updates are configured:
+once for the AppImage and once for the Debian package.
+
+- **AppImage.** Maestro replaces the `.AppImage` file it was started from,
+  which the AppImage runtime names in `APPIMAGE`. The running executable cannot
+  be the target: inside an AppImage it lives in a read-only squashfs mount (or,
+  with `APPIMAGE_EXTRACT_AND_RUN`, a temporary extraction the runtime deletes on
+  exit). The bundled `replace_linux_appimage.sh` waits for Maestro to exit,
+  copies the verified download beside the installed file with that file's
+  permissions, makes sure it stays executable, renames it over the installed
+  file in one step, and starts the new version. A failure before the rename
+  leaves the installed AppImage unchanged. The folder holding the AppImage must
+  be writable by the user. A copy that was not started from an AppImage file
+  refuses the update rather than guess a target.
+- **Debian package.** An install under `/opt/maestro` belongs to the system
+  package manager. Maestro hands the verified `.deb` to
+  `pkexec dpkg --install`, which asks for the user's password through polkit,
+  just as an MSIX update is handed to Windows; the package recommends `pkexec`.
+  Restart Maestro to run the new version. When elevation is refused or
+  unavailable, Maestro says so and how to install the package by hand:
+  `sudo apt install ./maestro-linux-amd64.deb`.

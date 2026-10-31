@@ -5,6 +5,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Artur Rios
 Depends: libgtk-3-0, libsecret-1-0
+Recommends: pkexec | policykit-1
 Description: Local AI agent workflow orchestrator
  Maestro coordinates reusable and one-off workflows across supported local
  coding agents.

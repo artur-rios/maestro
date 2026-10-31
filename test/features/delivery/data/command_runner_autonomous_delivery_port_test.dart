@@ -83,6 +83,8 @@ void main() {
         'merge',
         'https://github.com/acme/maestro/pull/42',
         '--merge',
+        '--match-head-commit',
+        'abc123',
       ]);
       expect(runner.requests[5].arguments, <String>[
         'pr',
@@ -138,6 +140,58 @@ void main() {
         expect(failure.remediation, isNot(contains('secret-value')));
         expect(failure.remediation, isNot(contains('authorization')));
       }
+    },
+  );
+  test(
+    'GivenAPullRequestAlreadyOpenForTheBranch_WhenOpening_ThenTheExistingPullRequestIsDelivered',
+    () async {
+      // Given: gh refuses to create a second pull request for the branch,
+      // because the agent or an earlier delivery attempt already opened one.
+      final runner = _SequenceRunner(<CommandResult>[
+        const CommandResult(
+          exitCode: 1,
+          stdout: '',
+          stderr:
+              'a pull request for branch "feature/uc-11" into branch "main" '
+              'already exists:\nhttps://github.com/acme/maestro/pull/42\n',
+        ),
+        _json(
+          '{"number":42,"url":"https://github.com/acme/maestro/pull/42","headRefOid":"abc123"}',
+        ),
+      ]);
+      final port = CommandRunnerAutonomousDeliveryPort(runner);
+
+      // When: delivery opens the pull request.
+      final opened = await port.openPullRequest(_delivery());
+
+      // Then: the open pull request is resolved and delivered instead of the
+      // retry failing forever.
+      final pullRequest = (opened as AutonomousPullRequestOpened).pullRequest;
+      expect(pullRequest.number, 42);
+      expect(pullRequest.headCommit, 'abc123');
+      expect(runner.requests[1].arguments.take(2), <String>['pr', 'view']);
+    },
+  );
+
+  test(
+    'GivenAnUnrelatedCreationFailure_WhenOpening_ThenNoPullRequestIsResolved',
+    () async {
+      final runner = _SequenceRunner(<CommandResult>[
+        const CommandResult(
+          exitCode: 1,
+          stdout: '',
+          stderr: 'could not find any commits between main and feature/uc-11',
+        ),
+      ]);
+      final port = CommandRunnerAutonomousDeliveryPort(runner);
+
+      final opened = await port.openPullRequest(_delivery());
+
+      expect(
+        (opened as AutonomousPullRequestFailure).code,
+        'github.remote_failure',
+      );
+      expect(runner.requests, hasLength(1));
     },
   );
 }

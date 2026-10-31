@@ -108,6 +108,101 @@ void main() {
     },
   );
 
+  group('defaultBranch', () {
+    Future<String> publishDevelop() async {
+      await _git(source.path, <String>['switch', '-c', 'develop']);
+      await File(p.join(source.path, 'develop.txt')).writeAsString('develop\n');
+      await _git(source.path, <String>['add', 'develop.txt']);
+      await _git(source.path, <String>['commit', '-m', 'develop']);
+      await _git(source.path, <String>['push', '-u', 'origin', 'develop']);
+      await _git(source.path, <String>['switch', 'main']);
+      return (await _git(source.path, <String>['rev-parse', 'develop'])).trim();
+    }
+
+    Future<void> setRemoteDefault(String branch) => _git(root.path, <String>[
+      '--git-dir',
+      p.join(root.path, 'remote.git'),
+      'symbolic-ref',
+      'HEAD',
+      'refs/heads/$branch',
+    ]);
+
+    test(
+      'Given the remote names develop as its default_When resolved_Then develop is returned even when the local remote HEAD is stale',
+      () async {
+        await publishDevelop();
+        await setRemoteDefault('develop');
+        // A clone made before the default branch changed keeps the old one.
+        await _git(source.path, <String>[
+          'remote',
+          'set-head',
+          'origin',
+          'main',
+        ]);
+
+        expect(await git.defaultBranch(source.path), 'develop');
+      },
+    );
+
+    test(
+      'Given the remote is unreachable_When resolved_Then the locally recorded remote HEAD is returned',
+      () async {
+        await publishDevelop();
+        await _git(source.path, <String>[
+          'remote',
+          'set-head',
+          'origin',
+          'develop',
+        ]);
+        await _git(source.path, <String>[
+          'remote',
+          'set-url',
+          'origin',
+          p.join(root.path, 'missing.git'),
+        ]);
+
+        expect(await git.defaultBranch(source.path), 'develop');
+      },
+    );
+
+    test(
+      'Given a repository without a remote_When resolved_Then no default branch is claimed',
+      () async {
+        await _git(source.path, <String>['remote', 'remove', 'origin']);
+
+        expect(await git.defaultBranch(source.path), isNull);
+      },
+    );
+
+    test(
+      'Given a remote defaulting to develop_When a hotfix run starts_Then a fix branch is cut from develop',
+      () async {
+        final developRevision = await publishDevelop();
+        await setRemoteDefault('develop');
+        final service = _service(
+          root: root,
+          source: source,
+          git: git,
+          runId: 'run-99999999',
+        );
+
+        final result = await service(
+          _request(source, _workflow, branchWorkType: BranchWorkType.hotfix),
+        );
+
+        final accepted = result as RunStartAccepted;
+        expect(accepted.branchName, 'fix/uc-06-start-runs-run99999999');
+        expect(
+          (await _git(source.path, <String>[
+            'rev-parse',
+            accepted.branchName,
+          ])).trim(),
+          developRevision,
+        );
+      },
+    );
+  });
+
   test(
     'Given an existing branch and registered worktree_When queried_Then conflicts are detected',
     () async {
@@ -203,7 +298,7 @@ void main() {
         git: _FailAfterRealAdd(git),
         pathInspector: const LocalRunWorktreePathInspector(),
         worktreesRoot: p.join(root.path, 'app-data', 'worktrees'),
-        baseBranch: 'main',
+        fallbackBaseBranch: 'main',
         clock: () => DateTime.utc(2026, 8, 6),
         newId: () => 'run-cccccccc',
       );
@@ -252,6 +347,90 @@ void main() {
         'run-cccccccc:worktree',
         'run-cccccccc:branch',
       ]);
+      expect(repository.lastStatus, RunStatus.failed);
+    },
+  );
+
+  test(
+    'Given real worktree add fails_When starting_Then the branch this run created is removed and the foreign folder is untouched',
+    () async {
+      final repository = _Repository();
+      final ownership = _Ownership();
+      final service = _service(
+        root: root,
+        source: source,
+        git: _OccupyDestinationBeforeAdd(git),
+        runId: 'run-gggggggg',
+        repository: repository,
+        ownership: ownership,
+      );
+      final path = p.join(
+        root.path,
+        'app-data',
+        'worktrees',
+        'project-1',
+        'run-gggggggg',
+      );
+
+      final result = await service(_request(source, _workflow));
+
+      expect((result as RunStartRejected).code, 'run.git.worktree_create');
+      expect(
+        (await git.branchPresence(
+          source.path,
+          'feature/uc-06-start-runs-rungggggggg',
+        )).code,
+        RunGitPresenceCode.absent,
+      );
+      expect(
+        (await git.worktreePresence(source.path, path)).code,
+        RunGitPresenceCode.absent,
+      );
+      expect(File(p.join(path, 'foreign.txt')).existsSync(), isTrue);
+      expect(ownership.resolved, <String>[
+        'run-gggggggg:worktree',
+        'run-gggggggg:branch',
+      ]);
+      expect(repository.lastStatus, RunStatus.failed);
+    },
+  );
+
+  test(
+    'Given real worktree registration whose outcome is reported unknown_When starting_Then nothing is removed and cleanup is required',
+    () async {
+      final repository = _Repository();
+      final ownership = _Ownership();
+      final service = _service(
+        root: root,
+        source: source,
+        git: _UnknownAfterRealAdd(git),
+        runId: 'run-hhhhhhhh',
+        repository: repository,
+        ownership: ownership,
+      );
+      final path = p.join(
+        root.path,
+        'app-data',
+        'worktrees',
+        'project-1',
+        'run-hhhhhhhh',
+      );
+
+      final result = await service(_request(source, _workflow));
+
+      expect((result as RunStartRejected).code, 'run.git.cleanup_required');
+      expect(
+        (await git.worktreePresence(source.path, path)).code,
+        RunGitPresenceCode.present,
+      );
+      expect(
+        (await git.branchPresence(
+          source.path,
+          'feature/uc-06-start-runs-runhhhhhhhh',
+        )).code,
+        RunGitPresenceCode.present,
+      );
+      expect(ownership.resolved, isEmpty);
       expect(repository.lastStatus, RunStatus.failed);
     },
   );
@@ -356,39 +535,44 @@ StartIsolatedRun _service({
   required Directory source,
   required RunGitPort git,
   required String runId,
+  _Repository? repository,
+  _Ownership? ownership,
 }) => StartIsolatedRun(
   projectPreflight: const _ProjectPreflight(),
   workItemResolvers: <WorkItemType, WorkItemResolver>{
     WorkItemType.useCase: const _UseCaseResolver(),
   },
   agentPreflight: const _AgentPreflight(),
-  repository: _Repository(),
-  ownership: _Ownership(),
+  repository: repository ?? _Repository(),
+  ownership: ownership ?? _Ownership(),
   git: git,
   pathInspector: const LocalRunWorktreePathInspector(),
   worktreesRoot: p.join(root.path, 'app-data', 'worktrees'),
-  baseBranch: 'main',
+  fallbackBaseBranch: 'main',
   clock: () => DateTime.utc(2026, 8, 6),
   newId: () => runId,
 );
 
-StartRunRequest _request(Directory source, WorkflowDefinition workflow) =>
-    StartRunRequest(
-      actorId: 'actor',
-      project: ProjectRecord(
-        id: 'project-1',
-        name: 'Fixture',
-        normalizedName: 'fixture',
-        folderPath: source.path,
-        createdAt: DateTime.utc(2026),
-        updatedAt: DateTime.utc(2026),
-        deletedAt: null,
-      ),
-      workflow: workflow,
-      rawWorkItem: 'UC-06',
-      deliveryMode: DeliveryMode.supervised,
-      branchWorkType: BranchWorkType.feature,
-    );
+StartRunRequest _request(
+  Directory source,
+  WorkflowDefinition workflow, {
+  BranchWorkType branchWorkType = BranchWorkType.feature,
+}) => StartRunRequest(
+  actorId: 'actor',
+  project: ProjectRecord(
+    id: 'project-1',
+    name: 'Fixture',
+    normalizedName: 'fixture',
+    folderPath: source.path,
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+    deletedAt: null,
+  ),
+  workflow: workflow,
+  rawWorkItem: 'UC-06',
+  deliveryMode: DeliveryMode.supervised,
+  branchWorkType: branchWorkType,
+);
 
 Future<String> _git(String workingDirectory, List<String> arguments) async {
   final result = await Process.run(
@@ -471,6 +655,9 @@ final class _FailAfterRealAdd implements RunGitPort {
     required String baseBranch,
   }) => delegate.inspectSource(sourcePath, baseBranch: baseBranch);
   @override
+  Future<String?> defaultBranch(String sourcePath) =>
+      delegate.defaultBranch(sourcePath);
+  @override
   Future<void> removeWorktree({
     required String sourcePath,
     required String worktreePath,
@@ -538,6 +725,52 @@ final class _WorktreeRaceGit extends _DelegatingRunGitPort {
   }
 }
 
+/// Another writer fills the run's destination after Maestro's path checks,
+/// so the real `git worktree add` fails.
+final class _OccupyDestinationBeforeAdd extends _DelegatingRunGitPort {
+  const _OccupyDestinationBeforeAdd(super.delegate);
+
+  @override
+  Future<RunGitMutationResult> addWorktree({
+    required String sourcePath,
+    required String branchName,
+    required String worktreePath,
+  }) async {
+    await Directory(worktreePath).create(recursive: true);
+    await File(p.join(worktreePath, 'foreign.txt')).writeAsString('foreign');
+    return delegate.addWorktree(
+      sourcePath: sourcePath,
+      branchName: branchName,
+      worktreePath: worktreePath,
+    );
+  }
+}
+
+/// The real worktree is registered, but the outcome reaches Maestro as
+/// unknown, as when Git's exit status is lost.
+final class _UnknownAfterRealAdd extends _DelegatingRunGitPort {
+  const _UnknownAfterRealAdd(super.delegate);
+
+  @override
+  Future<RunGitMutationResult> addWorktree({
+    required String sourcePath,
+    required String branchName,
+    required String worktreePath,
+  }) async {
+    final result = await delegate.addWorktree(
+      sourcePath: sourcePath,
+      branchName: branchName,
+      worktreePath: worktreePath,
+    );
+    return result is RunGitMutationSucceeded
+        ? const RunGitMutationFailed(
+            'injected lost outcome',
+            effect: RunGitMutationEffect.unknown,
+          )
+        : result;
+  }
+}
+
 abstract base class _DelegatingRunGitPort implements RunGitPort {
   const _DelegatingRunGitPort(this.delegate);
 
@@ -576,6 +809,9 @@ abstract base class _DelegatingRunGitPort implements RunGitPort {
     String sourcePath, {
     required String baseBranch,
   }) => delegate.inspectSource(sourcePath, baseBranch: baseBranch);
+  @override
+  Future<String?> defaultBranch(String sourcePath) =>
+      delegate.defaultBranch(sourcePath);
   @override
   Future<void> removeWorktree({
     required String sourcePath,

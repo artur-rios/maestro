@@ -37,6 +37,31 @@ void main() {
       expect(policy.evaluate(worktree), OwnershipDecision.unknownOwnership);
     });
 
+    test(
+      'GivenARecordNamingAnOwnedRoot_WhenEvaluated_ThenTheRootIsProtected',
+      () {
+        // A damaged record naming the worktrees folder itself would delete
+        // every run's worktree, active runs' included.
+        final policy = OwnedPathPolicy(
+          appPaths: paths,
+          sourcePaths: <String>[source],
+          ownedPaths: <String>{
+            paths.worktreesDirectory.path,
+            paths.runResultsDirectory.path,
+          },
+        );
+
+        expect(
+          policy.evaluate(paths.worktreesDirectory.path),
+          OwnershipDecision.protectedApplicationRoot,
+        );
+        expect(
+          policy.evaluate(paths.runResultsDirectory.path),
+          OwnershipDecision.protectedApplicationRoot,
+        );
+      },
+    );
+
     test('GivenRecordedWorktree_WhenEvaluated_ThenCleanupIsAllowed', () {
       final policy = OwnedPathPolicy(
         appPaths: paths,

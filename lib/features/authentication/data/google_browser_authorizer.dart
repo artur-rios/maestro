@@ -126,6 +126,9 @@ final class GoogleBrowserAuthorizer implements GoogleBrowserAuthorization {
         redirectUri,
         verifier,
       );
+      if (response.statusCode >= 500 || response.statusCode == 429) {
+        throw const OAuthTransportFailure();
+      }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw const GoogleTokenExchangeRejected();
       }

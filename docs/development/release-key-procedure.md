@@ -7,9 +7,11 @@ not run this procedure in CI and do not save its terminal output to a file.
 dart run tooling/release/generate_keypair.dart
 ```
 
-The command prints two base64 values. Store the secret value only in GitHub as
-the `MAESTRO_RELEASE_SECRET_KEY_BASE64` repository secret. Pass the public
-value into each release build:
+The command prints two base64 values. Store the secret value only in Jenkins as the credential
+`maestro-signing-key`. Store the public value as the Jenkins credential
+`maestro-signing-public-key` and as the `MAESTRO_RELEASE_PUBLIC_KEY_BASE64`
+GitHub repository secret (the Windows build reads that one). Each release
+build passes the public value in:
 
 ```powershell
 flutter build windows --release --dart-define=MAESTRO_RELEASE_PUBLIC_KEY_BASE64=<public-value>

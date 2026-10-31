@@ -310,7 +310,15 @@ Future<ProductionAppComposition> composeProductionApp({
     newId: newId,
   );
   final workflowRepository = DriftWorkflowRepository(database);
-  final runRepository = DriftRunRepository(database);
+  // The diagnostics log the remediation text points users at. Composed before
+  // the foundation so startup probe verdicts are the first thing it records,
+  // and before the run repository, which records runs it cannot read.
+  final diagnostics = BoundedDiagnosticLog(
+    sink: DriftDiagnosticLogSink(database: database, clock: now, newId: newId),
+    clock: now,
+    environment: Platform.environment,
+  );
+  final runRepository = DriftRunRepository(database, diagnostics: diagnostics);
   final deliveryRepository = DriftDeliveryRepository(database);
   final workflowDesignService = WorkflowDesignService(
     repository: workflowRepository,
@@ -328,13 +336,6 @@ Future<ProductionAppComposition> composeProductionApp({
       OpenCodeAdapter(commandRunner),
     ],
     workflowDesignService: workflowDesignService,
-  );
-  // The diagnostics log the remediation text points users at. Composed before
-  // the foundation so startup probe verdicts are the first thing it records.
-  final diagnostics = BoundedDiagnosticLog(
-    sink: DriftDiagnosticLogSink(database: database, clock: now, newId: newId),
-    clock: now,
-    environment: Platform.environment,
   );
   final ownership = DriftOwnedResourceStore(database);
   final runOrchestrator = RunOrchestrator(
@@ -434,7 +435,7 @@ Future<ProductionAppComposition> composeProductionApp({
       git: CommandRunnerRunGitPort(commandRunner),
       pathInspector: const LocalRunWorktreePathInspector(),
       worktreesRoot: paths.worktreesDirectory.path,
-      baseBranch: 'main',
+      fallbackBaseBranch: 'main',
       clock: now,
       newId: newId,
     );

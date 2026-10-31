@@ -245,12 +245,13 @@ final class _RunStartPanelState extends State<RunStartPanel> {
       DropdownButtonFormField<BranchWorkType>(
         key: const Key('run-branch-type'),
         initialValue: state.branchWorkType,
+        isExpanded: true,
         decoration: const InputDecoration(labelText: 'Branch type'),
         items: <DropdownMenuItem<BranchWorkType>>[
           for (final value in BranchWorkType.values)
             DropdownMenuItem<BranchWorkType>(
               value: value,
-              child: Text(value.name),
+              child: Text(_branchTypeLabel(value)),
             ),
         ],
         onChanged: state.starting
@@ -260,6 +261,12 @@ final class _RunStartPanelState extends State<RunStartPanel> {
               },
       );
 }
+
+/// Names the branch prefix a kind is delivered on when it differs from the
+/// kind itself.
+String _branchTypeLabel(BranchWorkType type) => type.name == type.branchPrefix
+    ? type.name
+    : '${type.name} (${type.branchPrefix}/)';
 
 String _recoveryLabel(RecoveryAction action) => switch (action) {
   RecoveryAction.retryWithPreservedContext => 'Retry with preserved context',
