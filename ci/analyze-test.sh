@@ -4,15 +4,16 @@
 # coverage. The release build runs the same commands before it packages (ci/release-build.sh).
 #
 # libsqlite3-dev and libsecret-1-dev are what the workflow apt-installed for the native assets and the secret
-# storage tests; they are installed here with apt when this runs as root, as checks do on yggdrasil's agents
-# (ci/apt-packages.sh). The Windows packaging tests need PowerShell, which the runner had and the image has not
-# (ci/pwsh.sh).
+# storage tests; clang, pkg-config and the GTK, X11 and Xi headers are what window_manager's native library needs,
+# which `dart run` and `flutter test` build through its hook. They are installed here with apt when this runs as
+# root, as checks do on yggdrasil's agents (ci/apt-packages.sh). The Windows packaging tests need PowerShell, which
+# the runner had and the image has not (ci/pwsh.sh).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # shellcheck source=ci/apt-packages.sh
 source ci/apt-packages.sh
-ensure_packages libsqlite3-dev libsecret-1-dev
+ensure_packages clang pkg-config libgtk-3-dev libx11-dev libxi-dev libsqlite3-dev libsecret-1-dev
 # shellcheck source=ci/flutter-env.sh
 source ci/flutter-env.sh
 # shellcheck source=ci/pwsh.sh

@@ -47,7 +47,7 @@
 | url_launcher | 6.3.2 | 6.3.2 | 6.3.2 | [pub.dev 6.3.2](https://pub.dev/packages/url_launcher/versions/6.3.2) | Current resolved version is latest stable. |
 | uuid | 4.6.0 | 4.6.0 | 4.6.0 | [pub.dev 4.6.0](https://pub.dev/packages/uuid/versions/4.6.0) | Current resolved version is latest stable. |
 | win32 | 6.4.0 | 6.4.0 | 6.4.0 | [pub.dev 6.4.0](https://pub.dev/packages/win32/versions/6.4.0) | Current resolved version is latest stable. |
-| window_manager | 0.5.2 | 0.5.2 | 0.5.2 | [pub.dev 0.5.2](https://pub.dev/packages/window_manager/versions/0.5.2) | Current resolved version is latest stable. |
+| window_manager | 0.6.0 | 0.6.0 | 0.6.0 | [pub.dev 0.6.0](https://pub.dev/packages/window_manager/versions/0.6.0) | Current resolved version is latest stable. |
 | xterm | 4.0.0 | 4.0.0 | 4.0.0 | [pub.dev 4.0.0](https://pub.dev/packages/xterm/versions/4.0.0) | Current resolved version is latest stable. |
 | build_runner | 2.16.1 | 2.16.1 | 2.16.1 | [pub.dev 2.16.1](https://pub.dev/packages/build_runner/versions/2.16.1) | Current resolved version is latest stable. |
 | drift_dev | 2.34.6 | 2.34.6 | 2.34.6 | [pub.dev 2.34.6](https://pub.dev/packages/drift_dev/versions/2.34.6) | Current resolved version is latest stable. |
@@ -78,6 +78,7 @@
 | checked_yaml | 2.0.4 | 2.0.4 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | cli_util | 0.5.2 | 0.5.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | clock | 1.1.3 | 1.1.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| cnativeapi | 0.5.10 | 0.5.10 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | code_assets | 1.2.1 | 1.2.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | collection | 1.19.1 | 1.19.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | console | 4.1.0 | 4.1.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -130,6 +131,8 @@
 | meta | 1.19.0 | 1.19.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | mime | 2.1.0 | 2.1.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | native_toolchain_c | 0.19.3 | 0.19.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| nativeapi | 0.5.10 | 0.5.10 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| nativeapi_flutter | 0.5.10 | 0.5.10 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | objective_c | 9.5.0 | 9.5.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | package_config | 3.0.0 | 3.0.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | path_provider_android | 2.3.1 | 2.3.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -148,11 +151,6 @@
 | recase | 4.1.0 | 4.1.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | record_use | 1.1.1 | 1.1.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | riverpod | 3.4.3 | 3.4.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| screen_retriever | 0.2.2 | 0.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| screen_retriever_linux | 0.2.2 | 0.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| screen_retriever_macos | 0.2.2 | 0.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| screen_retriever_platform_interface | 0.2.2 | 0.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| screen_retriever_windows | 0.2.2 | 0.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | shelf | 1.4.2 | 1.4.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | shelf_web_socket | 3.0.0 | 3.0.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | sky_engine | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
@@ -217,6 +215,8 @@ All versions are intentionally unpinned: the `ubuntu-24.04` GitHub-hosted runner
 | ninja-build | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
 | pkg-config | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
 | libgtk-3-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |
+| libx11-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI builds of window_manager's native library. |
+| libxi-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI builds of window_manager's native library. |
 | libsecret-1-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI test and build prerequisite; intentionally not hard-pinned. |
 | libsqlite3-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI test prerequisite; intentionally not hard-pinned. |
 | libjsoncpp-dev | Ubuntu 24.04 stable repository version | [Ubuntu Noble packages](https://packages.ubuntu.com/noble/) | CI build prerequisite; intentionally not hard-pinned. |

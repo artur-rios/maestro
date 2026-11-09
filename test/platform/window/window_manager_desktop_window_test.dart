@@ -6,14 +6,14 @@ import 'package:window_manager/window_manager.dart';
 
 void main() {
   test(
-    'GivenDesktopStartup_WhenInitialized_ThenFramelessOptionsAreAppliedInOrder',
+    'GivenDesktopStartup_WhenInitialized_ThenFramelessOptionsAreApplied',
     () async {
       final gateway = FakeWindowManagerGateway();
 
       final window = await initializeDesktopWindow(gateway);
 
       expect(window, isA<WindowManagerDesktopWindow>());
-      expect(gateway.calls, <String>['ensureInitialized', 'waitUntilReady']);
+      expect(gateway.applyStartupOptionsCalls, 1);
       expect(gateway.options?.minimumSize, const Size(900, 640));
       expect(gateway.options?.size, const Size(1440, 900));
       expect(gateway.options?.center, isTrue);
@@ -83,8 +83,8 @@ final class FakeWindowManagerGateway implements WindowManagerGateway {
     : isMaximizedValue = isMaximized;
 
   final bool isMaximizedValue;
-  final List<String> calls = <String>[];
-  WindowOptions? options;
+  int applyStartupOptionsCalls = 0;
+  DesktopWindowStartupOptions? options;
   int startDraggingCalls = 0;
   int minimizeCalls = 0;
   int maximizeCalls = 0;
@@ -92,13 +92,8 @@ final class FakeWindowManagerGateway implements WindowManagerGateway {
   int closeCalls = 0;
 
   @override
-  Future<void> ensureInitialized() async {
-    calls.add('ensureInitialized');
-  }
-
-  @override
-  Future<void> waitUntilReadyToShow(WindowOptions options) async {
-    calls.add('waitUntilReady');
+  Future<void> applyStartupOptions(DesktopWindowStartupOptions options) async {
+    applyStartupOptionsCalls++;
     this.options = options;
   }
 

@@ -35,6 +35,7 @@ jobs:
       - run: flutter pub get
       - run: flutter test integration_test/platform/process_tree_integration_test.dart -d windows
       - run: flutter test integration_test/platform/detached_process_launcher_integration_test.dart -d windows --dart-define=MAESTRO_TEST_DART="$env:FLUTTER_ROOT\bin\cache\dart-sdk\bin\dart.exe"
+      - run: flutter test integration_test/platform/desktop_window_integration_test.dart -d windows
       - run: flutter test integration_test/foundation_startup_integration_test.dart -d windows
       - run: flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows
       - run: flutter test integration_test/performance/run_observation_integration_test.dart -d windows

@@ -90,7 +90,8 @@ sudo apt install ./maestro-linux-amd64.deb
 
 It installs Maestro under `/opt/maestro`, puts `maestro` on `PATH`, and adds a
 desktop entry and icon so it appears in the applications menu. It depends on
-`libgtk-3-0` and `libsecret-1-0`, which `apt` installs when they are missing.
+`libgtk-3-0`, `libsecret-1-0`, `libx11-6` and `libxi6`, which `apt` installs
+when they are missing.
 Remove it with `sudo apt remove maestro`.
 
 The AppImage, `maestro-linux-x64.AppImage`, is a single file that runs without
