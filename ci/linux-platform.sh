@@ -12,8 +12,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # shellcheck source=ci/apt-packages.sh
 source ci/apt-packages.sh
-ensure_packages clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
-  libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb file
+ensure_packages clang cmake ninja-build pkg-config libgtk-3-dev libx11-dev libxi-dev libsecret-1-dev libsqlite3-dev \
+  libjsoncpp-dev libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb file
 # shellcheck source=ci/flutter-env.sh
 source ci/flutter-env.sh
 # shellcheck source=ci/appimagetool.sh

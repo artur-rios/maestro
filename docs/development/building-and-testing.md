@@ -18,7 +18,7 @@ The supported CI baseline is Ubuntu 24.04. Install Flutter 3.47.2 plus:
 ```bash
 sudo apt-get update
 sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
-  libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
+  libx11-dev libxi-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
   libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
 ```
 

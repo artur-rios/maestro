@@ -2,9 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 import 'package:window_manager/window_manager.dart';
 
+final class DesktopWindowStartupOptions {
+  const DesktopWindowStartupOptions({
+    required this.minimumSize,
+    required this.size,
+    required this.center,
+    required this.backgroundColor,
+    required this.titleBarStyle,
+    required this.windowButtonVisibility,
+  });
+
+  final Size minimumSize;
+  final Size size;
+  final bool center;
+  final Color backgroundColor;
+  final TitleBarStyle titleBarStyle;
+  final bool windowButtonVisibility;
+}
+
 abstract interface class WindowManagerGateway {
-  Future<void> ensureInitialized();
-  Future<void> waitUntilReadyToShow(WindowOptions options);
+  Future<void> applyStartupOptions(DesktopWindowStartupOptions options);
   Future<void> startDragging();
   Future<void> minimize();
   Future<bool> isMaximized();
@@ -14,40 +31,48 @@ abstract interface class WindowManagerGateway {
 }
 
 final class ProductionWindowManagerGateway implements WindowManagerGateway {
-  const ProductionWindowManagerGateway();
+  Window? _currentWindow;
+
+  // Resolved on first use and kept, because every lookup makes a new native wrapper. Null until the platform has a
+  // window, and the commands then do nothing.
+  Window? get _window => _currentWindow ??= WindowManager.instance.getCurrent();
 
   @override
-  Future<void> ensureInitialized() => windowManager.ensureInitialized();
+  Future<void> applyStartupOptions(DesktopWindowStartupOptions options) async {
+    final window = _window;
+    if (window == null) return;
+    window.titleBarStyle = options.titleBarStyle;
+    window.isWindowControlButtonsVisible = options.windowButtonVisibility;
+    window.setSize(options.size.toNative(), false);
+    if (options.center) window.center();
+    window.minimumSize = options.minimumSize.toNative();
+    window.backgroundColor = options.backgroundColor.toNative();
+  }
 
   @override
-  Future<void> waitUntilReadyToShow(WindowOptions options) =>
-      windowManager.waitUntilReadyToShow(options);
+  Future<void> startDragging() async => _window?.startDragging();
 
   @override
-  Future<void> startDragging() => windowManager.startDragging();
+  Future<void> minimize() async => _window?.minimize();
 
   @override
-  Future<void> minimize() => windowManager.minimize();
+  Future<bool> isMaximized() async => _window?.isMaximized ?? false;
 
   @override
-  Future<bool> isMaximized() => windowManager.isMaximized();
+  Future<void> maximize() async => _window?.maximize();
 
   @override
-  Future<void> maximize() => windowManager.maximize();
+  Future<void> unmaximize() async => _window?.unmaximize();
 
   @override
-  Future<void> unmaximize() => windowManager.unmaximize();
-
-  @override
-  Future<void> close() => windowManager.close();
+  Future<void> close() async => _window?.close();
 }
 
 Future<DesktopWindowPort> initializeDesktopWindow(
   WindowManagerGateway gateway,
 ) async {
-  await gateway.ensureInitialized();
-  await gateway.waitUntilReadyToShow(
-    const WindowOptions(
+  await gateway.applyStartupOptions(
+    const DesktopWindowStartupOptions(
       minimumSize: Size(900, 640),
       size: Size(1440, 900),
       center: true,

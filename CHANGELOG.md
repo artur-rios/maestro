@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Update `window_manager` to 0.6.0. On Linux the application now also depends on `libx11-6` and `libxi6`.
+
 ## [0.1.0] - 2026-10-31
 
 The first release: use cases UC-01 through UC-14.

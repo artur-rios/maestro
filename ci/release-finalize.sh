@@ -29,6 +29,10 @@ public_key=${MAESTRO_RELEASE_PUBLIC_KEY_BASE64:-}
 # applications use (the old job had it from GITHUB_REPOSITORY and GITHUB_REF_NAME).
 download_base="https://github.com/artur-rios/maestro/releases/download/${tag}/"
 
+# `dart run` below builds window_manager's native library through its hook, which needs these.
+# shellcheck source=ci/apt-packages.sh
+source ci/apt-packages.sh
+ensure_packages clang pkg-config libgtk-3-dev libx11-dev libxi-dev
 # shellcheck source=ci/flutter-env.sh
 source ci/flutter-env.sh
 

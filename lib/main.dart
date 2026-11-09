@@ -658,7 +658,7 @@ final class ProductionProjectExecutionReadiness
 Future<void> _closeDatabase(MaestroDatabase database) => database.close();
 
 Future<DesktopWindowPort> _initializeProductionDesktopWindow() =>
-    initializeDesktopWindow(const ProductionWindowManagerGateway());
+    initializeDesktopWindow(ProductionWindowManagerGateway());
 
 Future<MaestroDatabase> _openProductionDatabase(ApplicationPaths paths) =>
     const DatabaseFactory().open(paths);
