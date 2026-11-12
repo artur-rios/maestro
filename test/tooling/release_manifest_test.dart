@@ -331,11 +331,15 @@ Future<Directory> _createDistributionDirectory() async {
   return directory;
 }
 
+// `dart run`, as ci/release-finalize.sh and the release docs call them: since
+// Dart 3.14 a bare `dart <script>` no longer builds or loads native assets, so
+// the scripts that use sodium cannot find libsodium without it.
 Future<ProcessResult> _runReleaseTool(
   String script,
   List<String> arguments, {
   Map<String, String>? environment,
 }) => Process.run(_dartExecutable.path, <String>[
+  'run',
   'tooling/release/$script',
   ...arguments,
 ], environment: environment);
