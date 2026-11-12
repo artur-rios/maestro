@@ -132,7 +132,7 @@ void _verifyWindowsReleaseWorkflow(YamlMap document, String workflowPath) {
     (step) =>
         '${step['uses']}'.startsWith('subosito/flutter-action@') &&
         step['with'] is YamlMap &&
-        (step['with'] as YamlMap)['flutter-version'] == '3.47.2' &&
+        (step['with'] as YamlMap)['flutter-version'] == '3.50.0' &&
         (step['with'] as YamlMap)['channel'] == 'stable' &&
         (step['with'] as YamlMap)['cache'] == true,
   );

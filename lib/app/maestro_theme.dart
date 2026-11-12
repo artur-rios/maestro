@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
+import 'package:material_ui/material_ui.dart';
 
 ThemeMode flutterThemeMode(AppearanceMode mode) => switch (mode) {
   AppearanceMode.system => ThemeMode.system,

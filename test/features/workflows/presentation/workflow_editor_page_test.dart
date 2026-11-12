@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +11,7 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
 import 'package:maestro/platform/agents/agent_cli_adapter.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets(

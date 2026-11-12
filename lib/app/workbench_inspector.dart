@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class WorkbenchInspectorScope extends InheritedWidget {
   const WorkbenchInspectorScope({

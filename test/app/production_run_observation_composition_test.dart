@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
@@ -14,6 +13,7 @@ import 'package:maestro/features/runs/application/observe_runs.dart';
 import 'package:maestro/features/runs/presentation/active_runs_panel.dart';
 import 'package:maestro/main.dart' as app;
 import 'package:maestro/platform/common/command_runner.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   test(

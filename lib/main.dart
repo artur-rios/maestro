@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/app/maestro_window_chrome.dart';
@@ -93,6 +92,7 @@ import 'package:maestro/platform/updates/update_readiness_signal.dart';
 import 'package:maestro/platform/updates/update_service.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 import 'package:maestro/platform/window/window_manager_desktop_window.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';

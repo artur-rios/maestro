@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/maestro_window_chrome.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('GivenWindowChrome_WhenControlsUsed_ThenPortReceivesCommands', (

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
@@ -11,6 +10,7 @@ import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/domain/run_observation.dart';
 import 'package:maestro/features/runs/presentation/run_control_controller.dart';
 import 'package:maestro/features/runs/presentation/run_observation_controller.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shows every run of the selected project, its ordered steps, and its output.
 ///

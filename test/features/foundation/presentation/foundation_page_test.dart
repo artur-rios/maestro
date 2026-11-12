@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/features/foundation/presentation/foundation_page.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets(

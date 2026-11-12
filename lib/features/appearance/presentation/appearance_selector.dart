@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class AppearanceSelector extends StatelessWidget {
   const AppearanceSelector({required this.controller, super.key});

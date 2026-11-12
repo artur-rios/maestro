@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/projects/domain/project_models.dart';
 import 'package:maestro/features/runs/application/run_interruption_reconciler.dart';
@@ -10,6 +9,7 @@ import 'package:maestro/features/runs/domain/run_models.dart';
 import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/runs/presentation/run_start_panel.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('GivenDesktopRunForm_WhenRendered_ThenItsContentIsConstrained', (
