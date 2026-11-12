@@ -107,14 +107,14 @@ String newProductionNonce() {
 typedef DatabaseCloser = Future<void> Function(MaestroDatabase database);
 typedef DesktopWindowInitializer = Future<DesktopWindowPort> Function();
 typedef ApplicationSupportDirectoryReader = Future<Directory> Function();
-typedef DatabaseOpener =
-    Future<MaestroDatabase> Function(ApplicationPaths paths);
-typedef ProductionAppComposer =
-    Future<ProductionAppComposition> Function({
-      required ApplicationPaths paths,
-      required MaestroDatabase database,
-      required DesktopWindowPort window,
-    });
+typedef DatabaseOpener = Future<MaestroDatabase> Function(
+  ApplicationPaths paths,
+);
+typedef ProductionAppComposer = Future<ProductionAppComposition> Function({
+  required ApplicationPaths paths,
+  required MaestroDatabase database,
+  required DesktopWindowPort window,
+});
 typedef AppRunner = void Function(Widget app);
 
 final class ProductionAppComposition {

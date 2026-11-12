@@ -180,8 +180,7 @@ final class MethodChannelAuthentication implements AuthenticationPort {
     return const Capability(
       id: _capabilityId,
       state: CapabilityState.malformed,
-      message:
-          'The operating-system authentication host returned an invalid response.',
+      message: 'The operating-system authentication host returned an invalid response.',
       remediation:
           'Repair the installation or use email and password authentication.',
     );

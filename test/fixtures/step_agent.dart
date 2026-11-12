@@ -36,13 +36,13 @@ Future<void> main(List<String> arguments) async {
     return;
   }
   final prompt = await stdin.transform(utf8.decoder).join();
-  final attemptId = RegExp(
-    r'"attemptId":"([^"]+)"',
-  ).firstMatch(prompt)?.group(1);
+  final attemptId = RegExp(r'"attemptId":"([^"]+)"')
+      .firstMatch(prompt)
+      ?.group(1);
   final nonce = RegExp(r'"nonce":"([^"]+)"').firstMatch(prompt)?.group(1);
-  final path = RegExp(
-    r'write UTF-8 JSON to this exact path: ([^\r\n]+)',
-  ).firstMatch(prompt)?.group(1);
+  final path = RegExp(r'write UTF-8 JSON to this exact path: ([^\r\n]+)')
+      .firstMatch(prompt)
+      ?.group(1);
   if (attemptId == null || nonce == null || path == null) exit(21);
 
   if (mode == 'nonzero') {
@@ -56,9 +56,8 @@ Future<void> main(List<String> arguments) async {
   } else if (mode == 'overlap') {
     final barrier = Directory(arguments[1]);
     await barrier.create(recursive: true);
-    await File(
-      '${barrier.path}${Platform.pathSeparator}$attemptId',
-    ).writeAsString('ready');
+    await File('${barrier.path}${Platform.pathSeparator}$attemptId')
+        .writeAsString('ready');
     for (var attempt = 0; attempt < 100; attempt++) {
       if ((await barrier.list().length) >= 2) break;
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -84,9 +83,8 @@ Future<void> main(List<String> arguments) async {
     flush: true,
   );
   if (mode == 'survivingChildSwap') {
-    await File(
-      '$path.child.pid',
-    ).writeAsString(await _startSurvivingChild(path), flush: true);
+    await File('$path.child.pid')
+        .writeAsString(await _startSurvivingChild(path), flush: true);
   }
 }
 

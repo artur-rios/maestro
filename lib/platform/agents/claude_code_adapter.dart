@@ -46,8 +46,7 @@ final class ClaudeCodeAdapter implements AgentCliAdapter {
     if (!auth.succeeded || auth.stdoutTruncated || auth.stderrTruncated) {
       return _support.catalog(
         version: start.version,
-        guidance:
-            'Claude Code authentication could not be verified. Retry from the project terminal.',
+        guidance: 'Claude Code authentication could not be verified. Retry from the project terminal.',
       );
     }
     try {
@@ -68,14 +67,12 @@ final class ClaudeCodeAdapter implements AgentCliAdapter {
         session: AgentCliSession.authenticated,
         verification: AgentModelVerification.cliOnly,
         models: documentedAliases,
-        guidance:
-            'Claude model aliases are CLI-valid; account access is checked when the step starts.',
+        guidance: 'Claude model aliases are CLI-valid; account access is checked when the step starts.',
       );
     } on FormatException {
       return _support.catalog(
         version: start.version,
-        guidance:
-            'Claude Code returned an unrecognized authentication status. Update it and retry.',
+        guidance: 'Claude Code returned an unrecognized authentication status. Update it and retry.',
       );
     }
   }

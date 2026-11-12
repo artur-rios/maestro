@@ -43,8 +43,7 @@ void main() {
           const CommandResult(
             exitCode: 128,
             stdout: '',
-            stderr:
-                'fatal: not a git repository (or any of the parent directories): .git\n',
+            stderr: 'fatal: not a git repository (or any of the parent directories): .git\n',
           ),
         );
         final validator = _validator(runner, ProjectDirectoryState.accessible);
@@ -56,60 +55,48 @@ void main() {
       },
     );
 
-    test(
-      'GivenAccompaniedOrRewordedNonGitDiagnostic_WhenValidated_ThenStillNotGitWorkingTree',
-      () async {
-        for (final stderr in <String>[
-          'warning: unable to access system config\n'
-              'fatal: not a git repository (or any of the parent directories): .git\n',
-          'fatal: not a git repository: .git\r\n',
-          'fatal: Not a git repository (or any parent up to mount point /)\n'
-              'Stopping at filesystem boundary.\n',
-        ]) {
-          final runner = _RecordingRunner(
-            CommandResult(exitCode: 128, stdout: '', stderr: stderr),
-          );
-          final validator = _validator(
-            runner,
-            ProjectDirectoryState.accessible,
-          );
+    test('GivenAccompaniedOrRewordedNonGitDiagnostic_WhenValidated_ThenStillNotGitWorkingTree', () async {
+      for (final stderr in <String>[
+        'warning: unable to access system config\n'
+            'fatal: not a git repository (or any of the parent directories): .git\n',
+        'fatal: not a git repository: .git\r\n',
+        'fatal: Not a git repository (or any parent up to mount point /)\n'
+            'Stopping at filesystem boundary.\n',
+      ]) {
+        final runner = _RecordingRunner(
+          CommandResult(exitCode: 128, stdout: '', stderr: stderr),
+        );
+        final validator = _validator(runner, ProjectDirectoryState.accessible);
 
-          final result = await validator.validate(ProjectFolder.parse('/repo'));
+        final result = await validator.validate(ProjectFolder.parse('/repo'));
 
-          expect(
-            result.availability,
-            ProjectAvailability.notGitWorkingTree,
-            reason: stderr,
-          );
-        }
-      },
-    );
+        expect(
+          result.availability,
+          ProjectAvailability.notGitWorkingTree,
+          reason: stderr,
+        );
+      }
+    });
 
-    test(
-      'GivenUnrecognizedOrLostDiagnostic_WhenValidated_ThenFailureStaysTransient',
-      () async {
-        for (final stderr in <String>[
-          '',
-          'error: could not lock config file\n',
-        ]) {
-          final runner = _RecordingRunner(
-            CommandResult(exitCode: 128, stdout: '', stderr: stderr),
-          );
-          final validator = _validator(
-            runner,
-            ProjectDirectoryState.accessible,
-          );
+    test('GivenUnrecognizedOrLostDiagnostic_WhenValidated_ThenFailureStaysTransient', () async {
+      for (final stderr in <String>[
+        '',
+        'error: could not lock config file\n',
+      ]) {
+        final runner = _RecordingRunner(
+          CommandResult(exitCode: 128, stdout: '', stderr: stderr),
+        );
+        final validator = _validator(runner, ProjectDirectoryState.accessible);
 
-          final result = await validator.validate(ProjectFolder.parse('/repo'));
+        final result = await validator.validate(ProjectFolder.parse('/repo'));
 
-          expect(
-            result.availability,
-            ProjectAvailability.transientFailure,
-            reason: stderr,
-          );
-        }
-      },
-    );
+        expect(
+          result.availability,
+          ProjectAvailability.transientFailure,
+          reason: stderr,
+        );
+      }
+    });
 
     test('GivenNestedSelection_WhenValidated_ThenNotRoot', () async {
       final runner = _RecordingRunner(_success('/repo'));
@@ -152,20 +139,17 @@ void main() {
       },
     );
 
-    test(
-      'GivenPosixSpacedRootWithTrailingSeparator_WhenValidated_ThenGitSpellingIsReturned',
-      () async {
-        const selected = '/work trees/maestro demo/';
-        const reported = '/work trees/maestro demo';
-        final runner = _RecordingRunner(_success('$reported\n'));
-        final validator = _validator(runner, ProjectDirectoryState.accessible);
+    test('GivenPosixSpacedRootWithTrailingSeparator_WhenValidated_ThenGitSpellingIsReturned', () async {
+      const selected = '/work trees/maestro demo/';
+      const reported = '/work trees/maestro demo';
+      final runner = _RecordingRunner(_success('$reported\n'));
+      final validator = _validator(runner, ProjectDirectoryState.accessible);
 
-        final result = await validator.validate(ProjectFolder.parse(selected));
+      final result = await validator.validate(ProjectFolder.parse(selected));
 
-        expect(result.availability, ProjectAvailability.available);
-        expect(result.canonicalFolder?.path, reported);
-      },
-    );
+      expect(result.availability, ProjectAvailability.available);
+      expect(result.canonicalFolder?.path, reported);
+    });
 
     test(
       'GivenWindowsPathFormatting_WhenValidated_ThenComparisonIsInsensitive',
@@ -232,8 +216,7 @@ void main() {
       (name: 'arbitrary', stderr: 'fatal: sensitive repository detail'),
       (
         name: 'embeddedKnownDiagnostic',
-        stderr:
-            'prefix fatal: not a git repository (or any of the parent directories): .git',
+        stderr: 'prefix fatal: not a git repository (or any of the parent directories): .git',
       ),
     ]) {
       test('Given${failure.name}Nonzero_WhenValidated_ThenTransient', () async {

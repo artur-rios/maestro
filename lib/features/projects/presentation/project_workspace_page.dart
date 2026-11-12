@@ -15,21 +15,19 @@ import 'package:maestro/features/workflows/presentation/workflow_controller.dart
 import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
 import 'package:material_ui/material_ui.dart';
 
-typedef RunStartWorkspaceBuilder =
-    Widget Function(
-      BuildContext context,
-      String actorId,
-      ProjectRecord project,
-    );
+typedef RunStartWorkspaceBuilder = Widget Function(
+  BuildContext context,
+  String actorId,
+  ProjectRecord project,
+);
 
-typedef WorkbenchTerminalBuilder =
-    Widget Function(
-      BuildContext context,
-      String actorId,
-      ProjectRecord? availableProject,
-      ProjectTerminalDrawerController drawerController,
-      VoidCallback onWorkbenchFocusRequested,
-    );
+typedef WorkbenchTerminalBuilder = Widget Function(
+  BuildContext context,
+  String actorId,
+  ProjectRecord? availableProject,
+  ProjectTerminalDrawerController drawerController,
+  VoidCallback onWorkbenchFocusRequested,
+);
 
 enum _WorkbenchDestination { tasks, automations, health }
 

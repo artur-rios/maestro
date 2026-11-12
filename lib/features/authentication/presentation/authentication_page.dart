@@ -11,11 +11,10 @@ import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
 import 'package:material_ui/material_ui.dart';
 
-typedef AuthenticatedWorkspaceBuilder =
-    Widget Function(
-      BuildContext context,
-      ValueChanged<String?> onWorkspaceLabelChanged,
-    );
+typedef AuthenticatedWorkspaceBuilder = Widget Function(
+  BuildContext context,
+  ValueChanged<String?> onWorkspaceLabelChanged,
+);
 
 final class AuthenticationPage extends ConsumerStatefulWidget {
   const AuthenticationPage({

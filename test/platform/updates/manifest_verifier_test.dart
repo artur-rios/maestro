@@ -26,8 +26,7 @@ void main() {
               'platform': 'windows',
               'sha256': 'a' * 64,
               'size': 42,
-              'url':
-                  'https://github.com/artur-rios/maestro/releases/download/v0.2.0/maestro.zip',
+              'url': 'https://github.com/artur-rios/maestro/releases/download/v0.2.0/maestro.zip',
             },
           ],
           'keyExpiresAt': '2030-01-01T00:00:00.000Z',

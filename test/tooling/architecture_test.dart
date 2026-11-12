@@ -61,17 +61,12 @@ void main() {
   );
 
   final mutableReleaseAssets = <String, String>{
-    'GitHubContinuous':
-        'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
-    'GitHubLatest':
-        'https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage',
-    'ExternalContinuous':
-        'https://downloads.example.com/tools/releases/download/continuous/tool-x86_64',
-    'ExternalLatest':
-        'http://downloads.example.com/tools/releases/latest/download/tool-x86_64',
+    'GitHubContinuous': 'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
+    'GitHubLatest': 'https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage',
+    'ExternalContinuous': 'https://downloads.example.com/tools/releases/download/continuous/tool-x86_64',
+    'ExternalLatest': 'http://downloads.example.com/tools/releases/latest/download/tool-x86_64',
     'ArbitraryMutable': 'https://downloads.example.com/tool/latest/tool-x86_64',
-    'PrereleaseVersion':
-        'https://github.com/example/tool/releases/download/1.9.2-rc.1/tool-x86_64',
+    'PrereleaseVersion': 'https://github.com/example/tool/releases/download/1.9.2-rc.1/tool-x86_64',
   };
   for (final MapEntry(key: scenario, value: mutableUrl)
       in mutableReleaseAssets.entries) {

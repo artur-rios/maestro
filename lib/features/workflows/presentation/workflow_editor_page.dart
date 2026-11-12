@@ -760,10 +760,8 @@ final class _StepRow extends ConsumerWidget {
   static String _guidance(AgentRowState? state) {
     if (state == null) return 'Select an agent CLI and model.';
     return switch (state.code) {
-      AgentRowStateCode.unauthenticated =>
-        'Authenticate in the project terminal (embedded terminal when available), then refresh. Maestro never starts login.',
-      AgentRowStateCode.cliOnly =>
-        'This is a documented CLI alias; account access is checked when the step starts.',
+      AgentRowStateCode.unauthenticated => 'Authenticate in the project terminal (embedded terminal when available), then refresh. Maestro never starts login.',
+      AgentRowStateCode.cliOnly => 'This is a documented CLI alias; account access is checked when the step starts.',
       _ => state.guidance,
     };
   }

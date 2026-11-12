@@ -22,38 +22,32 @@ void main() {
 
   tearDown(() => database.close());
 
-  test(
-    'GivenCompletedDelivery_WhenReloading_ThenPullRequestAuditAndMergeEvidenceRemain',
-    () async {
-      final record = _completedRecord();
+  test('GivenCompletedDelivery_WhenReloading_ThenPullRequestAuditAndMergeEvidenceRemain', () async {
+    final record = _completedRecord();
 
-      await repository.save(record);
+    await repository.save(record);
 
-      final reloaded = await repository.findByRunId(record.runId);
-      expect(reloaded, isNotNull);
-      expect(reloaded!.pullRequestNumber, 42);
-      expect(
-        reloaded.pullRequestUrl,
-        'https://github.com/acme/maestro/pull/42',
-      );
-      expect(reloaded.reviewerIdentity, 'reviewer-model');
-      expect(reloaded.reviewOutcome, DeliveryReviewOutcome.approved);
-      expect(reloaded.findings, <String>['No blocking findings']);
-      expect(reloaded.mergeCommit, 'merge-commit');
-      expect(reloaded.issueClosed, isTrue);
-      expect(reloaded.branchDeleted, isTrue);
-      expect(reloaded.createdAt, DateTime.utc(2026, 8, 10, 12));
-      expect(reloaded.updatedAt, DateTime.utc(2026, 8, 10, 12, 5));
-      expect(reloaded.completedAt, DateTime.utc(2026, 8, 10, 12, 5));
-      final audit = await database
-          .customSelect(
-            "SELECT action, target, outcome FROM audit_events WHERE action = 'autonomousDelivery'",
-          )
-          .getSingle();
-      expect(audit.read<String>('target'), 'run-1');
-      expect(audit.read<String>('outcome'), 'completed');
-    },
-  );
+    final reloaded = await repository.findByRunId(record.runId);
+    expect(reloaded, isNotNull);
+    expect(reloaded!.pullRequestNumber, 42);
+    expect(reloaded.pullRequestUrl, 'https://github.com/acme/maestro/pull/42');
+    expect(reloaded.reviewerIdentity, 'reviewer-model');
+    expect(reloaded.reviewOutcome, DeliveryReviewOutcome.approved);
+    expect(reloaded.findings, <String>['No blocking findings']);
+    expect(reloaded.mergeCommit, 'merge-commit');
+    expect(reloaded.issueClosed, isTrue);
+    expect(reloaded.branchDeleted, isTrue);
+    expect(reloaded.createdAt, DateTime.utc(2026, 8, 10, 12));
+    expect(reloaded.updatedAt, DateTime.utc(2026, 8, 10, 12, 5));
+    expect(reloaded.completedAt, DateTime.utc(2026, 8, 10, 12, 5));
+    final audit = await database
+        .customSelect(
+          "SELECT action, target, outcome FROM audit_events WHERE action = 'autonomousDelivery'",
+        )
+        .getSingle();
+    expect(audit.read<String>('target'), 'run-1');
+    expect(audit.read<String>('outcome'), 'completed');
+  });
 
   test(
     'GivenFailedDelivery_WhenReloading_ThenPullRequestContextIsRetained',

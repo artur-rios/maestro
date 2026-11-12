@@ -41,9 +41,8 @@ ThemeData maestroTheme(Brightness brightness) {
     extensions: <ThemeExtension<dynamic>>[tokens],
     scaffoldBackgroundColor: colorScheme.surface,
     dividerTheme: DividerThemeData(color: tokens.subtleBorder),
-    textTheme: ThemeData(
-      brightness: brightness,
-    ).textTheme.copyWith(bodySmall: metadataText, labelSmall: metadataText),
+    textTheme: ThemeData(brightness: brightness).textTheme
+        .copyWith(bodySmall: metadataText, labelSmall: metadataText),
     cardTheme: CardThemeData(
       color: tokens.navigatorSurface,
       elevation: 0,

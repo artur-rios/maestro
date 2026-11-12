@@ -89,9 +89,9 @@ void main() {
       tester.binding.focusManager.primaryFocus?.unfocus();
       await tester.pump();
       final workflowElement = tester.element(find.byType(WorkflowEditorPage));
-      ProviderScope.containerOf(
-        workflowElement,
-      ).read(workflowControllerProvider.notifier).create(WorkflowKind.oneOff);
+      ProviderScope.containerOf(workflowElement)
+          .read(workflowControllerProvider.notifier)
+          .create(WorkflowKind.oneOff);
       await tester.pump();
       await tester.pump();
 

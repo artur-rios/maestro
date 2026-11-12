@@ -105,25 +105,22 @@ void main() {
     },
   );
 
-  test(
-    'GivenMatchingPrereleaseProjections_WhenValidated_ThenReturnsCanonicalValues',
-    () async {
-      final result = await Process.run(_dartExecutable.path, <String>[
-        'tooling/release/validate_release_projections.dart',
-        '1.2.3-rc.4',
-        '--core',
-        '1.2.3',
-        '--windows',
-        '1.2.3.50004',
-        '--debian',
-        '1.2.3~rc.4',
-      ]);
+  test('GivenMatchingPrereleaseProjections_WhenValidated_ThenReturnsCanonicalValues', () async {
+    final result = await Process.run(_dartExecutable.path, <String>[
+      'tooling/release/validate_release_projections.dart',
+      '1.2.3-rc.4',
+      '--core',
+      '1.2.3',
+      '--windows',
+      '1.2.3.50004',
+      '--debian',
+      '1.2.3~rc.4',
+    ]);
 
-      expect(result.exitCode, 0, reason: '${result.stderr}');
-      expect('${result.stdout}', contains('windows_version=1.2.3.50004'));
-      expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
-    },
-  );
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    expect('${result.stdout}', contains('windows_version=1.2.3.50004'));
+    expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
+  });
 
   test(
     'GivenNoncanonicalOrMismatchedProjections_WhenValidated_ThenFailsClosed',

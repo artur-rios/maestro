@@ -72,48 +72,42 @@ void main() {
     },
   );
 
-  test(
-    'GivenEqualClockEdits_WhenRevisionChanges_ThenStaleThirdEditIsRejectedUnchanged',
-    () async {
-      final created = _definition();
-      await repository.save(definition: created, expectedRevision: null);
-      final first = _definition(
-        revision: 2,
-        name: 'First',
-        updatedAt: created.updatedAt,
-      );
-      final second = _definition(
-        revision: 3,
-        name: 'Second',
-        updatedAt: created.updatedAt,
-      );
-      final stale = _definition(
-        revision: 3,
-        name: 'Stale',
-        updatedAt: created.updatedAt,
-      );
+  test('GivenEqualClockEdits_WhenRevisionChanges_ThenStaleThirdEditIsRejectedUnchanged', () async {
+    final created = _definition();
+    await repository.save(definition: created, expectedRevision: null);
+    final first = _definition(
+      revision: 2,
+      name: 'First',
+      updatedAt: created.updatedAt,
+    );
+    final second = _definition(
+      revision: 3,
+      name: 'Second',
+      updatedAt: created.updatedAt,
+    );
+    final stale = _definition(
+      revision: 3,
+      name: 'Stale',
+      updatedAt: created.updatedAt,
+    );
 
-      expect(
-        await repository.save(definition: first, expectedRevision: 1),
-        isA<WorkflowRepositorySaved>(),
-      );
-      expect(
-        await repository.save(definition: second, expectedRevision: 2),
-        isA<WorkflowRepositorySaved>(),
-      );
-      expect(
-        await repository.save(definition: stale, expectedRevision: 2),
-        isA<WorkflowRepositoryRevisionConflict>(),
-      );
+    expect(
+      await repository.save(definition: first, expectedRevision: 1),
+      isA<WorkflowRepositorySaved>(),
+    );
+    expect(
+      await repository.save(definition: second, expectedRevision: 2),
+      isA<WorkflowRepositorySaved>(),
+    );
+    expect(
+      await repository.save(definition: stale, expectedRevision: 2),
+      isA<WorkflowRepositoryRevisionConflict>(),
+    );
 
-      final actual = await repository.findById(created.id);
-      expect(actual, _matchesDefinition(second));
-      expect(actual!.steps.map((step) => step.id), [
-        'step-plan',
-        'step-execute',
-      ]);
-    },
-  );
+    final actual = await repository.findById(created.id);
+    expect(actual, _matchesDefinition(second));
+    expect(actual!.steps.map((step) => step.id), ['step-plan', 'step-execute']);
+  });
 
   test(
     'GivenInvalidReplacement_WhenEdited_ThenWholeAggregateRollsBack',
@@ -328,13 +322,11 @@ WorkflowStep _step(
   model: model,
 );
 
-Future<void> _insertProject(
-  MaestroDatabase database,
-  String id,
-) => database.customStatement(
-  'INSERT INTO projects (id, name, normalized_name, folder_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-  [id, id, id, r'C:\private\source', 1786000000, 1786000000],
-);
+Future<void> _insertProject(MaestroDatabase database, String id) =>
+    database.customStatement(
+      'INSERT INTO projects (id, name, normalized_name, folder_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, id, id, r'C:\private\source', 1786000000, 1786000000],
+    );
 
 Matcher _matchesDefinition(
   WorkflowDefinition expected, {

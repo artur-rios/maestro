@@ -19,150 +19,139 @@ import 'package:path/path.dart' as p;
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'GivenFixtureAgentClis_WhenDiscoveringSavingAndPreflighting_ThenRealProcessBoundariesStayDeterministic',
-    () async {
-      if (!Platform.isWindows && !Platform.isLinux) return;
+  test('GivenFixtureAgentClis_WhenDiscoveringSavingAndPreflighting_ThenRealProcessBoundariesStayDeterministic', () async {
+    if (!Platform.isWindows && !Platform.isLinux) return;
 
-      final sandbox = await _createSandbox();
-      addTearDown(() async {
-        if (await sandbox.exists()) await sandbox.delete(recursive: true);
-      });
-      await _writeFixtureClis(sandbox);
-      final fixturePath = Platform.isWindows
-          ? '${sandbox.path};${Platform.environment['PATH'] ?? ''}'
-          : sandbox.path;
-      final resolver = ExecutableResolver(path: fixturePath);
-      const runner = ProcessCommandRunner();
-      final adapters = [
-        ClaudeCodeAdapter(runner, resolver: resolver),
-        CodexAdapter(runner, resolver: resolver),
-        OpenCodeAdapter(runner, resolver: resolver),
-      ];
-      final database = MaestroDatabase(NativeDatabase.memory());
-      addTearDown(database.close);
-      final repository = DriftWorkflowRepository(database);
-      final design = WorkflowDesignService(
-        repository: repository,
-        projectReadiness: const _AvailableProjects(),
-        clock: () => DateTime.utc(2026, 8, 6),
-        newId: _Ids().next,
-      );
-      final service = AgentConfigurationService(
-        adapters: adapters,
-        workflowDesignService: design,
-      );
+    final sandbox = await _createSandbox();
+    addTearDown(() async {
+      if (await sandbox.exists()) await sandbox.delete(recursive: true);
+    });
+    await _writeFixtureClis(sandbox);
+    final fixturePath = Platform.isWindows
+        ? '${sandbox.path};${Platform.environment['PATH'] ?? ''}'
+        : sandbox.path;
+    final resolver = ExecutableResolver(path: fixturePath);
+    const runner = ProcessCommandRunner();
+    final adapters = [
+      ClaudeCodeAdapter(runner, resolver: resolver),
+      CodexAdapter(runner, resolver: resolver),
+      OpenCodeAdapter(runner, resolver: resolver),
+    ];
+    final database = MaestroDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftWorkflowRepository(database);
+    final design = WorkflowDesignService(
+      repository: repository,
+      projectReadiness: const _AvailableProjects(),
+      clock: () => DateTime.utc(2026, 8, 6),
+      newId: _Ids().next,
+    );
+    final service = AgentConfigurationService(
+      adapters: adapters,
+      workflowDesignService: design,
+    );
 
-      final catalog = await service.refreshAll();
+    final catalog = await service.refreshAll();
 
-      expect(
-        catalog.forKind(AgentCliKind.claudeCode).models,
-        containsAll(<String>['sonnet', 'opus']),
-      );
-      expect(
-        catalog.forKind(AgentCliKind.claudeCode).modelVerification,
-        AgentModelVerification.cliOnly,
-      );
-      final codexCatalog = catalog.forKind(AgentCliKind.codex);
-      expect(codexCatalog.session, AgentCliSession.authenticated);
-      expect(
-        codexCatalog.models,
-        <String>['gpt-5.3-codex', 'gpt-5.2-codex'],
-        reason:
-            'version=${codexCatalog.version}; guidance=${codexCatalog.guidance}',
-      );
-      expect(catalog.forKind(AgentCliKind.openCode).models, <String>[
-        'openai/gpt-5.3',
-      ]);
+    expect(
+      catalog.forKind(AgentCliKind.claudeCode).models,
+      containsAll(<String>['sonnet', 'opus']),
+    );
+    expect(
+      catalog.forKind(AgentCliKind.claudeCode).modelVerification,
+      AgentModelVerification.cliOnly,
+    );
+    final codexCatalog = catalog.forKind(AgentCliKind.codex);
+    expect(codexCatalog.session, AgentCliSession.authenticated);
+    expect(
+      codexCatalog.models,
+      <String>['gpt-5.3-codex', 'gpt-5.2-codex'],
+      reason:
+          'version=${codexCatalog.version}; guidance=${codexCatalog.guidance}',
+    );
+    expect(catalog.forKind(AgentCliKind.openCode).models, <String>[
+      'openai/gpt-5.3',
+    ]);
 
-      var draft = WorkflowDraft.initial(kind: WorkflowKind.reusable)
-          .copyWith(
-            name: 'Fixture delivery',
-            unitType: WorkItemType.githubIssue,
-          )
-          .addStep(
-            const WorkflowDraftStep(
-              rowKey: 'repeat-codex',
-              kind: WorkflowStepKind.custom,
-              name: 'Repeat Codex',
-            ),
-          )
-          .assignStep(
-            'default-plan',
-            AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
-          )
-          .assignStep(
-            'default-execute',
-            AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.3-codex'),
-          )
-          .assignStep(
-            'default-review',
-            AgentAssignment(
-              kind: AgentCliKind.openCode,
-              model: 'openai/gpt-5.3',
-            ),
-          )
-          .assignStep(
-            'repeat-codex',
-            AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.3-codex'),
-          );
-      final completed = service.evaluateConfiguration(draft, catalog);
-      expect(completed, isA<AgentConfigurationCompleted>());
-      draft = (completed as AgentConfigurationCompleted).draft;
-      final saved = await design.save(draft, requireAgentConfiguration: true);
-      expect(saved, isA<WorkflowSaved>());
-      final definition = (saved as WorkflowSaved).definition;
-      final reloaded = await repository.findById(definition.id);
-      expect(
-        reloaded!.steps.map((step) => (step.cli, step.model)),
-        <(String?, String?)>[
-          ('claude-code', 'sonnet'),
-          ('codex', 'gpt-5.3-codex'),
-          ('opencode', 'openai/gpt-5.3'),
-          ('codex', 'gpt-5.3-codex'),
-        ],
-      );
-      final ready = await service.executionPreflight(
-        WorkflowDraft.fromDefinition(reloaded),
-      );
-      expect(ready.isReady, isTrue);
+    var draft = WorkflowDraft.initial(kind: WorkflowKind.reusable)
+        .copyWith(name: 'Fixture delivery', unitType: WorkItemType.githubIssue)
+        .addStep(
+          const WorkflowDraftStep(
+            rowKey: 'repeat-codex',
+            kind: WorkflowStepKind.custom,
+            name: 'Repeat Codex',
+          ),
+        )
+        .assignStep(
+          'default-plan',
+          AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
+        )
+        .assignStep(
+          'default-execute',
+          AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.3-codex'),
+        )
+        .assignStep(
+          'default-review',
+          AgentAssignment(kind: AgentCliKind.openCode, model: 'openai/gpt-5.3'),
+        )
+        .assignStep(
+          'repeat-codex',
+          AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.3-codex'),
+        );
+    final completed = service.evaluateConfiguration(draft, catalog);
+    expect(completed, isA<AgentConfigurationCompleted>());
+    draft = (completed as AgentConfigurationCompleted).draft;
+    final saved = await design.save(draft, requireAgentConfiguration: true);
+    expect(saved, isA<WorkflowSaved>());
+    final definition = (saved as WorkflowSaved).definition;
+    final reloaded = await repository.findById(definition.id);
+    expect(
+      reloaded!.steps.map((step) => (step.cli, step.model)),
+      <(String?, String?)>[
+        ('claude-code', 'sonnet'),
+        ('codex', 'gpt-5.3-codex'),
+        ('opencode', 'openai/gpt-5.3'),
+        ('codex', 'gpt-5.3-codex'),
+      ],
+    );
+    final ready = await service.executionPreflight(
+      WorkflowDraft.fromDefinition(reloaded),
+    );
+    expect(ready.isReady, isTrue);
 
-      final mode = File(p.join(sandbox.path, 'opencode.mode'));
-      await mode.writeAsString('unauthenticated');
-      final unauthenticated = await adapters.last.discover();
-      expect(unauthenticated.session, AgentCliSession.unauthenticated);
-      await mode.writeAsString('discovery-failure');
-      final failedDiscovery = await adapters.last.discover();
-      expect(failedDiscovery.session, AgentCliSession.unverified);
-      expect(failedDiscovery.models, isEmpty);
-      final blocked = service.evaluateConfiguration(
-        WorkflowDraft.fromDefinition(reloaded),
-        AgentCatalogSnapshot(<AgentCliCatalog>[
-          catalog.forKind(AgentCliKind.claudeCode),
-          catalog.forKind(AgentCliKind.codex),
-          failedDiscovery,
-        ]),
-      );
-      expect(
-        blocked.states.map((state) => state.code),
-        contains(AgentRowStateCode.catalogUnverified),
-      );
-      expect(
-        (await repository.findById(definition.id))!.steps[2].model,
-        'openai/gpt-5.3',
-      );
+    final mode = File(p.join(sandbox.path, 'opencode.mode'));
+    await mode.writeAsString('unauthenticated');
+    final unauthenticated = await adapters.last.discover();
+    expect(unauthenticated.session, AgentCliSession.unauthenticated);
+    await mode.writeAsString('discovery-failure');
+    final failedDiscovery = await adapters.last.discover();
+    expect(failedDiscovery.session, AgentCliSession.unverified);
+    expect(failedDiscovery.models, isEmpty);
+    final blocked = service.evaluateConfiguration(
+      WorkflowDraft.fromDefinition(reloaded),
+      AgentCatalogSnapshot(<AgentCliCatalog>[
+        catalog.forKind(AgentCliKind.claudeCode),
+        catalog.forKind(AgentCliKind.codex),
+        failedDiscovery,
+      ]),
+    );
+    expect(
+      blocked.states.map((state) => state.code),
+      contains(AgentRowStateCode.catalogUnverified),
+    );
+    expect(
+      (await repository.findById(definition.id))!.steps[2].model,
+      'openai/gpt-5.3',
+    );
 
-      final emptyDirectory = await Directory(
-        p.join(sandbox.path, 'empty'),
-      ).create();
-      final missing = await ClaudeCodeAdapter(
-        runner,
-        resolver: ExecutableResolver(path: emptyDirectory.path),
-      ).discover();
-      expect(missing.installation, AgentCliInstallation.missing);
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    final emptyDirectory = await Directory(p.join(sandbox.path, 'empty'))
+        .create();
+    final missing = await ClaudeCodeAdapter(
+      runner,
+      resolver: ExecutableResolver(path: emptyDirectory.path),
+    ).discover();
+    expect(missing.installation, AgentCliInstallation.missing);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 Future<Directory> _createSandbox() async {

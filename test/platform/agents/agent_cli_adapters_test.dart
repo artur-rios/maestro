@@ -158,12 +158,10 @@ void main() {
   });
 
   group('OpenCodeAdapter', () {
-    test(
-      'GivenAuthenticatedProviders_WhenDiscovered_ThenOnlyTheirSafeModelsRemain',
-      () async {
-        final runner = _QueueRunner(<CommandResult>[
-          _ok('opencode version 1.1.2'),
-          _ok('''
+    test('GivenAuthenticatedProviders_WhenDiscovered_ThenOnlyTheirSafeModelsRemain', () async {
+      final runner = _QueueRunner(<CommandResult>[
+        _ok('opencode version 1.1.2'),
+        _ok('''
 \u001b[32m┌  Credentials ~/.local/share/opencode/auth.json\u001b[0m
 │
 ●  OpenCode Zen api
@@ -178,39 +176,32 @@ void main() {
 │
 └  1 environment variable
 '''),
-          _ok(
-            'opencode/gpt-5\nanthropic/claude-sonnet-4-5\ngroq/llama\ngoogle/gemini\nopencode/bad\u0001\nopencode/${'x' * 300}',
-          ),
-        ]);
-        final catalog = await OpenCodeAdapter(
-          runner,
-          resolver: _resolved(),
-        ).discover();
-        expect(catalog.session, AgentCliSession.authenticated);
-        expect(
-          catalog.modelVerification,
-          AgentModelVerification.accountVerified,
-        );
-        expect(catalog.models, <String>[
-          'opencode/gpt-5',
-          'anthropic/claude-sonnet-4-5',
-          'groq/llama',
-        ]);
-        expect(runner.requests.last.arguments, <String>['models']);
-      },
-    );
+        _ok(
+          'opencode/gpt-5\nanthropic/claude-sonnet-4-5\ngroq/llama\ngoogle/gemini\nopencode/bad\u0001\nopencode/${'x' * 300}',
+        ),
+      ]);
+      final catalog = await OpenCodeAdapter(
+        runner,
+        resolver: _resolved(),
+      ).discover();
+      expect(catalog.session, AgentCliSession.authenticated);
+      expect(catalog.modelVerification, AgentModelVerification.accountVerified);
+      expect(catalog.models, <String>[
+        'opencode/gpt-5',
+        'anthropic/claude-sonnet-4-5',
+        'groq/llama',
+      ]);
+      expect(runner.requests.last.arguments, <String>['models']);
+    });
 
-    test(
-      'GivenNoAuthenticatedOpenCodeProviders_WhenDiscovered_ThenUnauthenticated',
-      () async {
-        final catalog = await OpenCodeAdapter(
-          _QueueRunner(<CommandResult>[_ok('1.1.2'), _ok('No providers')]),
-          resolver: _resolved(),
-        ).discover();
-        expect(catalog.session, AgentCliSession.unauthenticated);
-        expect(catalog.models, isEmpty);
-      },
-    );
+    test('GivenNoAuthenticatedOpenCodeProviders_WhenDiscovered_ThenUnauthenticated', () async {
+      final catalog = await OpenCodeAdapter(
+        _QueueRunner(<CommandResult>[_ok('1.1.2'), _ok('No providers')]),
+        resolver: _resolved(),
+      ).discover();
+      expect(catalog.session, AgentCliSession.unauthenticated);
+      expect(catalog.models, isEmpty);
+    });
 
     test(
       'GivenOpenCodeModelFailure_WhenDiscovered_ThenSessionIsUnverified',
@@ -292,38 +283,35 @@ void main() {
   });
 
   group('CodexAdapter', () {
-    test(
-      'GivenExactCodexLoginOnStdoutWithHostNoise_WhenDiscovered_ThenAuthenticationIsAccepted',
-      () async {
-        final catalog = await CodexAdapter(
-          _QueueRunner(<CommandResult>[
-            _ok('codex-cli 0.114.0'),
-            const CommandResult(
-              exitCode: 0,
-              stdout: 'Logged in using ChatGPT',
-              stderr: _benignPowerShellProgress,
-            ),
-          ]),
-          resolver: _resolved(),
-          sessionRunner: _ScriptedSessionRunner(<Object?>[
-            jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
-            jsonEncode(<String, Object?>{
-              'id': 2,
-              'result': <String, Object?>{
-                'data': <Object>[
-                  <String, String>{'id': 'gpt-5.2-codex'},
-                ],
-                'nextCursor': null,
-              },
-            }),
-          ]),
-        ).discover();
+    test('GivenExactCodexLoginOnStdoutWithHostNoise_WhenDiscovered_ThenAuthenticationIsAccepted', () async {
+      final catalog = await CodexAdapter(
+        _QueueRunner(<CommandResult>[
+          _ok('codex-cli 0.114.0'),
+          const CommandResult(
+            exitCode: 0,
+            stdout: 'Logged in using ChatGPT',
+            stderr: _benignPowerShellProgress,
+          ),
+        ]),
+        resolver: _resolved(),
+        sessionRunner: _ScriptedSessionRunner(<Object?>[
+          jsonEncode(<String, Object>{'id': 1, 'result': <String, Object>{}}),
+          jsonEncode(<String, Object?>{
+            'id': 2,
+            'result': <String, Object?>{
+              'data': <Object>[
+                <String, String>{'id': 'gpt-5.2-codex'},
+              ],
+              'nextCursor': null,
+            },
+          }),
+        ]),
+      ).discover();
 
-        expect(catalog.session, AgentCliSession.authenticated);
-        expect(catalog.models, <String>['gpt-5.2-codex']);
-        expect(catalog.guidance, isNot(contains('CLIXML')));
-      },
-    );
+      expect(catalog.session, AgentCliSession.authenticated);
+      expect(catalog.models, <String>['gpt-5.2-codex']);
+      expect(catalog.guidance, isNot(contains('CLIXML')));
+    });
 
     test(
       'GivenPagedNotifications_WhenDiscovered_ThenHandshakePrecedesEveryPage',
@@ -493,105 +481,98 @@ void main() {
       },
     );
 
-    test(
-      'GivenUntrustedCodexLoginResults_WhenDiscovered_ThenDiscoveryRemainsUnverified',
-      () async {
-        final cases = <String, CommandResult>{
-          'timeout': const CommandResult(
-            exitCode: null,
-            stdout: '',
-            stderr: 'token=secret person@example.com',
-            failureKind: CommandFailureKind.timeout,
-          ),
-          'start failure': const CommandResult(
-            exitCode: null,
-            stdout: '',
-            stderr: 'start failed token=secret',
-            failureKind: CommandFailureKind.startFailure,
-          ),
-          'not found after begin': const CommandResult(
-            exitCode: null,
-            stdout: '',
-            stderr: 'path person@example.com',
-            failureKind: CommandFailureKind.notFound,
-          ),
-          'permission denied after begin': const CommandResult(
-            exitCode: null,
-            stdout: '',
-            stderr: 'denied token=secret',
-            failureKind: CommandFailureKind.permissionDenied,
-          ),
-          'stdout truncated': const CommandResult(
-            exitCode: 0,
-            stdout: 'Logged in using ChatGPT',
-            stderr: '',
-            stdoutTruncated: true,
-          ),
-          'stderr truncated': const CommandResult(
-            exitCode: 0,
-            stdout: '',
-            stderr: 'Logged in using ChatGPT',
-            stderrTruncated: true,
-          ),
-          'nonzero ambiguous': const CommandResult(
-            exitCode: 7,
-            stdout: '',
-            stderr: 'Not logged in: person@example.com',
-          ),
-          'malformed': const CommandResult(
-            exitCode: 0,
-            stdout: 'status=unknown token=secret',
-            stderr: '',
-          ),
-          'noisy': const CommandResult(
-            exitCode: 0,
-            stdout: 'Logged in using ChatGPT',
-            stderr: 'arbitrary host warning person@example.com',
-          ),
-        };
+    test('GivenUntrustedCodexLoginResults_WhenDiscovered_ThenDiscoveryRemainsUnverified', () async {
+      final cases = <String, CommandResult>{
+        'timeout': const CommandResult(
+          exitCode: null,
+          stdout: '',
+          stderr: 'token=secret person@example.com',
+          failureKind: CommandFailureKind.timeout,
+        ),
+        'start failure': const CommandResult(
+          exitCode: null,
+          stdout: '',
+          stderr: 'start failed token=secret',
+          failureKind: CommandFailureKind.startFailure,
+        ),
+        'not found after begin': const CommandResult(
+          exitCode: null,
+          stdout: '',
+          stderr: 'path person@example.com',
+          failureKind: CommandFailureKind.notFound,
+        ),
+        'permission denied after begin': const CommandResult(
+          exitCode: null,
+          stdout: '',
+          stderr: 'denied token=secret',
+          failureKind: CommandFailureKind.permissionDenied,
+        ),
+        'stdout truncated': const CommandResult(
+          exitCode: 0,
+          stdout: 'Logged in using ChatGPT',
+          stderr: '',
+          stdoutTruncated: true,
+        ),
+        'stderr truncated': const CommandResult(
+          exitCode: 0,
+          stdout: '',
+          stderr: 'Logged in using ChatGPT',
+          stderrTruncated: true,
+        ),
+        'nonzero ambiguous': const CommandResult(
+          exitCode: 7,
+          stdout: '',
+          stderr: 'Not logged in: person@example.com',
+        ),
+        'malformed': const CommandResult(
+          exitCode: 0,
+          stdout: 'status=unknown token=secret',
+          stderr: '',
+        ),
+        'noisy': const CommandResult(
+          exitCode: 0,
+          stdout: 'Logged in using ChatGPT',
+          stderr: 'arbitrary host warning person@example.com',
+        ),
+      };
 
-        for (final entry in cases.entries) {
-          final runner = _QueueRunner(<CommandResult>[
-            _ok('0.114.0'),
-            entry.value,
-          ]);
-          final catalog = await CodexAdapter(
-            runner,
-            resolver: _resolved(),
-          ).discover();
+      for (final entry in cases.entries) {
+        final runner = _QueueRunner(<CommandResult>[
+          _ok('0.114.0'),
+          entry.value,
+        ]);
+        final catalog = await CodexAdapter(
+          runner,
+          resolver: _resolved(),
+        ).discover();
 
-          expect(
-            catalog.installation,
-            AgentCliInstallation.available,
-            reason: entry.key,
-          );
-          expect(
-            catalog.session,
-            AgentCliSession.unverified,
-            reason: entry.key,
-          );
-          expect(
-            catalog.modelVerification,
-            AgentModelVerification.unverified,
-            reason: entry.key,
-          );
-          expect(catalog.models, isEmpty, reason: entry.key);
-          expect(catalog.guidance, contains('Retry'), reason: entry.key);
-          expect(
-            catalog.guidance,
-            isNot(
-              anyOf(
-                contains('secret'),
-                contains('@'),
-                contains('Not logged in:'),
-              ),
+        expect(
+          catalog.installation,
+          AgentCliInstallation.available,
+          reason: entry.key,
+        );
+        expect(catalog.session, AgentCliSession.unverified, reason: entry.key);
+        expect(
+          catalog.modelVerification,
+          AgentModelVerification.unverified,
+          reason: entry.key,
+        );
+        expect(catalog.models, isEmpty, reason: entry.key);
+        expect(catalog.guidance, contains('Retry'), reason: entry.key);
+        expect(
+          catalog.guidance,
+          isNot(
+            anyOf(
+              contains('secret'),
+              contains('@'),
+              contains('Not logged in:'),
             ),
-            reason: entry.key,
-          );
-          expect(runner.requests, hasLength(2), reason: entry.key);
-        }
-      },
-    );
+          ),
+          reason: entry.key,
+        );
+        expect(runner.requests, hasLength(2), reason: entry.key);
+      }
+    });
 
     test(
       'GivenCodexTimeout_WhenDiscovered_ThenFailureIsTypedAndSanitized',
@@ -639,109 +620,94 @@ void main() {
       },
     );
 
-    test(
-      'GivenNegativeCodexStdoutAndPositiveLookingStderr_WhenDiscovered_ThenAuthenticationIsRejected',
-      () async {
-        final catalog = await CodexAdapter(
-          _QueueRunner(<CommandResult>[
-            _ok('0.114.0'),
-            const CommandResult(
-              exitCode: 0,
-              stdout: 'Not logged in',
-              stderr: 'Logged in using ChatGPT',
+    test('GivenNegativeCodexStdoutAndPositiveLookingStderr_WhenDiscovered_ThenAuthenticationIsRejected', () async {
+      final catalog = await CodexAdapter(
+        _QueueRunner(<CommandResult>[
+          _ok('0.114.0'),
+          const CommandResult(
+            exitCode: 0,
+            stdout: 'Not logged in',
+            stderr: 'Logged in using ChatGPT',
+          ),
+        ]),
+        resolver: _resolved(),
+        sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+      ).discover();
+
+      expect(catalog.session, AgentCliSession.unverified);
+      expect(catalog.models, isEmpty);
+    });
+
+    test('GivenPositiveCodexStdoutAndNegativeStderr_WhenDiscovered_ThenAuthenticationIsRejected', () async {
+      final catalog = await CodexAdapter(
+        _QueueRunner(<CommandResult>[
+          _ok('0.114.0'),
+          const CommandResult(
+            exitCode: 0,
+            stdout: 'Logged in using ChatGPT',
+            stderr: 'Not logged in',
+          ),
+        ]),
+        resolver: _resolved(),
+        sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+      ).discover();
+
+      expect(catalog.session, AgentCliSession.unverified);
+      expect(catalog.models, isEmpty);
+    });
+
+    test('GivenPositiveCodexStdoutAndArbitraryStderr_WhenDiscovered_ThenAuthenticationIsRejected', () async {
+      final catalog = await CodexAdapter(
+        _QueueRunner(<CommandResult>[
+          _ok('0.114.0'),
+          const CommandResult(
+            exitCode: 0,
+            stdout: 'Logged in using ChatGPT',
+            stderr: 'host warning',
+          ),
+        ]),
+        resolver: _resolved(),
+        sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+      ).discover();
+
+      expect(catalog.session, AgentCliSession.unverified);
+      expect(catalog.guidance, isNot(contains('host warning')));
+    });
+
+    test('GivenPositiveCodexStdoutAndStatusBearingClixml_WhenDiscovered_ThenAuthenticationIsRejected', () async {
+      final catalog = await CodexAdapter(
+        _QueueRunner(<CommandResult>[
+          _ok('0.114.0'),
+          CommandResult(
+            exitCode: 0,
+            stdout: 'Logged in using ChatGPT',
+            stderr: _benignPowerShellProgress.replaceFirst(
+              'Preparing modules for first use.',
+              'Not logged in',
             ),
-          ]),
-          resolver: _resolved(),
-          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
-        ).discover();
+          ),
+        ]),
+        resolver: _resolved(),
+        sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
+      ).discover();
 
-        expect(catalog.session, AgentCliSession.unverified);
-        expect(catalog.models, isEmpty);
-      },
-    );
+      expect(catalog.session, AgentCliSession.unverified);
+      expect(catalog.guidance, isNot(contains('Not logged in')));
+    });
 
-    test(
-      'GivenPositiveCodexStdoutAndNegativeStderr_WhenDiscovered_ThenAuthenticationIsRejected',
-      () async {
-        final catalog = await CodexAdapter(
-          _QueueRunner(<CommandResult>[
-            _ok('0.114.0'),
-            const CommandResult(
-              exitCode: 0,
-              stdout: 'Logged in using ChatGPT',
-              stderr: 'Not logged in',
-            ),
-          ]),
-          resolver: _resolved(),
-          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
-        ).discover();
+    test('GivenExactCodexLoginOnStderrAndEmptyStdout_WhenDiscovered_ThenAuthenticationIsAccepted', () async {
+      final catalog = await CodexAdapter(
+        _QueueRunner(<CommandResult>[
+          _ok('0.114.0'),
+          _okStderr('Logged in using ChatGPT'),
+        ]),
+        resolver: _resolved(),
+        sessionRunner: _authenticatedCodexSession(),
+      ).discover();
 
-        expect(catalog.session, AgentCliSession.unverified);
-        expect(catalog.models, isEmpty);
-      },
-    );
-
-    test(
-      'GivenPositiveCodexStdoutAndArbitraryStderr_WhenDiscovered_ThenAuthenticationIsRejected',
-      () async {
-        final catalog = await CodexAdapter(
-          _QueueRunner(<CommandResult>[
-            _ok('0.114.0'),
-            const CommandResult(
-              exitCode: 0,
-              stdout: 'Logged in using ChatGPT',
-              stderr: 'host warning',
-            ),
-          ]),
-          resolver: _resolved(),
-          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
-        ).discover();
-
-        expect(catalog.session, AgentCliSession.unverified);
-        expect(catalog.guidance, isNot(contains('host warning')));
-      },
-    );
-
-    test(
-      'GivenPositiveCodexStdoutAndStatusBearingClixml_WhenDiscovered_ThenAuthenticationIsRejected',
-      () async {
-        final catalog = await CodexAdapter(
-          _QueueRunner(<CommandResult>[
-            _ok('0.114.0'),
-            CommandResult(
-              exitCode: 0,
-              stdout: 'Logged in using ChatGPT',
-              stderr: _benignPowerShellProgress.replaceFirst(
-                'Preparing modules for first use.',
-                'Not logged in',
-              ),
-            ),
-          ]),
-          resolver: _resolved(),
-          sessionRunner: _ScriptedSessionRunner(const <Object?>[]),
-        ).discover();
-
-        expect(catalog.session, AgentCliSession.unverified);
-        expect(catalog.guidance, isNot(contains('Not logged in')));
-      },
-    );
-
-    test(
-      'GivenExactCodexLoginOnStderrAndEmptyStdout_WhenDiscovered_ThenAuthenticationIsAccepted',
-      () async {
-        final catalog = await CodexAdapter(
-          _QueueRunner(<CommandResult>[
-            _ok('0.114.0'),
-            _okStderr('Logged in using ChatGPT'),
-          ]),
-          resolver: _resolved(),
-          sessionRunner: _authenticatedCodexSession(),
-        ).discover();
-
-        expect(catalog.session, AgentCliSession.authenticated);
-        expect(catalog.models, <String>['gpt-5.2-codex']);
-      },
-    );
+      expect(catalog.session, AgentCliSession.authenticated);
+      expect(catalog.models, <String>['gpt-5.2-codex']);
+    });
 
     test(
       'GivenOversizedCodexFrame_WhenRead_ThenDiscoveryFailsClosed',

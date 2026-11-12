@@ -117,27 +117,24 @@ void main() {
     },
   );
 
-  test(
-    'GivenConsecutiveWriteFailures_WhenLatestSelectionFails_ThenItRestoresLastPersistedMode',
-    () async {
-      final repository = _ControllableAppearanceRepository();
-      final controller = AppearanceController(
-        repository: repository,
-        initialMode: AppearanceMode.system,
-      );
-      addTearDown(controller.dispose);
+  test('GivenConsecutiveWriteFailures_WhenLatestSelectionFails_ThenItRestoresLastPersistedMode', () async {
+    final repository = _ControllableAppearanceRepository();
+    final controller = AppearanceController(
+      repository: repository,
+      initialMode: AppearanceMode.system,
+    );
+    addTearDown(controller.dispose);
 
-      final light = controller.select(AppearanceMode.light);
-      final dark = controller.select(AppearanceMode.dark);
-      await Future<void>.delayed(Duration.zero);
-      repository.failNext(StateError('light save failed'));
-      expect(await light, isTrue);
-      repository.failNext(StateError('dark save failed'));
+    final light = controller.select(AppearanceMode.light);
+    final dark = controller.select(AppearanceMode.dark);
+    await Future<void>.delayed(Duration.zero);
+    repository.failNext(StateError('light save failed'));
+    expect(await light, isTrue);
+    repository.failNext(StateError('dark save failed'));
 
-      expect(await dark, isFalse);
-      expect(controller.mode, AppearanceMode.system);
-    },
-  );
+    expect(await dark, isFalse);
+    expect(controller.mode, AppearanceMode.system);
+  });
 
   test(
     'GivenListenerSelection_WhenNotified_ThenWritesKeepNotificationOrder',

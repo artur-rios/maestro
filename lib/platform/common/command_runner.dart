@@ -171,10 +171,8 @@ final class ProcessCommandRunner implements CommandRunner {
         })().timeout(request.timeout);
         var streamsCompleted = true;
         try {
-          await Future.wait(<Future<void>>[
-            stdoutDone,
-            stderrDone,
-          ]).timeout(const Duration(milliseconds: 500));
+          await Future.wait(<Future<void>>[stdoutDone, stderrDone])
+              .timeout(const Duration(milliseconds: 500));
         } on Object {
           // A stream that stalled and a stream that failed mean the same thing
           // here: the capture is incomplete. The process itself started and

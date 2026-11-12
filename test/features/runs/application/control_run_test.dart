@@ -7,22 +7,19 @@ import 'package:maestro/features/runs/domain/run_control.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 
 void main() {
-  test(
-    'GivenRunningRun_WhenPausing_ThenPauseIsRequestedAndTheOrchestratorIsFlagged',
-    () async {
-      // Given: a run executing a step.
-      final fixture = _Fixture(status: RunStatus.running);
+  test('GivenRunningRun_WhenPausing_ThenPauseIsRequestedAndTheOrchestratorIsFlagged', () async {
+    // Given: a run executing a step.
+    final fixture = _Fixture(status: RunStatus.running);
 
-      // When: the user pauses it.
-      final failure = await fixture.control.pause('run-1');
+    // When: the user pauses it.
+    final failure = await fixture.control.pause('run-1');
 
-      // Then: the request is durable and the loop is told to stop after the
-      // active step (FR-RC-01).
-      expect(failure, isNull);
-      expect(fixture.repository.pauseRequested, <String>['run-1']);
-      expect(fixture.execution.paused, <String>['run-1']);
-    },
-  );
+    // Then: the request is durable and the loop is told to stop after the
+    // active step (FR-RC-01).
+    expect(failure, isNull);
+    expect(fixture.repository.pauseRequested, <String>['run-1']);
+    expect(fixture.execution.paused, <String>['run-1']);
+  });
 
   test('GivenPausedRun_WhenPausing_ThenTheTransitionIsRejected', () async {
     // Given: a run that is already paused.
@@ -76,63 +73,54 @@ void main() {
     },
   );
 
-  test(
-    'GivenRunningRun_WhenCancelling_ThenTheTreeIsTerminatedAndTheRunIsCancelled',
-    () async {
-      // Given: a run whose process tree terminates cleanly.
-      final fixture = _Fixture(status: RunStatus.running);
+  test('GivenRunningRun_WhenCancelling_ThenTheTreeIsTerminatedAndTheRunIsCancelled', () async {
+    // Given: a run whose process tree terminates cleanly.
+    final fixture = _Fixture(status: RunStatus.running);
 
-      // When: the user cancels it.
-      final result = await fixture.control.cancel('run-1');
+    // When: the user cancels it.
+    final result = await fixture.control.cancel('run-1');
 
-      // Then: the tree is gone and the run is recorded cancelled (FR-RC-04).
-      expect(result.outcome, CancellationOutcome.cancelled);
-      expect(result.failure, isNull);
-      expect(fixture.execution.cancelled, <String>['run-1']);
-      expect(fixture.repository.canceled, <String>['run-1']);
-    },
-  );
+    // Then: the tree is gone and the run is recorded cancelled (FR-RC-04).
+    expect(result.outcome, CancellationOutcome.cancelled);
+    expect(result.failure, isNull);
+    expect(fixture.execution.cancelled, <String>['run-1']);
+    expect(fixture.repository.canceled, <String>['run-1']);
+  });
 
-  test(
-    'GivenResistedTermination_WhenCancelling_ThenIncompleteIsReportedAndTheStatusHolds',
-    () async {
-      // Given: a run whose descendants survive termination (AF-03).
-      final fixture = _Fixture(status: RunStatus.running);
-      fixture.execution.outcome = CancellationOutcome.incomplete;
+  test('GivenResistedTermination_WhenCancelling_ThenIncompleteIsReportedAndTheStatusHolds', () async {
+    // Given: a run whose descendants survive termination (AF-03).
+    final fixture = _Fixture(status: RunStatus.running);
+    fixture.execution.outcome = CancellationOutcome.incomplete;
 
-      // When: the user cancels it.
-      final result = await fixture.control.cancel('run-1');
+    // When: the user cancels it.
+    final result = await fixture.control.cancel('run-1');
 
-      // Then: the run is not claimed cancelled, and the incomplete
-      // cancellation is on the record.
-      expect(result.outcome, CancellationOutcome.incomplete);
-      expect(result.failure?.code, 'run.control.cancel_incomplete');
-      expect(fixture.repository.canceled, isEmpty);
-      expect(fixture.repository.incompleteCancellations, <String>['run-1']);
-    },
-  );
+    // Then: the run is not claimed cancelled, and the incomplete
+    // cancellation is on the record.
+    expect(result.outcome, CancellationOutcome.incomplete);
+    expect(result.failure?.code, 'run.control.cancel_incomplete');
+    expect(fixture.repository.canceled, isEmpty);
+    expect(fixture.repository.incompleteCancellations, <String>['run-1']);
+  });
 
-  test(
-    'GivenActiveExecution_WhenCancelling_ThenEvidenceIsWrittenAfterTheLoopStops',
-    () async {
-      // Given: a run whose execute loop is still winding down.
-      final fixture = _Fixture(status: RunStatus.running);
-      final loop = Completer<void>();
-      fixture.execution.active = loop.future;
+  test('GivenActiveExecution_WhenCancelling_ThenEvidenceIsWrittenAfterTheLoopStops', () async {
+    // Given: a run whose execute loop is still winding down.
+    final fixture = _Fixture(status: RunStatus.running);
+    final loop = Completer<void>();
+    fixture.execution.active = loop.future;
 
-      // When: the user cancels it.
-      final pending = fixture.control.cancel('run-1');
-      await Future<void>.delayed(Duration.zero);
-      expect(fixture.repository.canceled, isEmpty);
-      loop.complete();
-      final result = await pending;
+    // When: the user cancels it.
+    final pending = fixture.control.cancel('run-1');
+    await Future<void>.delayed(Duration.zero);
+    expect(fixture.repository.canceled, isEmpty);
+    loop.complete();
+    final result = await pending;
 
-      // Then: the terminal evidence is written only once the loop has stood
-      // down, so the two writers cannot race.
-      expect(result.outcome, CancellationOutcome.cancelled);
-      expect(fixture.repository.canceled, <String>['run-1']);
-    },
-  );
+    // Then: the terminal evidence is written only once the loop has stood
+    // down, so the two writers cannot race.
+    expect(result.outcome, CancellationOutcome.cancelled);
+    expect(fixture.repository.canceled, <String>['run-1']);
+  });
 
   test(
     'GivenFailedRun_WhenListingRecoveryScopes_ThenAllThreeAreOffered',
@@ -157,71 +145,65 @@ void main() {
     },
   );
 
-  test(
-    'GivenUnavailablePreservedContext_WhenListingRecoveryScopes_ThenItIsDisabledWithAReason',
-    () async {
-      // Given: a run whose preceding step left no reusable context (AF-04).
-      final fixture = _Fixture(status: RunStatus.failed);
-      fixture.repository.evidence = RunRecoveryEvidence(
-        runId: 'run-1',
-        status: RunStatus.failed,
-        updatedAt: _updatedAt,
-        affectedStepPosition: 0,
-        affectedAttemptId: 'attempt-1',
-      );
+  test('GivenUnavailablePreservedContext_WhenListingRecoveryScopes_ThenItIsDisabledWithAReason', () async {
+    // Given: a run whose preceding step left no reusable context (AF-04).
+    final fixture = _Fixture(status: RunStatus.failed);
+    fixture.repository.evidence = RunRecoveryEvidence(
+      runId: 'run-1',
+      status: RunStatus.failed,
+      updatedAt: _updatedAt,
+      affectedStepPosition: 0,
+      affectedAttemptId: 'attempt-1',
+    );
 
-      // When: the recovery scopes are listed.
-      final scopes = await fixture.control.recoveryScopes('run-1');
-      final preserved = scopes.firstWhere(
-        (scope) => scope.action == RecoveryAction.retryWithPreservedContext,
-      );
+    // When: the recovery scopes are listed.
+    final scopes = await fixture.control.recoveryScopes('run-1');
+    final preserved = scopes.firstWhere(
+      (scope) => scope.action == RecoveryAction.retryWithPreservedContext,
+    );
 
-      // Then: the scope is offered-but-disabled with an explanation, and the
-      // remaining safe scopes stay available.
-      expect(preserved.available, isFalse);
-      expect(preserved.unavailableReason, isNotEmpty);
-      expect(
-        scopes
-            .where((scope) => scope.available)
-            .map((scope) => scope.action)
-            .toSet(),
-        <RecoveryAction>{
-          RecoveryAction.rerunStepFresh,
-          RecoveryAction.restartWorkflow,
-        },
-      );
-    },
-  );
-
-  test(
-    'GivenAStoppedRunWhoseWorktreeWasReclaimed_WhenRetrying_ThenWorktreeMissingIsReported',
-    () async {
-      // Given: a failed run from an earlier session; startup reclaimed its
-      // worktree because a failed run no longer retains resources.
-      final fixture = _Fixture(status: RunStatus.failed);
-      fixture.repository.evidence = RunRecoveryEvidence(
-        runId: 'run-1',
-        status: RunStatus.failed,
-        updatedAt: _updatedAt,
-        affectedStepPosition: 0,
-        affectedAttemptId: 'attempt-1',
-      );
-      fixture.probe.present = false;
-
-      // When: the user restarts the workflow.
-      final failure = await fixture.control.retry(
-        'run-1',
+    // Then: the scope is offered-but-disabled with an explanation, and the
+    // remaining safe scopes stay available.
+    expect(preserved.available, isFalse);
+    expect(preserved.unavailableReason, isNotEmpty);
+    expect(
+      scopes
+          .where((scope) => scope.available)
+          .map((scope) => scope.action)
+          .toSet(),
+      <RecoveryAction>{
+        RecoveryAction.rerunStepFresh,
         RecoveryAction.restartWorkflow,
-      );
+      },
+    );
+  });
 
-      // Then: no recovery is recorded and no agent is launched into a folder
-      // that does not exist.
-      expect(failure?.code, 'run.control.worktree_missing');
-      expect(failure?.remediation, isNot(contains('Retry')));
-      expect(fixture.repository.recoveries, isEmpty);
-      expect(fixture.execution.executed, isEmpty);
-    },
-  );
+  test('GivenAStoppedRunWhoseWorktreeWasReclaimed_WhenRetrying_ThenWorktreeMissingIsReported', () async {
+    // Given: a failed run from an earlier session; startup reclaimed its
+    // worktree because a failed run no longer retains resources.
+    final fixture = _Fixture(status: RunStatus.failed);
+    fixture.repository.evidence = RunRecoveryEvidence(
+      runId: 'run-1',
+      status: RunStatus.failed,
+      updatedAt: _updatedAt,
+      affectedStepPosition: 0,
+      affectedAttemptId: 'attempt-1',
+    );
+    fixture.probe.present = false;
+
+    // When: the user restarts the workflow.
+    final failure = await fixture.control.retry(
+      'run-1',
+      RecoveryAction.restartWorkflow,
+    );
+
+    // Then: no recovery is recorded and no agent is launched into a folder
+    // that does not exist.
+    expect(failure?.code, 'run.control.worktree_missing');
+    expect(failure?.remediation, isNot(contains('Retry')));
+    expect(fixture.repository.recoveries, isEmpty);
+    expect(fixture.execution.executed, isEmpty);
+  });
 
   test('GivenAPausedRun_WhenRetrying_ThenTheTransitionIsRejected', () async {
     // Given: a paused run, which has recovery evidence but is resumed rather

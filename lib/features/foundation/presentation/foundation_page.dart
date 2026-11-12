@@ -33,9 +33,9 @@ final class FoundationPage extends ConsumerWidget {
       loading: () => Material(
         key: const Key('foundation-section'),
         color:
-            Theme.of(
-              context,
-            ).extension<MaestroThemeTokens>()?.workspaceSurface ??
+            Theme.of(context)
+                .extension<MaestroThemeTokens>()
+                ?.workspaceSurface ??
             Theme.of(context).colorScheme.surface,
         child: Semantics(
           label: 'Foundation status',

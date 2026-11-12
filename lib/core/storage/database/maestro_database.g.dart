@@ -9040,20 +9040,18 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   ]);
 }
 
-typedef $$SettingsTableCreateCompanionBuilder =
-    SettingsCompanion Function({
-      required String key,
-      required String value,
-      Value<DateTime> updatedAt,
-      Value<int> rowid,
-    });
-typedef $$SettingsTableUpdateCompanionBuilder =
-    SettingsCompanion Function({
-      Value<String> key,
-      Value<String> value,
-      Value<DateTime> updatedAt,
-      Value<int> rowid,
-    });
+typedef $$SettingsTableCreateCompanionBuilder = SettingsCompanion Function({
+  required String key,
+  required String value,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
+typedef $$SettingsTableUpdateCompanionBuilder = SettingsCompanion Function({
+  Value<String> key,
+  Value<String> value,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
 
 class $$SettingsTableFilterComposer
     extends Composer<_$MaestroDatabase, $SettingsTable> {
@@ -9777,26 +9775,24 @@ typedef $$OwnedResourcesTableProcessedTableManager =
       OwnedResource,
       PrefetchHooks Function()
     >;
-typedef $$LocalUsersTableCreateCompanionBuilder =
-    LocalUsersCompanion Function({
-      required String id,
-      Value<String?> email,
-      required String authMethod,
-      Value<String?> verifierKey,
-      required DateTime createdAt,
-      Value<DateTime?> lastAuthenticatedAt,
-      Value<int> rowid,
-    });
-typedef $$LocalUsersTableUpdateCompanionBuilder =
-    LocalUsersCompanion Function({
-      Value<String> id,
-      Value<String?> email,
-      Value<String> authMethod,
-      Value<String?> verifierKey,
-      Value<DateTime> createdAt,
-      Value<DateTime?> lastAuthenticatedAt,
-      Value<int> rowid,
-    });
+typedef $$LocalUsersTableCreateCompanionBuilder = LocalUsersCompanion Function({
+  required String id,
+  Value<String?> email,
+  required String authMethod,
+  Value<String?> verifierKey,
+  required DateTime createdAt,
+  Value<DateTime?> lastAuthenticatedAt,
+  Value<int> rowid,
+});
+typedef $$LocalUsersTableUpdateCompanionBuilder = LocalUsersCompanion Function({
+  Value<String> id,
+  Value<String?> email,
+  Value<String> authMethod,
+  Value<String?> verifierKey,
+  Value<DateTime> createdAt,
+  Value<DateTime?> lastAuthenticatedAt,
+  Value<int> rowid,
+});
 
 final class $$LocalUsersTableReferences
     extends BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser> {
@@ -10407,19 +10403,15 @@ class $$LocalRecoveryCodesTableTableManager
                     >
                   >(state) {
                     if (userId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.userId,
-                                referencedTable:
-                                    $$LocalRecoveryCodesTableReferences
-                                        ._userIdTable(db),
-                                referencedColumn:
-                                    $$LocalRecoveryCodesTableReferences
-                                        ._userIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.userId,
+                        referencedTable: $$LocalRecoveryCodesTableReferences
+                            ._userIdTable(db),
+                        referencedColumn: $$LocalRecoveryCodesTableReferences
+                            ._userIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -10696,28 +10688,26 @@ typedef $$AuditEventsTableProcessedTableManager =
       AuditEvent,
       PrefetchHooks Function()
     >;
-typedef $$ProjectsTableCreateCompanionBuilder =
-    ProjectsCompanion Function({
-      required String id,
-      required String name,
-      required String normalizedName,
-      required String folderPath,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
-typedef $$ProjectsTableUpdateCompanionBuilder =
-    ProjectsCompanion Function({
-      Value<String> id,
-      Value<String> name,
-      Value<String> normalizedName,
-      Value<String> folderPath,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
+typedef $$ProjectsTableCreateCompanionBuilder = ProjectsCompanion Function({
+  required String id,
+  required String name,
+  required String normalizedName,
+  required String folderPath,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
+typedef $$ProjectsTableUpdateCompanionBuilder = ProjectsCompanion Function({
+  Value<String> id,
+  Value<String> name,
+  Value<String> normalizedName,
+  Value<String> folderPath,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
 
 final class $$ProjectsTableReferences
     extends BaseReferences<_$MaestroDatabase, $ProjectsTable, Project> {
@@ -11145,32 +11135,30 @@ typedef $$ProjectsTableProcessedTableManager =
         bool workflowRunsRefs,
       })
     >;
-typedef $$WorkflowsTableCreateCompanionBuilder =
-    WorkflowsCompanion Function({
-      required String id,
-      required int revision,
-      Value<String?> name,
-      required bool isReusable,
-      required String unitType,
-      Value<bool> supervisedDelivery,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
-typedef $$WorkflowsTableUpdateCompanionBuilder =
-    WorkflowsCompanion Function({
-      Value<String> id,
-      Value<int> revision,
-      Value<String?> name,
-      Value<bool> isReusable,
-      Value<String> unitType,
-      Value<bool> supervisedDelivery,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
+typedef $$WorkflowsTableCreateCompanionBuilder = WorkflowsCompanion Function({
+  required String id,
+  required int revision,
+  Value<String?> name,
+  required bool isReusable,
+  required String unitType,
+  Value<bool> supervisedDelivery,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
+typedef $$WorkflowsTableUpdateCompanionBuilder = WorkflowsCompanion Function({
+  Value<String> id,
+  Value<int> revision,
+  Value<String?> name,
+  Value<bool> isReusable,
+  Value<String> unitType,
+  Value<bool> supervisedDelivery,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
 
 final class $$WorkflowsTableReferences
     extends BaseReferences<_$MaestroDatabase, $WorkflowsTable, Workflow> {
@@ -12073,17 +12061,15 @@ class $$WorkflowStepsTableTableManager
                     >
                   >(state) {
                     if (workflowId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.workflowId,
-                                referencedTable: $$WorkflowStepsTableReferences
-                                    ._workflowIdTable(db),
-                                referencedColumn: $$WorkflowStepsTableReferences
-                                    ._workflowIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.workflowId,
+                        referencedTable: $$WorkflowStepsTableReferences
+                            ._workflowIdTable(db),
+                        referencedColumn: $$WorkflowStepsTableReferences
+                            ._workflowIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -12425,34 +12411,26 @@ class $$WorkflowProjectRefsTableTableManager
                     >
                   >(state) {
                     if (workflowId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.workflowId,
-                                referencedTable:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._workflowIdTable(db),
-                                referencedColumn:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._workflowIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.workflowId,
+                        referencedTable: $$WorkflowProjectRefsTableReferences
+                            ._workflowIdTable(db),
+                        referencedColumn: $$WorkflowProjectRefsTableReferences
+                            ._workflowIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (projectId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.projectId,
-                                referencedTable:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._projectIdTable(db),
-                                referencedColumn:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._projectIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.projectId,
+                        referencedTable: $$WorkflowProjectRefsTableReferences
+                            ._projectIdTable(db),
+                        referencedColumn: $$WorkflowProjectRefsTableReferences
+                            ._projectIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -13442,34 +13420,26 @@ class $$WorkflowRunsTableTableManager
                         >
                       >(state) {
                         if (projectId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.projectId,
-                                    referencedTable:
-                                        $$WorkflowRunsTableReferences
-                                            ._projectIdTable(db),
-                                    referencedColumn:
-                                        $$WorkflowRunsTableReferences
-                                            ._projectIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.projectId,
+                            referencedTable: $$WorkflowRunsTableReferences
+                                ._projectIdTable(db),
+                            referencedColumn: $$WorkflowRunsTableReferences
+                                ._projectIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (workflowId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.workflowId,
-                                    referencedTable:
-                                        $$WorkflowRunsTableReferences
-                                            ._workflowIdTable(db),
-                                    referencedColumn:
-                                        $$WorkflowRunsTableReferences
-                                            ._workflowIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.workflowId,
+                            referencedTable: $$WorkflowRunsTableReferences
+                                ._workflowIdTable(db),
+                            referencedColumn: $$WorkflowRunsTableReferences
+                                ._workflowIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -13893,17 +13863,15 @@ class $$RunSnapshotsTableTableManager
                     >
                   >(state) {
                     if (runId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.runId,
-                                referencedTable: $$RunSnapshotsTableReferences
-                                    ._runIdTable(db),
-                                referencedColumn: $$RunSnapshotsTableReferences
-                                    ._runIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.runId,
+                        referencedTable: $$RunSnapshotsTableReferences
+                            ._runIdTable(db),
+                        referencedColumn: $$RunSnapshotsTableReferences
+                            ._runIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -14450,19 +14418,15 @@ class $$RunSnapshotStepsTableTableManager
                         >
                       >(state) {
                         if (runId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.runId,
-                                    referencedTable:
-                                        $$RunSnapshotStepsTableReferences
-                                            ._runIdTable(db),
-                                    referencedColumn:
-                                        $$RunSnapshotStepsTableReferences
-                                            ._runIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.runId,
+                            referencedTable: $$RunSnapshotStepsTableReferences
+                                ._runIdTable(db),
+                            referencedColumn: $$RunSnapshotStepsTableReferences
+                                ._runIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -15149,34 +15113,26 @@ class $$RunAttemptsTableTableManager
                         >
                       >(state) {
                         if (runId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.runId,
-                                    referencedTable:
-                                        $$RunAttemptsTableReferences
-                                            ._runIdTable(db),
-                                    referencedColumn:
-                                        $$RunAttemptsTableReferences
-                                            ._runIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.runId,
+                            referencedTable: $$RunAttemptsTableReferences
+                                ._runIdTable(db),
+                            referencedColumn: $$RunAttemptsTableReferences
+                                ._runIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (snapshotStepId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.snapshotStepId,
-                                    referencedTable:
-                                        $$RunAttemptsTableReferences
-                                            ._snapshotStepIdTable(db),
-                                    referencedColumn:
-                                        $$RunAttemptsTableReferences
-                                            ._snapshotStepIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.snapshotStepId,
+                            referencedTable: $$RunAttemptsTableReferences
+                                ._snapshotStepIdTable(db),
+                            referencedColumn: $$RunAttemptsTableReferences
+                                ._snapshotStepIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -15789,49 +15745,37 @@ class $$RunLogSegmentsTableTableManager
                         >
                       >(state) {
                         if (runId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.runId,
-                                    referencedTable:
-                                        $$RunLogSegmentsTableReferences
-                                            ._runIdTable(db),
-                                    referencedColumn:
-                                        $$RunLogSegmentsTableReferences
-                                            ._runIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.runId,
+                            referencedTable: $$RunLogSegmentsTableReferences
+                                ._runIdTable(db),
+                            referencedColumn: $$RunLogSegmentsTableReferences
+                                ._runIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (attemptId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.attemptId,
-                                    referencedTable:
-                                        $$RunLogSegmentsTableReferences
-                                            ._attemptIdTable(db),
-                                    referencedColumn:
-                                        $$RunLogSegmentsTableReferences
-                                            ._attemptIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.attemptId,
+                            referencedTable: $$RunLogSegmentsTableReferences
+                                ._attemptIdTable(db),
+                            referencedColumn: $$RunLogSegmentsTableReferences
+                                ._attemptIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (snapshotStepId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.snapshotStepId,
-                                    referencedTable:
-                                        $$RunLogSegmentsTableReferences
-                                            ._snapshotStepIdTable(db),
-                                    referencedColumn:
-                                        $$RunLogSegmentsTableReferences
-                                            ._snapshotStepIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.snapshotStepId,
+                            referencedTable: $$RunLogSegmentsTableReferences
+                                ._snapshotStepIdTable(db),
+                            referencedColumn: $$RunLogSegmentsTableReferences
+                                ._snapshotStepIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -16252,34 +16196,26 @@ class $$RunRecoveryRequestsTableTableManager
                     >
                   >(state) {
                     if (runId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.runId,
-                                referencedTable:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._runIdTable(db),
-                                referencedColumn:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._runIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.runId,
+                        referencedTable: $$RunRecoveryRequestsTableReferences
+                            ._runIdTable(db),
+                        referencedColumn: $$RunRecoveryRequestsTableReferences
+                            ._runIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (attemptId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.attemptId,
-                                referencedTable:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._attemptIdTable(db),
-                                referencedColumn:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._attemptIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.attemptId,
+                        referencedTable: $$RunRecoveryRequestsTableReferences
+                            ._attemptIdTable(db),
+                        referencedColumn: $$RunRecoveryRequestsTableReferences
+                            ._attemptIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -16872,19 +16808,15 @@ class $$DeliveryRecordsTableTableManager
                     >
                   >(state) {
                     if (runId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.runId,
-                                referencedTable:
-                                    $$DeliveryRecordsTableReferences
-                                        ._runIdTable(db),
-                                referencedColumn:
-                                    $$DeliveryRecordsTableReferences
-                                        ._runIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.runId,
+                        referencedTable: $$DeliveryRecordsTableReferences
+                            ._runIdTable(db),
+                        referencedColumn: $$DeliveryRecordsTableReferences
+                            ._runIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;

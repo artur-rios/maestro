@@ -1008,9 +1008,9 @@ void main() {
       );
       await tester.tap(find.bySemanticsLabel('Create local account'));
       await tester.pumpAndSettle();
-      final pending =
-          container.read(authenticationControllerProvider)
-              as AuthenticationRecoveryCodesPending;
+      final pending = container.read(
+        authenticationControllerProvider,
+      ) as AuthenticationRecoveryCodesPending;
       final plaintext = pending.recoveryCodes;
       expect(plaintext, isNotEmpty);
 

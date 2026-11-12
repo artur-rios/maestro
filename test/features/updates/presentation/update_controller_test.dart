@@ -56,32 +56,29 @@ void main() {
     },
   );
 
-  test(
-    'GivenTheInstallerFailsWithRemediation_WhenApproved_ThenTheMessageSaysWhatToDo',
-    () async {
-      final controller = UpdateController(
-        service: _service(
-          installer: _Installer(
-            failure: const PlatformFailure(
-              code: 'update.install.failed',
-              message: 'Linux update installer failed.',
-              remediation: 'Install it with: sudo apt install ./maestro.deb',
-            ),
+  test('GivenTheInstallerFailsWithRemediation_WhenApproved_ThenTheMessageSaysWhatToDo', () async {
+    final controller = UpdateController(
+      service: _service(
+        installer: _Installer(
+          failure: const PlatformFailure(
+            code: 'update.install.failed',
+            message: 'Linux update installer failed.',
+            remediation: 'Install it with: sudo apt install ./maestro.deb',
           ),
         ),
-      );
-      await controller.check();
-      await controller.install(approved: true);
-      expect(
-        controller.state.message,
-        allOf(
-          contains('Linux update installer failed.'),
-          contains('sudo apt install ./maestro.deb'),
-          contains('preserved'),
-        ),
-      );
-    },
-  );
+      ),
+    );
+    await controller.check();
+    await controller.install(approved: true);
+    expect(
+      controller.state.message,
+      allOf(
+        contains('Linux update installer failed.'),
+        contains('sudo apt install ./maestro.deb'),
+        contains('preserved'),
+      ),
+    );
+  });
 }
 
 UpdateService _service({_Installer? installer}) {

@@ -4,69 +4,61 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/platform/updates/production_update_service.dart';
 
 void main() {
-  test(
-    'GivenLinuxPackager_WhenProjectionIsMissingOrInvalid_ThenValidationFails',
-    () async {
-      final script = File('tooling/packaging/.package_linux_$pid.sh');
-      addTearDown(() => script.delete());
-      await script.writeAsString(
-        (await File(
-          'tooling/packaging/package_linux.sh',
-        ).readAsString()).replaceAll('\r\n', '\n'),
-      );
-      final bash = Platform.isWindows
-          ? r'C:\Program Files\Git\bin\bash.exe'
-          : 'bash';
-      final scriptArgument = Platform.isWindows
-          ? '/${script.absolute.path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
-          : script.path;
-      final missing = await Process.run(bash, <String>[
-        scriptArgument,
-        '1.2.3-rc.0',
-        '1.2.3',
-      ]);
-      final invalid = await Process.run(bash, <String>[
-        scriptArgument,
-        '1.2.3-rc.0',
-        '1.2.3-rc.0',
-        '1.2.3~rc.0-1',
-      ]);
+  test('GivenLinuxPackager_WhenProjectionIsMissingOrInvalid_ThenValidationFails', () async {
+    final script = File('tooling/packaging/.package_linux_$pid.sh');
+    addTearDown(() => script.delete());
+    await script.writeAsString(
+      (await File(
+        'tooling/packaging/package_linux.sh',
+      ).readAsString()).replaceAll('\r\n', '\n'),
+    );
+    final bash = Platform.isWindows
+        ? r'C:\Program Files\Git\bin\bash.exe'
+        : 'bash';
+    final scriptArgument = Platform.isWindows
+        ? '/${script.absolute.path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
+        : script.path;
+    final missing = await Process.run(bash, <String>[
+      scriptArgument,
+      '1.2.3-rc.0',
+      '1.2.3',
+    ]);
+    final invalid = await Process.run(bash, <String>[
+      scriptArgument,
+      '1.2.3-rc.0',
+      '1.2.3-rc.0',
+      '1.2.3~rc.0-1',
+    ]);
 
-      expect(missing.exitCode, isNot(0));
-      expect('${missing.stderr}', contains('debian version is required'));
-      expect(invalid.exitCode, 65);
-      expect('${invalid.stderr}', contains('CoreVersion'));
-    },
-  );
+    expect(missing.exitCode, isNot(0));
+    expect('${missing.stderr}', contains('debian version is required'));
+    expect(invalid.exitCode, 65);
+    expect('${invalid.stderr}', contains('CoreVersion'));
+  });
 
-  test(
-    'GivenLinuxPrereleaseProjections_WhenPreflightRuns_ThenCanonicalRoutingIsReported',
-    () async {
-      final script = File(
-        'tooling/packaging/.package_linux_${pid}_positive.sh',
-      );
-      addTearDown(() => script.delete());
-      await script.writeAsString(
-        (await File(
-          'tooling/packaging/package_linux.sh',
-        ).readAsString()).replaceAll('\r\n', '\n'),
-      );
-      final environment = Map<String, String>.of(Platform.environment)
-        ..['MAESTRO_PACKAGING_PREFLIGHT_ONLY'] = '1';
-      final scriptArgument = Platform.isWindows
-          ? '/${File(script.absolute.path).path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
-          : script.path;
-      final result = await Process.run(
-        Platform.isWindows ? r'C:\Program Files\Git\bin\bash.exe' : 'bash',
-        <String>[scriptArgument, '1.2.3-rc.4', '1.2.3', '1.2.3~rc.4'],
-        environment: environment,
-      );
+  test('GivenLinuxPrereleaseProjections_WhenPreflightRuns_ThenCanonicalRoutingIsReported', () async {
+    final script = File('tooling/packaging/.package_linux_${pid}_positive.sh');
+    addTearDown(() => script.delete());
+    await script.writeAsString(
+      (await File(
+        'tooling/packaging/package_linux.sh',
+      ).readAsString()).replaceAll('\r\n', '\n'),
+    );
+    final environment = Map<String, String>.of(Platform.environment)
+      ..['MAESTRO_PACKAGING_PREFLIGHT_ONLY'] = '1';
+    final scriptArgument = Platform.isWindows
+        ? '/${File(script.absolute.path).path[0].toLowerCase()}${script.absolute.path.substring(2).replaceAll(r'\', '/')}'
+        : script.path;
+    final result = await Process.run(
+      Platform.isWindows ? r'C:\Program Files\Git\bin\bash.exe' : 'bash',
+      <String>[scriptArgument, '1.2.3-rc.4', '1.2.3', '1.2.3~rc.4'],
+      environment: environment,
+    );
 
-      expect(result.exitCode, 0, reason: '${result.stderr}');
-      expect('${result.stdout}', contains('semantic_version=1.2.3-rc.4'));
-      expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
-    },
-  );
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    expect('${result.stdout}', contains('semantic_version=1.2.3-rc.4'));
+    expect('${result.stdout}', contains('debian_version=1.2.3~rc.4'));
+  });
 
   test(
     'GivenAppImageHelper_WhenInvokedWithTwoArguments_ThenItRefuses',
@@ -122,77 +114,64 @@ void main() {
       environment: <String, String>{'MAESTRO_TEST_MARKER': marker.path},
     );
 
-    test(
-      'GivenAStagedAppImage_WhenMaestroExits_ThenTheAppImageFileIsReplacedInPlaceAndRelaunched',
-      () async {
-        if (!Platform.isLinux) return;
-        final parent = await Process.start('sleep', <String>['1']);
+    test('GivenAStagedAppImage_WhenMaestroExits_ThenTheAppImageFileIsReplacedInPlaceAndRelaunched', () async {
+      if (!Platform.isLinux) return;
+      final parent = await Process.start('sleep', <String>['1']);
 
-        final replacing = replace(parentPid: parent.pid);
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        expect(
-          await installed.readAsString(),
-          '#!/bin/sh\necho old\n',
-          reason: 'nothing is replaced while Maestro is still running',
-        );
-        final result = await replacing;
+      final replacing = replace(parentPid: parent.pid);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(
+        await installed.readAsString(),
+        '#!/bin/sh\necho old\n',
+        reason: 'nothing is replaced while Maestro is still running',
+      );
+      final result = await replacing;
 
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-        expect(await installed.readAsString(), await staged.readAsString());
-        final mode = await Process.run('stat', <String>[
-          '-c',
-          '%a',
-          installed.path,
-        ]);
-        expect(
-          '${mode.stdout}'.trim(),
-          '750',
-          reason: 'the installed file keeps its permissions, execute included',
-        );
-        expect(await marker.readAsString(), installed.path);
-        expect(
-          installed.parent.listSync().map((entity) => entity.path),
-          <String>[installed.path],
-          reason: 'no staging file is left beside the AppImage',
-        );
-      },
-    );
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect(await installed.readAsString(), await staged.readAsString());
+      final mode = await Process.run('stat', <String>[
+        '-c',
+        '%a',
+        installed.path,
+      ]);
+      expect(
+        '${mode.stdout}'.trim(),
+        '750',
+        reason: 'the installed file keeps its permissions, execute included',
+      );
+      expect(await marker.readAsString(), installed.path);
+      expect(installed.parent.listSync().map((entity) => entity.path), <String>[
+        installed.path,
+      ], reason: 'no staging file is left beside the AppImage');
+    });
 
-    test(
-      'GivenTheReplacementCannotBeStaged_WhenUpdating_ThenTheInstalledAppImageIsUntouchedAndNotRelaunched',
-      () async {
-        if (!Platform.isLinux) return;
-        await Directory(
-          '${installed.path}.staging/occupied',
-        ).create(recursive: true);
-        final parent = await Process.start('true', const <String>[]);
-        await parent.exitCode;
+    test('GivenTheReplacementCannotBeStaged_WhenUpdating_ThenTheInstalledAppImageIsUntouchedAndNotRelaunched', () async {
+      if (!Platform.isLinux) return;
+      await Directory('${installed.path}.staging/occupied')
+          .create(recursive: true);
+      final parent = await Process.start('true', const <String>[]);
+      await parent.exitCode;
 
-        final result = await replace(parentPid: parent.pid);
+      final result = await replace(parentPid: parent.pid);
 
-        expect(result.exitCode, isNot(0));
-        expect(await installed.readAsString(), '#!/bin/sh\necho old\n');
-        expect(await marker.exists(), isFalse);
-      },
-    );
+      expect(result.exitCode, isNot(0));
+      expect(await installed.readAsString(), '#!/bin/sh\necho old\n');
+      expect(await marker.exists(), isFalse);
+    });
 
-    test(
-      'GivenNoInstalledAppImage_WhenUpdating_ThenTheHelperRefusesBeforeWaitingForMaestro',
-      () async {
-        if (!Platform.isLinux) return;
-        await installed.delete();
-        final parent = await Process.start('sleep', <String>['30']);
-        addTearDown(parent.kill);
+    test('GivenNoInstalledAppImage_WhenUpdating_ThenTheHelperRefusesBeforeWaitingForMaestro', () async {
+      if (!Platform.isLinux) return;
+      await installed.delete();
+      final parent = await Process.start('sleep', <String>['30']);
+      addTearDown(parent.kill);
 
-        final result = await replace(
-          parentPid: parent.pid,
-        ).timeout(const Duration(seconds: 10));
+      final result = await replace(parentPid: parent.pid)
+          .timeout(const Duration(seconds: 10));
 
-        expect(result.exitCode, 66);
-        expect('${result.stderr}', contains('Installed AppImage'));
-        expect(await installed.exists(), isFalse);
-      },
-    );
+      expect(result.exitCode, 66);
+      expect('${result.stderr}', contains('Installed AppImage'));
+      expect(await installed.exists(), isFalse);
+    });
   });
 
   test(
@@ -216,18 +195,16 @@ void main() {
       // The mark is the application's own accent, not a stock template colour.
       expect(svg, contains('#B9C3FF'));
 
-      final ico = await File(
-        'windows/runner/resources/app_icon.ico',
-      ).readAsBytes();
+      final ico = await File('windows/runner/resources/app_icon.ico')
+          .readAsBytes();
       expect(ico.length, greaterThan(0));
       // An ICO header is: reserved 0, type 1, then the image count.
       expect(ico[0] | ico[1], 0);
       expect(ico[2] | (ico[3] << 8), 1);
       expect(ico[4] | (ico[5] << 8), sizes.length - 2);
 
-      final linuxPackage = await File(
-        'tooling/packaging/package_linux.sh',
-      ).readAsString();
+      final linuxPackage = await File('tooling/packaging/package_linux.sh')
+          .readAsString();
       expect(linuxPackage, contains('hicolor/scalable/apps/maestro.svg'));
       expect(linuxPackage, contains(r'maestro-$size.png'));
 
@@ -250,9 +227,8 @@ void main() {
       expect(await bundled.length(), greaterThan(0));
       expect(pubspec, contains('- assets/icons/maestro.png'));
 
-      final linuxRunner = await File(
-        'linux/runner/my_application.cc',
-      ).readAsString();
+      final linuxRunner = await File('linux/runner/my_application.cc')
+          .readAsString();
       expect(linuxRunner, contains('gtk_window_set_icon_name(window,'));
       expect(linuxRunner, contains('gtk_window_set_icon_from_file'));
       // The fallback has to name the path the bundle actually ships.
@@ -265,12 +241,10 @@ void main() {
     () async {
       // Without these the shipped build composes no update service at all, and
       // the whole signed-update path is unreachable in every release.
-      final windows = await File(
-        'tooling/packaging/package_windows.ps1',
-      ).readAsString();
-      final linux = await File(
-        'tooling/packaging/package_linux.sh',
-      ).readAsString();
+      final windows = await File('tooling/packaging/package_windows.ps1')
+          .readAsString();
+      final linux = await File('tooling/packaging/package_linux.sh')
+          .readAsString();
       for (final define in ReleaseUpdateConfiguration.requiredDefines) {
         expect(
           windows,
@@ -293,18 +267,14 @@ void main() {
   test(
     'GivenBundledUpdateHelpers_WhenInspected_ThenRollbackAndRelaunchAreDefined',
     () async {
-      final windows = await File(
-        'tooling/updates/replace_windows_zip.ps1',
-      ).readAsString();
-      final linux = await File(
-        'tooling/updates/replace_linux_appimage.sh',
-      ).readAsString();
-      final windowsPackage = await File(
-        'tooling/packaging/package_windows.ps1',
-      ).readAsString();
-      final linuxPackage = await File(
-        'tooling/packaging/package_linux.sh',
-      ).readAsString();
+      final windows = await File('tooling/updates/replace_windows_zip.ps1')
+          .readAsString();
+      final linux = await File('tooling/updates/replace_linux_appimage.sh')
+          .readAsString();
+      final windowsPackage = await File('tooling/packaging/package_windows.ps1')
+          .readAsString();
+      final linuxPackage = await File('tooling/packaging/package_linux.sh')
+          .readAsString();
       expect(
         windows,
         allOf(<Matcher>[

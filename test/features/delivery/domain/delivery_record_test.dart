@@ -4,17 +4,14 @@ import 'package:maestro/features/delivery/domain/delivery_record.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 
 void main() {
-  test(
-    'GivenMatchedPostMergeRecord_WhenHydratingRetry_ThenItSkipsOpeningAndMergingAgain',
-    () {
-      final progress = _record().progressFor(_request());
+  test('GivenMatchedPostMergeRecord_WhenHydratingRetry_ThenItSkipsOpeningAndMergingAgain', () {
+    final progress = _record().progressFor(_request());
 
-      expect(progress, isNotNull);
-      expect(progress!.mergeCommit, 'merged');
-      expect(progress.issueClosed, isTrue);
-      expect(progress.branchDeleted, isFalse);
-    },
-  );
+    expect(progress, isNotNull);
+    expect(progress!.mergeCommit, 'merged');
+    expect(progress.issueClosed, isTrue);
+    expect(progress.branchDeleted, isFalse);
+  });
 
   test('GivenRecordForAnotherHead_WhenHydratingRetry_ThenItIsDiscarded', () {
     final progress = _record(headCommit: 'old').progressFor(_request());

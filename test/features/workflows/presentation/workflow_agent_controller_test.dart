@@ -92,177 +92,157 @@ void main() {
     );
   });
 
-  test(
-    'GivenCatalogRefresh_WhenCreateRequested_ThenCreateIsIgnoredAndRefreshCompletes',
-    () async {
-      final completer = Completer<AgentCliCatalog>();
-      final fixture = _Fixture(
-        codex: _Adapter(AgentCliKind.codex, completer.future),
-      );
-      addTearDown(fixture.dispose);
+  test('GivenCatalogRefresh_WhenCreateRequested_ThenCreateIsIgnoredAndRefreshCompletes', () async {
+    final completer = Completer<AgentCliCatalog>();
+    final fixture = _Fixture(
+      codex: _Adapter(AgentCliKind.codex, completer.future),
+    );
+    addTearDown(fixture.dispose);
 
-      final refresh = fixture.controller.refreshAgents();
-      await Future<void>.delayed(Duration.zero);
-      fixture.controller.create(WorkflowKind.oneOff);
-      completer.complete(_catalog(AgentCliKind.codex));
-      await refresh;
+    final refresh = fixture.controller.refreshAgents();
+    await Future<void>.delayed(Duration.zero);
+    fixture.controller.create(WorkflowKind.oneOff);
+    completer.complete(_catalog(AgentCliKind.codex));
+    await refresh;
 
-      expect(fixture.state.catalogs, isNotNull);
-      expect(fixture.state.catalogBusy, isFalse);
-      expect(fixture.state.draft.kind, WorkflowKind.reusable);
-    },
-  );
+    expect(fixture.state.catalogs, isNotNull);
+    expect(fixture.state.catalogBusy, isFalse);
+    expect(fixture.state.draft.kind, WorkflowKind.reusable);
+  });
 
-  test(
-    'GivenUnchangedPersistedAssignments_WhenDiscoveryFails_ThenMetadataSavePreservesPairsUnverified',
-    () async {
-      final fixture = _Fixture(
-        codex: _Adapter.value(
-          AgentCliCatalog(
-            kind: AgentCliKind.codex,
-            installation: AgentCliInstallation.transientFailure,
-            session: AgentCliSession.unverified,
-            modelVerification: AgentModelVerification.unverified,
-            models: const <String>[],
-            guidance: 'Try again.',
-          ),
-        ),
-      );
-      fixture.repository.last = _persistedDefinition();
-      addTearDown(fixture.dispose);
-
-      await fixture.controller.select('saved');
-      fixture.controller.setName('Metadata edit');
-      await fixture.controller.save();
-
-      expect(fixture.repository.saveCalls, 1);
-      expect(
-        fixture.repository.last!.steps.map(
-          (step) => '${step.cli}/${step.model}',
-        ),
-        everyElement('codex/gpt-5.4'),
-      );
-      expect(fixture.state.readiness, WorkflowReadinessStatus.blocked);
-      expect(
-        fixture.state.agentRowStates.values.map((state) => state.code),
-        everyElement(AgentRowStateCode.catalogUnverified),
-      );
-    },
-  );
-
-  test(
-    'GivenAlternativeCatalogStates_WhenLoaded_ThenEachRowPublishesTypedRemediation',
-    () async {
-      expect(
-        await _loadedCode(
-          installation: AgentCliInstallation.missing,
+  test('GivenUnchangedPersistedAssignments_WhenDiscoveryFails_ThenMetadataSavePreservesPairsUnverified', () async {
+    final fixture = _Fixture(
+      codex: _Adapter.value(
+        AgentCliCatalog(
+          kind: AgentCliKind.codex,
+          installation: AgentCliInstallation.transientFailure,
           session: AgentCliSession.unverified,
-          verification: AgentModelVerification.unverified,
+          modelVerification: AgentModelVerification.unverified,
+          models: const <String>[],
+          guidance: 'Try again.',
         ),
-        AgentRowStateCode.cliMissing,
-      );
-      expect(
-        await _loadedCode(
-          installation: AgentCliInstallation.inaccessible,
+      ),
+    );
+    fixture.repository.last = _persistedDefinition();
+    addTearDown(fixture.dispose);
+
+    await fixture.controller.select('saved');
+    fixture.controller.setName('Metadata edit');
+    await fixture.controller.save();
+
+    expect(fixture.repository.saveCalls, 1);
+    expect(
+      fixture.repository.last!.steps.map((step) => '${step.cli}/${step.model}'),
+      everyElement('codex/gpt-5.4'),
+    );
+    expect(fixture.state.readiness, WorkflowReadinessStatus.blocked);
+    expect(
+      fixture.state.agentRowStates.values.map((state) => state.code),
+      everyElement(AgentRowStateCode.catalogUnverified),
+    );
+  });
+
+  test('GivenAlternativeCatalogStates_WhenLoaded_ThenEachRowPublishesTypedRemediation', () async {
+    expect(
+      await _loadedCode(
+        installation: AgentCliInstallation.missing,
+        session: AgentCliSession.unverified,
+        verification: AgentModelVerification.unverified,
+      ),
+      AgentRowStateCode.cliMissing,
+    );
+    expect(
+      await _loadedCode(
+        installation: AgentCliInstallation.inaccessible,
+        session: AgentCliSession.unverified,
+        verification: AgentModelVerification.unverified,
+      ),
+      AgentRowStateCode.cliInaccessible,
+    );
+    expect(
+      await _loadedCode(
+        installation: AgentCliInstallation.available,
+        session: AgentCliSession.unauthenticated,
+        verification: AgentModelVerification.unverified,
+      ),
+      AgentRowStateCode.unauthenticated,
+    );
+    expect(
+      await _loadedCode(
+        installation: AgentCliInstallation.available,
+        session: AgentCliSession.authenticated,
+        verification: AgentModelVerification.accountVerified,
+        models: const <String>['replacement'],
+      ),
+      AgentRowStateCode.modelWithdrawn,
+    );
+  });
+
+  test('GivenCatalogRefresh_WhenStructurallyInvalidSaveRequested_ThenRefreshStillCompletes', () async {
+    final pending = Completer<AgentCliCatalog>();
+    final fixture = _Fixture(
+      codex: _Adapter(AgentCliKind.codex, pending.future),
+    );
+    addTearDown(fixture.dispose);
+
+    final refresh = fixture.controller.refreshAgents();
+    await Future<void>.delayed(Duration.zero);
+    await fixture.controller.save();
+    expect(fixture.state.catalogBusy, isTrue);
+    expect(fixture.repository.saveCalls, 0);
+
+    pending.complete(_catalog(AgentCliKind.codex));
+    await refresh;
+    expect(fixture.state.catalogBusy, isFalse);
+  });
+
+  test('GivenCatalogRefresh_WhenValidSaveRequested_ThenRefreshStillCompletesWithoutMutation', () async {
+    final pending = Completer<AgentCliCatalog>();
+    final fixture = _Fixture(
+      codex: _Adapter(AgentCliKind.codex, pending.future),
+    );
+    addTearDown(fixture.dispose);
+    fixture.controller.setName('Release');
+    fixture.controller.setUnitType(WorkItemType.useCase);
+
+    final refresh = fixture.controller.refreshAgents();
+    await Future<void>.delayed(Duration.zero);
+    await fixture.controller.save();
+    expect(fixture.state.catalogBusy, isTrue);
+    expect(fixture.repository.saveCalls, 0);
+
+    pending.complete(_catalog(AgentCliKind.codex));
+    await refresh;
+    expect(fixture.state.catalogBusy, isFalse);
+  });
+
+  test('GivenMixedReadyAndUnverifiedPersistedRows_WhenMetadataSaved_ThenFallbackIsAllowed', () async {
+    final fixture = _Fixture(
+      codex: _Adapter.value(
+        AgentCliCatalog(
+          kind: AgentCliKind.codex,
+          installation: AgentCliInstallation.transientFailure,
           session: AgentCliSession.unverified,
-          verification: AgentModelVerification.unverified,
+          modelVerification: AgentModelVerification.unverified,
+          models: const <String>[],
+          guidance: 'Try again.',
         ),
-        AgentRowStateCode.cliInaccessible,
-      );
-      expect(
-        await _loadedCode(
-          installation: AgentCliInstallation.available,
-          session: AgentCliSession.unauthenticated,
-          verification: AgentModelVerification.unverified,
-        ),
-        AgentRowStateCode.unauthenticated,
-      );
-      expect(
-        await _loadedCode(
-          installation: AgentCliInstallation.available,
-          session: AgentCliSession.authenticated,
-          verification: AgentModelVerification.accountVerified,
-          models: const <String>['replacement'],
-        ),
-        AgentRowStateCode.modelWithdrawn,
-      );
-    },
-  );
+      ),
+    );
+    fixture.repository.last = _persistedDefinition(mixedClaude: true);
+    addTearDown(fixture.dispose);
 
-  test(
-    'GivenCatalogRefresh_WhenStructurallyInvalidSaveRequested_ThenRefreshStillCompletes',
-    () async {
-      final pending = Completer<AgentCliCatalog>();
-      final fixture = _Fixture(
-        codex: _Adapter(AgentCliKind.codex, pending.future),
-      );
-      addTearDown(fixture.dispose);
+    await fixture.controller.select('saved');
+    fixture.controller.setName('Metadata edit');
+    await fixture.controller.save();
 
-      final refresh = fixture.controller.refreshAgents();
-      await Future<void>.delayed(Duration.zero);
-      await fixture.controller.save();
-      expect(fixture.state.catalogBusy, isTrue);
-      expect(fixture.repository.saveCalls, 0);
-
-      pending.complete(_catalog(AgentCliKind.codex));
-      await refresh;
-      expect(fixture.state.catalogBusy, isFalse);
-    },
-  );
-
-  test(
-    'GivenCatalogRefresh_WhenValidSaveRequested_ThenRefreshStillCompletesWithoutMutation',
-    () async {
-      final pending = Completer<AgentCliCatalog>();
-      final fixture = _Fixture(
-        codex: _Adapter(AgentCliKind.codex, pending.future),
-      );
-      addTearDown(fixture.dispose);
-      fixture.controller.setName('Release');
-      fixture.controller.setUnitType(WorkItemType.useCase);
-
-      final refresh = fixture.controller.refreshAgents();
-      await Future<void>.delayed(Duration.zero);
-      await fixture.controller.save();
-      expect(fixture.state.catalogBusy, isTrue);
-      expect(fixture.repository.saveCalls, 0);
-
-      pending.complete(_catalog(AgentCliKind.codex));
-      await refresh;
-      expect(fixture.state.catalogBusy, isFalse);
-    },
-  );
-
-  test(
-    'GivenMixedReadyAndUnverifiedPersistedRows_WhenMetadataSaved_ThenFallbackIsAllowed',
-    () async {
-      final fixture = _Fixture(
-        codex: _Adapter.value(
-          AgentCliCatalog(
-            kind: AgentCliKind.codex,
-            installation: AgentCliInstallation.transientFailure,
-            session: AgentCliSession.unverified,
-            modelVerification: AgentModelVerification.unverified,
-            models: const <String>[],
-            guidance: 'Try again.',
-          ),
-        ),
-      );
-      fixture.repository.last = _persistedDefinition(mixedClaude: true);
-      addTearDown(fixture.dispose);
-
-      await fixture.controller.select('saved');
-      fixture.controller.setName('Metadata edit');
-      await fixture.controller.save();
-
-      expect(fixture.repository.saveCalls, 1);
-      expect(fixture.repository.last!.steps.first.cli, 'claude-code');
-      expect(
-        fixture.repository.last!.steps.skip(1).map((step) => step.cli),
-        everyElement('codex'),
-      );
-    },
-  );
+    expect(fixture.repository.saveCalls, 1);
+    expect(fixture.repository.last!.steps.first.cli, 'claude-code');
+    expect(
+      fixture.repository.last!.steps.skip(1).map((step) => step.cli),
+      everyElement('codex'),
+    );
+  });
 
   test(
     'GivenPersistedWithdrawnOrChangedRow_WhenSaved_ThenFallbackIsRejected',
@@ -307,32 +287,26 @@ void main() {
     },
   );
 
-  test(
-    'GivenPendingCli_WhenWorkflowReselectedWithOverlappingRowKey_ThenLoadedAssignmentWins',
-    () async {
-      final fixture = _Fixture();
-      fixture.repository.last = _persistedDefinition(overlappingRowKey: true);
-      addTearDown(fixture.dispose);
-      await fixture.controller.load();
-      fixture.controller.selectAgentCli(
-        'default-plan',
-        AgentCliKind.claudeCode,
-      );
-      expect(fixture.state.pendingCliKinds, contains('default-plan'));
+  test('GivenPendingCli_WhenWorkflowReselectedWithOverlappingRowKey_ThenLoadedAssignmentWins', () async {
+    final fixture = _Fixture();
+    fixture.repository.last = _persistedDefinition(overlappingRowKey: true);
+    addTearDown(fixture.dispose);
+    await fixture.controller.load();
+    fixture.controller.selectAgentCli('default-plan', AgentCliKind.claudeCode);
+    expect(fixture.state.pendingCliKinds, contains('default-plan'));
 
-      await fixture.controller.select('saved');
+    await fixture.controller.select('saved');
 
-      expect(fixture.state.pendingCliKinds, isEmpty);
-      expect(
-        fixture.state.draft.steps.first.assignment?.kind,
-        AgentCliKind.codex,
-      );
-      expect(
-        fixture.state.agentRowStates['default-plan']?.code,
-        AgentRowStateCode.ready,
-      );
-    },
-  );
+    expect(fixture.state.pendingCliKinds, isEmpty);
+    expect(
+      fixture.state.draft.steps.first.assignment?.kind,
+      AgentCliKind.codex,
+    );
+    expect(
+      fixture.state.agentRowStates['default-plan']?.code,
+      AgentRowStateCode.ready,
+    );
+  });
 
   test(
     'GivenPendingCliSelection_WhenCatalogVaries_ThenImmediateStatusUsesCatalog',
@@ -409,126 +383,114 @@ void main() {
     },
   );
 
-  test(
-    'GivenCatalogRefreshInFlight_WhenMissingWorkflowSelected_ThenSelectIsIgnoredAndRefreshCompletes',
-    () async {
-      final pending = Completer<AgentCliCatalog>();
-      final fixture = _Fixture(
-        codex: _Adapter(AgentCliKind.codex, pending.future),
-      );
-      addTearDown(fixture.dispose);
+  test('GivenCatalogRefreshInFlight_WhenMissingWorkflowSelected_ThenSelectIsIgnoredAndRefreshCompletes', () async {
+    final pending = Completer<AgentCliCatalog>();
+    final fixture = _Fixture(
+      codex: _Adapter(AgentCliKind.codex, pending.future),
+    );
+    addTearDown(fixture.dispose);
 
-      final refresh = fixture.controller.refreshAgents();
-      await Future<void>.delayed(Duration.zero);
-      await fixture.controller.select('missing');
-      expect(fixture.repository.findCalls, 0);
+    final refresh = fixture.controller.refreshAgents();
+    await Future<void>.delayed(Duration.zero);
+    await fixture.controller.select('missing');
+    expect(fixture.repository.findCalls, 0);
 
-      pending.complete(_catalog(AgentCliKind.codex));
-      await refresh;
-      expect(fixture.state.catalogBusy, isFalse);
-      expect(fixture.state.feedback, isNull);
-    },
-  );
+    pending.complete(_catalog(AgentCliKind.codex));
+    await refresh;
+    expect(fixture.state.catalogBusy, isFalse);
+    expect(fixture.state.feedback, isNull);
+  });
 
-  test(
-    'GivenCatalogRefreshInFlight_WhenFailingWorkflowSelected_ThenSelectIsIgnoredAndRefreshCompletes',
-    () async {
-      final pending = Completer<AgentCliCatalog>();
-      final fixture = _Fixture(
-        codex: _Adapter(AgentCliKind.codex, pending.future),
-      );
-      fixture.repository.throwOnFind = StateError('must not run');
-      addTearDown(fixture.dispose);
+  test('GivenCatalogRefreshInFlight_WhenFailingWorkflowSelected_ThenSelectIsIgnoredAndRefreshCompletes', () async {
+    final pending = Completer<AgentCliCatalog>();
+    final fixture = _Fixture(
+      codex: _Adapter(AgentCliKind.codex, pending.future),
+    );
+    fixture.repository.throwOnFind = StateError('must not run');
+    addTearDown(fixture.dispose);
 
-      final refresh = fixture.controller.refreshAgents();
-      await Future<void>.delayed(Duration.zero);
-      await fixture.controller.select('failing');
-      expect(fixture.repository.findCalls, 0);
+    final refresh = fixture.controller.refreshAgents();
+    await Future<void>.delayed(Duration.zero);
+    await fixture.controller.select('failing');
+    expect(fixture.repository.findCalls, 0);
 
-      pending.complete(_catalog(AgentCliKind.codex));
-      await refresh;
-      expect(fixture.state.catalogBusy, isFalse);
-      expect(fixture.state.feedback, isNull);
-    },
-  );
+    pending.complete(_catalog(AgentCliKind.codex));
+    await refresh;
+    expect(fixture.state.catalogBusy, isFalse);
+    expect(fixture.state.feedback, isNull);
+  });
 
-  test(
-    'GivenDisplayRefreshFailureThenSuccessfulPreflight_WhenSelected_ThenFreshReadyStateReplacesStaleRow',
-    () async {
-      final fixture = _Fixture(
-        codex: _SequenceAdapter(AgentCliKind.codex, <AgentCliCatalog>[
-          AgentCliCatalog(
-            kind: AgentCliKind.codex,
-            installation: AgentCliInstallation.transientFailure,
-            session: AgentCliSession.unverified,
-            modelVerification: AgentModelVerification.unverified,
-            models: const <String>[],
-            guidance: 'Try again.',
-          ),
-          _catalog(AgentCliKind.codex),
-        ]),
-      );
-      fixture.repository.last = _persistedDefinition();
-      addTearDown(fixture.dispose);
+  test('GivenDisplayRefreshFailureThenSuccessfulPreflight_WhenSelected_ThenFreshReadyStateReplacesStaleRow', () async {
+    final fixture = _Fixture(
+      codex: _SequenceAdapter(AgentCliKind.codex, <AgentCliCatalog>[
+        AgentCliCatalog(
+          kind: AgentCliKind.codex,
+          installation: AgentCliInstallation.transientFailure,
+          session: AgentCliSession.unverified,
+          modelVerification: AgentModelVerification.unverified,
+          models: const <String>[],
+          guidance: 'Try again.',
+        ),
+        _catalog(AgentCliKind.codex),
+      ]),
+    );
+    fixture.repository.last = _persistedDefinition();
+    addTearDown(fixture.dispose);
 
-      await fixture.controller.select('saved');
+    await fixture.controller.select('saved');
 
-      expect(fixture.state.readiness, WorkflowReadinessStatus.ready);
-      expect(
-        fixture.state.agentRowStates.values.map((state) => state.code),
-        everyElement(AgentRowStateCode.ready),
-      );
-    },
-  );
+    expect(fixture.state.readiness, WorkflowReadinessStatus.ready);
+    expect(
+      fixture.state.agentRowStates.values.map((state) => state.code),
+      everyElement(AgentRowStateCode.ready),
+    );
+  });
 
-  test(
-    'GivenPendingCli_WhenCatalogRefreshesMissingUnauthenticatedThenUsable_ThenGuidanceUpdatesWithoutAssignment',
-    () async {
-      final fixture = _Fixture(
-        codex: _SequenceAdapter(AgentCliKind.codex, <AgentCliCatalog>[
-          _catalog(AgentCliKind.codex),
-          AgentCliCatalog(
-            kind: AgentCliKind.codex,
-            installation: AgentCliInstallation.missing,
-            session: AgentCliSession.unverified,
-            modelVerification: AgentModelVerification.unverified,
-            models: const <String>[],
-            guidance: 'Install.',
-          ),
-          AgentCliCatalog(
-            kind: AgentCliKind.codex,
-            installation: AgentCliInstallation.available,
-            session: AgentCliSession.unauthenticated,
-            modelVerification: AgentModelVerification.unverified,
-            models: const <String>[],
-            guidance: 'Authenticate.',
-          ),
-          _catalog(AgentCliKind.codex),
-        ]),
-      );
-      addTearDown(fixture.dispose);
-      await fixture.controller.load();
-      fixture.controller.selectAgentCli('default-plan', AgentCliKind.codex);
+  test('GivenPendingCli_WhenCatalogRefreshesMissingUnauthenticatedThenUsable_ThenGuidanceUpdatesWithoutAssignment', () async {
+    final fixture = _Fixture(
+      codex: _SequenceAdapter(AgentCliKind.codex, <AgentCliCatalog>[
+        _catalog(AgentCliKind.codex),
+        AgentCliCatalog(
+          kind: AgentCliKind.codex,
+          installation: AgentCliInstallation.missing,
+          session: AgentCliSession.unverified,
+          modelVerification: AgentModelVerification.unverified,
+          models: const <String>[],
+          guidance: 'Install.',
+        ),
+        AgentCliCatalog(
+          kind: AgentCliKind.codex,
+          installation: AgentCliInstallation.available,
+          session: AgentCliSession.unauthenticated,
+          modelVerification: AgentModelVerification.unverified,
+          models: const <String>[],
+          guidance: 'Authenticate.',
+        ),
+        _catalog(AgentCliKind.codex),
+      ]),
+    );
+    addTearDown(fixture.dispose);
+    await fixture.controller.load();
+    fixture.controller.selectAgentCli('default-plan', AgentCliKind.codex);
 
-      await fixture.controller.refreshAgents();
-      expect(
-        fixture.state.agentRowStates['default-plan']?.code,
-        AgentRowStateCode.cliMissing,
-      );
-      await fixture.controller.refreshAgents();
-      expect(
-        fixture.state.agentRowStates['default-plan']?.code,
-        AgentRowStateCode.unauthenticated,
-      );
-      await fixture.controller.refreshAgents();
-      expect(
-        fixture.state.agentRowStates['default-plan']?.code,
-        AgentRowStateCode.unassigned,
-      );
-      expect(fixture.state.pendingCliKinds['default-plan'], AgentCliKind.codex);
-      expect(fixture.state.draft.steps.first.assignment, isNull);
-    },
-  );
+    await fixture.controller.refreshAgents();
+    expect(
+      fixture.state.agentRowStates['default-plan']?.code,
+      AgentRowStateCode.cliMissing,
+    );
+    await fixture.controller.refreshAgents();
+    expect(
+      fixture.state.agentRowStates['default-plan']?.code,
+      AgentRowStateCode.unauthenticated,
+    );
+    await fixture.controller.refreshAgents();
+    expect(
+      fixture.state.agentRowStates['default-plan']?.code,
+      AgentRowStateCode.unassigned,
+    );
+    expect(fixture.state.pendingCliKinds['default-plan'], AgentCliKind.codex);
+    expect(fixture.state.draft.steps.first.assignment, isNull);
+  });
 }
 
 Future<AgentRowStateCode> _pendingCode({

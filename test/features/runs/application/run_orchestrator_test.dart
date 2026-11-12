@@ -24,12 +24,10 @@ void main() {
     const attestations = <_Script>[
       _Script(context: 'execute evidence'),
       _Script(
-        context:
-            '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
+        context: '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
       ),
       _Script(
-        context:
-            '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+        context: '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
       ),
     ];
 
@@ -82,71 +80,61 @@ void main() {
   });
 
   group('autonomous delivery attestation recovery', () {
-    test(
-      'GivenReviewRequestsChanges_WhenTheRunReturnsToExecute_ThenTheLoopDrivesItAgainToDelivery',
-      () async {
-        // Given: a review that requests changes once and approves the rework.
-        final port = _DeliveringPort(onOpen: () {});
-        final fixture = _autonomousFixture(port: port);
-        const testEvidence =
-            '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}';
-        fixture.launcher.results.addAll(<_Script>[
-          const _Script(context: 'execute evidence'),
-          const _Script(context: testEvidence),
-          const _Script(
-            context:
-                '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Fix the validation."}',
-          ),
-          const _Script(context: 'reworked evidence'),
-          const _Script(context: testEvidence),
-          const _Script(
-            context:
-                '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
-          ),
-        ]);
+    test('GivenReviewRequestsChanges_WhenTheRunReturnsToExecute_ThenTheLoopDrivesItAgainToDelivery', () async {
+      // Given: a review that requests changes once and approves the rework.
+      final port = _DeliveringPort(onOpen: () {});
+      final fixture = _autonomousFixture(port: port);
+      const testEvidence =
+          '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}';
+      fixture.launcher.results.addAll(<_Script>[
+        const _Script(context: 'execute evidence'),
+        const _Script(context: testEvidence),
+        const _Script(
+          context: '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Fix the validation."}',
+        ),
+        const _Script(context: 'reworked evidence'),
+        const _Script(context: testEvidence),
+        const _Script(
+          context: '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+        ),
+      ]);
 
-        // When: the run executes.
-        await fixture.orchestrator.execute('run-1');
+      // When: the run executes.
+      await fixture.orchestrator.execute('run-1');
 
-        // Then: the run sent back to execute is not stranded in running with
-        // no loop behind it; it is executed again and delivered.
-        expect(fixture.launcher.requests, hasLength(6));
-        expect(fixture.repository.failed, isEmpty);
-        expect(
-          fixture.repository.autonomousSettlements,
-          <(String, RunStatus, int)>[
-            ('run-1', RunStatus.running, 0),
-            ('run-1', RunStatus.succeeded, 3),
-          ],
-        );
-        expect(port.calls, contains('approveAndMerge'));
-      },
-    );
+      // Then: the run sent back to execute is not stranded in running with
+      // no loop behind it; it is executed again and delivered.
+      expect(fixture.launcher.requests, hasLength(6));
+      expect(fixture.repository.failed, isEmpty);
+      expect(
+        fixture.repository.autonomousSettlements,
+        <(String, RunStatus, int)>[
+          ('run-1', RunStatus.running, 0),
+          ('run-1', RunStatus.succeeded, 3),
+        ],
+      );
+      expect(port.calls, contains('approveAndMerge'));
+    });
 
-    test(
-      'GivenRejectedReviewAttestation_WhenDeliveryIsReached_ThenRunReturnsToExecute',
-      () async {
-        final fixture = _autonomousFixture();
-        fixture.launcher.results.addAll(<_Script>[
-          const _Script(context: 'execute evidence'),
-          const _Script(
-            context:
-                '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
-          ),
-          const _Script(
-            context:
-                '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Fix the validation."}',
-          ),
-        ]);
+    test('GivenRejectedReviewAttestation_WhenDeliveryIsReached_ThenRunReturnsToExecute', () async {
+      final fixture = _autonomousFixture();
+      fixture.launcher.results.addAll(<_Script>[
+        const _Script(context: 'execute evidence'),
+        const _Script(
+          context: '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
+        ),
+        const _Script(
+          context: '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Fix the validation."}',
+        ),
+      ]);
 
-        await fixture.orchestrator.execute('run-1');
+      await fixture.orchestrator.execute('run-1');
 
-        expect(
-          fixture.repository.autonomousSettlements,
-          <(String, RunStatus, int)>[('run-1', RunStatus.running, 0)],
-        );
-      },
-    );
+      expect(
+        fixture.repository.autonomousSettlements,
+        <(String, RunStatus, int)>[('run-1', RunStatus.running, 0)],
+      );
+    });
 
     test(
       'GivenMissingTestAttestation_WhenDeliveryIsReached_ThenRunReturnsToTest',
@@ -156,8 +144,7 @@ void main() {
           const _Script(context: 'execute evidence'),
           const _Script(context: 'not a test attestation'),
           const _Script(
-            context:
-                '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+            context: '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
           ),
         ]);
 
@@ -177,12 +164,10 @@ void main() {
         fixture.launcher.results.addAll(<_Script>[
           const _Script(context: 'execute evidence'),
           const _Script(
-            context:
-                '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
+            context: '{"schema":1,"kind":"test","headCommit":"abc","passedAt":"2026-08-10T12:00:00Z"}',
           ),
           const _Script(
-            context:
-                '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
+            context: '{"schema":1,"kind":"review","outcome":"approved","summary":"Approved."}',
           ),
         ]);
 
@@ -196,61 +181,53 @@ void main() {
     );
   });
 
-  test(
-    'GivenRejectedReviewAttestation_WhenAutonomousRunCompletes_ThenItReturnsToExecute',
-    () async {
-      final fixture = _Fixture(
-        stepCount: 3,
-        aggregate: _autonomousAggregate(),
-        autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
-      );
-      fixture.results.contexts.addAll(<String>[
-        'execute',
-        '{"schema":1,"kind":"test","headCommit":"head","passedAt":"2026-08-10T12:00:00Z"}',
-        '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Add a regression test."}',
-      ]);
-      fixture.launcher.results.addAll(const <_Script>[
-        _Script(),
-        _Script(),
-        _Script(),
-      ]);
+  test('GivenRejectedReviewAttestation_WhenAutonomousRunCompletes_ThenItReturnsToExecute', () async {
+    final fixture = _Fixture(
+      stepCount: 3,
+      aggregate: _autonomousAggregate(),
+      autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+    );
+    fixture.results.contexts.addAll(<String>[
+      'execute',
+      '{"schema":1,"kind":"test","headCommit":"head","passedAt":"2026-08-10T12:00:00Z"}',
+      '{"schema":1,"kind":"review","outcome":"requestedChanges","summary":"Add a regression test."}',
+    ]);
+    fixture.launcher.results.addAll(const <_Script>[
+      _Script(),
+      _Script(),
+      _Script(),
+    ]);
 
-      await fixture.orchestrator.execute('run-1');
+    await fixture.orchestrator.execute('run-1');
 
-      expect(
-        fixture.repository.autonomousSettlements,
-        <(String, RunStatus, int)>[('run-1', RunStatus.running, 0)],
-      );
-    },
-  );
+    expect(fixture.repository.autonomousSettlements, <(String, RunStatus, int)>[
+      ('run-1', RunStatus.running, 0),
+    ]);
+  });
 
-  test(
-    'GivenMissingTestAttestation_WhenAutonomousRunCompletes_ThenItReturnsToTestGate',
-    () async {
-      final fixture = _Fixture(
-        stepCount: 3,
-        aggregate: _autonomousAggregate(),
-        autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
-      );
-      fixture.results.contexts.addAll(<String>[
-        'execute',
-        'not-an-attestation',
-        '{"schema":1,"kind":"review","outcome":"approved","summary":"ok"}',
-      ]);
-      fixture.launcher.results.addAll(const <_Script>[
-        _Script(),
-        _Script(),
-        _Script(),
-      ]);
+  test('GivenMissingTestAttestation_WhenAutonomousRunCompletes_ThenItReturnsToTestGate', () async {
+    final fixture = _Fixture(
+      stepCount: 3,
+      aggregate: _autonomousAggregate(),
+      autonomousDelivery: AutonomousDelivery(port: _DeliveryPort()),
+    );
+    fixture.results.contexts.addAll(<String>[
+      'execute',
+      'not-an-attestation',
+      '{"schema":1,"kind":"review","outcome":"approved","summary":"ok"}',
+    ]);
+    fixture.launcher.results.addAll(const <_Script>[
+      _Script(),
+      _Script(),
+      _Script(),
+    ]);
 
-      await fixture.orchestrator.execute('run-1');
+    await fixture.orchestrator.execute('run-1');
 
-      expect(
-        fixture.repository.autonomousSettlements,
-        <(String, RunStatus, int)>[('run-1', RunStatus.running, 1)],
-      );
-    },
-  );
+    expect(fixture.repository.autonomousSettlements, <(String, RunStatus, int)>[
+      ('run-1', RunStatus.running, 1),
+    ]);
+  });
 
   test(
     'GivenUnavailableReviewer_WhenAutonomousRunCompletes_ThenItFailsDurably',
@@ -450,38 +427,35 @@ void main() {
     },
   );
 
-  test(
-    'GivenDegradedBufferOverflow_WhenStreaming_ThenAttemptFailsWithLogPersistCode',
-    () async {
-      // Given: storage that never recovers and a step flooding past the cap.
-      final fixture = _Fixture(stepCount: 1);
-      fixture.repository.appendFailures = _unlimitedAppendFailures;
-      fixture.launcher.results.add(
-        _Script(
-          frames: <StepOutputFrame>[
-            for (var index = 0; index < 40; index++)
-              StepOutputFrame(
-                RunLogChannel.stdout,
-                Uint8List.fromList(List<int>.filled(16 * 1024, 0x7a)),
-              ),
-          ],
-        ),
-      );
+  test('GivenDegradedBufferOverflow_WhenStreaming_ThenAttemptFailsWithLogPersistCode', () async {
+    // Given: storage that never recovers and a step flooding past the cap.
+    final fixture = _Fixture(stepCount: 1);
+    fixture.repository.appendFailures = _unlimitedAppendFailures;
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          for (var index = 0; index < 40; index++)
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(List<int>.filled(16 * 1024, 0x7a)),
+            ),
+        ],
+      ),
+    );
 
-      // When: the run executes.
-      await fixture.orchestrator.execute('run-1');
+    // When: the run executes.
+    await fixture.orchestrator.execute('run-1');
 
-      // Then: it failed safely with a typed code before memory grew unbounded.
-      expect(fixture.repository.failed, <(String, String)>[
-        ('attempt-1', 'run.step.log_persist'),
-      ]);
-      expect(fixture.repository.completed, isEmpty);
-      expect(
-        fixture.repository.appendAttempts * 16 * 1024,
-        lessThan(40 * 16 * 1024),
-      );
-    },
-  );
+    // Then: it failed safely with a typed code before memory grew unbounded.
+    expect(fixture.repository.failed, <(String, String)>[
+      ('attempt-1', 'run.step.log_persist'),
+    ]);
+    expect(fixture.repository.completed, isEmpty);
+    expect(
+      fixture.repository.appendAttempts * 16 * 1024,
+      lessThan(40 * 16 * 1024),
+    );
+  });
 
   test(
     'runs immutable steps in order and hands off only declared context',
@@ -1257,30 +1231,27 @@ void main() {
     });
   });
 
-  test(
-    'GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheRunPausesBeforeTheNextStep',
-    () async {
-      // Given: a two-step run whose first step is still executing.
-      final fixture = _Fixture(stepCount: 2);
-      final gate = Completer<void>();
-      fixture.launcher.results.addAll(<_Script>[
-        _Script(gate: gate),
-        const _Script(),
-      ]);
-      final execution = fixture.orchestrator.execute('run-1');
-      await Future<void>.delayed(Duration.zero);
+  test('GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheRunPausesBeforeTheNextStep', () async {
+    // Given: a two-step run whose first step is still executing.
+    final fixture = _Fixture(stepCount: 2);
+    final gate = Completer<void>();
+    fixture.launcher.results.addAll(<_Script>[
+      _Script(gate: gate),
+      const _Script(),
+    ]);
+    final execution = fixture.orchestrator.execute('run-1');
+    await Future<void>.delayed(Duration.zero);
 
-      // When: the user asks to pause, and the active step then finishes.
-      fixture.orchestrator.requestPause('run-1');
-      gate.complete();
-      await execution;
+    // When: the user asks to pause, and the active step then finishes.
+    fixture.orchestrator.requestPause('run-1');
+    gate.complete();
+    await execution;
 
-      // Then: the run pauses and the second step never begins (FR-RC-02).
-      expect(fixture.repository.paused, <String>['run-1']);
-      expect(fixture.repository.begun, hasLength(1));
-      expect(fixture.launcher.requests, hasLength(1));
-    },
-  );
+    // Then: the run pauses and the second step never begins (FR-RC-02).
+    expect(fixture.repository.paused, <String>['run-1']);
+    expect(fixture.repository.begun, hasLength(1));
+    expect(fixture.launcher.requests, hasLength(1));
+  });
 
   test(
     'GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheStepIsNotAbandoned',
@@ -1372,40 +1343,35 @@ void main() {
     },
   );
 
-  test(
-    'GivenACancelWhileTheStepIsLaunching_WhenTheProcessStarts_ThenItIsTerminatedAndNoLaterStepRuns',
-    () async {
-      // Given: a cancel that lands while the first step is being launched, so
-      // there is no live process for it to terminate yet.
-      final fixture = _Fixture(stepCount: 2);
-      final gate = Completer<void>();
-      final cancellations = <CancellationOutcome>[];
-      fixture.launcher.results.addAll(<_Script>[
-        _Script(gate: gate, exitCode: 143),
-        const _Script(),
-      ]);
-      fixture.launcher.onStarted = (_) => unawaited(
-        fixture.orchestrator.requestCancel('run-1').then(cancellations.add),
-      );
+  test('GivenACancelWhileTheStepIsLaunching_WhenTheProcessStarts_ThenItIsTerminatedAndNoLaterStepRuns', () async {
+    // Given: a cancel that lands while the first step is being launched, so
+    // there is no live process for it to terminate yet.
+    final fixture = _Fixture(stepCount: 2);
+    final gate = Completer<void>();
+    final cancellations = <CancellationOutcome>[];
+    fixture.launcher.results.addAll(<_Script>[
+      _Script(gate: gate, exitCode: 143),
+      const _Script(),
+    ]);
+    fixture.launcher.onStarted = (_) => unawaited(
+      fixture.orchestrator.requestCancel('run-1').then(cancellations.add),
+    );
 
-      // When: the launch completes.
-      final execution = fixture.orchestrator.execute('run-1');
-      await pumpEventQueue();
+    // When: the launch completes.
+    final execution = fixture.orchestrator.execute('run-1');
+    await pumpEventQueue();
 
-      // Then: the process the cancel could not reach is killed as soon as it
-      // exists, and the loop stands down instead of opening the next step.
-      expect(cancellations, <CancellationOutcome>[
-        CancellationOutcome.cancelled,
-      ]);
-      expect(fixture.launcher.terminated, hasLength(1));
-      gate.complete();
-      await execution;
-      expect(fixture.launcher.requests, hasLength(1));
-      expect(fixture.repository.begun, hasLength(1));
-      expect(fixture.repository.failed, isEmpty);
-      expect(fixture.repository.completed, isEmpty);
-    },
-  );
+    // Then: the process the cancel could not reach is killed as soon as it
+    // exists, and the loop stands down instead of opening the next step.
+    expect(cancellations, <CancellationOutcome>[CancellationOutcome.cancelled]);
+    expect(fixture.launcher.terminated, hasLength(1));
+    gate.complete();
+    await execution;
+    expect(fixture.launcher.requests, hasLength(1));
+    expect(fixture.repository.begun, hasLength(1));
+    expect(fixture.repository.failed, isEmpty);
+    expect(fixture.repository.completed, isEmpty);
+  });
 
   test('GivenTerminationResisted_WhenCancelling_ThenIncompleteIsReported', () {
     // Given: a step process whose descendants survive termination (AF-03).
@@ -1439,28 +1405,25 @@ void main() {
     expect(outcome, CancellationOutcome.cancelled);
   });
 
-  test(
-    'GivenCancelRequested_WhenTheStepExitsNonZero_ThenNoFailureEvidenceIsWritten',
-    () async {
-      // Given: a run whose killed step will report a non-zero exit.
-      final fixture = _Fixture(stepCount: 2);
-      final gate = Completer<void>();
-      fixture.launcher.results.add(_Script(gate: gate, exitCode: 137));
-      final execution = fixture.orchestrator.execute('run-1');
-      await Future<void>.delayed(Duration.zero);
+  test('GivenCancelRequested_WhenTheStepExitsNonZero_ThenNoFailureEvidenceIsWritten', () async {
+    // Given: a run whose killed step will report a non-zero exit.
+    final fixture = _Fixture(stepCount: 2);
+    final gate = Completer<void>();
+    fixture.launcher.results.add(_Script(gate: gate, exitCode: 137));
+    final execution = fixture.orchestrator.execute('run-1');
+    await Future<void>.delayed(Duration.zero);
 
-      // When: the run is cancelled and the killed step exits non-zero.
-      await fixture.orchestrator.requestCancel('run-1');
-      gate.complete();
-      await execution;
+    // When: the run is cancelled and the killed step exits non-zero.
+    await fixture.orchestrator.requestCancel('run-1');
+    gate.complete();
+    await execution;
 
-      // Then: the loop leaves the terminal state to the cancel transaction,
-      // so a cancelled run never lands as failed.
-      expect(fixture.repository.failed, isEmpty);
-      expect(fixture.repository.completed, isEmpty);
-      expect(fixture.repository.paused, isEmpty);
-    },
-  );
+    // Then: the loop leaves the terminal state to the cancel transaction,
+    // so a cancelled run never lands as failed.
+    expect(fixture.repository.failed, isEmpty);
+    expect(fixture.repository.completed, isEmpty);
+    expect(fixture.repository.paused, isEmpty);
+  });
 
   test(
     'GivenPreservedContextPolicy_WhenResuming_ThenThePriorContextIsPassed',

@@ -118,79 +118,73 @@ tar -C "$PWD/build/windows/x64/runner/Release" -cf "$output/$name.msix" .
     Future<String> tarListing(String archive) async =>
         '${(await Process.run('tar', <String>['-tf', dist(archive)])).stdout}';
 
-    test(
-      'GivenAConfiguredRelease_WhenPackaging_ThenEachWindowsPackageUpdatesAsItsOwnPackageType',
-      () async {
-        if (!_canPackage) return;
+    test('GivenAConfiguredRelease_WhenPackaging_ThenEachWindowsPackageUpdatesAsItsOwnPackageType', () async {
+      if (!_canPackage) return;
 
-        final result = await package(updatesConfigured: true);
+      final result = await package(updatesConfigured: true);
 
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-        expect(
-          await File('${root.path}/flutter-builds').readAsLines(),
-          hasLength(2),
-        );
-        expect(
-          '${result.stdout}',
-          allOf(
-            contains('runtime-update-package-type: zip'),
-            contains('runtime-update-package-type: msix'),
-          ),
-        );
-        // The ZIP, and setup.exe which installs the same files into a per-user
-        // folder, are both updated by swapping that folder.
-        expect(
-          await zipEntry('defines'),
-          contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=zip'),
-        );
-        expect(
-          await zipEntry('replace_windows_zip.ps1'),
-          contains('PackagePath'),
-        );
-        expect(
-          await tarEntry('maestro-windows-x64-setup.exe', './defines'),
-          contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=zip'),
-        );
-        expect(
-          await tarListing('maestro-windows-x64-setup.exe'),
-          contains('replace_windows_zip.ps1'),
-        );
-        // An MSIX install is read-only and is updated by Windows.
-        expect(
-          await tarEntry('maestro-windows-x64.msix', './defines'),
-          contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=msix'),
-        );
-        expect(
-          await tarListing('maestro-windows-x64.msix'),
-          isNot(contains('replace_windows_zip.ps1')),
-          reason: 'the ZIP helper cannot update an MSIX install',
-        );
-      },
-    );
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect(
+        await File('${root.path}/flutter-builds').readAsLines(),
+        hasLength(2),
+      );
+      expect(
+        '${result.stdout}',
+        allOf(
+          contains('runtime-update-package-type: zip'),
+          contains('runtime-update-package-type: msix'),
+        ),
+      );
+      // The ZIP, and setup.exe which installs the same files into a per-user
+      // folder, are both updated by swapping that folder.
+      expect(
+        await zipEntry('defines'),
+        contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=zip'),
+      );
+      expect(
+        await zipEntry('replace_windows_zip.ps1'),
+        contains('PackagePath'),
+      );
+      expect(
+        await tarEntry('maestro-windows-x64-setup.exe', './defines'),
+        contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=zip'),
+      );
+      expect(
+        await tarListing('maestro-windows-x64-setup.exe'),
+        contains('replace_windows_zip.ps1'),
+      );
+      // An MSIX install is read-only and is updated by Windows.
+      expect(
+        await tarEntry('maestro-windows-x64.msix', './defines'),
+        contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=msix'),
+      );
+      expect(
+        await tarListing('maestro-windows-x64.msix'),
+        isNot(contains('replace_windows_zip.ps1')),
+        reason: 'the ZIP helper cannot update an MSIX install',
+      );
+    });
 
-    test(
-      'GivenUpdatesAreUnconfigured_WhenPackaging_ThenOneBuildServesEveryPackage',
-      () async {
-        if (!_canPackage) return;
+    test('GivenUpdatesAreUnconfigured_WhenPackaging_ThenOneBuildServesEveryPackage', () async {
+      if (!_canPackage) return;
 
-        final result = await package(updatesConfigured: false);
+      final result = await package(updatesConfigured: false);
 
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-        expect('${result.stdout}', contains('runtime-updates: unconfigured'));
-        expect(
-          await File('${root.path}/flutter-builds').readAsLines(),
-          hasLength(1),
-        );
-        for (final defines in <String>[
-          await zipEntry('defines'),
-          await tarEntry('maestro-windows-x64-setup.exe', './defines'),
-          await tarEntry('maestro-windows-x64.msix', './defines'),
-        ]) {
-          expect(defines, contains('MAESTRO_INSTALLED_VERSION=1.2.3'));
-          expect(defines, isNot(contains('MAESTRO_RELEASE_PACKAGE_TYPE')));
-        }
-      },
-    );
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect('${result.stdout}', contains('runtime-updates: unconfigured'));
+      expect(
+        await File('${root.path}/flutter-builds').readAsLines(),
+        hasLength(1),
+      );
+      for (final defines in <String>[
+        await zipEntry('defines'),
+        await tarEntry('maestro-windows-x64-setup.exe', './defines'),
+        await tarEntry('maestro-windows-x64.msix', './defines'),
+      ]) {
+        expect(defines, contains('MAESTRO_INSTALLED_VERSION=1.2.3'));
+        expect(defines, isNot(contains('MAESTRO_RELEASE_PACKAGE_TYPE')));
+      }
+    });
 
     test(
       'GivenAConfiguredRelease_WhenTheBuildIsSkipped_ThenPackagingRefuses',
@@ -239,21 +233,18 @@ function Add-AppxPackage {
       },
     );
 
-    test(
-      'GivenTheMsixUpdateCommand_WhenBoundToAddAppxPackage_ThenTheStagedPathIsDeferredUntilMaestroCloses',
-      () async {
-        if (!_hasPwsh) return;
+    test('GivenTheMsixUpdateCommand_WhenBoundToAddAppxPackage_ThenTheStagedPathIsDeferredUntilMaestroCloses', () async {
+      if (!_hasPwsh) return;
 
-        final result = await bind(WindowsPackageInstaller.msixInstallCommand);
+      final result = await bind(WindowsPackageInstaller.msixInstallCommand);
 
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-        expect(
-          '${result.stdout}'.trim(),
-          r"path=C:\Users\ana o'neil\AppData\Local\Maestro\updates\a.msix "
-          'defer=True',
-        );
-      },
-    );
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect(
+        '${result.stdout}'.trim(),
+        r"path=C:\Users\ana o'neil\AppData\Local\Maestro\updates\a.msix "
+        'defer=True',
+      );
+    });
 
     test(
       'GivenALiteralPathArgument_WhenBoundToAddAppxPackage_ThenItIsRejected',

@@ -59,22 +59,19 @@ void main() {
     expect(environment['CI'], '1');
   });
 
-  test(
-    'GivenEmptyOrRelativePathEntries_WhenBuildingTheEnvironment_ThenTheWorktreeCannotSupplyTheAgent',
-    () {
-      // An empty entry means the current directory — the run's worktree — so
-      // a repository shipping its own `claude` would run instead of the CLI.
-      final linux = buildRunEnvironment(<String, String>{
-        'PATH': ':/usr/local/bin::node_modules/.bin:.:/usr/bin:',
-      }, windows: false);
-      final windows = buildRunEnvironment(<String, String>{
-        'Path': r'C:\Windows\System32;;.\bin;C:\Tools;',
-      }, windows: true);
+  test('GivenEmptyOrRelativePathEntries_WhenBuildingTheEnvironment_ThenTheWorktreeCannotSupplyTheAgent', () {
+    // An empty entry means the current directory — the run's worktree — so
+    // a repository shipping its own `claude` would run instead of the CLI.
+    final linux = buildRunEnvironment(<String, String>{
+      'PATH': ':/usr/local/bin::node_modules/.bin:.:/usr/bin:',
+    }, windows: false);
+    final windows = buildRunEnvironment(<String, String>{
+      'Path': r'C:\Windows\System32;;.\bin;C:\Tools;',
+    }, windows: true);
 
-      expect(linux['PATH'], '/usr/local/bin:/usr/bin');
-      expect(windows['PATH'], r'C:\Windows\System32;C:\Tools');
-    },
-  );
+    expect(linux['PATH'], '/usr/local/bin:/usr/bin');
+    expect(windows['PATH'], r'C:\Windows\System32;C:\Tools');
+  });
 
   test('command creation rejects shell-like unsupported CLI identifiers', () {
     expect(
@@ -208,47 +205,44 @@ void main() {
     },
   );
 
-  test(
-    'Windows and Linux fixture processes stream through ownership boundary',
-    () async {
-      final separator = Platform.pathSeparator;
-      final fixture = Platform.isWindows
-          ? '${Directory.current.path}${separator}test${separator}fixtures${separator}step_agent_windows.ps1'
-          : '${Directory.current.path}${separator}test${separator}fixtures${separator}step_agent_linux.sh';
-      final executable = Platform.isWindows
-          ? '${Platform.environment['SystemRoot']}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-          : '/bin/sh';
-      final launcher = OwnedStepProcessLauncher(
-        commands: _FixtureCommands(fixture),
-      );
-      final started = await launcher.start(
-        StepLaunchRequest(
-          cli: 'codex',
-          model: 'fixture',
-          executable: executable,
-          prompt: 'fixture input',
-          workingDirectory: Directory.current.path,
-          environment: Platform.environment,
-        ),
-      );
+  test('Windows and Linux fixture processes stream through ownership boundary', () async {
+    final separator = Platform.pathSeparator;
+    final fixture = Platform.isWindows
+        ? '${Directory.current.path}${separator}test${separator}fixtures${separator}step_agent_windows.ps1'
+        : '${Directory.current.path}${separator}test${separator}fixtures${separator}step_agent_linux.sh';
+    final executable = Platform.isWindows
+        ? '${Platform.environment['SystemRoot']}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+        : '/bin/sh';
+    final launcher = OwnedStepProcessLauncher(
+      commands: _FixtureCommands(fixture),
+    );
+    final started = await launcher.start(
+      StepLaunchRequest(
+        cli: 'codex',
+        model: 'fixture',
+        executable: executable,
+        prompt: 'fixture input',
+        workingDirectory: Directory.current.path,
+        environment: Platform.environment,
+      ),
+    );
 
-      expect(started.failureCode, isNull);
-      final frames = await started.process!.frames.toList();
-      expect(await started.process!.exitCode, 0);
-      expect(
-        frames
-            .where((frame) => frame.channel == RunLogChannel.stdout)
-            .expand((frame) => frame.bytes),
-        containsAllInOrder('fixture-out'.codeUnits),
-      );
-      expect(
-        frames
-            .where((frame) => frame.channel == RunLogChannel.stderr)
-            .expand((frame) => frame.bytes),
-        containsAllInOrder('fixture-err'.codeUnits),
-      );
-    },
-  );
+    expect(started.failureCode, isNull);
+    final frames = await started.process!.frames.toList();
+    expect(await started.process!.exitCode, 0);
+    expect(
+      frames
+          .where((frame) => frame.channel == RunLogChannel.stdout)
+          .expand((frame) => frame.bytes),
+      containsAllInOrder('fixture-out'.codeUnits),
+    );
+    expect(
+      frames
+          .where((frame) => frame.channel == RunLogChannel.stderr)
+          .expand((frame) => frame.bytes),
+      containsAllInOrder('fixture-err'.codeUnits),
+    );
+  });
 
   test('GivenOwnedProcess_WhenTerminating_ThenTheTreeIsCancelled', () async {
     // Given: a launched step whose process tree terminates cleanly.
