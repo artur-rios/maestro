@@ -79,37 +79,34 @@ echo build >> "$PWD/flutter-builds"
   Future<String> debianEntry(String entry) async =>
       '${(await Process.run('bash', <String>['-c', 'dpkg-deb --fsys-tarfile "\$0" | tar -xO "\$1"', '${root.path}/dist/maestro-linux-amd64.deb', entry])).stdout}';
 
-  test(
-    'GivenAConfiguredRelease_WhenPackaging_ThenEachLinuxPackageUpdatesAsItsOwnPackageType',
-    () async {
-      if (!_canPackage) return;
+  test('GivenAConfiguredRelease_WhenPackaging_ThenEachLinuxPackageUpdatesAsItsOwnPackageType', () async {
+    if (!_canPackage) return;
 
-      final result = await package(updatesConfigured: true);
+    final result = await package(updatesConfigured: true);
 
-      expect(result.exitCode, 0, reason: '${result.stderr}');
-      expect(
-        await appImageEntry('./usr/lib/maestro/defines'),
-        contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=appimage'),
-      );
-      expect(
-        await debianEntry('./opt/maestro/defines'),
-        contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=deb'),
-      );
-      expect(
-        await appImageEntry('./usr/lib/maestro/replace_linux_appimage.sh'),
-        contains('parent-pid'),
-      );
-      final debianFiles = await Process.run('dpkg-deb', <String>[
-        '--contents',
-        '${root.path}/dist/maestro-linux-amd64.deb',
-      ]);
-      expect(
-        '${debianFiles.stdout}',
-        isNot(contains('replace_linux_appimage.sh')),
-        reason: 'a Debian install is updated by the system package manager',
-      );
-    },
-  );
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    expect(
+      await appImageEntry('./usr/lib/maestro/defines'),
+      contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=appimage'),
+    );
+    expect(
+      await debianEntry('./opt/maestro/defines'),
+      contains('--dart-define=MAESTRO_RELEASE_PACKAGE_TYPE=deb'),
+    );
+    expect(
+      await appImageEntry('./usr/lib/maestro/replace_linux_appimage.sh'),
+      contains('parent-pid'),
+    );
+    final debianFiles = await Process.run('dpkg-deb', <String>[
+      '--contents',
+      '${root.path}/dist/maestro-linux-amd64.deb',
+    ]);
+    expect(
+      '${debianFiles.stdout}',
+      isNot(contains('replace_linux_appimage.sh')),
+      reason: 'a Debian install is updated by the system package manager',
+    );
+  });
 
   test(
     'GivenUpdatesAreUnconfigured_WhenPackaging_ThenOneBuildServesBothPackages',

@@ -4,19 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/platform/updates/update_readiness_signal.dart';
 
 void main() {
-  test(
-    'GivenProductionStartup_WhenInspected_ThenSignalFollowsRunAppInsideSuccessPath',
-    () async {
-      final source = await File('lib/main.dart').readAsString();
-      final runAppIndex = source.indexOf('runApp(composition.app);');
-      final signalIndex = source.indexOf('await readinessSignal?.write();');
-      final catchIndex = source.indexOf('} on Object {', runAppIndex);
+  test('GivenProductionStartup_WhenInspected_ThenSignalFollowsRunAppInsideSuccessPath', () async {
+    final source = await File('lib/main.dart').readAsString();
+    final runAppIndex = source.indexOf('runApp(composition.app);');
+    final signalIndex = source.indexOf('await readinessSignal?.write();');
+    final catchIndex = source.indexOf('} on Object {', runAppIndex);
 
-      expect(runAppIndex, greaterThan(-1));
-      expect(signalIndex, greaterThan(runAppIndex));
-      expect(signalIndex, lessThan(catchIndex));
-    },
-  );
+    expect(runAppIndex, greaterThan(-1));
+    expect(signalIndex, greaterThan(runAppIndex));
+    expect(signalIndex, lessThan(catchIndex));
+  });
 
   test(
     'GivenContainedWindowsSignal_WhenParsedAndWritten_ThenExactPathIsUsed',

@@ -45,8 +45,7 @@ final class DeliveryController extends ChangeNotifier {
         const DeliveryState(
           failure: DeliveryFailure(
             message: 'Delivery evidence could not be loaded.',
-            remediation:
-                'Refresh to try again. Existing delivery evidence remains durable.',
+            remediation: 'Refresh to try again. Existing delivery evidence remains durable.',
           ),
         ),
       );

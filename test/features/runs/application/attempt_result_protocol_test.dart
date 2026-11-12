@@ -52,14 +52,10 @@ void main() {
 
   test('rejects unknown duplicate wrong-bound and malformed results', () async {
     final cases = <String, String>{
-      'result.unknown_field':
-          '{"schema":1,"attemptId":"a1","nonce":"n1","outcome":"succeeded","context":"x","extra":1}',
-      'result.duplicate_field':
-          '{"schema":1,"attemptId":"a1","attemptId":"a1","nonce":"n1","outcome":"succeeded","context":"x"}',
-      'result.attempt_mismatch':
-          '{"schema":1,"attemptId":"other","nonce":"n1","outcome":"succeeded","context":"x"}',
-      'result.nonce_mismatch':
-          '{"schema":1,"attemptId":"a1","nonce":"other","outcome":"succeeded","context":"x"}',
+      'result.unknown_field': '{"schema":1,"attemptId":"a1","nonce":"n1","outcome":"succeeded","context":"x","extra":1}',
+      'result.duplicate_field': '{"schema":1,"attemptId":"a1","attemptId":"a1","nonce":"n1","outcome":"succeeded","context":"x"}',
+      'result.attempt_mismatch': '{"schema":1,"attemptId":"other","nonce":"n1","outcome":"succeeded","context":"x"}',
+      'result.nonce_mismatch': '{"schema":1,"attemptId":"a1","nonce":"other","outcome":"succeeded","context":"x"}',
       'result.malformed': '{',
     };
     for (final entry in cases.entries) {

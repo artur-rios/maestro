@@ -17,79 +17,73 @@ import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/common/capability.dart';
 
 void main() {
-  test(
-    'GivenProductionIdComposition_WhenAccountPersists_ThenUserAndAuditIdsAreUuidV7',
-    () async {
-      final database = db.MaestroDatabase(NativeDatabase.memory());
-      addTearDown(database.close);
-      final repository = DriftAuthenticationRepository(database);
-      final service = AuthenticationService(
-        users: repository,
-        verifiers: _MemoryVerifierStore(),
-        hasher: const _PasswordHasher(),
-        audits: repository,
-        operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-        recoveryCodes: _RecoveryCodes(),
-        settings: _Settings(),
-        googleAuthorization: _GoogleAuthorization(),
-        externalGateway: _ExternalGateway(),
-        newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
-        clock: () => DateTime.utc(2026, 8, 5),
-        newId: app.newProductionId,
-      );
+  test('GivenProductionIdComposition_WhenAccountPersists_ThenUserAndAuditIdsAreUuidV7', () async {
+    final database = db.MaestroDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftAuthenticationRepository(database);
+    final service = AuthenticationService(
+      users: repository,
+      verifiers: _MemoryVerifierStore(),
+      hasher: const _PasswordHasher(),
+      audits: repository,
+      operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
+      recoveryCodes: _RecoveryCodes(),
+      settings: _Settings(),
+      googleAuthorization: _GoogleAuthorization(),
+      externalGateway: _ExternalGateway(),
+      newRecoveryCodeSet: () => NewRecoveryCodeSet.generate(Random(7)),
+      clock: () => DateTime.utc(2026, 8, 5),
+      newId: app.newProductionId,
+    );
 
-      final result = await service.createAccount(
-        'person@example.com',
-        'strong-password',
-      );
-      final user = await database.select(database.localUsers).getSingle();
-      final audit = await database.select(database.auditEvents).getSingle();
+    final result = await service.createAccount(
+      'person@example.com',
+      'strong-password',
+    );
+    final user = await database.select(database.localUsers).getSingle();
+    final audit = await database.select(database.auditEvents).getSingle();
 
-      expect(result, isA<Success<LocalAccountCreation>>());
-      expect(user.id, _isCanonicalUuidV7);
-      expect(audit.id, _isCanonicalUuidV7);
-      expect(audit.actorId, user.id);
-    },
-  );
+    expect(result, isA<Success<LocalAccountCreation>>());
+    expect(user.id, _isCanonicalUuidV7);
+    expect(audit.id, _isCanonicalUuidV7);
+    expect(audit.actorId, user.id);
+  });
 
-  test(
-    'GivenProductionComposition_WhenExternalPortsAreInjected_ThenGoogleSignInUsesOnlyThosePorts',
-    () async {
-      final database = db.MaestroDatabase(NativeDatabase.memory());
-      final settings = _Settings();
-      final google = _GoogleAuthorization();
-      final gateway = _ExternalGateway();
-      const operatingSystem = _OperatingSystemAuthenticator();
-      final root = Directory.systemTemp.createTempSync(
-        'maestro-auth-composition-',
-      );
-      addTearDown(() => root.delete(recursive: true));
-      final composition = await app.composeProductionApp(
-        paths: ApplicationPaths.fromRoot(root),
-        database: database,
-        passwordVerifiers: _MemoryVerifierStore(),
-        passwordHasher: const _PasswordHasher(),
-        operatingSystemAuthentication: operatingSystem,
-        authenticationPort: operatingSystem,
-        authenticationSettings: settings,
-        recoveryCodes: _RecoveryCodes(),
-        googleAuthorization: google,
-        externalGateway: gateway,
-      );
-      addTearDown(composition.close);
+  test('GivenProductionComposition_WhenExternalPortsAreInjected_ThenGoogleSignInUsesOnlyThosePorts', () async {
+    final database = db.MaestroDatabase(NativeDatabase.memory());
+    final settings = _Settings();
+    final google = _GoogleAuthorization();
+    final gateway = _ExternalGateway();
+    const operatingSystem = _OperatingSystemAuthenticator();
+    final root = Directory.systemTemp.createTempSync(
+      'maestro-auth-composition-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final composition = await app.composeProductionApp(
+      paths: ApplicationPaths.fromRoot(root),
+      database: database,
+      passwordVerifiers: _MemoryVerifierStore(),
+      passwordHasher: const _PasswordHasher(),
+      operatingSystemAuthentication: operatingSystem,
+      authenticationPort: operatingSystem,
+      authenticationSettings: settings,
+      recoveryCodes: _RecoveryCodes(),
+      googleAuthorization: google,
+      externalGateway: gateway,
+    );
+    addTearDown(composition.close);
 
-      final result = await composition.authenticationService.signInWithGoogle();
+    final result = await composition.authenticationService.signInWithGoogle();
 
-      expect(result, isA<Success<AuthenticatedSession>>());
-      expect(google.authorizeCalls, 1);
-      expect(gateway.signInCalls, 1);
-      expect(composition.authenticationPort, same(operatingSystem));
-      expect(
-        (await composition.authenticationPort!.probe()).state,
-        CapabilityState.available,
-      );
-    },
-  );
+    expect(result, isA<Success<AuthenticatedSession>>());
+    expect(google.authorizeCalls, 1);
+    expect(gateway.signInCalls, 1);
+    expect(composition.authenticationPort, same(operatingSystem));
+    expect(
+      (await composition.authenticationPort!.probe()).state,
+      CapabilityState.available,
+    );
+  });
 }
 
 final Matcher _isCanonicalUuidV7 = predicate<String>(

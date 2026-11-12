@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_form_spacing.dart';
@@ -14,22 +13,21 @@ import 'package:maestro/features/workflows/application/agent_configuration_servi
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
 import 'package:maestro/features/workflows/presentation/workflow_editor_page.dart';
+import 'package:material_ui/material_ui.dart';
 
-typedef RunStartWorkspaceBuilder =
-    Widget Function(
-      BuildContext context,
-      String actorId,
-      ProjectRecord project,
-    );
+typedef RunStartWorkspaceBuilder = Widget Function(
+  BuildContext context,
+  String actorId,
+  ProjectRecord project,
+);
 
-typedef WorkbenchTerminalBuilder =
-    Widget Function(
-      BuildContext context,
-      String actorId,
-      ProjectRecord? availableProject,
-      ProjectTerminalDrawerController drawerController,
-      VoidCallback onWorkbenchFocusRequested,
-    );
+typedef WorkbenchTerminalBuilder = Widget Function(
+  BuildContext context,
+  String actorId,
+  ProjectRecord? availableProject,
+  ProjectTerminalDrawerController drawerController,
+  VoidCallback onWorkbenchFocusRequested,
+);
 
 enum _WorkbenchDestination { tasks, automations, health }
 

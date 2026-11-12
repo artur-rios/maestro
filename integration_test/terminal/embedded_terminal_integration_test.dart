@@ -263,9 +263,9 @@ Future<void> _deleteSilently(Directory directory) async {
   }
 }
 
-Future<TerminalSession> _open(Directory sandbox) => PtyTerminalPort(
-  shells: ShellResolver(locator: ExecutableResolver()),
-).start(workingDirectory: sandbox.path, columns: 80, rows: 24);
+Future<TerminalSession> _open(Directory sandbox) =>
+    PtyTerminalPort(shells: ShellResolver(locator: ExecutableResolver()))
+        .start(workingDirectory: sandbox.path, columns: 80, rows: 24);
 
 Future<void> _type(TerminalSession session, String command) =>
     session.write(Uint8List.fromList(utf8.encode('$command\r')));

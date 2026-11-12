@@ -76,60 +76,54 @@ void main() {
     expect(store.failedIds, <String>['resource-1']);
   });
 
-  test(
-    'GivenBranchRecordWithoutActiveRun_WhenReconciled_ThenFilesystemCleanerIsNeverCalled',
-    () async {
-      const resource = OwnedResourceRecord(
-        id: 'branch-1',
-        kind: OwnedResourceKind.branch,
-        path: 'feature/uc-06-run-1',
-        runId: 'run-1',
-      );
-      final cleaner = _FakeCleaner();
-      final report = await ReconcileResources(
-        store: _FakeStore(<OwnedResourceRecord>[resource]),
-        runActivity: _FakeRunActivity(const <String>{}),
-        cleaner: cleaner,
-        evaluatePath: (_) => OwnershipDecision.allowed,
-      )();
+  test('GivenBranchRecordWithoutActiveRun_WhenReconciled_ThenFilesystemCleanerIsNeverCalled', () async {
+    const resource = OwnedResourceRecord(
+      id: 'branch-1',
+      kind: OwnedResourceKind.branch,
+      path: 'feature/uc-06-run-1',
+      runId: 'run-1',
+    );
+    final cleaner = _FakeCleaner();
+    final report = await ReconcileResources(
+      store: _FakeStore(<OwnedResourceRecord>[resource]),
+      runActivity: _FakeRunActivity(const <String>{}),
+      cleaner: cleaner,
+      evaluatePath: (_) => OwnershipDecision.allowed,
+    )();
 
-      expect(cleaner.removed, isEmpty);
-      expect(report.failures, isEmpty);
-      expect(
-        report.retained.single.reason,
-        ReconciliationReason.externallyManaged,
-      );
-    },
-  );
+    expect(cleaner.removed, isEmpty);
+    expect(report.failures, isEmpty);
+    expect(
+      report.retained.single.reason,
+      ReconciliationReason.externallyManaged,
+    );
+  });
 
-  test(
-    'GivenInterruptedRunResultFile_WhenReconciled_ThenStaleNonceBoundFileIsCleanedButWorktreeIsRetained',
-    () async {
-      const result = OwnedResourceRecord(
-        id: 'result-1',
-        kind: OwnedResourceKind.resultFile,
-        path: r'C:\maestro\results\attempt.json',
-        runId: 'run-1',
-      );
-      const worktree = OwnedResourceRecord(
-        id: 'worktree-1',
-        kind: OwnedResourceKind.worktree,
-        path: r'C:\maestro\worktrees\run-1',
-        runId: 'run-1',
-      );
-      final cleaner = _FakeCleaner();
-      final report = await ReconcileResources(
-        store: _FakeStore(<OwnedResourceRecord>[result, worktree]),
-        runActivity: _FakeRunActivity(const <String>{'run-1'}),
-        interruptionState: _FakeInterruptedRuns(const <String>{'run-1'}),
-        cleaner: cleaner,
-        evaluatePath: (_) => OwnershipDecision.allowed,
-      )();
+  test('GivenInterruptedRunResultFile_WhenReconciled_ThenStaleNonceBoundFileIsCleanedButWorktreeIsRetained', () async {
+    const result = OwnedResourceRecord(
+      id: 'result-1',
+      kind: OwnedResourceKind.resultFile,
+      path: r'C:\maestro\results\attempt.json',
+      runId: 'run-1',
+    );
+    const worktree = OwnedResourceRecord(
+      id: 'worktree-1',
+      kind: OwnedResourceKind.worktree,
+      path: r'C:\maestro\worktrees\run-1',
+      runId: 'run-1',
+    );
+    final cleaner = _FakeCleaner();
+    final report = await ReconcileResources(
+      store: _FakeStore(<OwnedResourceRecord>[result, worktree]),
+      runActivity: _FakeRunActivity(const <String>{'run-1'}),
+      interruptionState: _FakeInterruptedRuns(const <String>{'run-1'}),
+      cleaner: cleaner,
+      evaluatePath: (_) => OwnershipDecision.allowed,
+    )();
 
-      expect(cleaner.removed, <OwnedResourceRecord>[result]);
-      expect(report.retained.single.resource, worktree);
-    },
-  );
+    expect(cleaner.removed, <OwnedResourceRecord>[result]);
+    expect(report.retained.single.resource, worktree);
+  });
 }
 
 final class _FakeStore implements OwnedResourceStore {

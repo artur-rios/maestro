@@ -32,9 +32,8 @@ Future<void> main(List<String> arguments) async {
       message: manifest,
       secretKey: secretKey,
     );
-    await File(
-      '${directory.path}${Platform.pathSeparator}release-manifest.sig',
-    ).writeAsString(base64Encode(signature));
+    await File('${directory.path}${Platform.pathSeparator}release-manifest.sig')
+        .writeAsString(base64Encode(signature));
   } finally {
     secretKey.dispose();
   }

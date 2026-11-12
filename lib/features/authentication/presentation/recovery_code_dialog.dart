@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Non-dismissible, one-time presentation of newly created recovery codes.
 final class RecoveryCodeDialog extends StatefulWidget {

@@ -75,9 +75,9 @@ final class SecretRedactor {
     // a delimiter would otherwise leave the rest of it in place, no longer
     // recognisable as the whole value.
     final secrets =
-        secretValuesIn(
-            environment,
-          ).where((value) => value != '[REDACTED]').toList()
+        secretValuesIn(environment)
+            .where((value) => value != '[REDACTED]')
+            .toList()
           ..sort((left, right) => right.length.compareTo(left.length));
     var output = input;
     for (final secret in secrets) {

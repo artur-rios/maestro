@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   test(
@@ -30,9 +30,8 @@ void main() {
   );
 
   test('GivenLightAndDarkThemes_WhenCompared_ThenSemanticRolesStayStable', () {
-    final light = maestroTheme(
-      Brightness.light,
-    ).extension<MaestroThemeTokens>()!;
+    final light = maestroTheme(Brightness.light)
+        .extension<MaestroThemeTokens>()!;
     final dark = maestroTheme(Brightness.dark).extension<MaestroThemeTokens>()!;
 
     expect(light.success != light.destructive, true);
@@ -84,18 +83,15 @@ void main() {
     },
   );
 
-  test(
-    'GivenBothBrightnesses_WhenFieldsFocused_ThenFocusTokenDrivesTheVisibleBorder',
-    () {
-      for (final brightness in Brightness.values) {
-        final theme = maestroTheme(brightness);
-        final tokens = theme.extension<MaestroThemeTokens>()!;
-        final border = theme.inputDecorationTheme.focusedBorder;
+  test('GivenBothBrightnesses_WhenFieldsFocused_ThenFocusTokenDrivesTheVisibleBorder', () {
+    for (final brightness in Brightness.values) {
+      final theme = maestroTheme(brightness);
+      final tokens = theme.extension<MaestroThemeTokens>()!;
+      final border = theme.inputDecorationTheme.focusedBorder;
 
-        expect(border, isA<OutlineInputBorder>());
-        expect((border! as OutlineInputBorder).borderSide.color, tokens.focus);
-        expect(border.borderSide.width, greaterThan(1));
-      }
-    },
-  );
+      expect(border, isA<OutlineInputBorder>());
+      expect((border! as OutlineInputBorder).borderSide.color, tokens.focus);
+      expect(border.borderSide.width, greaterThan(1));
+    }
+  });
 }

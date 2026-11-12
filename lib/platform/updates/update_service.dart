@@ -154,8 +154,7 @@ final class UpdateService {
   }
 
   static bool _isNewer(String candidate, String installed) =>
-      ReleaseVersion.parse(
-        candidate,
-      ).compareTo(ReleaseVersion.parse(installed)) >
+      ReleaseVersion.parse(candidate)
+          .compareTo(ReleaseVersion.parse(installed)) >
       0;
 }

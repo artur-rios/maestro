@@ -99,47 +99,42 @@ void main() {
     },
   );
 
-  test(
-    'GivenValidDirtyConfiguration_WhenSaveIsPending_ThenGoogleAndSettingsRemainDisabledUntilPersistenceSucceeds',
-    () async {
-      final saveCompletion = Completer<void>();
-      final repository = _SettingsRepository()..saveCompletion = saveCompletion;
-      final container = ProviderContainer(
-        overrides: [
-          authenticationSettingsRepositoryProvider.overrideWithValue(
-            repository,
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-      final controller = container.read(
-        authenticationSettingsControllerProvider.notifier,
-      );
-      await controller.load();
-      controller.updateInput(
-        clientId: 'desktop-client.apps.googleusercontent.com',
-        scopeId: '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
-      );
+  test('GivenValidDirtyConfiguration_WhenSaveIsPending_ThenGoogleAndSettingsRemainDisabledUntilPersistenceSucceeds', () async {
+    final saveCompletion = Completer<void>();
+    final repository = _SettingsRepository()..saveCompletion = saveCompletion;
+    final container = ProviderContainer(
+      overrides: [
+        authenticationSettingsRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(
+      authenticationSettingsControllerProvider.notifier,
+    );
+    await controller.load();
+    controller.updateInput(
+      clientId: 'desktop-client.apps.googleusercontent.com',
+      scopeId: '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+    );
 
-      final pending = controller.save(
-        'desktop-client.apps.googleusercontent.com',
-        '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
-      );
+    final pending = controller.save(
+      'desktop-client.apps.googleusercontent.com',
+      '9c91b0e2-bc9f-4ca7-bbb3-6d503e8e6c92',
+    );
 
-      final saving = container.read(authenticationSettingsControllerProvider);
-      expect(saving, isA<AuthenticationConfigurationSaving>());
-      expect(saving.googleSignInEnabled, isFalse);
-      expect(saving.settingsBusy, isTrue);
+    final saving = container.read(authenticationSettingsControllerProvider);
+    expect(saving, isA<AuthenticationConfigurationSaving>());
+    expect(saving.googleSignInEnabled, isFalse);
+    expect(saving.settingsBusy, isTrue);
 
-      saveCompletion.complete();
-      await pending;
+    saveCompletion.complete();
+    await pending;
 
-      final saved = container.read(authenticationSettingsControllerProvider);
-      expect(saved, isA<AuthenticationConfigurationReady>());
-      expect(saved.googleSignInEnabled, isTrue);
-      expect(saved.settingsBusy, isFalse);
-    },
-  );
+    final saved = container.read(authenticationSettingsControllerProvider);
+    expect(saved, isA<AuthenticationConfigurationReady>());
+    expect(saved.googleSignInEnabled, isTrue);
+    expect(saved.settingsBusy, isFalse);
+  });
 }
 
 final class _SettingsRepository implements AuthenticationSettingsRepository {

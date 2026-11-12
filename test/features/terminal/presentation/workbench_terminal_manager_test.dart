@@ -102,121 +102,106 @@ void main() {
       },
     );
 
-    test(
-      'GivenIncompleteKillInFlight_WhenAnotherTabIsSelected_ThenCapturedEntryIsRestoredActive',
-      () async {
-        final fixture = _ManagerFixture(
-          closure: TerminalClosure.incomplete,
-          delayClose: true,
-        );
-        await fixture.manager.create(_projectTarget('One'));
-        await fixture.manager.create(_projectTarget('Two'));
-        final firstId = fixture.manager.entries.first.id;
-        final secondId = fixture.manager.entries.last.id;
-        fixture.manager.select(firstId);
+    test('GivenIncompleteKillInFlight_WhenAnotherTabIsSelected_ThenCapturedEntryIsRestoredActive', () async {
+      final fixture = _ManagerFixture(
+        closure: TerminalClosure.incomplete,
+        delayClose: true,
+      );
+      await fixture.manager.create(_projectTarget('One'));
+      await fixture.manager.create(_projectTarget('Two'));
+      final firstId = fixture.manager.entries.first.id;
+      final secondId = fixture.manager.entries.last.id;
+      fixture.manager.select(firstId);
 
-        final kill = fixture.manager.killActive();
-        fixture.manager.select(secondId);
-        fixture.openers.first.completeClose();
-        await kill;
+      final kill = fixture.manager.killActive();
+      fixture.manager.select(secondId);
+      fixture.openers.first.completeClose();
+      await kill;
 
-        expect(fixture.manager.entries, hasLength(2));
-        expect(fixture.manager.activeEntry?.id, firstId);
-        expect(fixture.manager.isVisible, isTrue);
-        expect(fixture.manager.isKilling, isFalse);
-      },
-    );
+      expect(fixture.manager.entries, hasLength(2));
+      expect(fixture.manager.activeEntry?.id, firstId);
+      expect(fixture.manager.isVisible, isTrue);
+      expect(fixture.manager.isKilling, isFalse);
+    });
 
-    test(
-      'GivenIncompleteKillInFlight_WhenAnotherTabIsCreated_ThenCapturedEntryIsRestoredActive',
-      () async {
-        final fixture = _ManagerFixture(
-          closure: TerminalClosure.incomplete,
-          delayClose: true,
-        );
-        await fixture.manager.create(_projectTarget('One'));
-        final firstId = fixture.manager.entries.single.id;
+    test('GivenIncompleteKillInFlight_WhenAnotherTabIsCreated_ThenCapturedEntryIsRestoredActive', () async {
+      final fixture = _ManagerFixture(
+        closure: TerminalClosure.incomplete,
+        delayClose: true,
+      );
+      await fixture.manager.create(_projectTarget('One'));
+      final firstId = fixture.manager.entries.single.id;
 
-        final kill = fixture.manager.killActive();
-        final creation = fixture.manager.create(_projectTarget('Two'));
-        fixture.openers.first.completeClose();
-        await Future.wait(<Future<void>>[kill, creation]);
+      final kill = fixture.manager.killActive();
+      final creation = fixture.manager.create(_projectTarget('Two'));
+      fixture.openers.first.completeClose();
+      await Future.wait(<Future<void>>[kill, creation]);
 
-        expect(fixture.manager.entries, hasLength(2));
-        expect(fixture.manager.activeEntry?.id, firstId);
-        expect(fixture.manager.isVisible, isTrue);
-        expect(fixture.manager.isKilling, isFalse);
-      },
-    );
+      expect(fixture.manager.entries, hasLength(2));
+      expect(fixture.manager.activeEntry?.id, firstId);
+      expect(fixture.manager.isVisible, isTrue);
+      expect(fixture.manager.isKilling, isFalse);
+    });
 
-    test(
-      'GivenIncompleteKillInFlight_WhenDockIsHidden_ThenCapturedEntryAndDockAreRestored',
-      () async {
-        final fixture = _ManagerFixture(
-          closure: TerminalClosure.incomplete,
-          delayClose: true,
-        );
-        await fixture.manager.show(_homeTarget());
-        final capturedId = fixture.manager.activeEntry!.id;
+    test('GivenIncompleteKillInFlight_WhenDockIsHidden_ThenCapturedEntryAndDockAreRestored', () async {
+      final fixture = _ManagerFixture(
+        closure: TerminalClosure.incomplete,
+        delayClose: true,
+      );
+      await fixture.manager.show(_homeTarget());
+      final capturedId = fixture.manager.activeEntry!.id;
 
-        final kill = fixture.manager.killActive();
-        fixture.manager.hide();
-        fixture.openers.single.completeClose();
-        await kill;
+      final kill = fixture.manager.killActive();
+      fixture.manager.hide();
+      fixture.openers.single.completeClose();
+      await kill;
 
-        expect(fixture.manager.entries.single.id, capturedId);
-        expect(fixture.manager.activeEntry?.id, capturedId);
-        expect(fixture.manager.isVisible, isTrue);
-        expect(fixture.manager.isKilling, isFalse);
-      },
-    );
+      expect(fixture.manager.entries.single.id, capturedId);
+      expect(fixture.manager.activeEntry?.id, capturedId);
+      expect(fixture.manager.isVisible, isTrue);
+      expect(fixture.manager.isKilling, isFalse);
+    });
 
-    test(
-      'GivenThrowingClose_WhenKilled_ThenCapturedEntryRemainsActiveVisibleAndRetryable',
-      () async {
-        final fixture = _ManagerFixture(
-          delayClose: true,
-          closeError: StateError('close failed'),
-        );
-        await fixture.manager.create(_projectTarget('One'));
-        await fixture.manager.create(_projectTarget('Two'));
-        final capturedId = fixture.manager.entries.first.id;
-        fixture.manager.select(capturedId);
+    test('GivenThrowingClose_WhenKilled_ThenCapturedEntryRemainsActiveVisibleAndRetryable', () async {
+      final fixture = _ManagerFixture(
+        delayClose: true,
+        closeError: StateError('close failed'),
+      );
+      await fixture.manager.create(_projectTarget('One'));
+      await fixture.manager.create(_projectTarget('Two'));
+      final capturedId = fixture.manager.entries.first.id;
+      fixture.manager.select(capturedId);
 
-        final kill = fixture.manager.killActive();
-        fixture.manager.select(fixture.manager.entries.last.id);
-        fixture.manager.hide();
-        fixture.openers.first.completeClose();
-        await kill;
+      final kill = fixture.manager.killActive();
+      fixture.manager.select(fixture.manager.entries.last.id);
+      fixture.manager.hide();
+      fixture.openers.first.completeClose();
+      await kill;
 
-        expect(fixture.manager.entries, hasLength(2));
-        expect(fixture.manager.activeEntry?.id, capturedId);
-        expect(fixture.manager.isVisible, isTrue);
-        expect(fixture.manager.isKilling, isFalse);
-        expect(
-          fixture.manager.activeEntry?.controller.state.failure?.code,
-          TerminalFailure.closeIncompleteCode,
-        );
-      },
-    );
+      expect(fixture.manager.entries, hasLength(2));
+      expect(fixture.manager.activeEntry?.id, capturedId);
+      expect(fixture.manager.isVisible, isTrue);
+      expect(fixture.manager.isKilling, isFalse);
+      expect(
+        fixture.manager.activeEntry?.controller.state.failure?.code,
+        TerminalFailure.closeIncompleteCode,
+      );
+    });
 
-    test(
-      'GivenUnexpectedControllerThrow_WhenKilled_ThenManagerConsumesItAndClearsKilling',
-      () async {
-        final controller = _ThrowingCloseController();
-        final manager = WorkbenchTerminalManager(factory: (_) => controller);
-        await manager.create(_homeTarget());
+    test('GivenUnexpectedControllerThrow_WhenKilled_ThenManagerConsumesItAndClearsKilling', () async {
+      final controller = _ThrowingCloseController();
+      final manager = WorkbenchTerminalManager(factory: (_) => controller);
+      await manager.create(_homeTarget());
 
-        await manager.killActive();
+      await manager.killActive();
 
-        expect(controller.closeCalls, 1);
-        expect(manager.entries.single.controller, same(controller));
-        expect(manager.activeEntry?.controller, same(controller));
-        expect(manager.isVisible, isTrue);
-        expect(manager.isKilling, isFalse);
-        manager.dispose();
-      },
-    );
+      expect(controller.closeCalls, 1);
+      expect(manager.entries.single.controller, same(controller));
+      expect(manager.activeEntry?.controller, same(controller));
+      expect(manager.isVisible, isTrue);
+      expect(manager.isKilling, isFalse);
+      manager.dispose();
+    });
 
     test(
       'GivenStableIds_WhenAnEntryIsSelected_ThenThatExactEntryBecomesActive',
@@ -405,35 +390,32 @@ void main() {
       },
     );
 
-    test(
-      'GivenAKillWaitingForStartup_WhenDisposed_ThenKillCompletesAndLateSessionCloses',
-      () async {
-        final fixture = _ManagerFixture(delayOpen: true);
-        final creation = fixture.manager.create(_projectTarget('Starting'));
-        final controller = fixture.manager.entries.single.controller;
-        var controllerNotifications = 0;
-        controller.addListener(() => controllerNotifications++);
+    test('GivenAKillWaitingForStartup_WhenDisposed_ThenKillCompletesAndLateSessionCloses', () async {
+      final fixture = _ManagerFixture(delayOpen: true);
+      final creation = fixture.manager.create(_projectTarget('Starting'));
+      final controller = fixture.manager.entries.single.controller;
+      var controllerNotifications = 0;
+      controller.addListener(() => controllerNotifications++);
 
-        final kill = fixture.manager.killActive();
-        var killCompleted = false;
-        final observedKill = kill.then((_) => killCompleted = true);
-        await Future<void>.delayed(Duration.zero);
-        expect(killCompleted, isFalse);
+      final kill = fixture.manager.killActive();
+      var killCompleted = false;
+      final observedKill = kill.then((_) => killCompleted = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(killCompleted, isFalse);
 
-        fixture.manager.dispose();
-        await Future<void>.delayed(Duration.zero);
+      fixture.manager.dispose();
+      await Future<void>.delayed(Duration.zero);
 
-        expect(killCompleted, isTrue);
-        await observedKill;
-        fixture.openers.single.completeOpen();
-        await creation;
-        await Future<void>.delayed(Duration.zero);
+      expect(killCompleted, isTrue);
+      await observedKill;
+      fixture.openers.single.completeOpen();
+      await creation;
+      await Future<void>.delayed(Duration.zero);
 
-        expect(fixture.openers.single.session.closeCalls, 1);
-        expect(fixture.openers.single.session.closed, isTrue);
-        expect(controllerNotifications, 0);
-      },
-    );
+      expect(fixture.openers.single.session.closeCalls, 1);
+      expect(fixture.openers.single.session.closed, isTrue);
+      expect(controllerNotifications, 0);
+    });
 
     test(
       'GivenAKillInFlight_WhenAnotherTabIsSelected_ThenSelectionIsPreserved',

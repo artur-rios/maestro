@@ -79,168 +79,160 @@ void main() {
     },
   );
 
-  test(
-    'GivenProductionComposition_WhenAuthenticationAndProjectPersist_ThenSharedDatabaseContainsOnlySafeMetadata',
-    () async {
-      final root = await Directory.systemTemp.createTemp(
-        'maestro-production-project-',
-      );
-      addTearDown(() => root.delete(recursive: true));
-      final source = Directory(
-        '${root.path}${Platform.pathSeparator}source with spaces',
-      );
-      await source.create();
-      final sourceFile = File(
-        '${source.path}${Platform.pathSeparator}keep.txt',
-      );
-      await sourceFile.writeAsString('owned by the user');
-      final before = await _snapshot(source);
-      final database = MaestroDatabase(NativeDatabase.memory());
-      final verifiers = _MemoryVerifierStore();
-      addTearDown(verifiers.clear);
-      final commandRunner = _GitRootCommandRunner(source.path);
-      final composition = await app.composeProductionApp(
-        paths: ApplicationPaths.fromRoot(root),
-        database: database,
-        passwordVerifiers: verifiers,
-        passwordHasher: const _PasswordHasher(),
-        operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
-        commandRunner: commandRunner,
-        projectFolderPicker: _ProjectFolderPicker(source.path),
-        clock: () => DateTime.utc(2026, 8, 6, 12, 34, 56),
-      );
-      addTearDown(composition.close);
+  test('GivenProductionComposition_WhenAuthenticationAndProjectPersist_ThenSharedDatabaseContainsOnlySafeMetadata', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'maestro-production-project-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final source = Directory(
+      '${root.path}${Platform.pathSeparator}source with spaces',
+    );
+    await source.create();
+    final sourceFile = File('${source.path}${Platform.pathSeparator}keep.txt');
+    await sourceFile.writeAsString('owned by the user');
+    final before = await _snapshot(source);
+    final database = MaestroDatabase(NativeDatabase.memory());
+    final verifiers = _MemoryVerifierStore();
+    addTearDown(verifiers.clear);
+    final commandRunner = _GitRootCommandRunner(source.path);
+    final composition = await app.composeProductionApp(
+      paths: ApplicationPaths.fromRoot(root),
+      database: database,
+      passwordVerifiers: verifiers,
+      passwordHasher: const _PasswordHasher(),
+      operatingSystemAuthentication: const _OperatingSystemAuthenticator(),
+      commandRunner: commandRunner,
+      projectFolderPicker: _ProjectFolderPicker(source.path),
+      clock: () => DateTime.utc(2026, 8, 6, 12, 34, 56),
+    );
+    addTearDown(composition.close);
 
-      final selectedPath = await composition.projectFolderPicker.chooseFolder();
-      final registration = await composition.projectService.register(
-        name: '  Maestro Source  ',
-        folderPath: selectedPath!,
-      );
-      const password = 'correct horse battery staple';
-      final account = await composition.authenticationService.createAccount(
-        'person@example.com',
-        password,
-      );
-      composition.authenticationService.signOut();
-      final authentication = await composition.authenticationService
-          .signInWithEmail('person@example.com', password);
-      final registeredProject =
-          (registration as Success<ProjectSelection>).value.record;
-      final actorId = composition.authenticationService.currentSession!.userId;
-      final softDelete = await composition.projectLifecycleService.softDelete(
-        projectId: registeredProject.id,
-        actorId: actorId,
-      );
-      final restore = await composition.projectLifecycleService.restore(
-        projectId: registeredProject.id,
-        actorId: actorId,
-      );
-      final workflowSave = await composition.workflowDesignService.save(
-        WorkflowDraft.initial(kind: WorkflowKind.reusable).copyWith(
-          name: 'Shared workflow',
-          unitType: WorkItemType.useCase,
-          projectIds: <String>[registeredProject.id],
-        ),
-      );
-      final workflow = (workflowSave as WorkflowSaved).definition;
-      final project = await database.select(database.projects).getSingle();
-      final user = await database.select(database.localUsers).getSingle();
-      final audits = await database.select(database.auditEvents).get();
+    final selectedPath = await composition.projectFolderPicker.chooseFolder();
+    final registration = await composition.projectService.register(
+      name: '  Maestro Source  ',
+      folderPath: selectedPath!,
+    );
+    const password = 'correct horse battery staple';
+    final account = await composition.authenticationService.createAccount(
+      'person@example.com',
+      password,
+    );
+    composition.authenticationService.signOut();
+    final authentication = await composition.authenticationService
+        .signInWithEmail('person@example.com', password);
+    final registeredProject =
+        (registration as Success<ProjectSelection>).value.record;
+    final actorId = composition.authenticationService.currentSession!.userId;
+    final softDelete = await composition.projectLifecycleService.softDelete(
+      projectId: registeredProject.id,
+      actorId: actorId,
+    );
+    final restore = await composition.projectLifecycleService.restore(
+      projectId: registeredProject.id,
+      actorId: actorId,
+    );
+    final workflowSave = await composition.workflowDesignService.save(
+      WorkflowDraft.initial(kind: WorkflowKind.reusable).copyWith(
+        name: 'Shared workflow',
+        unitType: WorkItemType.useCase,
+        projectIds: <String>[registeredProject.id],
+      ),
+    );
+    final workflow = (workflowSave as WorkflowSaved).definition;
+    final project = await database.select(database.projects).getSingle();
+    final user = await database.select(database.localUsers).getSingle();
+    final audits = await database.select(database.auditEvents).get();
 
-      expect(registration, isA<Success<Object>>());
-      expect(account, isA<Success<Object>>());
-      expect(authentication, isA<Success<Object>>());
-      expect(softDelete, isA<ProjectLifecycleSucceeded>());
-      expect(restore, isA<ProjectLifecycleSucceeded>());
-      expect(project.id, _isCanonicalUuidV7);
-      expect(project.name, 'Maestro Source');
-      expect(project.normalizedName, 'maestro source');
-      expect(project.folderPath, source.path);
-      expect(project.createdAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
-      expect(project.updatedAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
-      expect(project.deletedAt, isNull);
-      expect(user.id, _isCanonicalUuidV7);
-      expect(user.email, 'person@example.com');
-      expect(user.verifierKey, 'maestro.auth.verifier.${user.id}');
-      expect(audits, hasLength(4));
-      expect(audits.map((audit) => audit.id), everyElement(_isCanonicalUuidV7));
-      expect(audits.map((audit) => audit.actorId), everyElement(user.id));
-      expect(composition.foundation.database, same(database));
-      expect(composition.projectRepository, isA<ProjectLifecycleStore>());
-      expect(composition.workflowRepository, isA<DriftWorkflowRepository>());
-      expect(composition.workflowDesignService, isA<WorkflowDesignService>());
-      expect(
-        composition.agentConfigurationService,
-        isA<AgentConfigurationService>(),
-      );
-      expect(workflow.revision, 1);
-      expect(workflow.projectIds, <String>[project.id]);
-      expect(
-        (await composition.workflowRepository.findById(workflow.id))!.id,
-        workflow.id,
-      );
-      expect(
-        (await database.select(database.workflows).getSingle()).name,
-        'Shared workflow',
-      );
-      expect(composition.activeProjectRuns, isA<DriftRunRepository>());
-      expect(composition.runRepository, isA<DriftRunRepository>());
-      expect(
-        composition.foundation.runRepository,
-        same(composition.runRepository),
-      );
-      expect(
-        await composition.activeProjectRuns.listActiveForProject(project.id),
-        isEmpty,
-      );
-      expect(
-        composition.projectLifecycleService,
-        isA<ProjectLifecycleService>(),
-      );
-      expect(await _snapshot(source), before);
+    expect(registration, isA<Success<Object>>());
+    expect(account, isA<Success<Object>>());
+    expect(authentication, isA<Success<Object>>());
+    expect(softDelete, isA<ProjectLifecycleSucceeded>());
+    expect(restore, isA<ProjectLifecycleSucceeded>());
+    expect(project.id, _isCanonicalUuidV7);
+    expect(project.name, 'Maestro Source');
+    expect(project.normalizedName, 'maestro source');
+    expect(project.folderPath, source.path);
+    expect(project.createdAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
+    expect(project.updatedAt.toUtc(), DateTime.utc(2026, 8, 6, 12, 34, 56));
+    expect(project.deletedAt, isNull);
+    expect(user.id, _isCanonicalUuidV7);
+    expect(user.email, 'person@example.com');
+    expect(user.verifierKey, 'maestro.auth.verifier.${user.id}');
+    expect(audits, hasLength(4));
+    expect(audits.map((audit) => audit.id), everyElement(_isCanonicalUuidV7));
+    expect(audits.map((audit) => audit.actorId), everyElement(user.id));
+    expect(composition.foundation.database, same(database));
+    expect(composition.projectRepository, isA<ProjectLifecycleStore>());
+    expect(composition.workflowRepository, isA<DriftWorkflowRepository>());
+    expect(composition.workflowDesignService, isA<WorkflowDesignService>());
+    expect(
+      composition.agentConfigurationService,
+      isA<AgentConfigurationService>(),
+    );
+    expect(workflow.revision, 1);
+    expect(workflow.projectIds, <String>[project.id]);
+    expect(
+      (await composition.workflowRepository.findById(workflow.id))!.id,
+      workflow.id,
+    );
+    expect(
+      (await database.select(database.workflows).getSingle()).name,
+      'Shared workflow',
+    );
+    expect(composition.activeProjectRuns, isA<DriftRunRepository>());
+    expect(composition.runRepository, isA<DriftRunRepository>());
+    expect(
+      composition.foundation.runRepository,
+      same(composition.runRepository),
+    );
+    expect(
+      await composition.activeProjectRuns.listActiveForProject(project.id),
+      isEmpty,
+    );
+    expect(composition.projectLifecycleService, isA<ProjectLifecycleService>());
+    expect(await _snapshot(source), before);
 
-      final persistedText = <String>[
-        project.id,
-        project.name,
-        project.normalizedName,
-        project.folderPath,
-        user.id,
-        user.email!,
-        user.authMethod,
-        user.verifierKey!,
-        for (final audit in audits) ...<String>[
-          audit.id,
-          audit.actorId,
-          audit.action,
-          audit.target,
-          audit.outcome,
-          audit.details,
-        ],
-      ].join('\n');
-      expect(persistedText, isNot(contains(password)));
-      expect(persistedText, isNot(contains(_PasswordHasher.verifier)));
-      expect(verifiers.values.values, <String>[_PasswordHasher.verifier]);
+    final persistedText = <String>[
+      project.id,
+      project.name,
+      project.normalizedName,
+      project.folderPath,
+      user.id,
+      user.email!,
+      user.authMethod,
+      user.verifierKey!,
+      for (final audit in audits) ...<String>[
+        audit.id,
+        audit.actorId,
+        audit.action,
+        audit.target,
+        audit.outcome,
+        audit.details,
+      ],
+    ].join('\n');
+    expect(persistedText, isNot(contains(password)));
+    expect(persistedText, isNot(contains(_PasswordHasher.verifier)));
+    expect(verifiers.values.values, <String>[_PasswordHasher.verifier]);
 
-      expect(commandRunner.requests, hasLength(1));
-      final request = commandRunner.requests.single;
-      expect(request.executable, 'git');
-      expect(request.arguments, <String>[
-        '-C',
-        source.path,
-        'rev-parse',
-        '--show-toplevel',
-      ]);
-      expect(request.workingDirectory, isNull);
-      expect(request.environment, const <String, String>{
-        'LC_ALL': 'C',
-        'LANG': 'C',
-        'GIT_TERMINAL_PROMPT': '0',
-      });
+    expect(commandRunner.requests, hasLength(1));
+    final request = commandRunner.requests.single;
+    expect(request.executable, 'git');
+    expect(request.arguments, <String>[
+      '-C',
+      source.path,
+      'rev-parse',
+      '--show-toplevel',
+    ]);
+    expect(request.workingDirectory, isNull);
+    expect(request.environment, const <String, String>{
+      'LC_ALL': 'C',
+      'LANG': 'C',
+      'GIT_TERMINAL_PROMPT': '0',
+    });
 
-      verifiers.clear();
-      expect(verifiers.values, isEmpty);
-    },
-  );
+    verifiers.clear();
+    expect(verifiers.values, isEmpty);
+  });
 
   testWidgets(
     'GivenProductionComposition_WhenRootDisposes_ThenSharedDatabaseClosesOnce',

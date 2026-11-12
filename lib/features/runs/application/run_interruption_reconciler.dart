@@ -45,8 +45,10 @@ abstract interface class RunInterruptionRepository {
 /// Recording a selection and acting on it are one operation, owned by the run
 /// control service, so a scope chosen at startup actually runs instead of only
 /// being written down.
-typedef RunRecoveryStarter =
-    Future<void> Function(RunRecoveryOffer offer, RecoveryAction action);
+typedef RunRecoveryStarter = Future<void> Function(
+  RunRecoveryOffer offer,
+  RecoveryAction action,
+);
 
 final class RunInterruptionReconciler {
   const RunInterruptionReconciler({

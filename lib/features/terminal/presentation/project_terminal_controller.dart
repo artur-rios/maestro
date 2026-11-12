@@ -10,12 +10,11 @@ import 'package:maestro/features/terminal/application/terminal_port.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:xterm/xterm.dart';
 
-typedef ProjectTerminalOpener =
-    Future<TerminalOpenResult> Function({
-      required String workingDirectory,
-      required int columns,
-      required int rows,
-    });
+typedef ProjectTerminalOpener = Future<TerminalOpenResult> Function({
+  required String workingDirectory,
+  required int columns,
+  required int rows,
+});
 
 abstract interface class WorkbenchTerminalController implements Listenable {
   ProjectTerminalState get state;

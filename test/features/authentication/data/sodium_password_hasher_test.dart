@@ -20,21 +20,18 @@ void main() {
     expect(await hasher.verify(verifier, 'wrong password'), isFalse);
   });
 
-  test(
-    'GivenExpensiveHashing_WhenStarted_ThenEventLoopAdvancesBeforeHashCompletes',
-    () async {
-      var hashingCompleted = false;
-      final hashing = hasher.create('another correct horse battery staple');
-      unawaited(
-        hashing.then<void>((_) {
-          hashingCompleted = true;
-        }),
-      );
+  test('GivenExpensiveHashing_WhenStarted_ThenEventLoopAdvancesBeforeHashCompletes', () async {
+    var hashingCompleted = false;
+    final hashing = hasher.create('another correct horse battery staple');
+    unawaited(
+      hashing.then<void>((_) {
+        hashingCompleted = true;
+      }),
+    );
 
-      await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
 
-      expect(hashingCompleted, isFalse);
-      await hashing;
-    },
-  );
+    expect(hashingCompleted, isFalse);
+    await hashing;
+  });
 }

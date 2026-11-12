@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +30,7 @@ import 'package:maestro/features/terminal/presentation/workbench_terminal_dock.d
 import 'package:maestro/features/terminal/presentation/workbench_terminal_manager.dart';
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
@@ -581,14 +581,15 @@ void main() {
       final workspaceElement = tester.element(
         find.byKey(const Key('workbench-workspace')),
       );
-      await ProviderScope.containerOf(
-        workspaceElement,
-      ).read(projectControllerProvider.notifier).refreshSelected();
+      await ProviderScope.containerOf(workspaceElement)
+          .read(projectControllerProvider.notifier)
+          .refreshSelected();
       await tester.pumpAndSettle();
       expect(
-        ProviderScope.containerOf(
-          workspaceElement,
-        ).read(projectControllerProvider).selected?.availability,
+        ProviderScope.containerOf(workspaceElement)
+            .read(projectControllerProvider)
+            .selected
+            ?.availability,
         ProjectAvailability.missing,
       );
       expect(find.bySemanticsLabel('Folder: Missing'), findsOneWidget);
@@ -1639,27 +1640,28 @@ void main() {
     },
   );
 
-  testWidgets('GivenDeletedProject_WhenRestored_ThenItReturnsToActiveProjects', (
-    tester,
-  ) async {
-    final repository = _Repository()..records.add(_deletedRecord());
-    await tester.pumpWidget(_app(repository: repository));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'GivenDeletedProject_WhenRestored_ThenItReturnsToActiveProjects',
+    (tester) async {
+      final repository = _Repository()..records.add(_deletedRecord());
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('Restore Demo'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Restore Demo'));
+      await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Restore Demo'), findsNothing);
-    expect(find.text('Demo'), findsWidgets);
-    expect(
-      find.bySemanticsLabel(
-        RegExp(
-          r'^Project lifecycle success.*Project metadata restored.*Source files were not accessed',
+      expect(find.bySemanticsLabel('Restore Demo'), findsNothing);
+      expect(find.text('Demo'), findsWidgets);
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Project lifecycle success.*Project metadata restored.*Source files were not accessed',
+          ),
         ),
-      ),
-      findsOneWidget,
-    );
-  });
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'GivenPermanentDeletionDialog_WhenCancelled_ThenDeletedRecordRemains',

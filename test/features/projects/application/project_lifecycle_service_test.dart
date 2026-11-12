@@ -113,33 +113,30 @@ void main() {
       },
     );
 
-    test(
-      'GivenActiveRuns_WhenPermanentlyDeleted_ThenBoundedIdentitiesBlockMutation',
-      () async {
-        final runs = List.generate(
-          ActiveProjectRuns.maximumVisible + 3,
-          (index) => ActiveProjectRun(id: 'run-$index', label: 'Run $index'),
-        );
-        final context = harness(record: project(deleted: true), runs: runs);
+    test('GivenActiveRuns_WhenPermanentlyDeleted_ThenBoundedIdentitiesBlockMutation', () async {
+      final runs = List.generate(
+        ActiveProjectRuns.maximumVisible + 3,
+        (index) => ActiveProjectRun(id: 'run-$index', label: 'Run $index'),
+      );
+      final context = harness(record: project(deleted: true), runs: runs);
 
-        final result = await context.service.permanentlyDelete(
-          projectId: 'project-1',
-          actorId: 'actor-1',
-          confirmed: true,
-        );
+      final result = await context.service.permanentlyDelete(
+        projectId: 'project-1',
+        actorId: 'actor-1',
+        confirmed: true,
+      );
 
-        final rejected = result as ProjectLifecycleRejected;
-        expect(rejected.code, 'project.lifecycle.active_runs');
-        expect(
-          rejected.activeRuns.values,
-          hasLength(ActiveProjectRuns.maximumVisible),
-        );
-        expect(rejected.activeRuns.values.first.id, 'run-0');
-        expect(rejected.activeRuns.values.last.label, 'Run 19');
-        expect(rejected.activeRuns.hasMore, isTrue);
-        expect(context.store.actions, isEmpty);
-      },
-    );
+      final rejected = result as ProjectLifecycleRejected;
+      expect(rejected.code, 'project.lifecycle.active_runs');
+      expect(
+        rejected.activeRuns.values,
+        hasLength(ActiveProjectRuns.maximumVisible),
+      );
+      expect(rejected.activeRuns.values.first.id, 'run-0');
+      expect(rejected.activeRuns.values.last.label, 'Run 19');
+      expect(rejected.activeRuns.hasMore, isTrue);
+      expect(context.store.actions, isEmpty);
+    });
 
     test(
       'GivenMissingSource_WhenLifecycleChanges_ThenNoFolderAccessIsRequired',
@@ -274,24 +271,21 @@ void main() {
       },
     );
 
-    test(
-      'GivenActiveRunReaderFailure_WhenDeleting_ThenStorageFailurePreventsMutation',
-      () async {
-        final context = harness(
-          record: project(deleted: true),
-          activeRunsError: Exception(r'Z:\secret\runs.sqlite'),
-        );
+    test('GivenActiveRunReaderFailure_WhenDeleting_ThenStorageFailurePreventsMutation', () async {
+      final context = harness(
+        record: project(deleted: true),
+        activeRunsError: Exception(r'Z:\secret\runs.sqlite'),
+      );
 
-        final result = await context.service.permanentlyDelete(
-          projectId: 'project-1',
-          actorId: 'actor-1',
-          confirmed: true,
-        );
+      final result = await context.service.permanentlyDelete(
+        projectId: 'project-1',
+        actorId: 'actor-1',
+        confirmed: true,
+      );
 
-        _expectRejection(result, 'project.lifecycle.storage_failed');
-        expect(context.store.actions, isEmpty);
-      },
-    );
+      _expectRejection(result, 'project.lifecycle.storage_failed');
+      expect(context.store.actions, isEmpty);
+    });
   });
 }
 

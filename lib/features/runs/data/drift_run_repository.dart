@@ -1286,9 +1286,8 @@ final class DriftRunRepository
     // Runs the user can still act on come first; within each group the newest
     // run leads, because that is the one just started.
     topologies.sort((left, right) {
-      final active = _activeRank(
-        left.status,
-      ).compareTo(_activeRank(right.status));
+      final active = _activeRank(left.status)
+          .compareTo(_activeRank(right.status));
       if (active != 0) return active;
       final created = right.createdAt.compareTo(left.createdAt);
       return created != 0 ? created : right.runId.compareTo(left.runId);

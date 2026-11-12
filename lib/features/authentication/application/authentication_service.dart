@@ -86,11 +86,10 @@ abstract interface class AuditRepository {
 }
 
 typedef SessionExpiryCancellation = void Function();
-typedef SessionExpiryScheduler =
-    SessionExpiryCancellation Function(
-      Duration delay,
-      void Function() onExpiry,
-    );
+typedef SessionExpiryScheduler = SessionExpiryCancellation Function(
+  Duration delay,
+  void Function() onExpiry,
+);
 
 final class AuthenticationService {
   AuthenticationService({

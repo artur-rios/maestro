@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class MaestroWindowChrome extends StatefulWidget {
   const MaestroWindowChrome({

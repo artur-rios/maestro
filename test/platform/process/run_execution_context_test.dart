@@ -41,46 +41,37 @@ void main() {
       },
     );
 
-    test(
-      'GivenResistedTermination_WhenCancelledAgain_ThenTerminationIsReattempted',
-      () async {
-        // Given: a process tree that survived its first termination.
-        final process = _FakeOwnedProcess()
-          ..outcome = ProcessTerminalState.terminationFailed;
-        final supervisor = ProcessSupervisor()..attach(process);
-        expect(
-          await supervisor.cancel(),
-          ProcessTerminalState.terminationFailed,
-        );
+    test('GivenResistedTermination_WhenCancelledAgain_ThenTerminationIsReattempted', () async {
+      // Given: a process tree that survived its first termination.
+      final process = _FakeOwnedProcess()
+        ..outcome = ProcessTerminalState.terminationFailed;
+      final supervisor = ProcessSupervisor()..attach(process);
+      expect(await supervisor.cancel(), ProcessTerminalState.terminationFailed);
 
-        // When: the user cancels again.
-        final second = await supervisor.cancel();
+      // When: the user cancels again.
+      final second = await supervisor.cancel();
 
-        // Then: the platform escalation actually runs again rather than
-        // replaying a cached failure the user cannot act on.
-        expect(second, ProcessTerminalState.terminationFailed);
-        expect(process.terminationCalls, 2);
-      },
-    );
+      // Then: the platform escalation actually runs again rather than
+      // replaying a cached failure the user cannot act on.
+      expect(second, ProcessTerminalState.terminationFailed);
+      expect(process.terminationCalls, 2);
+    });
 
-    test(
-      'GivenResistedThenSuccessfulTermination_WhenCancelledAgain_ThenSuccessIsCached',
-      () async {
-        // Given: a tree that resists once and then dies on the retry.
-        final process = _FakeOwnedProcess()
-          ..outcome = ProcessTerminalState.terminationFailed;
-        final supervisor = ProcessSupervisor()..attach(process);
-        await supervisor.cancel();
-        process.outcome = ProcessTerminalState.cancelled;
+    test('GivenResistedThenSuccessfulTermination_WhenCancelledAgain_ThenSuccessIsCached', () async {
+      // Given: a tree that resists once and then dies on the retry.
+      final process = _FakeOwnedProcess()
+        ..outcome = ProcessTerminalState.terminationFailed;
+      final supervisor = ProcessSupervisor()..attach(process);
+      await supervisor.cancel();
+      process.outcome = ProcessTerminalState.cancelled;
 
-        // When: the user cancels twice more.
-        expect(await supervisor.cancel(), ProcessTerminalState.cancelled);
-        expect(await supervisor.cancel(), ProcessTerminalState.cancelled);
+      // When: the user cancels twice more.
+      expect(await supervisor.cancel(), ProcessTerminalState.cancelled);
+      expect(await supervisor.cancel(), ProcessTerminalState.cancelled);
 
-        // Then: a settled tree is never killed again.
-        expect(process.terminationCalls, 2);
-      },
-    );
+      // Then: a settled tree is never killed again.
+      expect(process.terminationCalls, 2);
+    });
   });
 }
 

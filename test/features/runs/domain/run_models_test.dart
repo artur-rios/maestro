@@ -4,56 +4,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/runs/domain/run_models.dart';
 
 void main() {
-  test(
-    'GivenTypedWorkItems_WhenSnapshotted_ThenCanonicalPayloadPreservesEachVariant',
-    () {
-      final cases = <(RunWorkItem, String)>[
-        (
-          UseCaseRunWorkItem(identifier: ' UC-06 ', title: ' Start runs '),
-          '{"identifier":"UC-06","title":"Start runs","type":"useCase"}',
+  test('GivenTypedWorkItems_WhenSnapshotted_ThenCanonicalPayloadPreservesEachVariant', () {
+    final cases = <(RunWorkItem, String)>[
+      (
+        UseCaseRunWorkItem(identifier: ' UC-06 ', title: ' Start runs '),
+        '{"identifier":"UC-06","title":"Start runs","type":"useCase"}',
+      ),
+      (
+        GitHubIssueRunWorkItem(
+          repository: ' artur-rios/maestro ',
+          number: 7,
+          title: ' Start runs ',
+          url: 'https://github.com/artur-rios/maestro/issues/7',
         ),
-        (
-          GitHubIssueRunWorkItem(
-            repository: ' artur-rios/maestro ',
-            number: 7,
-            title: ' Start runs ',
-            url: 'https://github.com/artur-rios/maestro/issues/7',
-          ),
-          '{"number":7,"repository":"artur-rios/maestro","title":"Start runs","type":"githubIssue","url":"https://github.com/artur-rios/maestro/issues/7"}',
-        ),
-        (
-          FreeFormRunWorkItem(text: '  Prepare the release  '),
-          '{"text":"Prepare the release","type":"freeFormTask"}',
-        ),
-      ];
+        '{"number":7,"repository":"artur-rios/maestro","title":"Start runs","type":"githubIssue","url":"https://github.com/artur-rios/maestro/issues/7"}',
+      ),
+      (
+        FreeFormRunWorkItem(text: '  Prepare the release  '),
+        '{"text":"Prepare the release","type":"freeFormTask"}',
+      ),
+    ];
 
-      for (final (item, expected) in cases) {
-        expect(item.toCanonicalJson(), expected);
-        expect(
-          RunWorkItem.fromCanonicalJson(expected).toCanonicalJson(),
-          expected,
-        );
-      }
-    },
-  );
-
-  test(
-    'GivenEachBranchWorkType_WhenNamingItsBranch_ThenOnlyFeatureAndFixPrefixesAreUsed',
-    () {
+    for (final (item, expected) in cases) {
+      expect(item.toCanonicalJson(), expected);
       expect(
-        <String, String>{
-          for (final type in BranchWorkType.values)
-            type.name: type.branchPrefix,
-        },
-        <String, String>{
-          'feature': 'feature',
-          'fix': 'fix',
-          'refactor': 'feature',
-          'hotfix': 'fix',
-        },
+        RunWorkItem.fromCanonicalJson(expected).toCanonicalJson(),
+        expected,
       );
-    },
-  );
+    }
+  });
+
+  test('GivenEachBranchWorkType_WhenNamingItsBranch_ThenOnlyFeatureAndFixPrefixesAreUsed', () {
+    expect(
+      <String, String>{
+        for (final type in BranchWorkType.values) type.name: type.branchPrefix,
+      },
+      <String, String>{
+        'feature': 'feature',
+        'fix': 'fix',
+        'refactor': 'feature',
+        'hotfix': 'fix',
+      },
+    );
+  });
 
   test(
     'GivenUnsupportedOrInvalidWorkItems_WhenCreated_ThenTheyAreRejected',
@@ -82,75 +75,68 @@ void main() {
     },
   );
 
-  test(
-    'GivenMutableWorkflowInputs_WhenSnapshotCreatedAndInputsChange_ThenSnapshotRemainsDeeplyImmutable',
-    () {
-      final configuration = <String, Object?>{
-        'temperature': 0,
-        'nested': <String, Object?>{'mode': 'careful'},
-      };
-      final steps = <RunSnapshotStep>[
-        RunSnapshotStep(
-          id: 'snapshot-step-1',
-          sourceWorkflowStepId: 'workflow-step-1',
-          position: 0,
-          kind: 'plan',
-          name: 'Plan',
-          cli: 'codex',
-          model: 'gpt-5',
-          configuration: configuration,
-        ),
-      ];
-      final snapshot = RunSnapshot(
-        schemaVersion: 1,
-        projectId: 'project-1',
-        projectName: 'Maestro',
-        canonicalSourcePath: r'C:\source\maestro',
-        sourceRevision: 'abc123',
-        workflowId: 'workflow-1',
-        workflowRevision: 3,
-        workflowName: 'Delivery',
-        workItem: FreeFormRunWorkItem(text: 'Ship'),
-        deliveryMode: DeliveryMode.supervised,
-        branchWorkType: BranchWorkType.feature,
-        steps: steps,
-      );
+  test('GivenMutableWorkflowInputs_WhenSnapshotCreatedAndInputsChange_ThenSnapshotRemainsDeeplyImmutable', () {
+    final configuration = <String, Object?>{
+      'temperature': 0,
+      'nested': <String, Object?>{'mode': 'careful'},
+    };
+    final steps = <RunSnapshotStep>[
+      RunSnapshotStep(
+        id: 'snapshot-step-1',
+        sourceWorkflowStepId: 'workflow-step-1',
+        position: 0,
+        kind: 'plan',
+        name: 'Plan',
+        cli: 'codex',
+        model: 'gpt-5',
+        configuration: configuration,
+      ),
+    ];
+    final snapshot = RunSnapshot(
+      schemaVersion: 1,
+      projectId: 'project-1',
+      projectName: 'Maestro',
+      canonicalSourcePath: r'C:\source\maestro',
+      sourceRevision: 'abc123',
+      workflowId: 'workflow-1',
+      workflowRevision: 3,
+      workflowName: 'Delivery',
+      workItem: FreeFormRunWorkItem(text: 'Ship'),
+      deliveryMode: DeliveryMode.supervised,
+      branchWorkType: BranchWorkType.feature,
+      steps: steps,
+    );
 
-      configuration['temperature'] = 1;
-      (configuration['nested']! as Map<String, Object?>)['mode'] = 'fast';
-      steps.clear();
+    configuration['temperature'] = 1;
+    (configuration['nested']! as Map<String, Object?>)['mode'] = 'fast';
+    steps.clear();
 
-      expect(snapshot.steps, hasLength(1));
-      expect(snapshot.steps.single.configuration, <String, Object?>{
-        'nested': <String, Object?>{'mode': 'careful'},
-        'temperature': 0,
-      });
-      expect(
-        () => snapshot.steps.single.configuration['temperature'] = 2,
-        throwsUnsupportedError,
-      );
-      expect(
-        RunSnapshot.fromCanonicalJson(
-          snapshot.toCanonicalJson(),
-        ).toCanonicalJson(),
-        snapshot.toCanonicalJson(),
-      );
-    },
-  );
+    expect(snapshot.steps, hasLength(1));
+    expect(snapshot.steps.single.configuration, <String, Object?>{
+      'nested': <String, Object?>{'mode': 'careful'},
+      'temperature': 0,
+    });
+    expect(
+      () => snapshot.steps.single.configuration['temperature'] = 2,
+      throwsUnsupportedError,
+    );
+    expect(
+      RunSnapshot.fromCanonicalJson(snapshot.toCanonicalJson())
+          .toCanonicalJson(),
+      snapshot.toCanonicalJson(),
+    );
+  });
 
-  test(
-    'GivenRunLifecycle_WhenCheckingTransitions_ThenOnlySupportedForwardTransitionsAreLegal',
-    () {
-      expect(RunStatus.queued.canTransitionTo(RunStatus.starting), isTrue);
-      expect(RunStatus.starting.canTransitionTo(RunStatus.running), isTrue);
-      expect(RunStatus.running.canTransitionTo(RunStatus.succeeded), isTrue);
-      expect(RunStatus.running.canTransitionTo(RunStatus.failed), isTrue);
-      expect(RunStatus.running.canTransitionTo(RunStatus.interrupted), isTrue);
-      expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
-      expect(RunStatus.failed.isTerminal, isTrue);
-      expect(RunStatus.interrupted.isTerminal, isTrue);
-    },
-  );
+  test('GivenRunLifecycle_WhenCheckingTransitions_ThenOnlySupportedForwardTransitionsAreLegal', () {
+    expect(RunStatus.queued.canTransitionTo(RunStatus.starting), isTrue);
+    expect(RunStatus.starting.canTransitionTo(RunStatus.running), isTrue);
+    expect(RunStatus.running.canTransitionTo(RunStatus.succeeded), isTrue);
+    expect(RunStatus.running.canTransitionTo(RunStatus.failed), isTrue);
+    expect(RunStatus.running.canTransitionTo(RunStatus.interrupted), isTrue);
+    expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
+    expect(RunStatus.failed.isTerminal, isTrue);
+    expect(RunStatus.interrupted.isTerminal, isTrue);
+  });
 
   test('GivenRunningRun_WhenRequestingPause_ThenTheTransitionIsLegal', () {
     // Given: a run executing a step.
@@ -190,57 +176,54 @@ void main() {
     },
   );
 
-  test(
-    'GivenAStoredSnapshotNamingAnUnknownValue_WhenDecoded_ThenItIsAFormatException',
-    () {
-      // Given: a stored snapshot whose branch work type or delivery mode this
-      // build no longer knows, as after a value is removed.
-      final snapshot = RunSnapshot(
-        schemaVersion: 1,
-        projectId: 'project-1',
-        projectName: 'Maestro',
-        canonicalSourcePath: r'C:\source\maestro',
-        sourceRevision: 'abc123',
-        workflowId: 'workflow-1',
-        workflowRevision: 3,
-        workflowName: 'Delivery',
-        workItem: FreeFormRunWorkItem(text: 'Ship'),
-        deliveryMode: DeliveryMode.supervised,
-        branchWorkType: BranchWorkType.feature,
-        steps: <RunSnapshotStep>[
-          RunSnapshotStep(
-            id: 'snapshot-step-1',
-            sourceWorkflowStepId: 'workflow-step-1',
-            position: 0,
-            kind: 'execute',
-            name: 'Execute',
-            cli: 'codex',
-            model: 'gpt-5',
-            configuration: const <String, Object?>{},
-          ),
-        ],
-      ).toCanonicalJson();
+  test('GivenAStoredSnapshotNamingAnUnknownValue_WhenDecoded_ThenItIsAFormatException', () {
+    // Given: a stored snapshot whose branch work type or delivery mode this
+    // build no longer knows, as after a value is removed.
+    final snapshot = RunSnapshot(
+      schemaVersion: 1,
+      projectId: 'project-1',
+      projectName: 'Maestro',
+      canonicalSourcePath: r'C:\source\maestro',
+      sourceRevision: 'abc123',
+      workflowId: 'workflow-1',
+      workflowRevision: 3,
+      workflowName: 'Delivery',
+      workItem: FreeFormRunWorkItem(text: 'Ship'),
+      deliveryMode: DeliveryMode.supervised,
+      branchWorkType: BranchWorkType.feature,
+      steps: <RunSnapshotStep>[
+        RunSnapshotStep(
+          id: 'snapshot-step-1',
+          sourceWorkflowStepId: 'workflow-step-1',
+          position: 0,
+          kind: 'execute',
+          name: 'Execute',
+          cli: 'codex',
+          model: 'gpt-5',
+          configuration: const <String, Object?>{},
+        ),
+      ],
+    ).toCanonicalJson();
 
-      // When / Then: decoding reports unreadable evidence as a format error,
-      // like every other malformed field, naming the offending value.
-      for (final (from, to) in <(String, String)>[
-        ('"branchWorkType":"feature"', '"branchWorkType":"chore"'),
-        ('"deliveryMode":"supervised"', '"deliveryMode":"manual"'),
-      ]) {
-        expect(snapshot, contains(from));
-        expect(
-          () => RunSnapshot.fromCanonicalJson(snapshot.replaceFirst(from, to)),
-          throwsA(
-            isA<FormatException>().having(
-              (error) => error.message,
-              'message',
-              contains(to.split(':').last.replaceAll('"', '')),
-            ),
+    // When / Then: decoding reports unreadable evidence as a format error,
+    // like every other malformed field, naming the offending value.
+    for (final (from, to) in <(String, String)>[
+      ('"branchWorkType":"feature"', '"branchWorkType":"chore"'),
+      ('"deliveryMode":"supervised"', '"deliveryMode":"manual"'),
+    ]) {
+      expect(snapshot, contains(from));
+      expect(
+        () => RunSnapshot.fromCanonicalJson(snapshot.replaceFirst(from, to)),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains(to.split(':').last.replaceAll('"', '')),
           ),
-        );
-      }
-    },
-  );
+        ),
+      );
+    }
+  });
 
   test('GivenQueuedRun_WhenItsStartCannotProceed_ThenFailedIsLegal', () {
     // Given: a queued intent whose start could not be recorded.
@@ -276,79 +259,67 @@ void main() {
     expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
   });
 
-  test(
-    'GivenWorkflowStepsComplete_WhenAutonomousDeliveryIsPending_ThenItCanSettleWithoutReopeningSucceeded',
-    () {
-      expect(
-        RunStatus.running.canTransitionTo(RunStatus.deliveryPending),
-        isTrue,
-      );
-      expect(
-        RunStatus.deliveryPending.canTransitionTo(RunStatus.running),
-        isTrue,
-      );
-      expect(
-        RunStatus.deliveryPending.canTransitionTo(RunStatus.succeeded),
-        isTrue,
-      );
-      expect(
-        RunStatus.deliveryPending.canTransitionTo(RunStatus.failed),
-        isTrue,
-      );
-      expect(RunStatus.deliveryPending.isTerminal, isFalse);
-      expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
-      expect(RunStatus.succeeded.canTransitionTo(RunStatus.failed), isFalse);
-    },
-  );
+  test('GivenWorkflowStepsComplete_WhenAutonomousDeliveryIsPending_ThenItCanSettleWithoutReopeningSucceeded', () {
+    expect(
+      RunStatus.running.canTransitionTo(RunStatus.deliveryPending),
+      isTrue,
+    );
+    expect(
+      RunStatus.deliveryPending.canTransitionTo(RunStatus.running),
+      isTrue,
+    );
+    expect(
+      RunStatus.deliveryPending.canTransitionTo(RunStatus.succeeded),
+      isTrue,
+    );
+    expect(RunStatus.deliveryPending.canTransitionTo(RunStatus.failed), isTrue);
+    expect(RunStatus.deliveryPending.isTerminal, isFalse);
+    expect(RunStatus.succeeded.canTransitionTo(RunStatus.running), isFalse);
+    expect(RunStatus.succeeded.canTransitionTo(RunStatus.failed), isFalse);
+  });
 
-  test(
-    'GivenEmptyOrNonContiguousSteps_WhenSnapshotCreated_ThenInvalidExecutionOrderIsRejected',
-    () {
-      expect(
-        () => _snapshotWithSteps(const <RunSnapshotStep>[]),
-        throwsArgumentError,
-      );
-      expect(
-        () => _snapshotWithSteps(<RunSnapshotStep>[
-          RunSnapshotStep(
-            id: 'step-2',
-            sourceWorkflowStepId: 'source-2',
-            position: 1,
-            kind: 'execute',
-            name: 'Execute',
-            cli: 'codex',
-            model: 'gpt-5',
-            configuration: const <String, Object?>{},
-          ),
-        ]),
-        throwsArgumentError,
-      );
-    },
-  );
+  test('GivenEmptyOrNonContiguousSteps_WhenSnapshotCreated_ThenInvalidExecutionOrderIsRejected', () {
+    expect(
+      () => _snapshotWithSteps(const <RunSnapshotStep>[]),
+      throwsArgumentError,
+    );
+    expect(
+      () => _snapshotWithSteps(<RunSnapshotStep>[
+        RunSnapshotStep(
+          id: 'step-2',
+          sourceWorkflowStepId: 'source-2',
+          position: 1,
+          kind: 'execute',
+          name: 'Execute',
+          cli: 'codex',
+          model: 'gpt-5',
+          configuration: const <String, Object?>{},
+        ),
+      ]),
+      throwsArgumentError,
+    );
+  });
 
-  test(
-    'GivenDeclaredContext_WhenAtBoundaryThenAccepted_WhenOverBoundaryThenRejected',
-    () {
-      expect(
-        DeclaredContext.parse(List<String>.filled(262144, 'x').join()).bytes,
-        262144,
-      );
-      expect(
-        () => DeclaredContext.parse(
-          '${List<String>.filled(262145, 'x').join()}SECRET-SENTINEL',
-        ),
-        throwsA(
-          isA<DeclaredContextTooLarge>()
-              .having((error) => error.actualBytes, 'actualBytes', 262160)
-              .having(
-                (error) => error.toString(),
-                'sanitized message',
-                allOf(contains('262160'), isNot(contains('SECRET-SENTINEL'))),
-              ),
-        ),
-      );
-    },
-  );
+  test('GivenDeclaredContext_WhenAtBoundaryThenAccepted_WhenOverBoundaryThenRejected', () {
+    expect(
+      DeclaredContext.parse(List<String>.filled(262144, 'x').join()).bytes,
+      262144,
+    );
+    expect(
+      () => DeclaredContext.parse(
+        '${List<String>.filled(262145, 'x').join()}SECRET-SENTINEL',
+      ),
+      throwsA(
+        isA<DeclaredContextTooLarge>()
+            .having((error) => error.actualBytes, 'actualBytes', 262160)
+            .having(
+              (error) => error.toString(),
+              'sanitized message',
+              allOf(contains('262160'), isNot(contains('SECRET-SENTINEL'))),
+            ),
+      ),
+    );
+  });
 
   test(
     'GivenMutableLogBytes_WhenSegmentCreatedOrRead_ThenEvidenceCannotBeMutated',

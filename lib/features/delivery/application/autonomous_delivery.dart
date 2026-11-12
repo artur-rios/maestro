@@ -31,8 +31,7 @@ final class AutonomousDelivery {
     if (request.progress case final saved?) {
       if (!saved.matches(request.delivery)) {
         return const AutonomousDeliveryBlocked(
-          remediation:
-              'Discard retry progress that does not match this run and head commit.',
+          remediation: 'Discard retry progress that does not match this run and head commit.',
         );
       }
       progress = saved;

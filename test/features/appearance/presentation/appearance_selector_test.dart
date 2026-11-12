@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/appearance/application/appearance_preference_repository.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
 import 'package:maestro/features/appearance/presentation/appearance_selector.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('GivenSelector_WhenOpened_ThenModesAndActiveModeAreAccessible', (

@@ -326,8 +326,7 @@ final class ProjectController extends Notifier<ProjectWorkspaceState> {
               .toList(growable: false),
         );
       },
-      successMessage:
-          'Project metadata permanently deleted. Source files were not changed.',
+      successMessage: 'Project metadata permanently deleted. Source files were not changed.',
     );
   }
 

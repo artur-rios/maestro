@@ -64,15 +64,23 @@ bool _isForbidden(String import, _Layer layer) => switch (layer) {
   // Use cases own ports; adapters implement them.
   _Layer.application => _isOutsideWorld(import),
   // Adapters may use storage and the platform, but never the interface.
-  _Layer.data => import.startsWith('package:flutter/'),
+  _Layer.data => _isFramework(import),
   // Views may use the framework, but never the ORM or the filesystem.
   _Layer.presentation =>
     import == 'dart:io' || import.startsWith('package:drift'),
 };
 
+/// The UI framework: Flutter itself, and the Material and Cupertino libraries
+/// that Flutter 3.50 moved out of `package:flutter/` into their own packages.
+bool _isFramework(String import) =>
+    import.startsWith('package:flutter/') ||
+    import.startsWith('package:material_ui/') ||
+    import.startsWith('package:cupertino_ui/');
+
 bool _isOutsideWorld(String import) =>
     import == 'dart:io' ||
     import.startsWith('package:flutter') ||
+    _isFramework(import) ||
     import.startsWith('package:drift') ||
     import.startsWith('package:maestro/platform/');
 

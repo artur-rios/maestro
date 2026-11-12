@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/errors/result.dart';
 import 'package:maestro/features/updates/presentation/update_controller.dart';
@@ -8,6 +7,7 @@ import 'package:maestro/platform/updates/package_installer.dart';
 import 'package:maestro/platform/updates/release_manifest.dart';
 import 'package:maestro/platform/updates/update_downloader.dart';
 import 'package:maestro/platform/updates/update_service.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets(

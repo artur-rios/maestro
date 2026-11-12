@@ -50,22 +50,19 @@ void main() {
     });
   });
 
-  test(
-    'GivenFailedCanceledOrInterruptedRun_WhenListingControls_ThenOnlyRetryIsOffered',
-    () {
-      // Given: the three terminal statuses recovery applies to.
-      // When / Then: retry is the only control, for each of them.
-      for (final status in <RunStatus>[
-        RunStatus.failed,
-        RunStatus.canceled,
-        RunStatus.interrupted,
-      ]) {
-        expect(availableControls(status), <RunControlAction>{
-          RunControlAction.retry,
-        }, reason: '$status should offer retry alone');
-      }
-    },
-  );
+  test('GivenFailedCanceledOrInterruptedRun_WhenListingControls_ThenOnlyRetryIsOffered', () {
+    // Given: the three terminal statuses recovery applies to.
+    // When / Then: retry is the only control, for each of them.
+    for (final status in <RunStatus>[
+      RunStatus.failed,
+      RunStatus.canceled,
+      RunStatus.interrupted,
+    ]) {
+      expect(availableControls(status), <RunControlAction>{
+        RunControlAction.retry,
+      }, reason: '$status should offer retry alone');
+    }
+  });
 
   test('GivenSucceededRun_WhenListingControls_ThenNoControlIsOffered', () {
     // Given: a run that completed every step.

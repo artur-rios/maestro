@@ -5,7 +5,7 @@
 ## Verified implementation
 
 - Working tree: uncommitted dependency refresh; no CI run cites this state yet.
-- Selected toolchain: Flutter 3.47.2 stable and its bundled Dart 3.13.2 SDK
+- Selected toolchain: Flutter 3.50.0 stable and its bundled Dart 3.14.0 SDK
 - Local gates run against this resolution: `dart format --set-exit-if-changed`,
   `dart run tooling/verify_architecture.dart`,
   `dart run tooling/verify_workflows.dart`, `flutter analyze` (clean), and
@@ -22,8 +22,8 @@
 
 | Dependency | Current | Latest stable | Selected | Source | Reason |
 | --- | --- | --- | --- | --- | --- |
-| Flutter SDK | 3.47.2 | 3.47.2 | 3.47.2 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | The current stable Flutter release is selected. |
-| Dart SDK | 3.13.2 | 3.13.2 (bundled with Flutter 3.47.2) | 3.13.2 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter 3.47.2 bundles this Dart SDK; keep the toolchain pair aligned. |
+| Flutter SDK | 3.50.0 | 3.50.0 | 3.50.0 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | The current stable Flutter release is selected. |
+| Dart SDK | 3.14.0 | 3.14.0 (bundled with Flutter 3.50.0) | 3.14.0 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter 3.50.0 bundles this Dart SDK; keep the toolchain pair aligned. |
 
 ## Direct Dart packages
 
@@ -35,7 +35,7 @@
 | drift_flutter | 0.3.1 | 0.3.1 | 0.3.1 | [pub.dev 0.3.1](https://pub.dev/packages/drift_flutter/versions/0.3.1) | Current resolved version is latest stable. |
 | ffi | 2.2.0 | 2.2.0 | 2.2.0 | [pub.dev 2.2.0](https://pub.dev/packages/ffi/versions/2.2.0) | Current resolved version is latest stable. |
 | file_selector | 1.1.0 | 1.1.0 | 1.1.0 | [pub.dev 1.1.0](https://pub.dev/packages/file_selector/versions/1.1.0) | Current resolved version is latest stable. |
-| flutter | SDK 3.47.2 | SDK 3.47.2 | SDK 3.47.2 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
+| flutter | SDK 3.50.0 | SDK 3.50.0 | SDK 3.50.0 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
 | flutter_pty | 0.4.2 | 0.4.2 | 0.4.2 | [pub.dev 0.4.2](https://pub.dev/packages/flutter_pty/versions/0.4.2) | Current resolved version is latest stable. |
 | flutter_riverpod | 3.4.3 | 3.4.3 | 3.4.3 | [pub.dev 3.4.3](https://pub.dev/packages/flutter_riverpod/versions/3.4.3) | Current resolved version is latest stable. |
 | flutter_secure_storage | 11.0.0 | 11.0.0 | 11.0.0 | [pub.dev 11.0.0](https://pub.dev/packages/flutter_secure_storage/versions/11.0.0) | Current resolved version is latest stable. |
@@ -47,13 +47,13 @@
 | url_launcher | 6.3.2 | 6.3.2 | 6.3.2 | [pub.dev 6.3.2](https://pub.dev/packages/url_launcher/versions/6.3.2) | Current resolved version is latest stable. |
 | uuid | 4.6.0 | 4.6.0 | 4.6.0 | [pub.dev 4.6.0](https://pub.dev/packages/uuid/versions/4.6.0) | Current resolved version is latest stable. |
 | win32 | 6.4.0 | 6.4.0 | 6.4.0 | [pub.dev 6.4.0](https://pub.dev/packages/win32/versions/6.4.0) | Current resolved version is latest stable. |
-| window_manager | 0.6.0 | 0.6.0 | 0.6.0 | [pub.dev 0.6.0](https://pub.dev/packages/window_manager/versions/0.6.0) | Current resolved version is latest stable. |
+| window_manager | 0.7.0 | 0.7.0 | 0.7.0 | [pub.dev 0.7.0](https://pub.dev/packages/window_manager/versions/0.7.0) | Current resolved version is latest stable. |
 | xterm | 4.0.0 | 4.0.0 | 4.0.0 | [pub.dev 4.0.0](https://pub.dev/packages/xterm/versions/4.0.0) | Current resolved version is latest stable. |
 | build_runner | 2.16.1 | 2.16.1 | 2.16.1 | [pub.dev 2.16.1](https://pub.dev/packages/build_runner/versions/2.16.1) | Current resolved version is latest stable. |
 | drift_dev | 2.34.6 | 2.34.6 | 2.34.6 | [pub.dev 2.34.6](https://pub.dev/packages/drift_dev/versions/2.34.6) | Current resolved version is latest stable. |
 | flutter_lints | 6.0.0 | 6.0.0 | 6.0.0 | [pub.dev 6.0.0](https://pub.dev/packages/flutter_lints/versions/6.0.0) | Current resolved version is latest stable. |
-| flutter_test | SDK 3.47.2 | SDK 3.47.2 | SDK 3.47.2 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
-| integration_test | SDK 3.47.2 | SDK 3.47.2 | SDK 3.47.2 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
+| flutter_test | SDK 3.50.0 | SDK 3.50.0 | SDK 3.50.0 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
+| integration_test | SDK 3.50.0 | SDK 3.50.0 | SDK 3.50.0 | [Flutter Windows release metadata](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json) | Flutter SDK package; follows the selected Flutter SDK. |
 | msix | 3.18.0 | 3.18.0 | 3.18.0 | [pub.dev 3.18.0](https://pub.dev/packages/msix/versions/3.18.0) | Current resolved version is latest stable. |
 | yaml | 3.1.4 | 3.1.4 | 3.1.4 | [pub.dev 3.1.4](https://pub.dev/packages/yaml/versions/3.1.4) | Current resolved version is latest stable. |
 
@@ -78,7 +78,7 @@
 | checked_yaml | 2.0.4 | 2.0.4 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | cli_util | 0.5.2 | 0.5.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | clock | 1.1.3 | 1.1.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| cnativeapi | 0.5.10 | 0.5.10 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| cnativeapi | 0.6.0 | 0.6.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | code_assets | 1.2.1 | 1.2.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | collection | 1.19.1 | 1.19.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | console | 4.1.0 | 4.1.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -98,15 +98,15 @@
 | file_selector_web | 0.9.5 | 0.9.5 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | file_selector_windows | 0.9.3+6 | 0.9.3+6 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | fixnum | 1.1.1 | 1.1.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| flutter_driver | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
+| flutter_driver | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
 | flutter_secure_storage_darwin | 0.4.0 | 0.4.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | flutter_secure_storage_linux | 3.0.2 | 3.0.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | flutter_secure_storage_platform_interface | 2.0.3 | 2.0.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | flutter_secure_storage_web | 2.1.1 | 2.1.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | flutter_secure_storage_windows | 4.2.2 | 4.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| flutter_web_plugins | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
+| flutter_web_plugins | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
 | freezed_annotation | 3.1.0 | 3.1.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| fuchsia_remote_debug_protocol | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
+| fuchsia_remote_debug_protocol | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
 | get_it | 9.2.1 | 9.2.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | glob | 2.2.0 | 2.2.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | graphs | 2.3.2 | 2.3.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -131,8 +131,8 @@
 | meta | 1.19.0 | 1.19.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | mime | 2.1.0 | 2.1.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | native_toolchain_c | 0.19.3 | 0.19.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| nativeapi | 0.5.10 | 0.5.10 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| nativeapi_flutter | 0.5.10 | 0.5.10 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| nativeapi | 0.6.0 | 0.6.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| nativeapi_flutter | 0.6.0 | 0.6.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | objective_c | 9.5.0 | 9.5.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | package_config | 3.0.0 | 3.0.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | path_provider_android | 2.3.1 | 2.3.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -153,7 +153,7 @@
 | riverpod | 3.4.3 | 3.4.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | shelf | 1.4.2 | 1.4.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | shelf_web_socket | 3.0.0 | 3.0.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| sky_engine | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK 3.47.2 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
+| sky_engine | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK 3.50.0 (lockfile 0.0.0) | Flutter SDK; pubspec.lock | Flutter-owned SDK package. |
 | source_gen | 4.3.0 | 4.3.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | source_span | 1.10.2 | 1.10.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | sqlcipher_flutter_libs | 0.7.0+eol | 0.7.0+eol | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -166,7 +166,7 @@
 | string_scanner | 1.4.1 | 1.4.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | sync_http | 0.3.1 | 0.3.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | term_glyph | 1.2.2 | 1.2.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| test_api | 0.7.12 | 0.7.12 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| test_api | 0.7.14 | 0.7.14 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | typed_data | 1.4.0 | 1.4.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | url_launcher_android | 6.3.33 | 6.3.33 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | url_launcher_ios | 6.4.2 | 6.4.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
@@ -175,7 +175,7 @@
 | url_launcher_platform_interface | 2.3.2 | 2.3.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | url_launcher_web | 2.4.3 | 2.4.3 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | url_launcher_windows | 3.1.6 | 3.1.6 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
-| vector_math | 2.4.2 | 2.4.2 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
+| vector_math | 2.4.4 | 2.4.4 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | vm_service | 15.3.0 | 15.3.0 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | watcher | 1.2.1 | 1.2.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |
 | web | 1.1.1 | 1.1.1 | [pub.dev](https://pub.dev); pubspec.lock | Locked hosted transitive. |

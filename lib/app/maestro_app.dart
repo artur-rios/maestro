@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_theme.dart';
 import 'package:maestro/features/appearance/presentation/appearance_controller.dart';
@@ -18,6 +17,7 @@ import 'package:maestro/features/workflows/application/agent_configuration_servi
 import 'package:maestro/features/workflows/application/workflow_design_service.dart';
 import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
+import 'package:material_ui/material_ui.dart';
 
 class MaestroApp extends StatefulWidget {
   const MaestroApp({

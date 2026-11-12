@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
@@ -10,12 +9,12 @@ import 'package:maestro/features/authentication/presentation/authentication_sett
 import 'package:maestro/features/authentication/presentation/recovery_code_dialog.dart';
 import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
+import 'package:material_ui/material_ui.dart';
 
-typedef AuthenticatedWorkspaceBuilder =
-    Widget Function(
-      BuildContext context,
-      ValueChanged<String?> onWorkspaceLabelChanged,
-    );
+typedef AuthenticatedWorkspaceBuilder = Widget Function(
+  BuildContext context,
+  ValueChanged<String?> onWorkspaceLabelChanged,
+);
 
 final class AuthenticationPage extends ConsumerStatefulWidget {
   const AuthenticationPage({

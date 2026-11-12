@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' show SemanticsAction, Tristate;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_theme.dart';
@@ -15,6 +14,7 @@ import 'package:maestro/features/terminal/presentation/project_terminal_controll
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:maestro/features/terminal/presentation/workbench_terminal_dock.dart';
 import 'package:maestro/features/terminal/presentation/workbench_terminal_manager.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {

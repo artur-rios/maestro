@@ -6,8 +6,9 @@ import 'package:maestro/features/terminal/domain/terminal_launch_target.dart';
 import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 
-typedef WorkbenchTerminalFactory =
-    WorkbenchTerminalController Function(TerminalLaunchTarget target);
+typedef WorkbenchTerminalFactory = WorkbenchTerminalController Function(
+  TerminalLaunchTarget target,
+);
 
 final class WorkbenchTerminalEntry {
   const WorkbenchTerminalEntry({
