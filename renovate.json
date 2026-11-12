@@ -17,6 +17,12 @@
       "schedule": ["on monday"]
     },
     {
+      "description": "drift_dev's generated code calls the drift runtime, so the two must match: drift_dev 2.35.3's output needs drift 2.35.4, and Renovate's #83 (drift_dev alone) did not compile. drift, drift_dev and drift_flutter update together, in one pull request.",
+      "matchManagers": ["pub"],
+      "matchPackageNames": ["drift", "drift_dev", "drift_flutter"],
+      "groupName": "drift"
+    },
+    {
       "description": "GitHub Actions weekly and in one pull request, as Dependabot's github-actions group did.",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions",
