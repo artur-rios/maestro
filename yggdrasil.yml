@@ -6,7 +6,7 @@
 # here, under the same name; the Windows job stays a GitHub Actions workflow (the catalog's `actionsChecks`,
 # `windows-platform`), run on the GitHub mirror.
 #
-# Flutter 3.47.2 is pinned in ci/flutter-env.sh, not by the image: no Flutter image has that version. The Flutter
+# Flutter 3.50.0 is pinned in ci/flutter-env.sh, not by the image: no Flutter image has that version. The Flutter
 # image (ghcr.io/cirruslabs/flutter) supplies git, curl, xz and Ubuntu 24.04, as the GitHub runner did; the scripts
 # apt-install the Linux desktop packages the workflows installed (checks and release builds run as root on the
 # agents) and fetch the pinned SDK and appimagetool, each checked against its checksum.
