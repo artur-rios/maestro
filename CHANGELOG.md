@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Maestro is built with Flutter 3.50.0 (Dart 3.14.0), from 3.47.2.
-- Update `window_manager` to 0.6.0. On Linux the application now also depends on `libx11-6` and `libxi6`.
+- Update `window_manager` to 0.7.0. On Linux the application now also depends on `libx11-6` and `libxi6`.
 
 ## [0.1.0] - 2026-10-31
 

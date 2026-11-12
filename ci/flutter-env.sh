@@ -3,7 +3,7 @@
 #
 # The workflows pinned Flutter 3.50.0 (subosito/flutter-action; .fvmrc and .flutter-version say the same). No
 # published Flutter image has that version (ghcr.io/cirruslabs/flutter stops at 3.44.0, whose Dart is older than
-# pubspec.yaml's `sdk: ^3.12.2`), so the image in yggdrasil.yml only supplies the tools around it (git, curl, xz,
+# pubspec.yaml's `sdk: ^3.14.0`), so the image in yggdrasil.yml only supplies the tools around it (git, curl, xz,
 # Ubuntu 24.04, as the GitHub runner had), and the SDK itself is fetched here from Flutter's release archive and
 # checked against its checksum. FLUTTER_SHA256 comes from
 # https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json; change it together with
