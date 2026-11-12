@@ -10069,10 +10069,11 @@ class $$LocalUsersTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (localRecoveryCodesRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       LocalUser,
                       $LocalUsersTable,
-                      LocalRecoveryCode
+                      LocalRecoveryCode,
+                      $LocalRecoveryCodesTable
                     >(
                       currentTable: table,
                       referencedTable: $$LocalUsersTableReferences
@@ -10083,8 +10084,8 @@ class $$LocalUsersTableTableManager
                             table,
                             p0,
                           ).localRecoveryCodesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.userId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'user_id',
                       typedResults: items,
                     ),
                 ];
@@ -11080,10 +11081,11 @@ class $$ProjectsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (workflowProjectRefsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Project,
                           $ProjectsTable,
-                          WorkflowProjectRef
+                          WorkflowProjectRef,
+                          $WorkflowProjectRefsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ProjectsTableReferences
@@ -11094,17 +11096,16 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).workflowProjectRefsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.projectId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'project_id',
                           typedResults: items,
                         ),
                       if (workflowRunsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Project,
                           $ProjectsTable,
-                          WorkflowRun
+                          WorkflowRun,
+                          $WorkflowRunsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ProjectsTableReferences
@@ -11115,10 +11116,8 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).workflowRunsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.projectId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'project_id',
                           typedResults: items,
                         ),
                     ];
@@ -11644,10 +11643,11 @@ class $$WorkflowsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (workflowStepsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Workflow,
                           $WorkflowsTable,
-                          WorkflowStep
+                          WorkflowStep,
+                          $WorkflowStepsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowsTableReferences
@@ -11658,17 +11658,16 @@ class $$WorkflowsTableTableManager
                                 table,
                                 p0,
                               ).workflowStepsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.workflowId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'workflow_id',
                           typedResults: items,
                         ),
                       if (workflowProjectRefsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Workflow,
                           $WorkflowsTable,
-                          WorkflowProjectRef
+                          WorkflowProjectRef,
+                          $WorkflowProjectRefsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowsTableReferences
@@ -11679,17 +11678,16 @@ class $$WorkflowsTableTableManager
                                 table,
                                 p0,
                               ).workflowProjectRefsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.workflowId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'workflow_id',
                           typedResults: items,
                         ),
                       if (workflowRunsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Workflow,
                           $WorkflowsTable,
-                          WorkflowRun
+                          WorkflowRun,
+                          $WorkflowRunsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowsTableReferences
@@ -11700,10 +11698,8 @@ class $$WorkflowsTableTableManager
                                 table,
                                 p0,
                               ).workflowRunsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.workflowId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'workflow_id',
                           typedResults: items,
                         ),
                     ];
@@ -13481,10 +13477,11 @@ class $$WorkflowRunsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (runSnapshotsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunSnapshot
+                          RunSnapshot,
+                          $RunSnapshotsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13495,17 +13492,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runSnapshotsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runSnapshotStepsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunSnapshotStep
+                          RunSnapshotStep,
+                          $RunSnapshotStepsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13516,17 +13512,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runSnapshotStepsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runAttemptsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunAttempt
+                          RunAttempt,
+                          $RunAttemptsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13537,17 +13532,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runAttemptsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runLogSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunLogSegment
+                          RunLogSegment,
+                          $RunLogSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13558,17 +13552,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runLogSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runRecoveryRequestsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunRecoveryRequest
+                          RunRecoveryRequest,
+                          $RunRecoveryRequestsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13579,17 +13572,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runRecoveryRequestsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (deliveryRecordsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          DeliveryRecord
+                          DeliveryRecord,
+                          $DeliveryRecordsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13600,10 +13592,8 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).deliveryRecordsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                     ];
@@ -14480,10 +14470,11 @@ class $$RunSnapshotStepsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (runAttemptsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunSnapshotStep,
                           $RunSnapshotStepsTable,
-                          RunAttempt
+                          RunAttempt,
+                          $RunAttemptsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunSnapshotStepsTableReferences
@@ -14494,17 +14485,16 @@ class $$RunSnapshotStepsTableTableManager
                                 table,
                                 p0,
                               ).runAttemptsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.snapshotStepId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'snapshot_step_id',
                           typedResults: items,
                         ),
                       if (runLogSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunSnapshotStep,
                           $RunSnapshotStepsTable,
-                          RunLogSegment
+                          RunLogSegment,
+                          $RunLogSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunSnapshotStepsTableReferences
@@ -14515,10 +14505,8 @@ class $$RunSnapshotStepsTableTableManager
                                 table,
                                 p0,
                               ).runLogSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.snapshotStepId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'snapshot_step_id',
                           typedResults: items,
                         ),
                     ];
@@ -15196,10 +15184,11 @@ class $$RunAttemptsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (runLogSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunAttempt,
                           $RunAttemptsTable,
-                          RunLogSegment
+                          RunLogSegment,
+                          $RunLogSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunAttemptsTableReferences
@@ -15210,17 +15199,16 @@ class $$RunAttemptsTableTableManager
                                 table,
                                 p0,
                               ).runLogSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.attemptId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'attempt_id',
                           typedResults: items,
                         ),
                       if (runRecoveryRequestsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunAttempt,
                           $RunAttemptsTable,
-                          RunRecoveryRequest
+                          RunRecoveryRequest,
+                          $RunRecoveryRequestsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunAttemptsTableReferences
@@ -15231,10 +15219,8 @@ class $$RunAttemptsTableTableManager
                                 table,
                                 p0,
                               ).runRecoveryRequestsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.attemptId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'attempt_id',
                           typedResults: items,
                         ),
                     ];
