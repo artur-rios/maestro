@@ -35,16 +35,16 @@ dependencies:
   material_ui: ^1.11.0
   drift: 2.35.4
   drift_flutter: ^0.3.1
-  sqlite3: ^3.7.1
+  sqlite3: ^3.9.1
   xterm: ^4.0.0
   flutter_pty: ^0.4.2
   flutter_secure_storage: ^11.2.0
-  sodium: ^4.1.2
+  sodium: ^4.1.2+1
   uuid: ^4.6.0
   path_provider: ^2.1.6
   path: ^1.9.1
-  crypto: ^3.0.7
-  archive: ^4.5.2
+  crypto: ^3.0.8
+  archive: ^4.7.1
   win32: ^6.4.0
   ffi: ^2.2.0
   file_selector: 1.1.0
@@ -65,7 +65,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   drift_dev: 2.35.3
-  build_runner: ^2.16.2
+  build_runner: ^2.17.1
   msix: ^3.18.0
   yaml: ^3.1.4
 
