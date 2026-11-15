@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-14
+
 ### Changed
 
 - Maestro is built with Flutter 3.50.0 (Dart 3.14.0), from 3.47.2.
@@ -92,5 +94,6 @@ The first release: use cases UC-01 through UC-14.
 - Startup cleanup refuses an ownership record that names the worktrees or run-results folder itself, rather than
   deleting every run's resources.
 
-[Unreleased]: https://github.com/artur-rios/maestro/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/artur-rios/maestro/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/artur-rios/maestro/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/artur-rios/maestro/releases/tag/v0.1.0
