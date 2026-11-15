@@ -311,8 +311,7 @@ final class AgentConfigurationService {
           rowKey: step.rowKey,
           kind: assignment.kind,
           code: AgentRowStateCode.catalogUnverified,
-          guidance:
-              'The saved selection is retained but unverified. Refresh before execution.',
+          guidance: 'The saved selection is retained but unverified. Refresh before execution.',
         );
       case AgentCliInstallation.available:
         break;
@@ -332,8 +331,7 @@ final class AgentConfigurationService {
         rowKey: step.rowKey,
         kind: assignment.kind,
         code: AgentRowStateCode.catalogUnverified,
-        guidance:
-            'The saved selection is retained but unverified. Refresh before execution.',
+        guidance: 'The saved selection is retained but unverified. Refresh before execution.',
       );
     }
     if (catalog.modelVerification == AgentModelVerification.cliOnly &&
@@ -342,8 +340,7 @@ final class AgentConfigurationService {
         rowKey: step.rowKey,
         kind: assignment.kind,
         code: AgentRowStateCode.catalogUnverified,
-        guidance:
-            'This CLI catalog is not account-verified. Refresh with an account-verified catalog before execution.',
+        guidance: 'This CLI catalog is not account-verified. Refresh with an account-verified catalog before execution.',
       );
     }
     if (!catalog.models.contains(assignment.model)) {
@@ -351,8 +348,7 @@ final class AgentConfigurationService {
         rowKey: step.rowKey,
         kind: assignment.kind,
         code: AgentRowStateCode.modelWithdrawn,
-        guidance:
-            'This model is no longer in the current catalog. Select a replacement.',
+        guidance: 'This model is no longer in the current catalog. Select a replacement.',
       );
     }
     if (catalog.modelVerification == AgentModelVerification.cliOnly) {
@@ -360,8 +356,7 @@ final class AgentConfigurationService {
         rowKey: step.rowKey,
         kind: assignment.kind,
         code: AgentRowStateCode.cliOnly,
-        guidance:
-            'This CLI model alias is valid; account accessibility will be checked when the step starts.',
+        guidance: 'This CLI model alias is valid; account accessibility will be checked when the step starts.',
       );
     }
     return AgentRowState(

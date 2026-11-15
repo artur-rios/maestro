@@ -26,21 +26,18 @@ void main() {
     expect(target.workingDirectory, '/home/ada');
   });
 
-  test(
-    'GivenWindowsHomeDriveAndHomePath_WhenUserProfileMissing_ThenCombinedFallbackIsUsed',
-    () {
-      final target = LocalTerminalHomeDirectory(
-        environment: <String, String>{
-          'HOMEDRIVE': 'C:',
-          'HOMEPATH': r'\Users\Ada',
-        },
-        isWindows: true,
-      ).resolve();
+  test('GivenWindowsHomeDriveAndHomePath_WhenUserProfileMissing_ThenCombinedFallbackIsUsed', () {
+    final target = LocalTerminalHomeDirectory(
+      environment: <String, String>{
+        'HOMEDRIVE': 'C:',
+        'HOMEPATH': r'\Users\Ada',
+      },
+      isWindows: true,
+    ).resolve();
 
-      expect(target.workingDirectory, r'C:\Users\Ada');
-      expect(target.failure, isNull);
-    },
-  );
+    expect(target.workingDirectory, r'C:\Users\Ada');
+    expect(target.failure, isNull);
+  });
 
   test(
     'GivenWhitespaceAroundWindowsHomeValues_WhenResolved_ThenValuesAreTrimmed',

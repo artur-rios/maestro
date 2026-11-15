@@ -7,35 +7,29 @@ import 'package:maestro/features/runs/domain/run_models.dart';
 
 void main() {
   group('AutonomousDelivery', () {
-    test(
-      'GivenFreshTestsAndAnApprovingIndependentReviewer_WhenDelivering_ThenItMergesAndCleansUp',
-      () async {
-        final port = _FakeAutonomousDeliveryPort();
-        final outcome = await AutonomousDelivery(port: port)(_request());
+    test('GivenFreshTestsAndAnApprovingIndependentReviewer_WhenDelivering_ThenItMergesAndCleansUp', () async {
+      final port = _FakeAutonomousDeliveryPort();
+      final outcome = await AutonomousDelivery(port: port)(_request());
 
-        expect(outcome, isA<AutonomousDeliveryCompleted>());
-        expect(port.calls, [
-          'open',
-          'review',
-          'approveMerge',
-          'closeIssue',
-          'deleteBranch',
-        ]);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryCompleted>());
+      expect(port.calls, [
+        'open',
+        'review',
+        'approveMerge',
+        'closeIssue',
+        'deleteBranch',
+      ]);
+    });
 
-    test(
-      'GivenSupervisedRun_WhenCompletingAutonomously_ThenItIsBlockedWithoutRemoteCalls',
-      () async {
-        final port = _FakeAutonomousDeliveryPort();
-        final outcome = await AutonomousDelivery(port: port)(
-          _request(deliveryMode: DeliveryMode.supervised),
-        );
+    test('GivenSupervisedRun_WhenCompletingAutonomously_ThenItIsBlockedWithoutRemoteCalls', () async {
+      final port = _FakeAutonomousDeliveryPort();
+      final outcome = await AutonomousDelivery(port: port)(
+        _request(deliveryMode: DeliveryMode.supervised),
+      );
 
-        expect(outcome, isA<AutonomousDeliveryBlocked>());
-        expect(port.calls, isEmpty);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryBlocked>());
+      expect(port.calls, isEmpty);
+    });
 
     test(
       'GivenStaleOrFailedTests_WhenDelivering_ThenItBlocksBeforeReview',
@@ -55,62 +49,53 @@ void main() {
       },
     );
 
-    test(
-      'GivenRequestedChanges_WhenDelivering_ThenItReturnsFindingsWithoutMerging',
-      () async {
-        final port = _FakeAutonomousDeliveryPort(
-          reviewResult: const AutonomousReviewResult.requestedChanges(
-            findings: ['Add regression coverage.'],
-          ),
-        );
-        final outcome = await AutonomousDelivery(port: port)(_request());
+    test('GivenRequestedChanges_WhenDelivering_ThenItReturnsFindingsWithoutMerging', () async {
+      final port = _FakeAutonomousDeliveryPort(
+        reviewResult: const AutonomousReviewResult.requestedChanges(
+          findings: ['Add regression coverage.'],
+        ),
+      );
+      final outcome = await AutonomousDelivery(port: port)(_request());
 
-        expect(outcome, isA<AutonomousDeliveryBlocked>());
-        expect((outcome as AutonomousDeliveryBlocked).findings, [
-          'Add regression coverage.',
-        ]);
-        expect(outcome.recovery, AutonomousDeliveryRecovery.returnToExecute);
-        expect(port.calls, ['open', 'review']);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryBlocked>());
+      expect((outcome as AutonomousDeliveryBlocked).findings, [
+        'Add regression coverage.',
+      ]);
+      expect(outcome.recovery, AutonomousDeliveryRecovery.returnToExecute);
+      expect(port.calls, ['open', 'review']);
+    });
 
-    test(
-      'GivenUnavailableReviewer_WhenDelivering_ThenItReturnsRecoveryGuidanceWithoutMerging',
-      () async {
-        final port = _FakeAutonomousDeliveryPort(
-          reviewResult: const AutonomousReviewResult.unavailable(
-            remediation: 'Configure a reachable independent reviewer.',
-          ),
-        );
-        final outcome = await AutonomousDelivery(port: port)(_request());
+    test('GivenUnavailableReviewer_WhenDelivering_ThenItReturnsRecoveryGuidanceWithoutMerging', () async {
+      final port = _FakeAutonomousDeliveryPort(
+        reviewResult: const AutonomousReviewResult.unavailable(
+          remediation: 'Configure a reachable independent reviewer.',
+        ),
+      );
+      final outcome = await AutonomousDelivery(port: port)(_request());
 
-        expect(outcome, isA<AutonomousDeliveryBlocked>());
-        expect(
-          (outcome as AutonomousDeliveryBlocked).remediation,
-          contains('Configure'),
-        );
-        expect(outcome.recovery, AutonomousDeliveryRecovery.fail);
-        expect(port.calls, ['open', 'review']);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryBlocked>());
+      expect(
+        (outcome as AutonomousDeliveryBlocked).remediation,
+        contains('Configure'),
+      );
+      expect(outcome.recovery, AutonomousDeliveryRecovery.fail);
+      expect(port.calls, ['open', 'review']);
+    });
 
-    test(
-      'GivenRemoteFailure_WhenDelivering_ThenItRetainsPullRequestAndSkipsCleanup',
-      () async {
-        final port = _FakeAutonomousDeliveryPort(
-          mergeResult: const AutonomousOperationResult.failure(
-            code: 'github.network',
-            remediation: 'Retry after GitHub is reachable.',
-          ),
-        );
-        final outcome = await AutonomousDelivery(port: port)(_request());
+    test('GivenRemoteFailure_WhenDelivering_ThenItRetainsPullRequestAndSkipsCleanup', () async {
+      final port = _FakeAutonomousDeliveryPort(
+        mergeResult: const AutonomousOperationResult.failure(
+          code: 'github.network',
+          remediation: 'Retry after GitHub is reachable.',
+        ),
+      );
+      final outcome = await AutonomousDelivery(port: port)(_request());
 
-        expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
-        final failure = outcome as AutonomousDeliveryRetryableFailure;
-        expect(failure.pullRequest!.number, 42);
-        expect(port.calls, ['open', 'review', 'approveMerge']);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
+      final failure = outcome as AutonomousDeliveryRetryableFailure;
+      expect(failure.pullRequest!.number, 42);
+      expect(port.calls, ['open', 'review', 'approveMerge']);
+    });
 
     test(
       'GivenIssueClosureFailureAfterMerge_WhenRetrying_ThenItDoesNotMergeAgain',
@@ -143,70 +128,61 @@ void main() {
       },
     );
 
-    test(
-      'GivenTheExecutingModelIsAlsoTheReviewer_WhenDelivering_ThenItIsBlockedWithoutRemoteCalls',
-      () async {
-        final port = _FakeAutonomousDeliveryPort();
-        final outcome = await AutonomousDelivery(port: port)(
-          _request(executeModel: 'reviewer'),
-        );
+    test('GivenTheExecutingModelIsAlsoTheReviewer_WhenDelivering_ThenItIsBlockedWithoutRemoteCalls', () async {
+      final port = _FakeAutonomousDeliveryPort();
+      final outcome = await AutonomousDelivery(port: port)(
+        _request(executeModel: 'reviewer'),
+      );
 
-        expect(outcome, isA<AutonomousDeliveryBlocked>());
-        expect(port.calls, isEmpty);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryBlocked>());
+      expect(port.calls, isEmpty);
+    });
 
-    test(
-      'GivenRetryProgressForAnotherHeadCommit_WhenDelivering_ThenItBlocksWithoutRemoteCalls',
-      () async {
-        final port = _FakeAutonomousDeliveryPort();
-        final outcome = await AutonomousDelivery(port: port)(
-          _request(
-            progress: const AutonomousDeliveryProgress(
-              pullRequest: AutonomousPullRequest(
-                number: 42,
-                url: 'https://github.com/acme/maestro/pull/42',
-                headCommit: 'different-head',
-              ),
-              mergeCommit: 'merge123',
-              runId: 'run-11',
-              repository: 'acme/maestro',
+    test('GivenRetryProgressForAnotherHeadCommit_WhenDelivering_ThenItBlocksWithoutRemoteCalls', () async {
+      final port = _FakeAutonomousDeliveryPort();
+      final outcome = await AutonomousDelivery(port: port)(
+        _request(
+          progress: const AutonomousDeliveryProgress(
+            pullRequest: AutonomousPullRequest(
+              number: 42,
+              url: 'https://github.com/acme/maestro/pull/42',
               headCommit: 'different-head',
             ),
+            mergeCommit: 'merge123',
+            runId: 'run-11',
+            repository: 'acme/maestro',
+            headCommit: 'different-head',
           ),
-        );
+        ),
+      );
 
-        expect(outcome, isA<AutonomousDeliveryBlocked>());
-        expect(port.calls, isEmpty);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryBlocked>());
+      expect(port.calls, isEmpty);
+    });
 
-    test(
-      'GivenBranchCleanupFailureAfterMerge_WhenDelivering_ThenItRetainsCompletedIssueState',
-      () async {
-        final port = _FakeAutonomousDeliveryPort(
-          deleteBranchResult: const AutonomousOperationResult.failure(
-            code: 'github.network',
-            remediation: 'Retry branch cleanup after GitHub is reachable.',
-          ),
-        );
+    test('GivenBranchCleanupFailureAfterMerge_WhenDelivering_ThenItRetainsCompletedIssueState', () async {
+      final port = _FakeAutonomousDeliveryPort(
+        deleteBranchResult: const AutonomousOperationResult.failure(
+          code: 'github.network',
+          remediation: 'Retry branch cleanup after GitHub is reachable.',
+        ),
+      );
 
-        final outcome = await AutonomousDelivery(port: port)(_request());
+      final outcome = await AutonomousDelivery(port: port)(_request());
 
-        expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
-        final failure = outcome as AutonomousDeliveryRetryableFailure;
-        expect(failure.progress!.mergeCommit, 'merge123');
-        expect(failure.progress!.issueClosed, isTrue);
-        expect(failure.progress!.branchDeleted, isFalse);
-        expect(port.calls, [
-          'open',
-          'review',
-          'approveMerge',
-          'closeIssue',
-          'deleteBranch',
-        ]);
-      },
-    );
+      expect(outcome, isA<AutonomousDeliveryRetryableFailure>());
+      final failure = outcome as AutonomousDeliveryRetryableFailure;
+      expect(failure.progress!.mergeCommit, 'merge123');
+      expect(failure.progress!.issueClosed, isTrue);
+      expect(failure.progress!.branchDeleted, isFalse);
+      expect(port.calls, [
+        'open',
+        'review',
+        'approveMerge',
+        'closeIssue',
+        'deleteBranch',
+      ]);
+    });
 
     for (final code in ['github.policy', 'github.conflict', 'github.network']) {
       test(

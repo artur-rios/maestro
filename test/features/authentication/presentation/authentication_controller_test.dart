@@ -15,466 +15,417 @@ import 'package:maestro/features/authentication/domain/external_authentication_m
 import 'package:maestro/features/authentication/presentation/authentication_controller.dart';
 
 void main() {
-  test(
-    'GivenPendingAuthentication_WhenSignedOut_ThenLateCompletionCannotPublishAuthenticatedState',
-    () async {
-      final operatingSystem = _CompletingOperatingSystemAuthenticator();
-      final service = _authenticationService(operatingSystem);
-      final container = _container(service);
-      addTearDown(container.dispose);
-      final controller = container.read(
-        authenticationControllerProvider.notifier,
-      );
-      final pending = controller.signInWithOperatingSystem();
+  test('GivenPendingAuthentication_WhenSignedOut_ThenLateCompletionCannotPublishAuthenticatedState', () async {
+    final operatingSystem = _CompletingOperatingSystemAuthenticator();
+    final service = _authenticationService(operatingSystem);
+    final container = _container(service);
+    addTearDown(container.dispose);
+    final controller = container.read(
+      authenticationControllerProvider.notifier,
+    );
+    final pending = controller.signInWithOperatingSystem();
 
-      controller.signOut();
-      operatingSystem.complete(const Success<void>(null));
-      await pending;
+    controller.signOut();
+    operatingSystem.complete(const Success<void>(null));
+    await pending;
 
-      expect(
-        container.read(authenticationControllerProvider),
-        isA<AuthenticationSignedOut>(),
-      );
-      expect(service.currentSession, isNull);
-    },
-  );
+    expect(
+      container.read(authenticationControllerProvider),
+      isA<AuthenticationSignedOut>(),
+    );
+    expect(service.currentSession, isNull);
+  });
 
-  test(
-    'GivenOverlappingAuthentication_WhenNewerOperationSucceeds_ThenOlderCompletionCannotReplaceState',
-    () async {
-      final operatingSystem = _CompletingOperatingSystemAuthenticator();
-      final repository = _AuthenticationRepository()
-        ..emailUser = _emailUser()
-        ..operatingSystemUser = _operatingSystemUser();
+  test('GivenOverlappingAuthentication_WhenNewerOperationSucceeds_ThenOlderCompletionCannotReplaceState', () async {
+    final operatingSystem = _CompletingOperatingSystemAuthenticator();
+    final repository = _AuthenticationRepository()
+      ..emailUser = _emailUser()
+      ..operatingSystemUser = _operatingSystemUser();
+    final service = _authenticationService(
+      operatingSystem,
+      repository: repository,
+      verifiers: _PasswordVerifierStore()
+        ..values['verifier-email-user'] = 'hashed:password1',
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+    final controller = container.read(
+      authenticationControllerProvider.notifier,
+    );
+    final older = controller.signInWithOperatingSystem();
+
+    await controller.signInWithEmail('person@example.com', 'password1');
+    operatingSystem.complete(const Success<void>(null));
+    await older;
+
+    final state = container.read(authenticationControllerProvider);
+    expect(state, isA<AuthenticationAuthenticated>());
+    expect((state as AuthenticationAuthenticated).session.userId, 'email-user');
+    expect(service.currentSession?.userId, 'email-user');
+  });
+
+  test('GivenPendingAuthentication_WhenControllerIsDisposed_ThenLateCompletionIsIgnored', () async {
+    final operatingSystem = _CompletingOperatingSystemAuthenticator();
+    final service = _authenticationService(operatingSystem);
+    final container = _container(service);
+    final published = <AuthenticationPresentationState>[];
+    container.listen(
+      authenticationControllerProvider,
+      (_, next) => published.add(next),
+      fireImmediately: true,
+    );
+    final pending = container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithOperatingSystem();
+
+    container.dispose();
+    operatingSystem.complete(const Success<void>(null));
+    await pending;
+
+    expect(published.whereType<AuthenticationAuthenticated>(), isEmpty);
+    expect(service.currentSession, isNull);
+  });
+
+  test('GivenNewLocalAccount_WhenCreated_ThenRecoveryCodesGateTheSessionUntilAcknowledged', () async {
+    final service = _authenticationService(
+      _CompletingOperatingSystemAuthenticator(),
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+    final controller = container.read(
+      authenticationControllerProvider.notifier,
+    );
+
+    await controller.createAccount('new@example.com', 'password1');
+
+    final pending = container.read(
+      authenticationControllerProvider,
+    ) as AuthenticationRecoveryCodesPending;
+    expect(pending.recoveryCodes, hasLength(RecoveryCode.count));
+    expect(service.currentSession, isNull);
+
+    final plaintext = pending.recoveryCodes;
+    controller.acknowledgeRecoveryCodes();
+
+    expect(
+      container.read(authenticationControllerProvider),
+      isA<AuthenticationAuthenticated>(),
+    );
+    expect(service.currentSession?.userId, 'id-0');
+    expect(plaintext, isEmpty);
+  });
+
+  test('GivenConfiguredGoogleIdentity_WhenGoogleSignInCompletes_ThenGoogleSessionIsPublished', () async {
+    final service = _authenticationService(
+      _CompletingOperatingSystemAuthenticator(),
+      googleAuthorization: const _SuccessfulGoogleAuthorization(),
+      externalGateway: _SuccessfulExternalGateway(),
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithGoogle();
+
+    final state = container.read(
+      authenticationControllerProvider,
+    ) as AuthenticationAuthenticated;
+    expect(state.session.userId, 'google-subject');
+    expect(state.session.source, AuthenticationSource.google);
+  });
+
+  test('GivenTypedGoogleFailures_WhenPresented_ThenEveryStableCodeCrossesTheControllerUnchanged', () async {
+    final cases = <({Object error, String code, bool browser})>[
+      (
+        error: const OAuthBrowserCancelled(),
+        code: 'authentication.google.browser.cancelled',
+        browser: true,
+      ),
+      (
+        error: const OAuthAuthorizationCancelled(),
+        code: 'authentication.google.authorization.cancelled',
+        browser: true,
+      ),
+      (
+        error: const OAuthAuthorizationTimedOut(),
+        code: 'authentication.google.authorization.timed_out',
+        browser: true,
+      ),
+      (
+        error: const OAuthCallbackStateMismatch(),
+        code: 'authentication.google.callback.state_mismatch',
+        browser: true,
+      ),
+      (
+        error: const OAuthCallbackRejected(),
+        code: 'authentication.google.callback.rejected',
+        browser: true,
+      ),
+      (
+        error: const OAuthProviderRejected(),
+        code: 'authentication.google.provider.rejected',
+        browser: true,
+      ),
+      (
+        error: const OAuthBrowserLaunchFailure(),
+        code: 'authentication.google.browser.launch_failed',
+        browser: true,
+      ),
+      (
+        error: const OAuthListenerFailure(),
+        code: 'authentication.google.listener.failed',
+        browser: true,
+      ),
+      (
+        error: const OAuthTransportFailure(),
+        code: 'authentication.google.transport.failed',
+        browser: true,
+      ),
+      (
+        error: const GoogleTokenExchangeTimedOut(),
+        code: 'authentication.google.exchange.timed_out',
+        browser: true,
+      ),
+      (
+        error: const GoogleTokenExchangeRejected(),
+        code: 'authentication.google.exchange.rejected',
+        browser: true,
+      ),
+      (
+        error: const HeimdallBaseUriInvalid(),
+        code: 'authentication.google.heimdall.configuration.invalid',
+        browser: false,
+      ),
+      (
+        error: const HeimdallAuthenticationRejected(),
+        code: 'authentication.google.heimdall.rejected',
+        browser: false,
+      ),
+      (
+        error: const HeimdallAuthenticationTimedOut(),
+        code: 'authentication.google.heimdall.timed_out',
+        browser: false,
+      ),
+      (
+        error: const HeimdallAuthenticationTransportFailure(),
+        code: 'authentication.google.heimdall.transport_failed',
+        browser: false,
+      ),
+      (
+        error: const HeimdallAuthenticationEnvelopeMalformed(),
+        code: 'authentication.google.heimdall.envelope_malformed',
+        browser: false,
+      ),
+    ];
+
+    for (final failureCase in cases) {
       final service = _authenticationService(
-        operatingSystem,
-        repository: repository,
-        verifiers: _PasswordVerifierStore()
-          ..values['verifier-email-user'] = 'hashed:password1',
+        _ImmediateOperatingSystemAuthenticator(),
+        googleAuthorization: failureCase.browser
+            ? _FailingGoogleAuthorization(failureCase.error)
+            : const _SuccessfulGoogleAuthorization(),
+        externalGateway: failureCase.browser
+            ? _SuccessfulExternalGateway()
+            : _FailingExternalGateway(failureCase.error),
       );
       final container = _container(service);
-      addTearDown(container.dispose);
-      final controller = container.read(
-        authenticationControllerProvider.notifier,
-      );
-      final older = controller.signInWithOperatingSystem();
+      await container
+          .read(authenticationControllerProvider.notifier)
+          .signInWithGoogle();
 
-      await controller.signInWithEmail('person@example.com', 'password1');
-      operatingSystem.complete(const Success<void>(null));
-      await older;
-
-      final state = container.read(authenticationControllerProvider);
-      expect(state, isA<AuthenticationAuthenticated>());
-      expect(
-        (state as AuthenticationAuthenticated).session.userId,
-        'email-user',
-      );
-      expect(service.currentSession?.userId, 'email-user');
-    },
-  );
-
-  test(
-    'GivenPendingAuthentication_WhenControllerIsDisposed_ThenLateCompletionIsIgnored',
-    () async {
-      final operatingSystem = _CompletingOperatingSystemAuthenticator();
-      final service = _authenticationService(operatingSystem);
-      final container = _container(service);
-      final published = <AuthenticationPresentationState>[];
-      container.listen(
+      final state = container.read(
         authenticationControllerProvider,
-        (_, next) => published.add(next),
-        fireImmediately: true,
-      );
-      final pending = container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithOperatingSystem();
-
+      ) as AuthenticationError;
+      expect(state.code, failureCase.code);
+      expect(state.message, isNot(contains(failureCase.error.toString())));
       container.dispose();
-      operatingSystem.complete(const Success<void>(null));
-      await pending;
+    }
+  });
 
-      expect(published.whereType<AuthenticationAuthenticated>(), isEmpty);
-      expect(service.currentSession, isNull);
-    },
-  );
-
-  test(
-    'GivenNewLocalAccount_WhenCreated_ThenRecoveryCodesGateTheSessionUntilAcknowledged',
-    () async {
-      final service = _authenticationService(
-        _CompletingOperatingSystemAuthenticator(),
+  test('GivenAThrottledAccount_WhenSigningInWithEmail_ThenTheWaitIsShownInsteadOfInvalidCredentials', () async {
+    final repository = _AuthenticationRepository()
+      ..emailUser = _emailUser()
+      ..failures = FailedAuthenticationHistory(
+        count: 12,
+        lastAt: DateTime.utc(2026, 8, 5),
       );
-      final container = _container(service);
-      addTearDown(container.dispose);
-      final controller = container.read(
-        authenticationControllerProvider.notifier,
-      );
+    final service = _authenticationService(
+      _ImmediateOperatingSystemAuthenticator(),
+      repository: repository,
+      verifiers: _PasswordVerifierStore()
+        ..values['verifier-email-user'] = 'hashed:password1',
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
 
-      await controller.createAccount('new@example.com', 'password1');
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithEmail('person@example.com', 'password1');
 
-      final pending =
-          container.read(authenticationControllerProvider)
-              as AuthenticationRecoveryCodesPending;
-      expect(pending.recoveryCodes, hasLength(RecoveryCode.count));
-      expect(service.currentSession, isNull);
+    final state =
+        container.read(authenticationControllerProvider) as AuthenticationError;
+    expect(state.code, 'authentication.attempts.throttled');
+    expect(state.remediation, contains('second'));
+  });
 
-      final plaintext = pending.recoveryCodes;
-      controller.acknowledgeRecoveryCodes();
+  test('GivenUnavailableProtectedStorage_WhenSigningInWithEmail_ThenItIsNotReportedAsInvalidCredentials', () async {
+    final repository = _AuthenticationRepository()..emailUser = _emailUser();
+    final service = _authenticationService(
+      _ImmediateOperatingSystemAuthenticator(),
+      repository: repository,
+      verifiers: _PasswordVerifierStore()..unavailable = true,
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
 
-      expect(
-        container.read(authenticationControllerProvider),
-        isA<AuthenticationAuthenticated>(),
-      );
-      expect(service.currentSession?.userId, 'id-0');
-      expect(plaintext, isEmpty);
-    },
-  );
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithEmail('person@example.com', 'password1');
 
-  test(
-    'GivenConfiguredGoogleIdentity_WhenGoogleSignInCompletes_ThenGoogleSessionIsPublished',
-    () async {
-      final service = _authenticationService(
-        _CompletingOperatingSystemAuthenticator(),
-        googleAuthorization: const _SuccessfulGoogleAuthorization(),
-        externalGateway: _SuccessfulExternalGateway(),
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
+    final state =
+        container.read(authenticationControllerProvider) as AuthenticationError;
+    expect(state.code, 'authentication.storage.failed');
+    expect(state.message, isNot(contains('locked')));
+  });
 
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithGoogle();
+  test('GivenMalformedGoogleConfiguration_WhenPresented_ThenConfigurationCodeCrossesTheControllerUnchanged', () async {
+    final service = _authenticationService(
+      _ImmediateOperatingSystemAuthenticator(),
+      settings: const _ThrowingSettingsRepository(),
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
 
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationAuthenticated;
-      expect(state.session.userId, 'google-subject');
-      expect(state.session.source, AuthenticationSource.google);
-    },
-  );
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithGoogle();
 
-  test(
-    'GivenTypedGoogleFailures_WhenPresented_ThenEveryStableCodeCrossesTheControllerUnchanged',
-    () async {
-      final cases = <({Object error, String code, bool browser})>[
-        (
-          error: const OAuthBrowserCancelled(),
-          code: 'authentication.google.browser.cancelled',
-          browser: true,
-        ),
-        (
-          error: const OAuthAuthorizationCancelled(),
-          code: 'authentication.google.authorization.cancelled',
-          browser: true,
-        ),
-        (
-          error: const OAuthAuthorizationTimedOut(),
-          code: 'authentication.google.authorization.timed_out',
-          browser: true,
-        ),
-        (
-          error: const OAuthCallbackStateMismatch(),
-          code: 'authentication.google.callback.state_mismatch',
-          browser: true,
-        ),
-        (
-          error: const OAuthCallbackRejected(),
-          code: 'authentication.google.callback.rejected',
-          browser: true,
-        ),
-        (
-          error: const OAuthProviderRejected(),
-          code: 'authentication.google.provider.rejected',
-          browser: true,
-        ),
-        (
-          error: const OAuthBrowserLaunchFailure(),
-          code: 'authentication.google.browser.launch_failed',
-          browser: true,
-        ),
-        (
-          error: const OAuthListenerFailure(),
-          code: 'authentication.google.listener.failed',
-          browser: true,
-        ),
-        (
-          error: const OAuthTransportFailure(),
-          code: 'authentication.google.transport.failed',
-          browser: true,
-        ),
-        (
-          error: const GoogleTokenExchangeTimedOut(),
-          code: 'authentication.google.exchange.timed_out',
-          browser: true,
-        ),
-        (
-          error: const GoogleTokenExchangeRejected(),
-          code: 'authentication.google.exchange.rejected',
-          browser: true,
-        ),
-        (
-          error: const HeimdallBaseUriInvalid(),
-          code: 'authentication.google.heimdall.configuration.invalid',
-          browser: false,
-        ),
-        (
-          error: const HeimdallAuthenticationRejected(),
-          code: 'authentication.google.heimdall.rejected',
-          browser: false,
-        ),
-        (
-          error: const HeimdallAuthenticationTimedOut(),
-          code: 'authentication.google.heimdall.timed_out',
-          browser: false,
-        ),
-        (
-          error: const HeimdallAuthenticationTransportFailure(),
-          code: 'authentication.google.heimdall.transport_failed',
-          browser: false,
-        ),
-        (
-          error: const HeimdallAuthenticationEnvelopeMalformed(),
-          code: 'authentication.google.heimdall.envelope_malformed',
-          browser: false,
-        ),
-      ];
+    final state =
+        container.read(authenticationControllerProvider) as AuthenticationError;
+    expect(state.code, 'authentication.google.configuration.invalid');
+    expect(state.message, isNot(contains('persisted-sentinel')));
+  });
 
-      for (final failureCase in cases) {
-        final service = _authenticationService(
-          _ImmediateOperatingSystemAuthenticator(),
-          googleAuthorization: failureCase.browser
-              ? _FailingGoogleAuthorization(failureCase.error)
-              : const _SuccessfulGoogleAuthorization(),
-          externalGateway: failureCase.browser
-              ? _SuccessfulExternalGateway()
-              : _FailingExternalGateway(failureCase.error),
+  test('GivenPasswordAccount_WhenWindowsCredentialsAreUsed_ThenThatEmailAccountIsPublished', () async {
+    final repository = _AuthenticationRepository()..emailUser = _emailUser();
+    final service = _authenticationService(
+      _ImmediateOperatingSystemAuthenticator(),
+      repository: repository,
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithLocalWindowsCredentials('person@example.com');
+
+    final state = container.read(
+      authenticationControllerProvider,
+    ) as AuthenticationAuthenticated;
+    expect(state.session.userId, 'email-user');
+    expect(state.session.source, AuthenticationSource.localWindows);
+  });
+
+  test('GivenWindowsCredentialsUnavailable_WhenPresented_ThenPasswordOrRecoveryRemediationCrossesTheController', () async {
+    final repository = _AuthenticationRepository()..emailUser = _emailUser();
+    final service = _authenticationService(
+      const _UnavailableOperatingSystemAuthenticator(),
+      repository: repository,
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithLocalWindowsCredentials('person@example.com');
+
+    final state =
+        container.read(authenticationControllerProvider) as AuthenticationError;
+    expect(state.code, 'authentication.operating_system.unavailable');
+    expect(state.remediation, contains('local password'));
+    expect(state.remediation, contains('recovery code'));
+  });
+
+  test('GivenUnusedRecoveryCode_WhenRecoveringAccount_ThenRecoveredSessionIsPublished', () async {
+    final code = RecoveryCode.generate(Random(11));
+    final repository = _AuthenticationRepository()..emailUser = _emailUser();
+    final recoveryCodes = _RecoveryCodeRepository()
+      ..unusedDigests.add(code.digest);
+    final service = _authenticationService(
+      _CompletingOperatingSystemAuthenticator(),
+      repository: repository,
+      recoveryCodes: recoveryCodes,
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .recoverLocalAccount(
+          'person@example.com',
+          code.display,
+          'replacement-password',
         );
-        final container = _container(service);
-        await container
-            .read(authenticationControllerProvider.notifier)
-            .signInWithGoogle();
 
-        final state =
-            container.read(authenticationControllerProvider)
-                as AuthenticationError;
-        expect(state.code, failureCase.code);
-        expect(state.message, isNot(contains(failureCase.error.toString())));
-        container.dispose();
-      }
-    },
-  );
+    final state = container.read(
+      authenticationControllerProvider,
+    ) as AuthenticationAuthenticated;
+    expect(state.session.userId, 'email-user');
+    expect(state.session.source, AuthenticationSource.recoveryCode);
+  });
 
-  test(
-    'GivenAThrottledAccount_WhenSigningInWithEmail_ThenTheWaitIsShownInsteadOfInvalidCredentials',
-    () async {
-      final repository = _AuthenticationRepository()
-        ..emailUser = _emailUser()
-        ..failures = FailedAuthenticationHistory(
-          count: 12,
-          lastAt: DateTime.utc(2026, 8, 5),
-        );
-      final service = _authenticationService(
-        _ImmediateOperatingSystemAuthenticator(),
-        repository: repository,
-        verifiers: _PasswordVerifierStore()
-          ..values['verifier-email-user'] = 'hashed:password1',
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
+  test('GivenGoogleSessionExpires_WhenServiceRevokesIt_ThenControllerReturnsToSignedOut', () async {
+    var now = DateTime.utc(2026, 8, 5);
+    void Function()? expire;
+    final service = _authenticationService(
+      _CompletingOperatingSystemAuthenticator(),
+      googleAuthorization: const _SuccessfulGoogleAuthorization(),
+      externalGateway: _SuccessfulExternalGateway(),
+      clock: () => now,
+      scheduleExpiry: (delay, onExpiry) {
+        expire = onExpiry;
+        return () {};
+      },
+    );
+    final container = _container(service);
+    addTearDown(container.dispose);
+    await container
+        .read(authenticationControllerProvider.notifier)
+        .signInWithGoogle();
+    expect(
+      container.read(authenticationControllerProvider),
+      isA<AuthenticationAuthenticated>(),
+    );
 
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithEmail('person@example.com', 'password1');
+    now = DateTime.utc(2026, 8, 5, 1);
+    expire!();
 
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationError;
-      expect(state.code, 'authentication.attempts.throttled');
-      expect(state.remediation, contains('second'));
-    },
-  );
+    expect(
+      container.read(authenticationControllerProvider),
+      isA<AuthenticationSignedOut>(),
+    );
+  });
 
-  test(
-    'GivenUnavailableProtectedStorage_WhenSigningInWithEmail_ThenItIsNotReportedAsInvalidCredentials',
-    () async {
-      final repository = _AuthenticationRepository()..emailUser = _emailUser();
-      final service = _authenticationService(
-        _ImmediateOperatingSystemAuthenticator(),
-        repository: repository,
-        verifiers: _PasswordVerifierStore()..unavailable = true,
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
+  test('GivenRecoveryCodesAwaitAcknowledgement_WhenAnotherSignInIsRequested_ThenPendingCreationRemainsAuthoritative', () async {
+    final operatingSystem = _CountingOperatingSystemAuthenticator();
+    final service = _authenticationService(operatingSystem);
+    final container = _container(service);
+    addTearDown(container.dispose);
+    final controller = container.read(
+      authenticationControllerProvider.notifier,
+    );
+    await controller.createAccount('new@example.com', 'password1');
 
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithEmail('person@example.com', 'password1');
+    await controller.signInWithOperatingSystem();
 
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationError;
-      expect(state.code, 'authentication.storage.failed');
-      expect(state.message, isNot(contains('locked')));
-    },
-  );
-
-  test(
-    'GivenMalformedGoogleConfiguration_WhenPresented_ThenConfigurationCodeCrossesTheControllerUnchanged',
-    () async {
-      final service = _authenticationService(
-        _ImmediateOperatingSystemAuthenticator(),
-        settings: const _ThrowingSettingsRepository(),
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
-
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithGoogle();
-
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationError;
-      expect(state.code, 'authentication.google.configuration.invalid');
-      expect(state.message, isNot(contains('persisted-sentinel')));
-    },
-  );
-
-  test(
-    'GivenPasswordAccount_WhenWindowsCredentialsAreUsed_ThenThatEmailAccountIsPublished',
-    () async {
-      final repository = _AuthenticationRepository()..emailUser = _emailUser();
-      final service = _authenticationService(
-        _ImmediateOperatingSystemAuthenticator(),
-        repository: repository,
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
-
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithLocalWindowsCredentials('person@example.com');
-
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationAuthenticated;
-      expect(state.session.userId, 'email-user');
-      expect(state.session.source, AuthenticationSource.localWindows);
-    },
-  );
-
-  test(
-    'GivenWindowsCredentialsUnavailable_WhenPresented_ThenPasswordOrRecoveryRemediationCrossesTheController',
-    () async {
-      final repository = _AuthenticationRepository()..emailUser = _emailUser();
-      final service = _authenticationService(
-        const _UnavailableOperatingSystemAuthenticator(),
-        repository: repository,
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
-
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithLocalWindowsCredentials('person@example.com');
-
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationError;
-      expect(state.code, 'authentication.operating_system.unavailable');
-      expect(state.remediation, contains('local password'));
-      expect(state.remediation, contains('recovery code'));
-    },
-  );
-
-  test(
-    'GivenUnusedRecoveryCode_WhenRecoveringAccount_ThenRecoveredSessionIsPublished',
-    () async {
-      final code = RecoveryCode.generate(Random(11));
-      final repository = _AuthenticationRepository()..emailUser = _emailUser();
-      final recoveryCodes = _RecoveryCodeRepository()
-        ..unusedDigests.add(code.digest);
-      final service = _authenticationService(
-        _CompletingOperatingSystemAuthenticator(),
-        repository: repository,
-        recoveryCodes: recoveryCodes,
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
-
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .recoverLocalAccount(
-            'person@example.com',
-            code.display,
-            'replacement-password',
-          );
-
-      final state =
-          container.read(authenticationControllerProvider)
-              as AuthenticationAuthenticated;
-      expect(state.session.userId, 'email-user');
-      expect(state.session.source, AuthenticationSource.recoveryCode);
-    },
-  );
-
-  test(
-    'GivenGoogleSessionExpires_WhenServiceRevokesIt_ThenControllerReturnsToSignedOut',
-    () async {
-      var now = DateTime.utc(2026, 8, 5);
-      void Function()? expire;
-      final service = _authenticationService(
-        _CompletingOperatingSystemAuthenticator(),
-        googleAuthorization: const _SuccessfulGoogleAuthorization(),
-        externalGateway: _SuccessfulExternalGateway(),
-        clock: () => now,
-        scheduleExpiry: (delay, onExpiry) {
-          expire = onExpiry;
-          return () {};
-        },
-      );
-      final container = _container(service);
-      addTearDown(container.dispose);
-      await container
-          .read(authenticationControllerProvider.notifier)
-          .signInWithGoogle();
-      expect(
-        container.read(authenticationControllerProvider),
-        isA<AuthenticationAuthenticated>(),
-      );
-
-      now = DateTime.utc(2026, 8, 5, 1);
-      expire!();
-
-      expect(
-        container.read(authenticationControllerProvider),
-        isA<AuthenticationSignedOut>(),
-      );
-    },
-  );
-
-  test(
-    'GivenRecoveryCodesAwaitAcknowledgement_WhenAnotherSignInIsRequested_ThenPendingCreationRemainsAuthoritative',
-    () async {
-      final operatingSystem = _CountingOperatingSystemAuthenticator();
-      final service = _authenticationService(operatingSystem);
-      final container = _container(service);
-      addTearDown(container.dispose);
-      final controller = container.read(
-        authenticationControllerProvider.notifier,
-      );
-      await controller.createAccount('new@example.com', 'password1');
-
-      await controller.signInWithOperatingSystem();
-
-      expect(operatingSystem.attempts, 0);
-      expect(
-        container.read(authenticationControllerProvider),
-        isA<AuthenticationRecoveryCodesPending>(),
-      );
-      expect(service.currentSession, isNull);
-    },
-  );
+    expect(operatingSystem.attempts, 0);
+    expect(
+      container.read(authenticationControllerProvider),
+      isA<AuthenticationRecoveryCodesPending>(),
+    );
+    expect(service.currentSession, isNull);
+  });
 }
 
 ProviderContainer _container(AuthenticationService service) {

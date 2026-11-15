@@ -26,7 +26,10 @@ import 'dart:io';
 
 Future<void> main(List<String> arguments) async {
   await Future<void>.delayed(const Duration(milliseconds: 750));
-  await File(arguments.single).writeAsString('detached', flush: true);
+  // Renamed into place: the test reads the marker as soon as it exists, so it must never exist half written.
+  final partial = File('\${arguments.single}.partial');
+  await partial.writeAsString('detached', flush: true);
+  await partial.rename(arguments.single);
 }
 ''');
       const dartExecutable = String.fromEnvironment('MAESTRO_TEST_DART');

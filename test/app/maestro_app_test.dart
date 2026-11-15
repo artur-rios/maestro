@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/app/maestro_app.dart';
 import 'package:maestro/core/errors/result.dart';
@@ -20,6 +19,7 @@ import 'package:maestro/features/workflows/application/workflow_design_service.d
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/common/capability.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets(

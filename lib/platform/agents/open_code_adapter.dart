@@ -40,8 +40,7 @@ final class OpenCodeAdapter implements AgentCliAdapter {
       return _support.catalog(
         version: start.version,
         session: AgentCliSession.unauthenticated,
-        guidance:
-            'Authenticate an OpenCode provider in the project terminal, then refresh.',
+        guidance: 'Authenticate an OpenCode provider in the project terminal, then refresh.',
       );
     }
     final modelResult = await _support.run(start.executable!, const <String>[
@@ -105,7 +104,6 @@ final class OpenCodeAdapter implements AgentCliAdapter {
 
   AgentCliCatalog _unverified(String version) => _support.catalog(
     version: version,
-    guidance:
-        'OpenCode model discovery could not be verified. Retry without refreshing provider state.',
+    guidance: 'OpenCode model discovery could not be verified. Retry without refreshing provider state.',
   );
 }

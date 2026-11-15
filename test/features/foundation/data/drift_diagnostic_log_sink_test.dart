@@ -30,9 +30,8 @@ void main() {
       await log.record('foundation database: blocked — storage is unreadable');
       await log.close();
 
-      final entries = await DriftHistoryRepository(
-        database,
-      ).recentDiagnostics();
+      final entries = await DriftHistoryRepository(database)
+          .recentDiagnostics();
       expect(entries, hasLength(1));
       expect(entries.single.text, contains('storage is unreadable'));
       expect(entries.single.recordedAt, DateTime.utc(2026, 8, 6, 12));

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_form_spacing.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
@@ -9,6 +8,7 @@ import 'package:maestro/features/workflows/application/agent_cli_discovery.dart'
 import 'package:maestro/features/workflows/application/agent_configuration_service.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 import 'package:maestro/features/workflows/presentation/workflow_controller.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class WorkflowEditorPage extends ConsumerStatefulWidget {
   const WorkflowEditorPage({
@@ -760,10 +760,8 @@ final class _StepRow extends ConsumerWidget {
   static String _guidance(AgentRowState? state) {
     if (state == null) return 'Select an agent CLI and model.';
     return switch (state.code) {
-      AgentRowStateCode.unauthenticated =>
-        'Authenticate in the project terminal (embedded terminal when available), then refresh. Maestro never starts login.',
-      AgentRowStateCode.cliOnly =>
-        'This is a documented CLI alias; account access is checked when the step starts.',
+      AgentRowStateCode.unauthenticated => 'Authenticate in the project terminal (embedded terminal when available), then refresh. Maestro never starts login.',
+      AgentRowStateCode.cliOnly => 'This is a documented CLI alias; account access is checked when the step starts.',
       _ => state.guidance,
     };
   }

@@ -77,50 +77,47 @@ void main() {
     },
   );
 
-  test(
-    'GivenDeletedProject_WhenPermanentlyDeleted_ThenOnlyTargetAndOneAuditChange',
-    () async {
-      final project = _project(deletedAt: DateTime.utc(2026, 8, 5, 14));
-      final unrelated = _project(
-        id: 'unrelated',
-        name: 'Other',
-        normalizedName: 'other',
-      );
-      await repository.save(project);
-      await repository.save(unrelated);
-      await database
-          .into(database.auditEvents)
-          .insert(
-            AuditEventsCompanion.insert(
-              id: 'unrelated-audit',
-              actorId: 'somebody',
-              action: 'unrelated.action',
-              target: 'unrelated',
-              outcome: 'success',
-              occurredAt: DateTime.utc(2026),
-              details: '{}',
-            ),
-          );
+  test('GivenDeletedProject_WhenPermanentlyDeleted_ThenOnlyTargetAndOneAuditChange', () async {
+    final project = _project(deletedAt: DateTime.utc(2026, 8, 5, 14));
+    final unrelated = _project(
+      id: 'unrelated',
+      name: 'Other',
+      normalizedName: 'other',
+    );
+    await repository.save(project);
+    await repository.save(unrelated);
+    await database
+        .into(database.auditEvents)
+        .insert(
+          AuditEventsCompanion.insert(
+            id: 'unrelated-audit',
+            actorId: 'somebody',
+            action: 'unrelated.action',
+            target: 'unrelated',
+            outcome: 'success',
+            occurredAt: DateTime.utc(2026),
+            details: '{}',
+          ),
+        );
 
-      await repository.permanentlyDelete(
-        project: project,
-        audit: _audit(ProjectLifecycleAction.permanentDelete),
-      );
+    await repository.permanentlyDelete(
+      project: project,
+      audit: _audit(ProjectLifecycleAction.permanentDelete),
+    );
 
-      expect(await repository.findById(project.id), isNull);
-      expect(await repository.findById(unrelated.id), _matches(unrelated));
-      final audits = await database.select(database.auditEvents).get();
-      expect(
-        audits.map((row) => row.id),
-        containsAll(<String>['unrelated-audit', 'audit-permanentDelete']),
-      );
-      expect(audits, hasLength(2));
-      final lifecycle = audits.singleWhere(
-        (row) => row.id == 'audit-permanentDelete',
-      );
-      _expectAudit(lifecycle, action: 'project.permanent_delete');
-    },
-  );
+    expect(await repository.findById(project.id), isNull);
+    expect(await repository.findById(unrelated.id), _matches(unrelated));
+    final audits = await database.select(database.auditEvents).get();
+    expect(
+      audits.map((row) => row.id),
+      containsAll(<String>['unrelated-audit', 'audit-permanentDelete']),
+    );
+    expect(audits, hasLength(2));
+    final lifecycle = audits.singleWhere(
+      (row) => row.id == 'audit-permanentDelete',
+    );
+    _expectAudit(lifecycle, action: 'project.permanent_delete');
+  });
 
   test(
     'GivenAuditInsertFails_WhenSoftDeleting_ThenProjectAndAuditRollBack',
@@ -230,40 +227,37 @@ void main() {
     },
   );
 
-  test(
-    'GivenAssociatedWorkflow_WhenProjectPermanentlyDeleted_ThenOnlyAssociationCascadesAndWorkflowRemainsEditable',
-    () async {
-      final project = _project(deletedAt: DateTime.utc(2026, 8, 5, 14));
-      await repository.save(project);
-      final workflows = DriftWorkflowRepository(database);
-      final original = _workflow(project.id);
-      await workflows.save(definition: original, expectedRevision: null);
+  test('GivenAssociatedWorkflow_WhenProjectPermanentlyDeleted_ThenOnlyAssociationCascadesAndWorkflowRemainsEditable', () async {
+    final project = _project(deletedAt: DateTime.utc(2026, 8, 5, 14));
+    await repository.save(project);
+    final workflows = DriftWorkflowRepository(database);
+    final original = _workflow(project.id);
+    await workflows.save(definition: original, expectedRevision: null);
 
-      await repository.permanentlyDelete(
-        project: project,
-        audit: _audit(ProjectLifecycleAction.permanentDelete),
-      );
+    await repository.permanentlyDelete(
+      project: project,
+      audit: _audit(ProjectLifecycleAction.permanentDelete),
+    );
 
-      final retained = await workflows.findById(original.id);
-      expect(retained, isNotNull);
-      expect(retained!.projectIds, isEmpty);
-      final edited = _workflow(project.id, revision: 2, projectIds: const []);
-      expect(
-        await workflows.save(definition: edited, expectedRevision: 1),
-        isA<WorkflowRepositorySaved>(),
-      );
-      expect((await workflows.findById(original.id))!.revision, 2);
-      expect(
-        await database
-            .customSelect(
-              "SELECT COUNT(*) AS count FROM workflows WHERE name LIKE '%private%'",
-            )
-            .map((row) => row.read<int>('count'))
-            .getSingle(),
-        0,
-      );
-    },
-  );
+    final retained = await workflows.findById(original.id);
+    expect(retained, isNotNull);
+    expect(retained!.projectIds, isEmpty);
+    final edited = _workflow(project.id, revision: 2, projectIds: const []);
+    expect(
+      await workflows.save(definition: edited, expectedRevision: 1),
+      isA<WorkflowRepositorySaved>(),
+    );
+    expect((await workflows.findById(original.id))!.revision, 2);
+    expect(
+      await database
+          .customSelect(
+            "SELECT COUNT(*) AS count FROM workflows WHERE name LIKE '%private%'",
+          )
+          .map((row) => row.read<int>('count'))
+          .getSingle(),
+      0,
+    );
+  });
 }
 
 WorkflowDefinition _workflow(

@@ -69,28 +69,25 @@ void main() {
     },
   );
 
-  test(
-    'GivenEachUnavailableFolder_WhenRegistered_ThenTypedFailurePreventsPersistence',
-    () async {
-      for (final availability in ProjectAvailability.values.where(
-        (value) => value != ProjectAvailability.available,
-      )) {
-        validator.result = ProjectFolderValidation.unavailable(availability);
-        final result = await service.register(
-          name: 'Project ${availability.name}',
-          folderPath: r'C:\project',
-        );
+  test('GivenEachUnavailableFolder_WhenRegistered_ThenTypedFailurePreventsPersistence', () async {
+    for (final availability in ProjectAvailability.values.where(
+      (value) => value != ProjectAvailability.available,
+    )) {
+      validator.result = ProjectFolderValidation.unavailable(availability);
+      final result = await service.register(
+        name: 'Project ${availability.name}',
+        folderPath: r'C:\project',
+      );
 
-        expect(result, isA<FailureResult<ProjectSelection>>());
-        expect(
-          (result as FailureResult<ProjectSelection>).failure.code,
-          'project.folder.${availability.name}',
-        );
-      }
+      expect(result, isA<FailureResult<ProjectSelection>>());
+      expect(
+        (result as FailureResult<ProjectSelection>).failure.code,
+        'project.folder.${availability.name}',
+      );
+    }
 
-      expect(repository.saved, isEmpty);
-    },
-  );
+    expect(repository.saved, isEmpty);
+  });
 
   test(
     'GivenRetainedDuplicateName_WhenRegistered_ThenPreflightRejectsWithoutSave',
@@ -111,108 +108,92 @@ void main() {
     },
   );
 
-  test(
-    'GivenRacedDuplicateWrite_WhenRegistered_ThenSameDuplicateFailureIsReturned',
-    () async {
-      repository.saveResult = const FailureResult<void>(
-        StorageFailure(
-          code: ProjectRepositoryFailureCodes.duplicateName,
-          message: 'adapter detail must not escape',
-        ),
-      );
+  test('GivenRacedDuplicateWrite_WhenRegistered_ThenSameDuplicateFailureIsReturned', () async {
+    repository.saveResult = const FailureResult<void>(
+      StorageFailure(
+        code: ProjectRepositoryFailureCodes.duplicateName,
+        message: 'adapter detail must not escape',
+      ),
+    );
 
-      final result = await service.register(
-        name: 'Race',
-        folderPath: r'C:\project',
-      );
+    final result = await service.register(
+      name: 'Race',
+      folderPath: r'C:\project',
+    );
 
+    expect(result, isA<FailureResult<ProjectSelection>>());
+    final failure = (result as FailureResult<ProjectSelection>).failure;
+    expect(failure.code, 'project.name.duplicate');
+    expect(failure.message, isNot(contains('adapter detail')));
+  });
+
+  test('GivenUnorderedActiveAndDeletedRows_WhenListed_ThenActiveRowsUseStableNameOrder', () async {
+    repository.records.addAll([
+      _record(name: 'zulu'),
+      _record(name: 'Alpha'),
+      _record(name: 'beta'),
+      _record(name: 'hidden', deleted: true),
+    ]);
+
+    final result = await service.listWithAvailability();
+
+    expect(result, isA<Success<List<ProjectSelection>>>());
+    final selections = (result as Success<List<ProjectSelection>>).value;
+    expect(selections.map((item) => item.record.name), [
+      'Alpha',
+      'beta',
+      'zulu',
+    ]);
+  });
+
+  test('GivenUnavailableRetainedRecord_WhenListed_ThenRecordIsPreservedAndActionsBlocked', () async {
+    repository.records.add(_record(name: 'Offline'));
+    validator.result = ProjectFolderValidation.unavailable(
+      ProjectAvailability.missing,
+    );
+
+    final result = await service.listWithAvailability();
+
+    final selection = (result as Success<List<ProjectSelection>>).value.single;
+    expect(selection.record.name, 'Offline');
+    expect(selection.availability, ProjectAvailability.missing);
+    expect(selection.folderActionsEnabled, isFalse);
+    expect(selection.remediation, isNotEmpty);
+  });
+
+  test('GivenProjectSelectedOrRefreshed_WhenValidated_ThenCurrentAvailabilityIsReturned', () async {
+    final record = _record(name: 'Selected');
+    repository.records.add(record);
+    validator.result = ProjectFolderValidation.unavailable(
+      ProjectAvailability.notGitWorkingTree,
+    );
+
+    final selected = await service.select(record.id);
+    final refreshed = await service.refresh(record.id);
+
+    for (final result in [selected, refreshed]) {
+      expect(result, isA<Success<ProjectSelection>>());
+      expect(
+        (result as Success<ProjectSelection>).value.folderActionsEnabled,
+        isFalse,
+      );
+    }
+    expect(validator.paths, [record.folderPath, record.folderPath]);
+  });
+
+  test('GivenMissingOrDeletedId_WhenSelected_ThenTypedFailureIsReturnedWithoutProbe', () async {
+    repository.records.add(_record(name: 'Deleted', deleted: true));
+
+    for (final id in ['missing', 'id-deleted']) {
+      final result = await service.select(id);
       expect(result, isA<FailureResult<ProjectSelection>>());
-      final failure = (result as FailureResult<ProjectSelection>).failure;
-      expect(failure.code, 'project.name.duplicate');
-      expect(failure.message, isNot(contains('adapter detail')));
-    },
-  );
-
-  test(
-    'GivenUnorderedActiveAndDeletedRows_WhenListed_ThenActiveRowsUseStableNameOrder',
-    () async {
-      repository.records.addAll([
-        _record(name: 'zulu'),
-        _record(name: 'Alpha'),
-        _record(name: 'beta'),
-        _record(name: 'hidden', deleted: true),
-      ]);
-
-      final result = await service.listWithAvailability();
-
-      expect(result, isA<Success<List<ProjectSelection>>>());
-      final selections = (result as Success<List<ProjectSelection>>).value;
-      expect(selections.map((item) => item.record.name), [
-        'Alpha',
-        'beta',
-        'zulu',
-      ]);
-    },
-  );
-
-  test(
-    'GivenUnavailableRetainedRecord_WhenListed_ThenRecordIsPreservedAndActionsBlocked',
-    () async {
-      repository.records.add(_record(name: 'Offline'));
-      validator.result = ProjectFolderValidation.unavailable(
-        ProjectAvailability.missing,
+      expect(
+        (result as FailureResult<ProjectSelection>).failure.code,
+        'project.not_found',
       );
-
-      final result = await service.listWithAvailability();
-
-      final selection =
-          (result as Success<List<ProjectSelection>>).value.single;
-      expect(selection.record.name, 'Offline');
-      expect(selection.availability, ProjectAvailability.missing);
-      expect(selection.folderActionsEnabled, isFalse);
-      expect(selection.remediation, isNotEmpty);
-    },
-  );
-
-  test(
-    'GivenProjectSelectedOrRefreshed_WhenValidated_ThenCurrentAvailabilityIsReturned',
-    () async {
-      final record = _record(name: 'Selected');
-      repository.records.add(record);
-      validator.result = ProjectFolderValidation.unavailable(
-        ProjectAvailability.notGitWorkingTree,
-      );
-
-      final selected = await service.select(record.id);
-      final refreshed = await service.refresh(record.id);
-
-      for (final result in [selected, refreshed]) {
-        expect(result, isA<Success<ProjectSelection>>());
-        expect(
-          (result as Success<ProjectSelection>).value.folderActionsEnabled,
-          isFalse,
-        );
-      }
-      expect(validator.paths, [record.folderPath, record.folderPath]);
-    },
-  );
-
-  test(
-    'GivenMissingOrDeletedId_WhenSelected_ThenTypedFailureIsReturnedWithoutProbe',
-    () async {
-      repository.records.add(_record(name: 'Deleted', deleted: true));
-
-      for (final id in ['missing', 'id-deleted']) {
-        final result = await service.select(id);
-        expect(result, isA<FailureResult<ProjectSelection>>());
-        expect(
-          (result as FailureResult<ProjectSelection>).failure.code,
-          'project.not_found',
-        );
-      }
-      expect(validator.paths, isEmpty);
-    },
-  );
+    }
+    expect(validator.paths, isEmpty);
+  });
 
   test(
     'GivenRepositoryThrows_WhenCalled_ThenRawExceptionDoesNotEscape',
@@ -229,50 +210,44 @@ void main() {
     },
   );
 
-  test(
-    'GivenValidatorThrows_WhenRegistered_ThenSanitizedTransientFolderFailureIsReturned',
-    () async {
-      validator.error = StateError('secret adapter detail');
+  test('GivenValidatorThrows_WhenRegistered_ThenSanitizedTransientFolderFailureIsReturned', () async {
+    validator.error = StateError('secret adapter detail');
 
-      final result = await service.register(
-        name: 'Project',
-        folderPath: r'C:\project',
-      );
+    final result = await service.register(
+      name: 'Project',
+      folderPath: r'C:\project',
+    );
 
-      expect(result, isA<FailureResult<ProjectSelection>>());
-      final failure = (result as FailureResult<ProjectSelection>).failure;
-      expect(failure.code, 'project.folder.transientFailure');
-      expect(failure.message, isNot(contains('secret')));
-      expect(failure.cause, isNull);
-      expect(repository.events, [r'validate:C:\project']);
-      expect(repository.saved, isEmpty);
-    },
-  );
+    expect(result, isA<FailureResult<ProjectSelection>>());
+    final failure = (result as FailureResult<ProjectSelection>).failure;
+    expect(failure.code, 'project.folder.transientFailure');
+    expect(failure.message, isNot(contains('secret')));
+    expect(failure.cause, isNull);
+    expect(repository.events, [r'validate:C:\project']);
+    expect(repository.saved, isEmpty);
+  });
 
-  test(
-    'GivenValidatorThrows_WhenListingSelectingOrRefreshing_ThenRecordIsPreservedAsTransient',
-    () async {
-      final record = _record(name: 'Transient');
-      repository.records.add(record);
-      validator.error = StateError('secret adapter detail');
+  test('GivenValidatorThrows_WhenListingSelectingOrRefreshing_ThenRecordIsPreservedAsTransient', () async {
+    final record = _record(name: 'Transient');
+    repository.records.add(record);
+    validator.error = StateError('secret adapter detail');
 
-      final listed = await service.listWithAvailability();
-      final selected = await service.select(record.id);
-      final refreshed = await service.refresh(record.id);
+    final listed = await service.listWithAvailability();
+    final selected = await service.select(record.id);
+    final refreshed = await service.refresh(record.id);
 
-      final selections = <ProjectSelection>[
-        (listed as Success<List<ProjectSelection>>).value.single,
-        (selected as Success<ProjectSelection>).value,
-        (refreshed as Success<ProjectSelection>).value,
-      ];
-      for (final selection in selections) {
-        expect(selection.record, same(record));
-        expect(selection.availability, ProjectAvailability.transientFailure);
-        expect(selection.folderActionsEnabled, isFalse);
-        expect(selection.remediation, isNot(contains('secret')));
-      }
-    },
-  );
+    final selections = <ProjectSelection>[
+      (listed as Success<List<ProjectSelection>>).value.single,
+      (selected as Success<ProjectSelection>).value,
+      (refreshed as Success<ProjectSelection>).value,
+    ];
+    for (final selection in selections) {
+      expect(selection.record, same(record));
+      expect(selection.availability, ProjectAvailability.transientFailure);
+      expect(selection.folderActionsEnabled, isFalse);
+      expect(selection.remediation, isNot(contains('secret')));
+    }
+  });
 }
 
 ProjectRecord _record({required String name, bool deleted = false}) {

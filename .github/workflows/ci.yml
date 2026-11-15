@@ -29,12 +29,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: '3.47.2'
+          flutter-version: '3.50.0'
           channel: stable
           cache: true
       - run: flutter pub get
       - run: flutter test integration_test/platform/process_tree_integration_test.dart -d windows
       - run: flutter test integration_test/platform/detached_process_launcher_integration_test.dart -d windows --dart-define=MAESTRO_TEST_DART="$env:FLUTTER_ROOT\bin\cache\dart-sdk\bin\dart.exe"
+      - run: flutter test integration_test/platform/desktop_window_integration_test.dart -d windows
       - run: flutter test integration_test/foundation_startup_integration_test.dart -d windows
       - run: flutter test integration_test/performance/concurrent_streams_integration_test.dart -d windows
       - run: flutter test integration_test/performance/run_observation_integration_test.dart -d windows

@@ -19,9 +19,8 @@ Future<void> main(List<String> arguments) async {
     for (final file in distributionFiles) file.uri.pathSegments.last: file,
   };
   final expectedSums = parseSha256Sums(
-    await File(
-      '${directory.path}${Platform.pathSeparator}SHA256SUMS',
-    ).readAsString(),
+    await File('${directory.path}${Platform.pathSeparator}SHA256SUMS')
+        .readAsString(),
   );
   final actualDigests = <String, String>{};
   for (final entry in filesByName.entries) {

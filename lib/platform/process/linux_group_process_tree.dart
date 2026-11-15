@@ -119,9 +119,8 @@ final class _LinuxOwnedProcess implements OwnedNativeProcess {
 
 final class _LinuxProcessBindings {
   _LinuxProcessBindings()
-    : _kill = DynamicLibrary.open(
-        'libc.so.6',
-      ).lookupFunction<_KillNative, _KillDart>('kill');
+    : _kill = DynamicLibrary.open('libc.so.6')
+          .lookupFunction<_KillNative, _KillDart>('kill');
 
   final _KillDart _kill;
 

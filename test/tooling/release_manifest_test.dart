@@ -15,22 +15,19 @@ void main() {
     }
   });
 
-  test(
-    'GivenUnsupportedReleaseVersions_WhenManifestParsed_ThenThrowsFormatException',
-    () {
-      for (final version in <String>[
-        '01.2.3',
-        '1.2.3-preview.1',
-        '1.2.3+build.1',
-        '1.2.3-beta.10000',
-      ]) {
-        expect(
-          () => ReleaseManifest.fromJson(_manifestJson(version)),
-          throwsFormatException,
-        );
-      }
-    },
-  );
+  test('GivenUnsupportedReleaseVersions_WhenManifestParsed_ThenThrowsFormatException', () {
+    for (final version in <String>[
+      '01.2.3',
+      '1.2.3-preview.1',
+      '1.2.3+build.1',
+      '1.2.3-beta.10000',
+    ]) {
+      expect(
+        () => ReleaseManifest.fromJson(_manifestJson(version)),
+        throwsFormatException,
+      );
+    }
+  });
 
   test(
     'GivenFourArtifacts_WhenManifestCreated_ThenEveryDigestAndSizeMatches',
@@ -73,80 +70,70 @@ void main() {
     },
   );
 
-  test(
-    'GivenExactDistribution_WhenToolsRun_ThenManifestAndChecksumsCoverExactSets',
-    () async {
-      final directory = await _createDistributionDirectory();
-      addTearDown(() => directory.delete(recursive: true));
+  test('GivenExactDistribution_WhenToolsRun_ThenManifestAndChecksumsCoverExactSets', () async {
+    final directory = await _createDistributionDirectory();
+    addTearDown(() => directory.delete(recursive: true));
 
-      final created = await _runReleaseTool('create_manifest.dart', <String>[
-        directory.path,
-        '1.2.3-rc.4',
-        'https://example.test/releases/v1.2.3-rc.4/',
-      ]);
+    final created = await _runReleaseTool('create_manifest.dart', <String>[
+      directory.path,
+      '1.2.3-rc.4',
+      'https://example.test/releases/v1.2.3-rc.4/',
+    ]);
 
-      expect(created.exitCode, 0, reason: '${created.stderr}');
-      final manifest =
-          jsonDecode(
-                await File(
-                  '${directory.path}/release-manifest.json',
-                ).readAsString(),
-              )
-              as Map<String, Object?>;
-      final artifacts = manifest['artifacts']! as List<Object?>;
-      expect(manifest['version'], '1.2.3-rc.4');
-      expect(
-        artifacts
-            .cast<Map<String, Object?>>()
-            .map(
-              (artifact) =>
-                  Uri.parse(artifact['url']! as String).pathSegments.last,
-            )
-            .toSet(),
-        <String>{
-          'maestro-windows-x64.zip',
-          'maestro-windows-x64.msix',
-          'maestro-linux-x64.AppImage',
-          'maestro-linux-amd64.deb',
-        },
-      );
-      final sums = await File('${directory.path}/SHA256SUMS').readAsString();
-      expect(sums, contains('  maestro-windows-x64-setup.exe\n'));
-      expect(sums.trim().split('\n'), hasLength(5));
+    expect(created.exitCode, 0, reason: '${created.stderr}');
+    final manifest = jsonDecode(
+      await File('${directory.path}/release-manifest.json').readAsString(),
+    ) as Map<String, Object?>;
+    final artifacts = manifest['artifacts']! as List<Object?>;
+    expect(manifest['version'], '1.2.3-rc.4');
+    expect(
+      artifacts
+          .cast<Map<String, Object?>>()
+          .map(
+            (artifact) =>
+                Uri.parse(artifact['url']! as String).pathSegments.last,
+          )
+          .toSet(),
+      <String>{
+        'maestro-windows-x64.zip',
+        'maestro-windows-x64.msix',
+        'maestro-linux-x64.AppImage',
+        'maestro-linux-amd64.deb',
+      },
+    );
+    final sums = await File('${directory.path}/SHA256SUMS').readAsString();
+    expect(sums, contains('  maestro-windows-x64-setup.exe\n'));
+    expect(sums.trim().split('\n'), hasLength(5));
 
-      final verified = await _runReleaseTool(
-        'verify_release.dart',
-        <String>[directory.path],
-        environment: <String, String>{'MAESTRO_RELEASE_PUBLIC_KEY_BASE64': ''},
-      );
+    final verified = await _runReleaseTool(
+      'verify_release.dart',
+      <String>[directory.path],
+      environment: <String, String>{'MAESTRO_RELEASE_PUBLIC_KEY_BASE64': ''},
+    );
 
-      expect(verified.exitCode, 0, reason: '${verified.stderr}');
-      expect('${verified.stdout}', contains('publisher-signing: unconfigured'));
-      expect('${verified.stdout}', contains('release-verification: passed'));
-    },
-  );
+    expect(verified.exitCode, 0, reason: '${verified.stderr}');
+    expect('${verified.stdout}', contains('publisher-signing: unconfigured'));
+    expect('${verified.stdout}', contains('release-verification: passed'));
+  });
 
-  test(
-    'GivenUnexpectedManagedPackage_WhenManifestToolRuns_ThenFailsWithoutOutputs',
-    () async {
-      final directory = await _createDistributionDirectory();
-      addTearDown(() => directory.delete(recursive: true));
-      await File('${directory.path}/surprise.msix').writeAsString('surprise');
+  test('GivenUnexpectedManagedPackage_WhenManifestToolRuns_ThenFailsWithoutOutputs', () async {
+    final directory = await _createDistributionDirectory();
+    addTearDown(() => directory.delete(recursive: true));
+    await File('${directory.path}/surprise.msix').writeAsString('surprise');
 
-      final result = await _runReleaseTool('create_manifest.dart', <String>[
-        directory.path,
-        '1.2.3',
-        'https://example.test/releases/v1.2.3/',
-      ]);
+    final result = await _runReleaseTool('create_manifest.dart', <String>[
+      directory.path,
+      '1.2.3',
+      'https://example.test/releases/v1.2.3/',
+    ]);
 
-      expect(result.exitCode, isNot(0));
-      expect(
-        await File('${directory.path}/release-manifest.json').exists(),
-        isFalse,
-      );
-      expect(await File('${directory.path}/SHA256SUMS').exists(), isFalse);
-    },
-  );
+    expect(result.exitCode, isNot(0));
+    expect(
+      await File('${directory.path}/release-manifest.json').exists(),
+      isFalse,
+    );
+    expect(await File('${directory.path}/SHA256SUMS').exists(), isFalse);
+  });
 
   test(
     'GivenIncompleteChecksumsOrWrongManifestSet_WhenVerified_ThenFailsClosed',
@@ -205,9 +192,8 @@ void main() {
         'https://example.test/releases/v1.2.3/',
       ]);
       expect(created.exitCode, 0, reason: '${created.stderr}');
-      await File(
-        '${directory.path}/maestro-windows-x64-setup.exe',
-      ).writeAsString('tampered');
+      await File('${directory.path}/maestro-windows-x64-setup.exe')
+          .writeAsString('tampered');
 
       final verified = await _runReleaseTool(
         'verify_release.dart',
@@ -230,9 +216,8 @@ void main() {
         'https://example.test/releases/v1.2.3/',
       ]);
       expect(created.exitCode, 0, reason: '${created.stderr}');
-      await File(
-        '${directory.path}/release-manifest.sig',
-      ).writeAsString('AA==');
+      await File('${directory.path}/release-manifest.sig')
+          .writeAsString('AA==');
 
       final verified = await _runReleaseTool(
         'verify_release.dart',
@@ -331,11 +316,15 @@ Future<Directory> _createDistributionDirectory() async {
   return directory;
 }
 
+// `dart run`, as ci/release-finalize.sh and the release docs call them: since
+// Dart 3.14 a bare `dart <script>` no longer builds or loads native assets, so
+// the scripts that use sodium cannot find libsodium without it.
 Future<ProcessResult> _runReleaseTool(
   String script,
   List<String> arguments, {
   Map<String, String>? environment,
 }) => Process.run(_dartExecutable.path, <String>[
+  'run',
   'tooling/release/$script',
   ...arguments,
 ], environment: environment);

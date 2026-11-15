@@ -40,10 +40,9 @@ void main() {
         downloader: downloader,
         installer: installer,
       );
-      final candidate =
-          (await service.check(UpdateCheckReason.manual)
-                  as Success<UpdateCandidate?>)
-              .value!;
+      final candidate = (await service.check(
+        UpdateCheckReason.manual,
+      ) as Success<UpdateCandidate?>).value!;
 
       final outcome = await service.install(candidate, UpdateApproval.denied);
 
@@ -65,10 +64,9 @@ void main() {
         downloader: downloader,
         installer: installer,
       );
-      final candidate =
-          (await service.check(UpdateCheckReason.manual)
-                  as Success<UpdateCandidate?>)
-              .value!;
+      final candidate = (await service.check(
+        UpdateCheckReason.manual,
+      ) as Success<UpdateCandidate?>).value!;
 
       final outcome = await service.install(
         candidate,
@@ -100,18 +98,15 @@ void main() {
     );
   }
 
-  test(
-    'GivenStableInstalled_WhenEarlierPrereleaseIsAvailable_ThenDowngradeIsNotOffered',
-    () async {
-      final candidate = await _check(
-        installedVersion: '1.2.3',
-        candidateVersion: '1.2.3-rc.0',
-        artifact: artifact,
-      );
+  test('GivenStableInstalled_WhenEarlierPrereleaseIsAvailable_ThenDowngradeIsNotOffered', () async {
+    final candidate = await _check(
+      installedVersion: '1.2.3',
+      candidateVersion: '1.2.3-rc.0',
+      artifact: artifact,
+    );
 
-      expect(candidate, isNull);
-    },
-  );
+    expect(candidate, isNull);
+  });
 
   test(
     'GivenAMalformedInstalledVersion_WhenChecking_ThenATypedFailureIsReturned',
@@ -169,9 +164,9 @@ Future<UpdateCandidate?> _check({
     installer: _FakeInstaller(),
   );
 
-  return (await service.check(UpdateCheckReason.manual)
-          as Success<UpdateCandidate?>)
-      .value;
+  return (await service.check(
+    UpdateCheckReason.manual,
+  ) as Success<UpdateCandidate?>).value;
 }
 
 final class _FakeSource implements UpdateManifestSource {

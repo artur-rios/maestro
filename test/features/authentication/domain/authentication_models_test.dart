@@ -74,15 +74,12 @@ void main() {
   );
 
   // FR-AU-07 and BR-21: every authenticated local user has full control.
-  test(
-    'GivenAuthenticatedUser_WhenFullControlSessionIsCreated_ThenAllPermissionsAreGranted',
-    () {
-      const session = AuthenticatedSession.fullControl('user-1');
+  test('GivenAuthenticatedUser_WhenFullControlSessionIsCreated_ThenAllPermissionsAreGranted', () {
+    const session = AuthenticatedSession.fullControl('user-1');
 
-      expect(session.userId, 'user-1');
-      expect(session.canManageRecords, isTrue);
-      expect(session.canRunWorkflows, isTrue);
-      expect(session.canDeliverChanges, isTrue);
-    },
-  );
+    expect(session.userId, 'user-1');
+    expect(session.canManageRecords, isTrue);
+    expect(session.canRunWorkflows, isTrue);
+    expect(session.canDeliverChanges, isTrue);
+  });
 }

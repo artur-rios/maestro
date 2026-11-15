@@ -70,32 +70,29 @@ void main() {
     );
   });
 
-  test(
-    'GivenDigestOwnedByAnotherUser_WhenConsumed_ThenOwnerAndDigestMustBothMatchAtomically',
-    () async {
-      final database = await createDatabase();
-      addTearDown(database.close);
-      const otherUserId = 'other-local-user';
-      await insertUser(database, otherUserId, 'other@example.com');
-      final codes = DriftRecoveryCodeRepository(database);
-      final consumedAt = issuedAt.add(const Duration(hours: 1));
-      await codes.saveAll(userId, <StoredRecoveryCode>[code]);
+  test('GivenDigestOwnedByAnotherUser_WhenConsumed_ThenOwnerAndDigestMustBothMatchAtomically', () async {
+    final database = await createDatabase();
+    addTearDown(database.close);
+    const otherUserId = 'other-local-user';
+    await insertUser(database, otherUserId, 'other@example.com');
+    final codes = DriftRecoveryCodeRepository(database);
+    final consumedAt = issuedAt.add(const Duration(hours: 1));
+    await codes.saveAll(userId, <StoredRecoveryCode>[code]);
 
-      expect(
-        await codes.consumeUnusedDigest(otherUserId, code.digest, consumedAt),
-        isFalse,
-      );
-      expect(
-        (await database.select(database.localRecoveryCodes).getSingle())
-            .consumedAt,
-        isNull,
-      );
-      expect(
-        await codes.consumeUnusedDigest(userId, code.digest, consumedAt),
-        isTrue,
-      );
-    },
-  );
+    expect(
+      await codes.consumeUnusedDigest(otherUserId, code.digest, consumedAt),
+      isFalse,
+    );
+    expect(
+      (await database.select(database.localRecoveryCodes).getSingle())
+          .consumedAt,
+      isNull,
+    );
+    expect(
+      await codes.consumeUnusedDigest(userId, code.digest, consumedAt),
+      isTrue,
+    );
+  });
 
   test('GivenDuplicateDigestSet_WhenSaved_ThenTransactionRollsBack', () async {
     final database = await createDatabase();

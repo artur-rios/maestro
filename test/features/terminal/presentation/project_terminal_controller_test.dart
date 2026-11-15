@@ -165,21 +165,18 @@ void main() {
       },
     );
 
-    test(
-      'GivenConfirmedClose_WhenOutputCancellationFails_ThenClosedIsStillReturned',
-      () async {
-        final opener = _FakeOpener(cancelOutputError: true);
-        final controller = _controller(opener);
-        await controller.open();
+    test('GivenConfirmedClose_WhenOutputCancellationFails_ThenClosedIsStillReturned', () async {
+      final opener = _FakeOpener(cancelOutputError: true);
+      final controller = _controller(opener);
+      await controller.open();
 
-        final result = await controller.close();
+      final result = await controller.close();
 
-        expect(result, TerminalClosure.closed);
-        expect(controller.state.status, TerminalSessionStatus.idle);
-        expect(opener.session.closeCalls, 1);
-        controller.dispose();
-      },
-    );
+      expect(result, TerminalClosure.closed);
+      expect(controller.state.status, TerminalSessionStatus.idle);
+      expect(opener.session.closeCalls, 1);
+      controller.dispose();
+    });
 
     test(
       'GivenAClosedSession_WhenTheExitArrives_ThenTheStateStaysIdle',
@@ -210,49 +207,43 @@ void main() {
       expect(result, TerminalClosure.closed);
     });
 
-    test(
-      'GivenAThrowingSession_WhenClosing_ThenIncompleteAndTypedFailureAreReturned',
-      () async {
-        final opener = _FakeOpener()..closeError = StateError('boom');
-        final controller = _controller(opener);
-        await controller.open();
+    test('GivenAThrowingSession_WhenClosing_ThenIncompleteAndTypedFailureAreReturned', () async {
+      final opener = _FakeOpener()..closeError = StateError('boom');
+      final controller = _controller(opener);
+      await controller.open();
 
-        final result = await controller.close();
+      final result = await controller.close();
 
-        expect(result, TerminalClosure.incomplete);
-        expect(controller.state.status, TerminalSessionStatus.running);
-        expect(
-          controller.state.failure?.code,
-          TerminalFailure.closeIncompleteCode,
-        );
-        opener.session.closeError = null;
-        controller.dispose();
-      },
-    );
+      expect(result, TerminalClosure.incomplete);
+      expect(controller.state.status, TerminalSessionStatus.running);
+      expect(
+        controller.state.failure?.code,
+        TerminalFailure.closeIncompleteCode,
+      );
+      opener.session.closeError = null;
+      controller.dispose();
+    });
 
-    test(
-      'GivenAnInitialFailure_WhenOpening_ThenItRemainsFailedWithoutInvokingTheOpener',
-      () async {
-        final opener = _FakeOpener();
-        const failure = TerminalFailure(
-          code: TerminalFailure.folderUnavailableCode,
-          message: 'The project folder could not be resolved.',
-          remediation: 'Choose a project folder, then try again.',
-        );
-        final controller = ProjectTerminalController(
-          workingDirectory: r'D:\project',
-          open: opener.call,
-          initialFailure: failure,
-        );
+    test('GivenAnInitialFailure_WhenOpening_ThenItRemainsFailedWithoutInvokingTheOpener', () async {
+      final opener = _FakeOpener();
+      const failure = TerminalFailure(
+        code: TerminalFailure.folderUnavailableCode,
+        message: 'The project folder could not be resolved.',
+        remediation: 'Choose a project folder, then try again.',
+      );
+      final controller = ProjectTerminalController(
+        workingDirectory: r'D:\project',
+        open: opener.call,
+        initialFailure: failure,
+      );
 
-        await controller.open();
+      await controller.open();
 
-        expect(controller.state.status, TerminalSessionStatus.failed);
-        expect(identical(controller.state.failure, failure), isTrue);
-        expect(opener.requests, isEmpty);
-        controller.dispose();
-      },
-    );
+      expect(controller.state.status, TerminalSessionStatus.failed);
+      expect(identical(controller.state.failure, failure), isTrue);
+      expect(opener.requests, isEmpty);
+      controller.dispose();
+    });
 
     test(
       'GivenAFailedOpen_WhenTheFailureIsShown_ThenItCarriesRemediation',
@@ -310,48 +301,41 @@ void main() {
       },
     );
 
-    test(
-      'GivenAThrowingSessionClose_WhenControllerIsDisposed_ThenCleanupErrorIsConsumed',
-      () async {
-        final opener = _FakeOpener()..closeError = StateError('close failed');
-        final controller = _controller(opener);
-        await controller.open();
+    test('GivenAThrowingSessionClose_WhenControllerIsDisposed_ThenCleanupErrorIsConsumed', () async {
+      final opener = _FakeOpener()..closeError = StateError('close failed');
+      final controller = _controller(opener);
+      await controller.open();
 
-        controller.dispose();
-        await Future<void>.delayed(Duration.zero);
+      controller.dispose();
+      await Future<void>.delayed(Duration.zero);
 
-        expect(opener.session.closeCalls, 1);
-      },
-    );
+      expect(opener.session.closeCalls, 1);
+    });
 
-    test(
-      'GivenDisposedController_WhenLateSessionCloseThrows_ThenCleanupErrorIsConsumed',
-      () async {
-        final result = Completer<TerminalOpenResult>();
-        final session = _FakeSession(
-          TerminalClosure.closed,
-          closeError: StateError('late close failed'),
-        );
-        final controller = ProjectTerminalController(
-          workingDirectory: r'D:\project',
-          open:
-              ({
-                required String workingDirectory,
-                required int columns,
-                required int rows,
-              }) => result.future,
-        );
-        final opening = controller.open();
-        await Future<void>.delayed(Duration.zero);
+    test('GivenDisposedController_WhenLateSessionCloseThrows_ThenCleanupErrorIsConsumed', () async {
+      final result = Completer<TerminalOpenResult>();
+      final session = _FakeSession(
+        TerminalClosure.closed,
+        closeError: StateError('late close failed'),
+      );
+      final controller = ProjectTerminalController(
+        workingDirectory: r'D:\project',
+        open: ({
+          required String workingDirectory,
+          required int columns,
+          required int rows,
+        }) => result.future,
+      );
+      final opening = controller.open();
+      await Future<void>.delayed(Duration.zero);
 
-        controller.dispose();
-        result.complete(TerminalOpenResult.opened(session));
-        await opening;
-        await Future<void>.delayed(Duration.zero);
+      controller.dispose();
+      result.complete(TerminalOpenResult.opened(session));
+      await opening;
+      await Future<void>.delayed(Duration.zero);
 
-        expect(session.closeCalls, 1);
-      },
-    );
+      expect(session.closeCalls, 1);
+    });
 
     test('GivenARunningSession_WhenItsProjectFolderBecomesUnavailable_'
         'ThenTheSessionIsClosedAndTheFailureExplainsHowToRecover', () async {
@@ -385,32 +369,29 @@ void main() {
       controller.dispose();
     });
 
-    test(
-      'GivenFolderUnavailable_WhenSessionCloseThrows_ThenTypedIncompleteFailureRemainsRetryable',
-      () async {
-        final opener = _FakeOpener()..closeError = StateError('close failed');
-        final folder = _MutableFolder();
-        final controller = ProjectTerminalController(
-          workingDirectory: r'D:\project',
-          open: opener.call,
-          folderAvailability: folder.availability,
-          folderCheckInterval: const Duration(milliseconds: 1),
-        );
-        await controller.open();
-        folder.value = TerminalFolderAvailability.inaccessible;
+    test('GivenFolderUnavailable_WhenSessionCloseThrows_ThenTypedIncompleteFailureRemainsRetryable', () async {
+      final opener = _FakeOpener()..closeError = StateError('close failed');
+      final folder = _MutableFolder();
+      final controller = ProjectTerminalController(
+        workingDirectory: r'D:\project',
+        open: opener.call,
+        folderAvailability: folder.availability,
+        folderCheckInterval: const Duration(milliseconds: 1),
+      );
+      await controller.open();
+      folder.value = TerminalFolderAvailability.inaccessible;
 
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-        expect(controller.state.status, TerminalSessionStatus.running);
-        expect(
-          controller.state.failure?.code,
-          TerminalFailure.closeIncompleteCode,
-        );
-        expect(opener.session.closeCalls, 1);
-        opener.session.closeError = null;
-        controller.dispose();
-      },
-    );
+      expect(controller.state.status, TerminalSessionStatus.running);
+      expect(
+        controller.state.failure?.code,
+        TerminalFailure.closeIncompleteCode,
+      );
+      expect(opener.session.closeCalls, 1);
+      opener.session.closeError = null;
+      controller.dispose();
+    });
   });
 }
 

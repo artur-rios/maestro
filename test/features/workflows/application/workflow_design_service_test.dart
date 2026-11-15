@@ -52,21 +52,18 @@ void main() {
     },
   );
 
-  test(
-    'GivenAOneOffWithoutName_WhenSaved_ThenNameIsOptionalAndAssociationsAreEmpty',
-    () async {
-      final result = await service.save(
-        WorkflowDraft.initial(kind: WorkflowKind.oneOff).copyWith(
-          unitType: WorkItemType.freeFormTask,
-          projectIds: const ['must-not-survive'],
-        ),
-      );
+  test('GivenAOneOffWithoutName_WhenSaved_ThenNameIsOptionalAndAssociationsAreEmpty', () async {
+    final result = await service.save(
+      WorkflowDraft.initial(kind: WorkflowKind.oneOff).copyWith(
+        unitType: WorkItemType.freeFormTask,
+        projectIds: const ['must-not-survive'],
+      ),
+    );
 
-      final saved = (result as WorkflowSaved).definition;
-      expect(saved.name, isNull);
-      expect(saved.projectIds, isEmpty);
-    },
-  );
+    final saved = (result as WorkflowSaved).definition;
+    expect(saved.name, isNull);
+    expect(saved.projectIds, isEmpty);
+  });
 
   test(
     'GivenMissingOrDuplicateExecute_WhenSaved_ThenAf01RejectsBeforeMutation',
@@ -91,36 +88,33 @@ void main() {
     },
   );
 
-  test(
-    'GivenBlankRequiredValues_WhenSaved_ThenAf02ReportsIndexedRowsWithoutMutation',
-    () async {
-      final draft = _validDraftValue()
-          .copyWith(name: '   ', unitType: null, clearUnitType: true)
-          .renameStep('default-plan', '  ')
-          .renameStep('default-review', '');
+  test('GivenBlankRequiredValues_WhenSaved_ThenAf02ReportsIndexedRowsWithoutMutation', () async {
+    final draft = _validDraftValue()
+        .copyWith(name: '   ', unitType: null, clearUnitType: true)
+        .renameStep('default-plan', '  ')
+        .renameStep('default-review', '');
 
-      final result = await service.save(draft);
+    final result = await service.save(draft);
 
-      final rejected = result as WorkflowSaveRejected;
-      expect(rejected.code, 'workflow.validation_failed');
-      expect(
-        rejected.issues.map((issue) => issue.code),
-        containsAll([
-          'workflow.name.required',
-          'workflow.unit_type.required',
-          'workflow.step.name_required',
-        ]),
-      );
-      expect(
-        rejected.issues
-            .where((issue) => issue.code == 'workflow.step.name_required')
-            .map((issue) => (issue.rowKey, issue.stepIndex)),
-        [('default-plan', 0), ('default-review', 2)],
-      );
-      expect(repository.saveCalls, 0);
-      expect(ids.calls, 0);
-    },
-  );
+    final rejected = result as WorkflowSaveRejected;
+    expect(rejected.code, 'workflow.validation_failed');
+    expect(
+      rejected.issues.map((issue) => issue.code),
+      containsAll([
+        'workflow.name.required',
+        'workflow.unit_type.required',
+        'workflow.step.name_required',
+      ]),
+    );
+    expect(
+      rejected.issues
+          .where((issue) => issue.code == 'workflow.step.name_required')
+          .map((issue) => (issue.rowKey, issue.stepIndex)),
+      [('default-plan', 0), ('default-review', 2)],
+    );
+    expect(repository.saveCalls, 0);
+    expect(ids.calls, 0);
+  });
 
   test(
     'GivenAnExistingWorkflow_WhenEdited_ThenWorkflowAndStepIdsStayStable',
@@ -154,150 +148,131 @@ void main() {
     },
   );
 
-  test(
-    'GivenPersistedAssignments_WhenMetadataIsSaved_ThenAgentDataSurvivesUnverified',
-    () async {
-      final existing = _definition(
-        revision: 7,
-        assignment: AgentAssignment(
-          kind: AgentCliKind.codex,
-          model: 'gpt-5.2-codex',
-        ),
-        configuration: '{"future":"value"}',
-      );
-      repository.records[existing.id] = existing;
+  test('GivenPersistedAssignments_WhenMetadataIsSaved_ThenAgentDataSurvivesUnverified', () async {
+    final existing = _definition(
+      revision: 7,
+      assignment: AgentAssignment(
+        kind: AgentCliKind.codex,
+        model: 'gpt-5.2-codex',
+      ),
+      configuration: '{"future":"value"}',
+    );
+    repository.records[existing.id] = existing;
 
-      final result = await service.save(
-        WorkflowDraft.fromDefinition(existing).copyWith(name: 'Renamed'),
-      );
+    final result = await service.save(
+      WorkflowDraft.fromDefinition(existing).copyWith(name: 'Renamed'),
+    );
 
-      final saved = (result as WorkflowSaved).definition;
-      expect(saved.revision, 8);
-      expect(saved.name, 'Renamed');
-      expect(saved.steps, hasLength(3));
-      for (final step in saved.steps) {
-        expect(step.cli, 'codex');
-        expect(step.model, 'gpt-5.2-codex');
-        expect(step.configuration, '{"future":"value"}');
-      }
-    },
-  );
+    final saved = (result as WorkflowSaved).definition;
+    expect(saved.revision, 8);
+    expect(saved.name, 'Renamed');
+    expect(saved.steps, hasLength(3));
+    for (final step in saved.steps) {
+      expect(step.cli, 'codex');
+      expect(step.model, 'gpt-5.2-codex');
+      expect(step.configuration, '{"future":"value"}');
+    }
+  });
 
-  test(
-    'GivenChangedUnverifiedAssignment_WhenStructurallySaved_ThenChangeIsRejected',
-    () async {
-      final existing = _definition(
-        assignment: AgentAssignment(
-          kind: AgentCliKind.codex,
-          model: 'gpt-5.2-codex',
-        ),
-      );
-      repository.records[existing.id] = existing;
-      final changed = WorkflowDraft.fromDefinition(existing).assignStep(
-        'step-plan',
-        AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
-      );
+  test('GivenChangedUnverifiedAssignment_WhenStructurallySaved_ThenChangeIsRejected', () async {
+    final existing = _definition(
+      assignment: AgentAssignment(
+        kind: AgentCliKind.codex,
+        model: 'gpt-5.2-codex',
+      ),
+    );
+    repository.records[existing.id] = existing;
+    final changed = WorkflowDraft.fromDefinition(existing).assignStep(
+      'step-plan',
+      AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
+    );
 
-      final result = await service.save(changed);
+    final result = await service.save(changed);
 
-      final rejected = result as WorkflowSaveRejected;
-      expect(rejected.code, 'workflow.agent_assignment.unverified');
-      expect(rejected.issues.single.rowKey, 'step-plan');
-      expect(repository.saveCalls, 0);
-      expect(repository.records[existing.id]!.steps.first.cli, 'codex');
-    },
-  );
+    final rejected = result as WorkflowSaveRejected;
+    expect(rejected.code, 'workflow.agent_assignment.unverified');
+    expect(rejected.issues.single.rowKey, 'step-plan');
+    expect(repository.saveCalls, 0);
+    expect(repository.records[existing.id]!.steps.first.cli, 'codex');
+  });
 
-  test(
-    'GivenPersistedAssignment_WhenClearedWithoutVerification_ThenChangeIsRejected',
-    () async {
-      final existing = _definition(
-        assignment: AgentAssignment(
-          kind: AgentCliKind.codex,
-          model: 'gpt-5.2-codex',
-        ),
-      );
-      repository.records[existing.id] = existing;
-      final cleared = WorkflowDraft.fromDefinition(
-        existing,
-      ).clearStepAssignment('step-plan');
+  test('GivenPersistedAssignment_WhenClearedWithoutVerification_ThenChangeIsRejected', () async {
+    final existing = _definition(
+      assignment: AgentAssignment(
+        kind: AgentCliKind.codex,
+        model: 'gpt-5.2-codex',
+      ),
+    );
+    repository.records[existing.id] = existing;
+    final cleared = WorkflowDraft.fromDefinition(existing)
+        .clearStepAssignment('step-plan');
 
-      final result = await service.save(cleared);
+    final result = await service.save(cleared);
 
-      final rejected = result as WorkflowSaveRejected;
-      expect(rejected.code, 'workflow.agent_assignment.unverified');
-      expect(rejected.issues.single.rowKey, 'step-plan');
-      expect(repository.saveCalls, 0);
-    },
-  );
+    final rejected = result as WorkflowSaveRejected;
+    expect(rejected.code, 'workflow.agent_assignment.unverified');
+    expect(rejected.issues.single.rowKey, 'step-plan');
+    expect(repository.saveCalls, 0);
+  });
 
-  test(
-    'GivenIncompleteAssignments_WhenCompletingConfiguration_ThenAllRowsAreRejected',
-    () async {
-      final partiallyAssigned = _validDraftValue().assignStep(
-        'default-plan',
-        AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
-        validated: true,
-      );
+  test('GivenIncompleteAssignments_WhenCompletingConfiguration_ThenAllRowsAreRejected', () async {
+    final partiallyAssigned = _validDraftValue().assignStep(
+      'default-plan',
+      AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
+      validated: true,
+    );
 
-      final result = await service.save(
-        partiallyAssigned,
-        requireAgentConfiguration: true,
-      );
+    final result = await service.save(
+      partiallyAssigned,
+      requireAgentConfiguration: true,
+    );
 
-      final rejected = result as WorkflowSaveRejected;
-      expect(rejected.code, 'workflow.agent_configuration.incomplete');
-      expect(rejected.issues.map((issue) => issue.rowKey), [
-        'default-execute',
-        'default-review',
-      ]);
-      expect(repository.saveCalls, 0);
-    },
-  );
+    final rejected = result as WorkflowSaveRejected;
+    expect(rejected.code, 'workflow.agent_configuration.incomplete');
+    expect(rejected.issues.map((issue) => issue.rowKey), [
+      'default-execute',
+      'default-review',
+    ]);
+    expect(repository.saveCalls, 0);
+  });
 
-  test(
-    'GivenPersistedUnverifiedAssignments_WhenCompletingConfiguration_ThenFreshValidationIsRequired',
-    () async {
-      final existing = _definition(
-        assignment: AgentAssignment(
-          kind: AgentCliKind.openCode,
-          model: 'openai/gpt-5',
-        ),
-      );
-      repository.records[existing.id] = existing;
+  test('GivenPersistedUnverifiedAssignments_WhenCompletingConfiguration_ThenFreshValidationIsRequired', () async {
+    final existing = _definition(
+      assignment: AgentAssignment(
+        kind: AgentCliKind.openCode,
+        model: 'openai/gpt-5',
+      ),
+    );
+    repository.records[existing.id] = existing;
 
-      final result = await service.save(
-        WorkflowDraft.fromDefinition(existing),
-        requireAgentConfiguration: true,
-      );
+    final result = await service.save(
+      WorkflowDraft.fromDefinition(existing),
+      requireAgentConfiguration: true,
+    );
 
-      final rejected = result as WorkflowSaveRejected;
-      expect(rejected.code, 'workflow.agent_assignment.unverified');
-      expect(rejected.issues, hasLength(3));
-      expect(repository.saveCalls, 0);
-    },
-  );
+    final rejected = result as WorkflowSaveRejected;
+    expect(rejected.code, 'workflow.agent_assignment.unverified');
+    expect(rejected.issues, hasLength(3));
+    expect(repository.saveCalls, 0);
+  });
 
-  test(
-    'GivenRepeatedFreshAssignments_WhenCompletingConfiguration_ThenRevisionIsSaved',
-    () async {
-      final assignment = AgentAssignment(
-        kind: AgentCliKind.claudeCode,
-        model: 'sonnet',
-      );
-      var draft = _validDraftValue();
-      for (final step in draft.steps) {
-        draft = draft.assignStep(step.rowKey, assignment, validated: true);
-      }
+  test('GivenRepeatedFreshAssignments_WhenCompletingConfiguration_ThenRevisionIsSaved', () async {
+    final assignment = AgentAssignment(
+      kind: AgentCliKind.claudeCode,
+      model: 'sonnet',
+    );
+    var draft = _validDraftValue();
+    for (final step in draft.steps) {
+      draft = draft.assignStep(step.rowKey, assignment, validated: true);
+    }
 
-      final result = await service.save(draft, requireAgentConfiguration: true);
+    final result = await service.save(draft, requireAgentConfiguration: true);
 
-      final saved = (result as WorkflowSaved).definition;
-      expect(saved.steps.map((step) => step.cli), everyElement('claude-code'));
-      expect(saved.steps.map((step) => step.model), everyElement('sonnet'));
-      expect(repository.saveCalls, 1);
-    },
-  );
+    final saved = (result as WorkflowSaved).definition;
+    expect(saved.steps.map((step) => step.cli), everyElement('claude-code'));
+    expect(saved.steps.map((step) => step.model), everyElement('sonnet'));
+    expect(repository.saveCalls, 1);
+  });
 
   test(
     'GivenEqualUpdateClocks_WhenAnEditIsStale_ThenIntegerRevisionRejectsIt',
@@ -353,97 +328,81 @@ void main() {
     },
   );
 
-  test(
-    'GivenRepositoryReturnsMutableOrder_WhenListed_ThenResultIsDeterministicAndImmutable',
-    () async {
-      repository.records
-        ..['b'] = _definition(
-          id: 'b',
-          name: 'Zoo',
-          updatedAt: DateTime.utc(2026, 1, 2),
-        )
-        ..['c'] = _definition(
-          id: 'c',
-          name: 'beta',
-          updatedAt: DateTime.utc(2026, 1, 3),
-        )
-        ..['a'] = _definition(
-          id: 'a',
-          name: 'Alpha',
-          updatedAt: DateTime.utc(2026, 1, 3),
-        );
-
-      final result = await service.list();
-      final values = (result as Success<List<WorkflowDefinition>>).value;
-
-      expect(values.map((value) => value.id), ['a', 'c', 'b']);
-      expect(() => values.add(values.first), throwsUnsupportedError);
-      expect(
-        () => values.first.steps.add(values.first.steps.first),
-        throwsUnsupportedError,
-      );
-      expect(
-        () => values.first.projectIds.add('other'),
-        throwsUnsupportedError,
-      );
-    },
-  );
-
-  test(
-    'GivenUnavailableProject_WhenEditingAndCheckingReadiness_ThenAf03OnlyBlocksExecution',
-    () async {
-      readiness.values['project-a'] = ProjectExecutionAvailability.missing;
-      final editing = await service.save(
-        _validDraftValue().copyWith(projectIds: const ['project-a']),
-      );
-      expect(editing, isA<WorkflowSaved>());
-      expect(
-        readiness.calls,
-        0,
-        reason: 'saving must not access project source',
+  test('GivenRepositoryReturnsMutableOrder_WhenListed_ThenResultIsDeterministicAndImmutable', () async {
+    repository.records
+      ..['b'] = _definition(
+        id: 'b',
+        name: 'Zoo',
+        updatedAt: DateTime.utc(2026, 1, 2),
+      )
+      ..['c'] = _definition(
+        id: 'c',
+        name: 'beta',
+        updatedAt: DateTime.utc(2026, 1, 3),
+      )
+      ..['a'] = _definition(
+        id: 'a',
+        name: 'Alpha',
+        updatedAt: DateTime.utc(2026, 1, 3),
       );
 
-      final gate = await service.executionReadiness(['project-a']);
-      expect(gate, isA<WorkflowExecutionBlocked>());
-      final blocked = gate as WorkflowExecutionBlocked;
-      expect(blocked.projects.single.projectId, 'project-a');
-      expect(
-        blocked.projects.single.availability,
-        ProjectExecutionAvailability.missing,
-      );
-    },
-  );
+    final result = await service.list();
+    final values = (result as Success<List<WorkflowDefinition>>).value;
 
-  test(
-    'GivenManyUnavailableProjects_WhenReadinessRuns_ThenResultIsBoundedAndTyped',
-    () async {
-      for (var index = 0; index < 25; index++) {
-        readiness.values['project-$index'] =
-            ProjectExecutionAvailability.inaccessible;
-      }
-      final result = await service.executionReadiness(readiness.values.keys);
-      final blocked = result as WorkflowExecutionBlocked;
-      expect(
-        blocked.projects,
-        hasLength(UnavailableWorkflowProjects.maximumVisible),
-      );
-      expect(blocked.hasMore, isTrue);
+    expect(values.map((value) => value.id), ['a', 'c', 'b']);
+    expect(() => values.add(values.first), throwsUnsupportedError);
+    expect(
+      () => values.first.steps.add(values.first.steps.first),
+      throwsUnsupportedError,
+    );
+    expect(() => values.first.projectIds.add('other'), throwsUnsupportedError);
+  });
 
-      readiness.throwOnRead = StateError(r'C:\private');
-      final failed = await service.executionReadiness(const ['project-0']);
-      expect(failed, isA<WorkflowExecutionReadinessFailed>());
-      expect(
-        (failed as WorkflowExecutionReadinessFailed).code,
-        'workflow.readiness_failed',
-      );
-      expect(failed.message, isNot(contains('private')));
-    },
-  );
+  test('GivenUnavailableProject_WhenEditingAndCheckingReadiness_ThenAf03OnlyBlocksExecution', () async {
+    readiness.values['project-a'] = ProjectExecutionAvailability.missing;
+    final editing = await service.save(
+      _validDraftValue().copyWith(projectIds: const ['project-a']),
+    );
+    expect(editing, isA<WorkflowSaved>());
+    expect(readiness.calls, 0, reason: 'saving must not access project source');
+
+    final gate = await service.executionReadiness(['project-a']);
+    expect(gate, isA<WorkflowExecutionBlocked>());
+    final blocked = gate as WorkflowExecutionBlocked;
+    expect(blocked.projects.single.projectId, 'project-a');
+    expect(
+      blocked.projects.single.availability,
+      ProjectExecutionAvailability.missing,
+    );
+  });
+
+  test('GivenManyUnavailableProjects_WhenReadinessRuns_ThenResultIsBoundedAndTyped', () async {
+    for (var index = 0; index < 25; index++) {
+      readiness.values['project-$index'] =
+          ProjectExecutionAvailability.inaccessible;
+    }
+    final result = await service.executionReadiness(readiness.values.keys);
+    final blocked = result as WorkflowExecutionBlocked;
+    expect(
+      blocked.projects,
+      hasLength(UnavailableWorkflowProjects.maximumVisible),
+    );
+    expect(blocked.hasMore, isTrue);
+
+    readiness.throwOnRead = StateError(r'C:\private');
+    final failed = await service.executionReadiness(const ['project-0']);
+    expect(failed, isA<WorkflowExecutionReadinessFailed>());
+    expect(
+      (failed as WorkflowExecutionReadinessFailed).code,
+      'workflow.readiness_failed',
+    );
+    expect(failed.message, isNot(contains('private')));
+  });
 }
 
-WorkflowDraft _validDraftValue() => WorkflowDraft.initial(
-  kind: WorkflowKind.reusable,
-).copyWith(name: 'Delivery', unitType: WorkItemType.githubIssue);
+WorkflowDraft _validDraftValue() =>
+    WorkflowDraft.initial(kind: WorkflowKind.reusable)
+        .copyWith(name: 'Delivery', unitType: WorkItemType.githubIssue);
 
 WorkflowDefinition _definition({
   String id = 'workflow-1',

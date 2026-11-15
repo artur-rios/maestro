@@ -131,11 +131,9 @@ Future<void> main(List<String> arguments) async {
     keyExpiresAt: publishedAt.add(const Duration(days: 365 * 2)),
   );
   final manifest = canonicalJson(document.toJson());
-  await File(
-    '${directory.path}${Platform.pathSeparator}release-manifest.json',
-  ).writeAsString(manifest);
+  await File('${directory.path}${Platform.pathSeparator}release-manifest.json')
+      .writeAsString(manifest);
   final sums = await createSha256Sums(distributionFiles);
-  await File(
-    '${directory.path}${Platform.pathSeparator}SHA256SUMS',
-  ).writeAsString(sums);
+  await File('${directory.path}${Platform.pathSeparator}SHA256SUMS')
+      .writeAsString(sums);
 }

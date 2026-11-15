@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/terminal/domain/terminal_launch_target.dart';
@@ -9,6 +8,7 @@ import 'package:maestro/features/terminal/domain/terminal_models.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_controller.dart';
 import 'package:maestro/features/terminal/presentation/project_terminal_drawer_controller.dart';
 import 'package:maestro/features/terminal/presentation/workbench_terminal_manager.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
 
 const _terminalTextStyle = TerminalStyle(

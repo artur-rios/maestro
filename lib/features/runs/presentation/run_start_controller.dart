@@ -14,10 +14,13 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 typedef WorkflowLoader = Future<List<WorkflowDefinition>> Function();
 typedef RunStarter = Future<RunStartResult> Function(StartRunRequest request);
 typedef RunExecutor = Future<void> Function(String runId);
-typedef RunStatusReader =
-    Future<RunPresentationSnapshot?> Function(String runId);
-typedef RecoverySelector =
-    Future<void> Function(RunRecoveryOffer offer, RecoveryAction action);
+typedef RunStatusReader = Future<RunPresentationSnapshot?> Function(
+  String runId,
+);
+typedef RecoverySelector = Future<void> Function(
+  RunRecoveryOffer offer,
+  RecoveryAction action,
+);
 typedef RecoveryOfferLoader = Future<List<RunRecoveryOffer>> Function();
 
 final class RunPresentationSnapshot {

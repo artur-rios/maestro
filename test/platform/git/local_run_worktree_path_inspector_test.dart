@@ -39,34 +39,31 @@ void main() {
     },
   );
 
-  test(
-    'Given a redirecting project ancestor_When inspected_Then destination is unsafe',
-    () async {
-      final worktrees = Directory(p.join(root.path, 'app-data', 'worktrees'));
-      final outside = Directory(p.join(root.path, 'outside'));
-      await worktrees.create(recursive: true);
-      await outside.create();
-      final redirected = p.join(worktrees.path, 'project-1');
-      if (Platform.isWindows) {
-        final result = await Process.run('cmd', <String>[
-          '/c',
-          'mklink',
-          '/J',
-          redirected,
-          outside.path,
-        ]);
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-      } else {
-        await Link(redirected).create(outside.path);
-      }
+  test('Given a redirecting project ancestor_When inspected_Then destination is unsafe', () async {
+    final worktrees = Directory(p.join(root.path, 'app-data', 'worktrees'));
+    final outside = Directory(p.join(root.path, 'outside'));
+    await worktrees.create(recursive: true);
+    await outside.create();
+    final redirected = p.join(worktrees.path, 'project-1');
+    if (Platform.isWindows) {
+      final result = await Process.run('cmd', <String>[
+        '/c',
+        'mklink',
+        '/J',
+        redirected,
+        outside.path,
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+    } else {
+      await Link(redirected).create(outside.path);
+    }
 
-      final result = await const LocalRunWorktreePathInspector().inspect(
-        worktreesRoot: worktrees.path,
-        destination: p.join(redirected, 'run-1'),
-        sourcePath: p.join(root.path, 'source'),
-      );
+    final result = await const LocalRunWorktreePathInspector().inspect(
+      worktreesRoot: worktrees.path,
+      destination: p.join(redirected, 'run-1'),
+      sourcePath: p.join(root.path, 'source'),
+    );
 
-      expect(result.code, RunWorktreePathInspectionCode.unsafe);
-    },
-  );
+    expect(result.code, RunWorktreePathInspectionCode.unsafe);
+  });
 }

@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Compact workbench context that remains visible across destinations.
 final class WorkbenchStatusBar extends StatelessWidget {

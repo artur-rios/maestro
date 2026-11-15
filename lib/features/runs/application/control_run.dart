@@ -285,9 +285,8 @@ final class ControlRun {
     if (worktreePath == null || !await _worktrees.exists(worktreePath)) {
       return _worktreeMissing;
     }
-    final scope = _scopesFor(
-      evidence,
-    ).firstWhere((value) => value.action == action);
+    final scope = _scopesFor(evidence)
+        .firstWhere((value) => value.action == action);
     if (!scope.available) {
       return RunControlFailure(
         code: 'run.recovery.unavailable_scope',

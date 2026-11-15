@@ -309,9 +309,8 @@ final class LinuxOwnedProcessRecovery implements OwnedProcessRecoveryAdapter {
 }
 
 ({int startTime, int sessionId})? _parseLinuxFingerprint(String value) {
-  final match = RegExp(
-    r'^linux-start:([0-9]+):session:([0-9]+)$',
-  ).firstMatch(value);
+  final match = RegExp(r'^linux-start:([0-9]+):session:([0-9]+)$')
+      .firstMatch(value);
   if (match == null) return null;
   return (
     startTime: int.parse(match.group(1)!),

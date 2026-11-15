@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/app/workbench_inspector.dart';
 import 'package:maestro/app/workbench_inspector_model.dart';
 import 'package:maestro/features/foundation/domain/foundation_status.dart';
 import 'package:maestro/features/foundation/presentation/foundation_controller.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class FoundationPage extends ConsumerWidget {
   const FoundationPage({this.onInspectorChanged, super.key});
@@ -33,9 +33,9 @@ final class FoundationPage extends ConsumerWidget {
       loading: () => Material(
         key: const Key('foundation-section'),
         color:
-            Theme.of(
-              context,
-            ).extension<MaestroThemeTokens>()?.workspaceSurface ??
+            Theme.of(context)
+                .extension<MaestroThemeTokens>()
+                ?.workspaceSurface ??
             Theme.of(context).colorScheme.surface,
         child: Semantics(
           label: 'Foundation status',

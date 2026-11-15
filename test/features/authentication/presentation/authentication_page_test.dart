@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +22,7 @@ import 'package:maestro/features/authentication/presentation/recovery_code_dialo
 import 'package:maestro/platform/auth/authentication_port.dart';
 import 'package:maestro/platform/common/capability.dart';
 import 'package:maestro/platform/window/desktop_window_port.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets(
@@ -1008,9 +1008,9 @@ void main() {
       );
       await tester.tap(find.bySemanticsLabel('Create local account'));
       await tester.pumpAndSettle();
-      final pending =
-          container.read(authenticationControllerProvider)
-              as AuthenticationRecoveryCodesPending;
+      final pending = container.read(
+        authenticationControllerProvider,
+      ) as AuthenticationRecoveryCodesPending;
       final plaintext = pending.recoveryCodes;
       expect(plaintext, isNotEmpty);
 

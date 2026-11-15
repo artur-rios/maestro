@@ -1,5 +1,4 @@
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/core/storage/database/maestro_database.dart';
 import 'package:maestro/features/history/data/drift_history_repository.dart';
@@ -7,6 +6,7 @@ import 'package:maestro/features/history/data/retention_service.dart';
 import 'package:maestro/features/history/presentation/history_controller.dart';
 import 'package:maestro/features/history/presentation/history_panel.dart';
 import 'package:maestro/features/history/presentation/storage_limit_mb.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets(

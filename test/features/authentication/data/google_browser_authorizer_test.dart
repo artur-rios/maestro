@@ -149,78 +149,72 @@ void main() {
     },
   );
 
-  test(
-    'GivenPendingOrStalledAuthorization_WhenCancelledOrSuperseded_ThenItClosesOnce',
-    () async {
-      final first = _FakeServer();
-      final second = _FakeServer();
-      final servers = <_FakeServer>[first, second];
-      var index = 0;
-      final client = _StallingClient();
-      final authorizer = GoogleBrowserAuthorizer(
-        browser: (uri) async {
-          if (index == 2) {
-            second.complete(
-              OAuthCallback(code: 'code', state: uri.queryParameters['state']),
-            );
-          }
-          return true;
-        },
-        httpClient: client,
-        loopbackServerFactory: () async => servers[index++],
-        randomBytes: (_) => List<int>.filled(32, 1),
-      );
-      final pending = authorizer.authorize(configuration);
-      final pendingExpectation = expectLater(
-        pending,
-        throwsA(isA<OAuthAuthorizationCancelled>()),
-      );
-      final superseding = authorizer.authorize(configuration);
-      await pendingExpectation;
-      await _waitUntil(() => client.started);
-      final secondExpectation = expectLater(
-        superseding,
-        throwsA(isA<OAuthAuthorizationCancelled>()),
-      );
-      await authorizer.cancelActiveAuthorization();
-      await authorizer.cancelActiveAuthorization();
-      await secondExpectation;
-      expect(first.closeCalls, 1);
-      expect(second.closeCalls, 1);
-    },
-  );
+  test('GivenPendingOrStalledAuthorization_WhenCancelledOrSuperseded_ThenItClosesOnce', () async {
+    final first = _FakeServer();
+    final second = _FakeServer();
+    final servers = <_FakeServer>[first, second];
+    var index = 0;
+    final client = _StallingClient();
+    final authorizer = GoogleBrowserAuthorizer(
+      browser: (uri) async {
+        if (index == 2) {
+          second.complete(
+            OAuthCallback(code: 'code', state: uri.queryParameters['state']),
+          );
+        }
+        return true;
+      },
+      httpClient: client,
+      loopbackServerFactory: () async => servers[index++],
+      randomBytes: (_) => List<int>.filled(32, 1),
+    );
+    final pending = authorizer.authorize(configuration);
+    final pendingExpectation = expectLater(
+      pending,
+      throwsA(isA<OAuthAuthorizationCancelled>()),
+    );
+    final superseding = authorizer.authorize(configuration);
+    await pendingExpectation;
+    await _waitUntil(() => client.started);
+    final secondExpectation = expectLater(
+      superseding,
+      throwsA(isA<OAuthAuthorizationCancelled>()),
+    );
+    await authorizer.cancelActiveAuthorization();
+    await authorizer.cancelActiveAuthorization();
+    await secondExpectation;
+    expect(first.closeCalls, 1);
+    expect(second.closeCalls, 1);
+  });
 
-  test(
-    'GivenPendingListenerOrSecretTransport_WhenAuthorized_ThenItUsesTypedRedactedFailure',
-    () async {
-      final server = _FakeServer();
-      final timeout = GoogleBrowserAuthorizer(
-        browser: (_) async => true,
-        httpClient: _Client((_) => http.Response('{}', 200)),
-        loopbackServerFactory: () async => server,
-        randomBytes: (_) => List<int>.filled(32, 1),
-        callbackTimeout: const Duration(milliseconds: 1),
-      );
-      await expectLater(
-        timeout.authorize(configuration),
-        throwsA(isA<OAuthAuthorizationTimedOut>()),
-      );
-      expect(server.nextCalls, 1);
-      final failure = GoogleBrowserAuthorizer(
-        browser: (_) => Future<bool>.error(StateError('authorization-secret')),
-        httpClient: _Client((_) => http.Response('{}', 200)),
-        loopbackServerFactory: () async => _FakeServer(),
-        randomBytes: (_) => List<int>.filled(32, 1),
-      );
-      try {
-        await failure.authorize(configuration);
-        fail('Expected failure');
-      } on Object catch (error) {
-        expect(error, isA<OAuthBrowserLaunchFailure>());
-        expect(error.toString(), isNot(contains('authorization-secret')));
-      }
-    },
-  );
+  test('GivenPendingListenerOrSecretTransport_WhenAuthorized_ThenItUsesTypedRedactedFailure', () async {
+    final server = _FakeServer();
+    final timeout = GoogleBrowserAuthorizer(
+      browser: (_) async => true,
+      httpClient: _Client((_) => http.Response('{}', 200)),
+      loopbackServerFactory: () async => server,
+      randomBytes: (_) => List<int>.filled(32, 1),
+      callbackTimeout: const Duration(milliseconds: 1),
+    );
+    await expectLater(
+      timeout.authorize(configuration),
+      throwsA(isA<OAuthAuthorizationTimedOut>()),
+    );
+    expect(server.nextCalls, 1);
+    final failure = GoogleBrowserAuthorizer(
+      browser: (_) => Future<bool>.error(StateError('authorization-secret')),
+      httpClient: _Client((_) => http.Response('{}', 200)),
+      loopbackServerFactory: () async => _FakeServer(),
+      randomBytes: (_) => List<int>.filled(32, 1),
+    );
+    try {
+      await failure.authorize(configuration);
+      fail('Expected failure');
+    } on Object catch (error) {
+      expect(error, isA<OAuthBrowserLaunchFailure>());
+      expect(error.toString(), isNot(contains('authorization-secret')));
+    }
+  });
 
   test('GivenExchangeTimeout_WhenAuthorized_ThenItAbortsOwnedClient', () async {
     final server = _FakeServer();
@@ -277,20 +271,17 @@ void main() {
     },
   );
 
-  test(
-    'GivenCloseFailureAndStateMismatch_WhenAuthorized_ThenStateMismatchRemainsPrimary',
-    () async {
-      final server = _FakeServer()..closeError = StateError('close-secret');
-      final authorizer = _authorizer(server, (uri) {
-        server.complete(const OAuthCallback(code: 'code', state: 'wrong'));
-      });
+  test('GivenCloseFailureAndStateMismatch_WhenAuthorized_ThenStateMismatchRemainsPrimary', () async {
+    final server = _FakeServer()..closeError = StateError('close-secret');
+    final authorizer = _authorizer(server, (uri) {
+      server.complete(const OAuthCallback(code: 'code', state: 'wrong'));
+    });
 
-      await expectLater(
-        authorizer.authorize(configuration),
-        throwsA(isA<OAuthCallbackStateMismatch>()),
-      );
-    },
-  );
+    await expectLater(
+      authorizer.authorize(configuration),
+      throwsA(isA<OAuthCallbackStateMismatch>()),
+    );
+  });
   test(
     'GivenAnUnavailableTokenEndpoint_WhenAuthorized_ThenItIsATransportFailure',
     () async {

@@ -69,47 +69,44 @@ void main() {
     },
   );
 
-  test(
-    'GivenRealGitRepository_WhenValidated_ThenRepositoryIsUnchanged',
-    () async {
-      final sandbox = await _createExternalSandbox('maestro-git-validation-');
-      addTearDown(() => sandbox.delete(recursive: true));
-      final repository = Directory(
-        '${sandbox.path}${Platform.pathSeparator}repo',
-      );
-      await repository.create();
-      await _git(<String>['init', repository.path]);
-      final source = File(
-        '${repository.path}${Platform.pathSeparator}source.txt',
-      );
-      await source.writeAsString('unchanged\n');
+  test('GivenRealGitRepository_WhenValidated_ThenRepositoryIsUnchanged', () async {
+    final sandbox = await _createExternalSandbox('maestro-git-validation-');
+    addTearDown(() => sandbox.delete(recursive: true));
+    final repository = Directory(
+      '${sandbox.path}${Platform.pathSeparator}repo',
+    );
+    await repository.create();
+    await _git(<String>['init', repository.path]);
+    final source = File(
+      '${repository.path}${Platform.pathSeparator}source.txt',
+    );
+    await source.writeAsString('unchanged\n');
 
-      final statusBefore = await _git(<String>[
-        '-C',
-        repository.path,
-        'status',
-        '--porcelain=v1',
-      ]);
-      final treeBefore = await _snapshot(repository);
-      final validator = LocalGitProjectValidator(
-        git: CommandRunnerGitPort(const ProcessCommandRunner()),
-      );
+    final statusBefore = await _git(<String>[
+      '-C',
+      repository.path,
+      'status',
+      '--porcelain=v1',
+    ]);
+    final treeBefore = await _snapshot(repository);
+    final validator = LocalGitProjectValidator(
+      git: CommandRunnerGitPort(const ProcessCommandRunner()),
+    );
 
-      final lexicalSelection =
-          '${repository.path}${Platform.pathSeparator}.${Platform.pathSeparator}';
-      final result = await validator.validate(
-        ProjectFolder.parse(lexicalSelection),
-      );
+    final lexicalSelection =
+        '${repository.path}${Platform.pathSeparator}.${Platform.pathSeparator}';
+    final result = await validator.validate(
+      ProjectFolder.parse(lexicalSelection),
+    );
 
-      expect(result.availability, ProjectAvailability.available);
-      expect(result.canonicalFolder?.path, _gitReportedPath(repository.path));
-      expect(
-        await _git(<String>['-C', repository.path, 'status', '--porcelain=v1']),
-        statusBefore,
-      );
-      expect(await _snapshot(repository), treeBefore);
-    },
-  );
+    expect(result.availability, ProjectAvailability.available);
+    expect(result.canonicalFolder?.path, _gitReportedPath(repository.path));
+    expect(
+      await _git(<String>['-C', repository.path, 'status', '--porcelain=v1']),
+      statusBefore,
+    );
+    expect(await _snapshot(repository), treeBefore);
+  });
 
   test('GivenRealNestedFolder_WhenValidated_ThenFolderIsRejected', () async {
     final sandbox = await _createExternalSandbox('maestro-git-nested-');

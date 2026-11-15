@@ -53,33 +53,30 @@ void main() {
     },
   );
 
-  test(
-    'GivenInvalidAndDuplicateRegistration_WhenAttempted_ThenTypedCategoriesArePublished',
-    () async {
-      final harness = _Harness(pickedPath: r'C:\not-git');
-      harness.validator.availability = ProjectAvailability.notGitWorkingTree;
-      final container = harness.container();
-      addTearDown(container.dispose);
+  test('GivenInvalidAndDuplicateRegistration_WhenAttempted_ThenTypedCategoriesArePublished', () async {
+    final harness = _Harness(pickedPath: r'C:\not-git');
+    harness.validator.availability = ProjectAvailability.notGitWorkingTree;
+    final container = harness.container();
+    addTearDown(container.dispose);
 
-      await container.read(projectControllerProvider.notifier).register('Demo');
-      expect(
-        container.read(projectControllerProvider).failure?.category,
-        ProjectFailureCategory.notGitWorkingTree,
-      );
-      expect(
-        container.read(projectControllerProvider).failure?.message,
-        isNot(contains('not-git')),
-      );
+    await container.read(projectControllerProvider.notifier).register('Demo');
+    expect(
+      container.read(projectControllerProvider).failure?.category,
+      ProjectFailureCategory.notGitWorkingTree,
+    );
+    expect(
+      container.read(projectControllerProvider).failure?.message,
+      isNot(contains('not-git')),
+    );
 
-      harness.validator.availability = ProjectAvailability.available;
-      harness.repository.records.add(_record(id: 'existing', name: 'Demo'));
-      await container.read(projectControllerProvider.notifier).register('demo');
-      expect(
-        container.read(projectControllerProvider).failure?.category,
-        ProjectFailureCategory.duplicateName,
-      );
-    },
-  );
+    harness.validator.availability = ProjectAvailability.available;
+    harness.repository.records.add(_record(id: 'existing', name: 'Demo'));
+    await container.read(projectControllerProvider.notifier).register('demo');
+    expect(
+      container.read(projectControllerProvider).failure?.category,
+      ProjectFailureCategory.duplicateName,
+    );
+  });
 
   for (final testCase
       in <
@@ -142,37 +139,30 @@ void main() {
     );
   }
 
-  test(
-    'GivenSelectedFolderBecomesUnavailable_WhenRefreshed_ThenRecordRemainsAndActionsAreDisabled',
-    () async {
-      final harness = _Harness(
-        records: [_record(id: 'one', name: 'One')],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      await container.read(projectControllerProvider.notifier).load();
-      await container.read(projectControllerProvider.notifier).select('one');
+  test('GivenSelectedFolderBecomesUnavailable_WhenRefreshed_ThenRecordRemainsAndActionsAreDisabled', () async {
+    final harness = _Harness(
+      records: [_record(id: 'one', name: 'One')],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    await container.read(projectControllerProvider.notifier).load();
+    await container.read(projectControllerProvider.notifier).select('one');
 
-      harness.validator.availability = ProjectAvailability.missing;
-      await container
-          .read(projectControllerProvider.notifier)
-          .refreshSelected();
+    harness.validator.availability = ProjectAvailability.missing;
+    await container.read(projectControllerProvider.notifier).refreshSelected();
 
-      var state = container.read(projectControllerProvider);
-      expect(state.projects, hasLength(1));
-      expect(state.selected?.record.id, 'one');
-      expect(state.selected?.folderActionsEnabled, isFalse);
-      expect(state.failure?.category, ProjectFailureCategory.folderMissing);
+    var state = container.read(projectControllerProvider);
+    expect(state.projects, hasLength(1));
+    expect(state.selected?.record.id, 'one');
+    expect(state.selected?.folderActionsEnabled, isFalse);
+    expect(state.failure?.category, ProjectFailureCategory.folderMissing);
 
-      harness.validator.availability = ProjectAvailability.available;
-      await container
-          .read(projectControllerProvider.notifier)
-          .refreshSelected();
-      state = container.read(projectControllerProvider);
-      expect(state.selected?.folderActionsEnabled, isTrue);
-      expect(state.failure, isNull);
-    },
-  );
+    harness.validator.availability = ProjectAvailability.available;
+    await container.read(projectControllerProvider.notifier).refreshSelected();
+    state = container.read(projectControllerProvider);
+    expect(state.selected?.folderActionsEnabled, isTrue);
+    expect(state.failure, isNull);
+  });
 
   test(
     'GivenOlderLoadCompletesLast_WhenNewerSelectionWins_ThenStaleLoadIsIgnored',
@@ -225,181 +215,155 @@ void main() {
     },
   );
 
-  test(
-    'GivenActiveAndDeletedProjects_WhenLoaded_ThenTheyAreSeparatedWithoutValidatingDeletedSource',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[
-          _record(id: 'active', name: 'Active'),
-          _record(id: 'deleted', name: 'Deleted', deleted: true),
-        ],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
+  test('GivenActiveAndDeletedProjects_WhenLoaded_ThenTheyAreSeparatedWithoutValidatingDeletedSource', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[
+        _record(id: 'active', name: 'Active'),
+        _record(id: 'deleted', name: 'Deleted', deleted: true),
+      ],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
 
-      await container.read(projectControllerProvider.notifier).load();
+    await container.read(projectControllerProvider.notifier).load();
 
-      final state = container.read(projectControllerProvider);
-      expect(state.projects.single.record.id, 'active');
-      expect(state.deletedProjects.single.id, 'deleted');
-      expect(harness.validator.validatedPaths, <String>[r'C:\projects\active']);
-    },
-  );
+    final state = container.read(projectControllerProvider);
+    expect(state.projects.single.record.id, 'active');
+    expect(state.deletedProjects.single.id, 'deleted');
+    expect(harness.validator.validatedPaths, <String>[r'C:\projects\active']);
+  });
 
-  test(
-    'GivenDeletedMetadataLoadFails_WhenLoaded_ThenSafeStorageFailureIsPublished',
-    () async {
-      final harness = _Harness()..repository.failOnSecondList = true;
-      final container = harness.container();
-      addTearDown(container.dispose);
+  test('GivenDeletedMetadataLoadFails_WhenLoaded_ThenSafeStorageFailureIsPublished', () async {
+    final harness = _Harness()..repository.failOnSecondList = true;
+    final container = harness.container();
+    addTearDown(container.dispose);
 
-      await container.read(projectControllerProvider.notifier).load();
+    await container.read(projectControllerProvider.notifier).load();
 
-      final failure = container.read(projectControllerProvider).failure;
-      expect(failure?.category, ProjectFailureCategory.storage);
-      expect(failure?.message, isNot(contains('secret-database-detail')));
-    },
-  );
+    final failure = container.read(projectControllerProvider).failure;
+    expect(failure?.category, ProjectFailureCategory.storage);
+    expect(failure?.message, isNot(contains('secret-database-detail')));
+  });
 
-  test(
-    'GivenLoadedDeletedProjects_WhenActiveProjectSelected_ThenDeletedProjectsArePreserved',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[
-          _record(id: 'active', name: 'Active'),
-          _record(id: 'deleted', name: 'Deleted', deleted: true),
-        ],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
+  test('GivenLoadedDeletedProjects_WhenActiveProjectSelected_ThenDeletedProjectsArePreserved', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[
+        _record(id: 'active', name: 'Active'),
+        _record(id: 'deleted', name: 'Deleted', deleted: true),
+      ],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
 
-      await controller.select('active');
+    await controller.select('active');
 
-      expect(
-        container.read(projectControllerProvider).deletedProjects.single.id,
-        'deleted',
-      );
-    },
-  );
+    expect(
+      container.read(projectControllerProvider).deletedProjects.single.id,
+      'deleted',
+    );
+  });
 
-  test(
-    'GivenLoadedDeletedProjects_WhenActiveProjectRefreshed_ThenDeletedProjectsArePreserved',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[
-          _record(id: 'active', name: 'Active'),
-          _record(id: 'deleted', name: 'Deleted', deleted: true),
-        ],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
-      await controller.select('active');
+  test('GivenLoadedDeletedProjects_WhenActiveProjectRefreshed_ThenDeletedProjectsArePreserved', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[
+        _record(id: 'active', name: 'Active'),
+        _record(id: 'deleted', name: 'Deleted', deleted: true),
+      ],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
+    await controller.select('active');
 
-      await controller.refreshSelected();
+    await controller.refreshSelected();
 
-      expect(
-        container.read(projectControllerProvider).deletedProjects.single.id,
-        'deleted',
-      );
-    },
-  );
+    expect(
+      container.read(projectControllerProvider).deletedProjects.single.id,
+      'deleted',
+    );
+  });
 
-  test(
-    'GivenLoadedDeletedProjects_WhenProjectRegistered_ThenDeletedProjectsArePreserved',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[
-          _record(id: 'deleted', name: 'Deleted', deleted: true),
-        ],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
+  test('GivenLoadedDeletedProjects_WhenProjectRegistered_ThenDeletedProjectsArePreserved', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[
+        _record(id: 'deleted', name: 'Deleted', deleted: true),
+      ],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
 
-      await controller.register('New project');
+    await controller.register('New project');
 
-      expect(
-        container.read(projectControllerProvider).deletedProjects.single.id,
-        'deleted',
-      );
-    },
-  );
+    expect(
+      container.read(projectControllerProvider).deletedProjects.single.id,
+      'deleted',
+    );
+  });
 
-  test(
-    'GivenSelectedMissingSource_WhenSoftDeleted_ThenMetadataMovesToDeletedAndSourceIsNotRead',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[_record(id: 'one', name: 'One')],
-      )..validator.availability = ProjectAvailability.missing;
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
-      await controller.select('one');
-      final validationsBefore = harness.validator.validatedPaths.length;
+  test('GivenSelectedMissingSource_WhenSoftDeleted_ThenMetadataMovesToDeletedAndSourceIsNotRead', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[_record(id: 'one', name: 'One')],
+    )..validator.availability = ProjectAvailability.missing;
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
+    await controller.select('one');
+    final validationsBefore = harness.validator.validatedPaths.length;
 
-      await controller.softDelete(SourcePreservationDecision.confirmed);
+    await controller.softDelete(SourcePreservationDecision.confirmed);
 
-      final state = container.read(projectControllerProvider);
-      expect(state.projects, isEmpty);
-      expect(state.deletedProjects.single.id, 'one');
-      expect(state.selected, isNull);
-      expect(state.lifecycleFeedback?.isSuccess, isTrue);
-      expect(harness.validator.validatedPaths, hasLength(validationsBefore));
-      expect(harness.store.softDeleteCalls, 1);
-      expect(harness.store.lastActorId, 'actor-1');
-    },
-  );
+    final state = container.read(projectControllerProvider);
+    expect(state.projects, isEmpty);
+    expect(state.deletedProjects.single.id, 'one');
+    expect(state.selected, isNull);
+    expect(state.lifecycleFeedback?.isSuccess, isTrue);
+    expect(harness.validator.validatedPaths, hasLength(validationsBefore));
+    expect(harness.store.softDeleteCalls, 1);
+    expect(harness.store.lastActorId, 'actor-1');
+  });
 
-  test(
-    'GivenSoftDeleteConsentCancelled_WhenRequested_ThenControllerDoesNotInferConsent',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[_record(id: 'one', name: 'One')],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
-      await controller.select('one');
+  test('GivenSoftDeleteConsentCancelled_WhenRequested_ThenControllerDoesNotInferConsent', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[_record(id: 'one', name: 'One')],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
+    await controller.select('one');
 
-      await controller.softDelete(SourcePreservationDecision.cancelled);
+    await controller.softDelete(SourcePreservationDecision.cancelled);
 
-      expect(harness.store.softDeleteCalls, 0);
-      expect(
-        container.read(projectControllerProvider).selected?.record.id,
-        'one',
-      );
-    },
-  );
+    expect(harness.store.softDeleteCalls, 0);
+    expect(
+      container.read(projectControllerProvider).selected?.record.id,
+      'one',
+    );
+  });
 
-  test(
-    'GivenDeletedProject_WhenRestored_ThenItReturnsActiveWithoutSourceValidation',
-    () async {
-      final harness = _Harness(
-        records: <ProjectRecord>[
-          _record(id: 'one', name: 'One', deleted: true),
-        ],
-      );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
+  test('GivenDeletedProject_WhenRestored_ThenItReturnsActiveWithoutSourceValidation', () async {
+    final harness = _Harness(
+      records: <ProjectRecord>[_record(id: 'one', name: 'One', deleted: true)],
+    );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
 
-      await controller.restore('one');
+    await controller.restore('one');
 
-      final state = container.read(projectControllerProvider);
-      expect(state.deletedProjects, isEmpty);
-      expect(state.projects.single.record.id, 'one');
-      expect(state.lifecycleFeedback?.isSuccess, isTrue);
-      expect(harness.validator.validatedPaths, isEmpty);
-    },
-  );
+    final state = container.read(projectControllerProvider);
+    expect(state.deletedProjects, isEmpty);
+    expect(state.projects.single.record.id, 'one');
+    expect(state.lifecycleFeedback?.isSuccess, isTrue);
+    expect(harness.validator.validatedPaths, isEmpty);
+  });
 
   test(
     'GivenPermanentDeletionCancelled_WhenRequested_ThenNoMutationOccurs',
@@ -427,132 +391,118 @@ void main() {
     },
   );
 
-  test(
-    'GivenActiveRuns_WhenPermanentDeletionConfirmed_ThenLabelsArePublishedAndRecordRemains',
-    () async {
-      final harness =
-          _Harness(
-              records: <ProjectRecord>[
-                _record(id: 'one', name: 'One', deleted: true),
-              ],
-            )
-            ..activeRuns.runs = const <ActiveProjectRun>[
-              ActiveProjectRun(id: 'run-1', label: 'Release validation'),
-              ActiveProjectRun(id: 'run-2', label: 'Windows build'),
-            ];
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
+  test('GivenActiveRuns_WhenPermanentDeletionConfirmed_ThenLabelsArePublishedAndRecordRemains', () async {
+    final harness =
+        _Harness(
+            records: <ProjectRecord>[
+              _record(id: 'one', name: 'One', deleted: true),
+            ],
+          )
+          ..activeRuns.runs = const <ActiveProjectRun>[
+            ActiveProjectRun(id: 'run-1', label: 'Release validation'),
+            ActiveProjectRun(id: 'run-2', label: 'Windows build'),
+          ];
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
 
-      await controller.permanentlyDelete(
-        'one',
-        PermanentDeletionDecision.confirmed,
-      );
+    await controller.permanentlyDelete(
+      'one',
+      PermanentDeletionDecision.confirmed,
+    );
 
-      final state = container.read(projectControllerProvider);
-      expect(state.deletedProjects, hasLength(1));
-      expect(state.lifecycleFeedback?.activeRunLabels, <String>[
-        'Release validation',
-        'Windows build',
-      ]);
-      expect(state.lifecycleFeedback?.isSuccess, isFalse);
-      expect(harness.store.permanentDeleteCalls, 0);
-    },
-  );
+    final state = container.read(projectControllerProvider);
+    expect(state.deletedProjects, hasLength(1));
+    expect(state.lifecycleFeedback?.activeRunLabels, <String>[
+      'Release validation',
+      'Windows build',
+    ]);
+    expect(state.lifecycleFeedback?.isSuccess, isFalse);
+    expect(harness.store.permanentDeleteCalls, 0);
+  });
 
-  test(
-    'GivenMoreThanVisibleActiveRuns_WhenPermanentDeletionBlocked_ThenTruncationIsPreserved',
-    () async {
-      final harness =
-          _Harness(
-              records: <ProjectRecord>[
-                _record(id: 'one', name: 'One', deleted: true),
-              ],
-            )
-            ..activeRuns.runs = List<ActiveProjectRun>.generate(
-              ActiveProjectRuns.maximumVisible + 1,
-              (index) => ActiveProjectRun(
-                id: 'run-$index',
-                label: 'Active run ${index + 1}',
-              ),
-            );
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
+  test('GivenMoreThanVisibleActiveRuns_WhenPermanentDeletionBlocked_ThenTruncationIsPreserved', () async {
+    final harness =
+        _Harness(
+            records: <ProjectRecord>[
+              _record(id: 'one', name: 'One', deleted: true),
+            ],
+          )
+          ..activeRuns.runs = List<ActiveProjectRun>.generate(
+            ActiveProjectRuns.maximumVisible + 1,
+            (index) => ActiveProjectRun(
+              id: 'run-$index',
+              label: 'Active run ${index + 1}',
+            ),
+          );
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
 
-      await controller.permanentlyDelete(
-        'one',
-        PermanentDeletionDecision.confirmed,
-      );
+    await controller.permanentlyDelete(
+      'one',
+      PermanentDeletionDecision.confirmed,
+    );
 
-      final feedback = container
-          .read(projectControllerProvider)
-          .lifecycleFeedback;
-      expect(
-        feedback?.activeRunLabels,
-        hasLength(ActiveProjectRuns.maximumVisible),
-      );
-      expect(feedback?.hasAdditionalActiveRuns, isTrue);
-    },
-  );
+    final feedback = container
+        .read(projectControllerProvider)
+        .lifecycleFeedback;
+    expect(
+      feedback?.activeRunLabels,
+      hasLength(ActiveProjectRuns.maximumVisible),
+    );
+    expect(feedback?.hasAdditionalActiveRuns, isTrue);
+  });
 
-  test(
-    'GivenLifecycleRequestInProgress_WhenSubmittedTwice_ThenOnlyOneMutationRuns',
-    () async {
-      final completion = Completer<void>();
-      final harness = _Harness(
-        records: <ProjectRecord>[_record(id: 'one', name: 'One')],
-      )..store.nextSoftDelete = completion;
-      final container = harness.container();
-      addTearDown(container.dispose);
-      final controller = container.read(projectControllerProvider.notifier);
-      await controller.load();
-      await controller.select('one');
+  test('GivenLifecycleRequestInProgress_WhenSubmittedTwice_ThenOnlyOneMutationRuns', () async {
+    final completion = Completer<void>();
+    final harness = _Harness(
+      records: <ProjectRecord>[_record(id: 'one', name: 'One')],
+    )..store.nextSoftDelete = completion;
+    final container = harness.container();
+    addTearDown(container.dispose);
+    final controller = container.read(projectControllerProvider.notifier);
+    await controller.load();
+    await controller.select('one');
 
-      final first = controller.softDelete(SourcePreservationDecision.confirmed);
-      final second = controller.softDelete(
-        SourcePreservationDecision.confirmed,
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(harness.store.softDeleteCalls, 1);
-      completion.complete();
-      await Future.wait(<Future<void>>[first, second]);
+    final first = controller.softDelete(SourcePreservationDecision.confirmed);
+    final second = controller.softDelete(SourcePreservationDecision.confirmed);
+    await Future<void>.delayed(Duration.zero);
+    expect(harness.store.softDeleteCalls, 1);
+    completion.complete();
+    await Future.wait(<Future<void>>[first, second]);
 
-      expect(harness.store.softDeleteCalls, 1);
-    },
-  );
+    expect(harness.store.softDeleteCalls, 1);
+  });
 
-  test(
-    'GivenLifecycleCompletionAfterDisposal_WhenItFinishes_ThenNoLateStateIsPublished',
-    () async {
-      final completion = Completer<void>();
-      final harness = _Harness(
-        records: <ProjectRecord>[_record(id: 'one', name: 'One')],
-      )..store.nextSoftDelete = completion;
-      final container = harness.container();
-      await container.read(projectControllerProvider.notifier).load();
-      await container.read(projectControllerProvider.notifier).select('one');
-      final published = <ProjectWorkspaceState>[];
-      container.listen(
-        projectControllerProvider,
-        (_, next) => published.add(next),
-      );
-      final pending = container
-          .read(projectControllerProvider.notifier)
-          .softDelete(SourcePreservationDecision.confirmed);
+  test('GivenLifecycleCompletionAfterDisposal_WhenItFinishes_ThenNoLateStateIsPublished', () async {
+    final completion = Completer<void>();
+    final harness = _Harness(
+      records: <ProjectRecord>[_record(id: 'one', name: 'One')],
+    )..store.nextSoftDelete = completion;
+    final container = harness.container();
+    await container.read(projectControllerProvider.notifier).load();
+    await container.read(projectControllerProvider.notifier).select('one');
+    final published = <ProjectWorkspaceState>[];
+    container.listen(
+      projectControllerProvider,
+      (_, next) => published.add(next),
+    );
+    final pending = container
+        .read(projectControllerProvider.notifier)
+        .softDelete(SourcePreservationDecision.confirmed);
 
-      container.dispose();
-      completion.complete();
-      await pending;
+    container.dispose();
+    completion.complete();
+    await pending;
 
-      expect(
-        published.where((value) => value.lifecycleFeedback != null),
-        isEmpty,
-      );
-    },
-  );
+    expect(
+      published.where((value) => value.lifecycleFeedback != null),
+      isEmpty,
+    );
+  });
 }
 
 final class _Harness {

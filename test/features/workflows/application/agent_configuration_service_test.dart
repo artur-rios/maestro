@@ -47,27 +47,24 @@ void main() {
     workflowDesignService: design,
   );
 
-  test(
-    'GivenDuplicateUnorderedAdapters_WhenRefreshing_ThenEachCliIsCalledOnceInStableOrder',
-    () async {
-      final service = createService();
+  test('GivenDuplicateUnorderedAdapters_WhenRefreshing_ThenEachCliIsCalledOnceInStableOrder', () async {
+    final service = createService();
 
-      final snapshot = await service.refreshAll();
+    final snapshot = await service.refreshAll();
 
-      expect(snapshot.catalogs.map((catalog) => catalog.kind), [
-        AgentCliKind.claudeCode,
-        AgentCliKind.codex,
-        AgentCliKind.openCode,
-      ]);
-      expect(claude.calls, 1);
-      expect(codex.calls, 1);
-      expect(openCode.calls, 1);
-      expect(snapshot.forKind(AgentCliKind.claudeCode).models, [
-        'sonnet',
-        'opus',
-      ]);
-    },
-  );
+    expect(snapshot.catalogs.map((catalog) => catalog.kind), [
+      AgentCliKind.claudeCode,
+      AgentCliKind.codex,
+      AgentCliKind.openCode,
+    ]);
+    expect(claude.calls, 1);
+    expect(codex.calls, 1);
+    expect(openCode.calls, 1);
+    expect(snapshot.forKind(AgentCliKind.claudeCode).models, [
+      'sonnet',
+      'opus',
+    ]);
+  });
 
   test(
     'GivenAdapterException_WhenRefreshing_ThenTransientStateIsSanitized',
@@ -131,287 +128,260 @@ void main() {
     },
   );
 
-  test(
-    'GivenNewModelOutsideCurrentCatalog_WhenApplying_ThenDraftIsUnchangedAndTypedRejected',
-    () async {
-      final service = createService();
-      final draft = _draft();
+  test('GivenNewModelOutsideCurrentCatalog_WhenApplying_ThenDraftIsUnchangedAndTypedRejected', () async {
+    final service = createService();
+    final draft = _draft();
 
-      final result = service.applyAssignment(
+    final result = service.applyAssignment(
+      draft: draft,
+      rowKey: 'default-plan',
+      assignment: AgentAssignment(
+        kind: AgentCliKind.codex,
+        model: 'withdrawn-model',
+      ),
+      catalog: await service.refreshAll(),
+    );
+
+    expect(result, isA<AgentAssignmentRejected>());
+    final rejected = result as AgentAssignmentRejected;
+    expect(rejected.draft, same(draft));
+    expect(rejected.state.code, AgentRowStateCode.modelWithdrawn);
+  });
+
+  test('GivenRepeatedAssignments_WhenCompletingConfiguration_ThenEveryRowIsValidated', () async {
+    final service = createService();
+    final catalog = await service.refreshAll();
+    var draft = _draft();
+    for (final step in draft.steps) {
+      draft = (service.applyAssignment(
         draft: draft,
-        rowKey: 'default-plan',
+        rowKey: step.rowKey,
         assignment: AgentAssignment(
           kind: AgentCliKind.codex,
-          model: 'withdrawn-model',
+          model: 'gpt-5.2-codex',
         ),
-        catalog: await service.refreshAll(),
-      );
+        catalog: catalog,
+      ) as AgentAssignmentApplied).draft;
+    }
+    claude.calls = codex.calls = openCode.calls = 0;
 
-      expect(result, isA<AgentAssignmentRejected>());
-      final rejected = result as AgentAssignmentRejected;
-      expect(rejected.draft, same(draft));
-      expect(rejected.state.code, AgentRowStateCode.modelWithdrawn);
-    },
-  );
+    final result = await service.completeConfiguration(draft);
 
-  test(
-    'GivenRepeatedAssignments_WhenCompletingConfiguration_ThenEveryRowIsValidated',
-    () async {
-      final service = createService();
-      final catalog = await service.refreshAll();
-      var draft = _draft();
-      for (final step in draft.steps) {
-        draft =
-            (service.applyAssignment(
-                      draft: draft,
-                      rowKey: step.rowKey,
-                      assignment: AgentAssignment(
-                        kind: AgentCliKind.codex,
-                        model: 'gpt-5.2-codex',
-                      ),
-                      catalog: catalog,
-                    )
-                    as AgentAssignmentApplied)
-                .draft;
-      }
-      claude.calls = codex.calls = openCode.calls = 0;
+    expect(result, isA<AgentConfigurationCompleted>());
+    expect(claude.calls, 0);
+    expect(codex.calls, 1);
+    expect(openCode.calls, 0);
+    final validated = (result as AgentConfigurationCompleted).draft;
+    expect(validated.steps.every((step) => step.assignmentValidated), isTrue);
+    expect(
+      validated.steps.map((step) => step.assignment).toSet(),
+      hasLength(1),
+    );
+  });
 
-      final result = await service.completeConfiguration(draft);
+  test('GivenCompletedConfiguration_WhenDesignServiceSaves_ThenOneCompleteRevisionIsPersisted', () async {
+    final repository = _RecordingRepository();
+    final savingDesign = WorkflowDesignService(
+      repository: repository,
+      projectReadiness: projects,
+      clock: () => DateTime.utc(2026, 8, 6),
+      newId: _Ids().next,
+    );
+    final service = AgentConfigurationService(
+      adapters: [claude, codex, openCode],
+      workflowDesignService: savingDesign,
+    );
+    final displayCatalog = await service.refreshAll();
+    var draft = _draft();
+    for (final step in draft.steps) {
+      draft = (service.applyAssignment(
+        draft: draft,
+        rowKey: step.rowKey,
+        assignment: AgentAssignment(
+          kind: AgentCliKind.openCode,
+          model: 'openai/gpt-5',
+        ),
+        catalog: displayCatalog,
+      ) as AgentAssignmentApplied).draft;
+    }
+    expect(draft.steps.every((step) => !step.assignmentValidated), isTrue);
+    final displayOnlySave = await savingDesign.save(
+      draft,
+      requireAgentConfiguration: true,
+    );
+    expect(displayOnlySave, isA<WorkflowSaveRejected>());
+    expect(
+      (displayOnlySave as WorkflowSaveRejected).code,
+      'workflow.agent_assignment.unverified',
+    );
+    expect(repository.saveCalls, 0);
 
-      expect(result, isA<AgentConfigurationCompleted>());
-      expect(claude.calls, 0);
-      expect(codex.calls, 1);
-      expect(openCode.calls, 0);
-      final validated = (result as AgentConfigurationCompleted).draft;
-      expect(validated.steps.every((step) => step.assignmentValidated), isTrue);
-      expect(
-        validated.steps.map((step) => step.assignment).toSet(),
-        hasLength(1),
-      );
-    },
-  );
+    final completed = await service.completeConfiguration(
+      draft,
+    ) as AgentConfigurationCompleted;
 
-  test(
-    'GivenCompletedConfiguration_WhenDesignServiceSaves_ThenOneCompleteRevisionIsPersisted',
-    () async {
-      final repository = _RecordingRepository();
-      final savingDesign = WorkflowDesignService(
-        repository: repository,
-        projectReadiness: projects,
-        clock: () => DateTime.utc(2026, 8, 6),
-        newId: _Ids().next,
-      );
-      final service = AgentConfigurationService(
-        adapters: [claude, codex, openCode],
-        workflowDesignService: savingDesign,
-      );
-      final displayCatalog = await service.refreshAll();
-      var draft = _draft();
-      for (final step in draft.steps) {
-        draft =
-            (service.applyAssignment(
-                      draft: draft,
-                      rowKey: step.rowKey,
-                      assignment: AgentAssignment(
-                        kind: AgentCliKind.openCode,
-                        model: 'openai/gpt-5',
-                      ),
-                      catalog: displayCatalog,
-                    )
-                    as AgentAssignmentApplied)
-                .draft;
-      }
-      expect(draft.steps.every((step) => !step.assignmentValidated), isTrue);
-      final displayOnlySave = await savingDesign.save(
-        draft,
-        requireAgentConfiguration: true,
-      );
-      expect(displayOnlySave, isA<WorkflowSaveRejected>());
-      expect(
-        (displayOnlySave as WorkflowSaveRejected).code,
-        'workflow.agent_assignment.unverified',
-      );
-      expect(repository.saveCalls, 0);
+    final saved = await savingDesign.save(
+      completed.draft,
+      requireAgentConfiguration: true,
+    );
 
-      final completed =
-          await service.completeConfiguration(draft)
-              as AgentConfigurationCompleted;
+    expect(saved, isA<WorkflowSaved>());
+    expect(repository.saveCalls, 1);
+    expect(
+      repository.definition!.steps.map((step) => (step.cli, step.model)),
+      everyElement(('opencode', 'openai/gpt-5')),
+    );
+  });
 
-      final saved = await savingDesign.save(
-        completed.draft,
-        requireAgentConfiguration: true,
-      );
-
-      expect(saved, isA<WorkflowSaved>());
-      expect(repository.saveCalls, 1);
-      expect(
-        repository.definition!.steps.map((step) => (step.cli, step.model)),
-        everyElement(('opencode', 'openai/gpt-5')),
-      );
-    },
-  );
-
-  test(
-    'GivenCodexOrOpenCodeCliOnlyCatalog_WhenConfiguredOrPreflighted_ThenCliOnlyIsDenied',
-    () async {
-      for (final kind in [AgentCliKind.codex, AgentCliKind.openCode]) {
-        final adapter = kind == AgentCliKind.codex ? codex : openCode;
-        final model = kind == AgentCliKind.codex
-            ? 'gpt-5.2-codex'
-            : 'openai/gpt-5';
-        adapter.catalog = _catalog(
-          kind,
-          models: [model],
-          verification: AgentModelVerification.cliOnly,
-        );
-        final service = createService();
-        final assignment = AgentAssignment(kind: kind, model: model);
-        final display = await service.refreshAll();
-
-        final applied = service.applyAssignment(
-          draft: _draft(),
-          rowKey: 'default-plan',
-          assignment: assignment,
-          catalog: display,
-        );
-        expect(applied, isA<AgentAssignmentRejected>());
-        expect(
-          (applied as AgentAssignmentRejected).state.code,
-          AgentRowStateCode.catalogUnverified,
-        );
-
-        var draft = _draft();
-        for (final step in draft.steps) {
-          draft = draft.assignStep(step.rowKey, assignment);
-        }
-        final completion = await service.completeConfiguration(draft);
-        expect(completion, isA<AgentConfigurationRejected>());
-        expect(
-          completion.states.map((state) => state.code),
-          everyElement(AgentRowStateCode.catalogUnverified),
-        );
-
-        final preflight = await service.executionPreflight(draft);
-        expect(preflight.isReady, isFalse);
-        expect(
-          preflight.agentBlockers.map((state) => state.code),
-          everyElement(AgentRowStateCode.catalogUnverified),
-        );
-      }
-    },
-  );
-
-  test(
-    'GivenClaudeCliOnlyAlias_WhenCompleting_ThenItIsValidWithoutAccountVerifiedClaim',
-    () async {
-      final service = createService();
-      var draft = _draft();
-      for (final step in draft.steps) {
-        draft = draft.assignStep(
-          step.rowKey,
-          AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
-        );
-      }
-
-      final result = await service.completeConfiguration(draft);
-
-      expect(result, isA<AgentConfigurationCompleted>());
-      final states = (result as AgentConfigurationCompleted).states;
-      expect(
-        states.map((state) => state.code),
-        everyElement(AgentRowStateCode.cliOnly),
-      );
-      expect(
-        states.map((state) => state.guidance.toLowerCase()).join(' '),
-        isNot(contains('account verified')),
-      );
-      expect(states.first.guidance, contains('checked when the step starts'));
-    },
-  );
-
-  test(
-    'GivenUnavailableUnauthenticatedAndUnassignedRows_WhenCompleting_ThenTypedRowGuidanceIsReturned',
-    () async {
-      claude.catalog = _catalog(
-        AgentCliKind.claudeCode,
-        installation: AgentCliInstallation.missing,
-        session: AgentCliSession.unverified,
-      );
-      codex.catalog = _catalog(
-        AgentCliKind.codex,
-        session: AgentCliSession.unauthenticated,
-      );
-      openCode.catalog = _catalog(
-        AgentCliKind.openCode,
-        installation: AgentCliInstallation.inaccessible,
-        session: AgentCliSession.unverified,
+  test('GivenCodexOrOpenCodeCliOnlyCatalog_WhenConfiguredOrPreflighted_ThenCliOnlyIsDenied', () async {
+    for (final kind in [AgentCliKind.codex, AgentCliKind.openCode]) {
+      final adapter = kind == AgentCliKind.codex ? codex : openCode;
+      final model = kind == AgentCliKind.codex
+          ? 'gpt-5.2-codex'
+          : 'openai/gpt-5';
+      adapter.catalog = _catalog(
+        kind,
+        models: [model],
+        verification: AgentModelVerification.cliOnly,
       );
       final service = createService();
-      final draft = _draft()
-          .assignStep(
-            'default-plan',
-            AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
-          )
-          .assignStep(
-            'default-execute',
-            AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
-          )
-          .addStep(
-            const WorkflowDraftStep(
-              rowKey: 'inaccessible',
-              kind: WorkflowStepKind.custom,
-              name: 'Inaccessible',
-            ),
-          )
-          .assignStep(
-            'inaccessible',
-            AgentAssignment(kind: AgentCliKind.openCode, model: 'openai/gpt-5'),
-          );
-
-      final result =
-          await service.completeConfiguration(draft)
-              as AgentConfigurationRejected;
-
-      expect(result.states.map((state) => state.code), [
-        AgentRowStateCode.cliMissing,
-        AgentRowStateCode.unauthenticated,
-        AgentRowStateCode.unassigned,
-        AgentRowStateCode.cliInaccessible,
-      ]);
-      expect(result.draft.steps.first.assignment?.model, 'sonnet');
-      expect(result.draft.steps.first.assignmentValidated, isFalse);
-    },
-  );
-
-  test(
-    'GivenDiscoveryFailureForSavedSelection_WhenEvaluated_ThenExactSelectionIsRetainedUnverified',
-    () async {
-      final service = createService();
+      final assignment = AgentAssignment(kind: kind, model: model);
       final display = await service.refreshAll();
+
+      final applied = service.applyAssignment(
+        draft: _draft(),
+        rowKey: 'default-plan',
+        assignment: assignment,
+        catalog: display,
+      );
+      expect(applied, isA<AgentAssignmentRejected>());
       expect(
-        display.forKind(AgentCliKind.codex).installation,
-        AgentCliInstallation.available,
+        (applied as AgentAssignmentRejected).state.code,
+        AgentRowStateCode.catalogUnverified,
       );
-      codex.catalog = _catalog(
-        AgentCliKind.codex,
-        installation: AgentCliInstallation.transientFailure,
-        session: AgentCliSession.unverified,
-      );
-      final original = AgentAssignment(
-        kind: AgentCliKind.codex,
-        model: 'gpt-5.2-codex',
-      );
-      final draft = _draft().assignStep('default-plan', original);
 
-      final result =
-          await service.completeConfiguration(draft)
-              as AgentConfigurationRejected;
+      var draft = _draft();
+      for (final step in draft.steps) {
+        draft = draft.assignStep(step.rowKey, assignment);
+      }
+      final completion = await service.completeConfiguration(draft);
+      expect(completion, isA<AgentConfigurationRejected>());
+      expect(
+        completion.states.map((state) => state.code),
+        everyElement(AgentRowStateCode.catalogUnverified),
+      );
 
-      expect(result.states.first.code, AgentRowStateCode.catalogUnverified);
-      expect(result.draft.steps.first.assignment, original);
-      expect(result.draft.steps.first.assignmentValidated, isFalse);
-    },
-  );
+      final preflight = await service.executionPreflight(draft);
+      expect(preflight.isReady, isFalse);
+      expect(
+        preflight.agentBlockers.map((state) => state.code),
+        everyElement(AgentRowStateCode.catalogUnverified),
+      );
+    }
+  });
+
+  test('GivenClaudeCliOnlyAlias_WhenCompleting_ThenItIsValidWithoutAccountVerifiedClaim', () async {
+    final service = createService();
+    var draft = _draft();
+    for (final step in draft.steps) {
+      draft = draft.assignStep(
+        step.rowKey,
+        AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
+      );
+    }
+
+    final result = await service.completeConfiguration(draft);
+
+    expect(result, isA<AgentConfigurationCompleted>());
+    final states = (result as AgentConfigurationCompleted).states;
+    expect(
+      states.map((state) => state.code),
+      everyElement(AgentRowStateCode.cliOnly),
+    );
+    expect(
+      states.map((state) => state.guidance.toLowerCase()).join(' '),
+      isNot(contains('account verified')),
+    );
+    expect(states.first.guidance, contains('checked when the step starts'));
+  });
+
+  test('GivenUnavailableUnauthenticatedAndUnassignedRows_WhenCompleting_ThenTypedRowGuidanceIsReturned', () async {
+    claude.catalog = _catalog(
+      AgentCliKind.claudeCode,
+      installation: AgentCliInstallation.missing,
+      session: AgentCliSession.unverified,
+    );
+    codex.catalog = _catalog(
+      AgentCliKind.codex,
+      session: AgentCliSession.unauthenticated,
+    );
+    openCode.catalog = _catalog(
+      AgentCliKind.openCode,
+      installation: AgentCliInstallation.inaccessible,
+      session: AgentCliSession.unverified,
+    );
+    final service = createService();
+    final draft = _draft()
+        .assignStep(
+          'default-plan',
+          AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
+        )
+        .assignStep(
+          'default-execute',
+          AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
+        )
+        .addStep(
+          const WorkflowDraftStep(
+            rowKey: 'inaccessible',
+            kind: WorkflowStepKind.custom,
+            name: 'Inaccessible',
+          ),
+        )
+        .assignStep(
+          'inaccessible',
+          AgentAssignment(kind: AgentCliKind.openCode, model: 'openai/gpt-5'),
+        );
+
+    final result = await service.completeConfiguration(
+      draft,
+    ) as AgentConfigurationRejected;
+
+    expect(result.states.map((state) => state.code), [
+      AgentRowStateCode.cliMissing,
+      AgentRowStateCode.unauthenticated,
+      AgentRowStateCode.unassigned,
+      AgentRowStateCode.cliInaccessible,
+    ]);
+    expect(result.draft.steps.first.assignment?.model, 'sonnet');
+    expect(result.draft.steps.first.assignmentValidated, isFalse);
+  });
+
+  test('GivenDiscoveryFailureForSavedSelection_WhenEvaluated_ThenExactSelectionIsRetainedUnverified', () async {
+    final service = createService();
+    final display = await service.refreshAll();
+    expect(
+      display.forKind(AgentCliKind.codex).installation,
+      AgentCliInstallation.available,
+    );
+    codex.catalog = _catalog(
+      AgentCliKind.codex,
+      installation: AgentCliInstallation.transientFailure,
+      session: AgentCliSession.unverified,
+    );
+    final original = AgentAssignment(
+      kind: AgentCliKind.codex,
+      model: 'gpt-5.2-codex',
+    );
+    final draft = _draft().assignStep('default-plan', original);
+
+    final result = await service.completeConfiguration(
+      draft,
+    ) as AgentConfigurationRejected;
+
+    expect(result.states.first.code, AgentRowStateCode.catalogUnverified);
+    expect(result.draft.steps.first.assignment, original);
+    expect(result.draft.steps.first.assignmentValidated, isFalse);
+  });
 
   test(
     'GivenSavedModelWithdrawn_WhenCompleting_ThenExplicitReplacementIsRequired',
@@ -431,9 +401,9 @@ void main() {
         models: const ['gpt-5.1-codex'],
       );
 
-      final result =
-          await service.completeConfiguration(draft)
-              as AgentConfigurationRejected;
+      final result = await service.completeConfiguration(
+        draft,
+      ) as AgentConfigurationRejected;
 
       expect(result.states.first.code, AgentRowStateCode.modelWithdrawn);
       expect(result.states.first.guidance, contains('replacement'));
@@ -441,93 +411,87 @@ void main() {
     },
   );
 
-  test(
-    'GivenSelectedCliKinds_WhenPreflightRuns_ThenOnlySelectedAdaptersRefreshOnceAndProjectReadinessIsCombined',
-    () async {
-      final service = createService();
-      projects.values['project-a'] = ProjectExecutionAvailability.missing;
-      var draft = _draft().copyWith(projectIds: const ['project-a']);
-      draft = draft
-          .assignStep(
-            'default-plan',
-            AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
-          )
-          .assignStep(
-            'default-execute',
-            AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
-          )
-          .assignStep(
-            'default-review',
-            AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
-          );
-
-      final result = await service.executionPreflight(draft);
-
-      expect(codex.calls, 1);
-      expect(claude.calls, 1);
-      expect(openCode.calls, 0);
-      expect(result.agentBlockers, isEmpty);
-      expect(result.projectReadiness, isA<WorkflowExecutionBlocked>());
-      expect(result.isReady, isFalse);
-    },
-  );
-
-  test(
-    'GivenMissingUnassignedUnverifiedAndWithdrawnRows_WhenPreflightRuns_ThenItFailsClosedWithBoundedTypedBlockers',
-    () async {
-      codex.catalog = _catalog(
-        AgentCliKind.codex,
-        installation: AgentCliInstallation.transientFailure,
-        session: AgentCliSession.unverified,
-      );
-      claude.catalog = _catalog(
-        AgentCliKind.claudeCode,
-        installation: AgentCliInstallation.missing,
-        session: AgentCliSession.unverified,
-      );
-      final service = createService();
-      var draft = _draft()
-          .assignStep(
-            'default-plan',
-            AgentAssignment(kind: AgentCliKind.codex, model: 'kept-exactly'),
-          )
-          .assignStep(
-            'default-execute',
-            AgentAssignment(kind: AgentCliKind.openCode, model: 'withdrawn'),
-          )
-          .assignStep(
-            'default-review',
-            AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
-          );
-      for (var index = 0; index < 25; index++) {
-        draft = draft.addStep(
-          WorkflowDraftStep(
-            rowKey: 'extra-$index',
-            kind: WorkflowStepKind.custom,
-            name: 'Extra $index',
-          ),
+  test('GivenSelectedCliKinds_WhenPreflightRuns_ThenOnlySelectedAdaptersRefreshOnceAndProjectReadinessIsCombined', () async {
+    final service = createService();
+    projects.values['project-a'] = ProjectExecutionAvailability.missing;
+    var draft = _draft().copyWith(projectIds: const ['project-a']);
+    draft = draft
+        .assignStep(
+          'default-plan',
+          AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
+        )
+        .assignStep(
+          'default-execute',
+          AgentAssignment(kind: AgentCliKind.codex, model: 'gpt-5.2-codex'),
+        )
+        .assignStep(
+          'default-review',
+          AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
         );
-      }
 
-      final result = await service.executionPreflight(draft);
+    final result = await service.executionPreflight(draft);
 
-      expect(result.agentBlockers, hasLength(AgentRowBlockers.maximumVisible));
-      expect(result.hasMoreAgentBlockers, isTrue);
-      expect(
-        result.agentBlockers.first.code,
-        AgentRowStateCode.catalogUnverified,
+    expect(codex.calls, 1);
+    expect(claude.calls, 1);
+    expect(openCode.calls, 0);
+    expect(result.agentBlockers, isEmpty);
+    expect(result.projectReadiness, isA<WorkflowExecutionBlocked>());
+    expect(result.isReady, isFalse);
+  });
+
+  test('GivenMissingUnassignedUnverifiedAndWithdrawnRows_WhenPreflightRuns_ThenItFailsClosedWithBoundedTypedBlockers', () async {
+    codex.catalog = _catalog(
+      AgentCliKind.codex,
+      installation: AgentCliInstallation.transientFailure,
+      session: AgentCliSession.unverified,
+    );
+    claude.catalog = _catalog(
+      AgentCliKind.claudeCode,
+      installation: AgentCliInstallation.missing,
+      session: AgentCliSession.unverified,
+    );
+    final service = createService();
+    var draft = _draft()
+        .assignStep(
+          'default-plan',
+          AgentAssignment(kind: AgentCliKind.codex, model: 'kept-exactly'),
+        )
+        .assignStep(
+          'default-execute',
+          AgentAssignment(kind: AgentCliKind.openCode, model: 'withdrawn'),
+        )
+        .assignStep(
+          'default-review',
+          AgentAssignment(kind: AgentCliKind.claudeCode, model: 'sonnet'),
+        );
+    for (var index = 0; index < 25; index++) {
+      draft = draft.addStep(
+        WorkflowDraftStep(
+          rowKey: 'extra-$index',
+          kind: WorkflowStepKind.custom,
+          name: 'Extra $index',
+        ),
       );
-      expect(result.agentBlockers[1].code, AgentRowStateCode.modelWithdrawn);
-      expect(result.agentBlockers[2].code, AgentRowStateCode.cliMissing);
-      expect(result.agentBlockers[3].code, AgentRowStateCode.unassigned);
-      expect(result.isReady, isFalse);
-    },
-  );
+    }
+
+    final result = await service.executionPreflight(draft);
+
+    expect(result.agentBlockers, hasLength(AgentRowBlockers.maximumVisible));
+    expect(result.hasMoreAgentBlockers, isTrue);
+    expect(
+      result.agentBlockers.first.code,
+      AgentRowStateCode.catalogUnverified,
+    );
+    expect(result.agentBlockers[1].code, AgentRowStateCode.modelWithdrawn);
+    expect(result.agentBlockers[2].code, AgentRowStateCode.cliMissing);
+    expect(result.agentBlockers[3].code, AgentRowStateCode.unassigned);
+    expect(result.isReady, isFalse);
+  });
 }
 
-WorkflowDraft _draft() => WorkflowDraft.initial(
-  kind: WorkflowKind.reusable,
-).copyWith(name: 'Delivery', unitType: WorkItemType.githubIssue);
+WorkflowDraft _draft() =>
+    WorkflowDraft.initial(kind: WorkflowKind.reusable)
+        .copyWith(name: 'Delivery', unitType: WorkItemType.githubIssue);
 
 AgentCliCatalog _catalog(
   AgentCliKind kind, {

@@ -39,8 +39,7 @@ final class UpdateController extends ChangeNotifier {
     final service = _service;
     if (service == null) {
       state = const UpdateState(
-        message:
-            'Updates are unavailable in this build. Configure a release public key and immutable manifest URLs.',
+        message: 'Updates are unavailable in this build. Configure a release public key and immutable manifest URLs.',
       );
       notifyListeners();
       await _audit('update.check', 'unavailable', 'configuration');

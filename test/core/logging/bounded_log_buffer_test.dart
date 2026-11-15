@@ -7,26 +7,23 @@ import 'package:maestro/core/logging/durable_log_sink.dart';
 
 void main() {
   group('BoundedLogBuffer', () {
-    test(
-      'GivenOutputBeyondMemoryLimit_WhenBuffered_ThenBytesStayOrderedAndBounded',
-      () async {
-        final sink = _FakeDurableLogSink();
-        final buffer = BoundedLogBuffer(maxBytes: 1024, sink: sink);
-        addTearDown(buffer.close);
-        final original = Uint8List.fromList(
-          List<int>.generate(4096, (index) => index % 251),
-        );
+    test('GivenOutputBeyondMemoryLimit_WhenBuffered_ThenBytesStayOrderedAndBounded', () async {
+      final sink = _FakeDurableLogSink();
+      final buffer = BoundedLogBuffer(maxBytes: 1024, sink: sink);
+      addTearDown(buffer.close);
+      final original = Uint8List.fromList(
+        List<int>.generate(4096, (index) => index % 251),
+      );
 
-        await buffer.add(original);
+      await buffer.add(original);
 
-        expect(buffer.inMemoryBytes, lessThanOrEqualTo(1024));
-        expect(sink.joinedBytes, original);
-        expect(
-          sink.batches.map((batch) => batch.sequence),
-          orderedEquals(<int>[0, 1, 2, 3]),
-        );
-      },
-    );
+      expect(buffer.inMemoryBytes, lessThanOrEqualTo(1024));
+      expect(sink.joinedBytes, original);
+      expect(
+        sink.batches.map((batch) => batch.sequence),
+        orderedEquals(<int>[0, 1, 2, 3]),
+      );
+    });
 
     test(
       'GivenSecretOutput_WhenBuffered_ThenDurableBytesAreRedacted',

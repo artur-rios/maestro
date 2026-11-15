@@ -4,19 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maestro/features/authentication/domain/external_authentication_models.dart';
 
 void main() {
-  test(
-    'GivenGeneratedRecoveryCode_WhenPersisted_ThenDigestDoesNotContainPlaintext',
-    () {
-      final code = RecoveryCode.generate(Random(7));
+  test('GivenGeneratedRecoveryCode_WhenPersisted_ThenDigestDoesNotContainPlaintext', () {
+    final code = RecoveryCode.generate(Random(7));
 
-      expect(
-        code.display,
-        matches(RegExp(r'^[A-Z0-9]{4}(-[A-Z0-9]{4}){5}-[A-Z0-9]{2}$')),
-      );
-      expect(code.digest, hasLength(64));
-      expect(code.digest, isNot(contains(code.display)));
-    },
-  );
+    expect(
+      code.display,
+      matches(RegExp(r'^[A-Z0-9]{4}(-[A-Z0-9]{4}){5}-[A-Z0-9]{2}$')),
+    );
+    expect(code.digest, hasLength(64));
+    expect(code.digest, isNot(contains(code.display)));
+  });
 
   test('GivenDisplayedRecoveryCode_WhenParsed_ThenInputIsNormalized', () {
     final parsed = RecoveryCode.parse('abcd-efgh-jkmn-pqrs-tvwx-yz01-20');

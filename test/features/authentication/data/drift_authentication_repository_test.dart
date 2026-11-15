@@ -83,123 +83,111 @@ void main() {
     expect(actual?.lastAuthenticatedAt, DateTime.utc(2026, 8, 5, 13));
   });
 
-  test(
-    'GivenOperatingSystemAndEmailUsers_WhenFindingOperatingSystemUser_ThenOnlyOperatingSystemUserIsReturned',
-    () async {
-      await repository.save(_user());
-      await repository.save(
-        _user(
-          id: 'os-user',
-          email: null,
-          authenticationMethod: AuthenticationMethod.operatingSystem,
-          verifierKey: null,
-        ),
-      );
+  test('GivenOperatingSystemAndEmailUsers_WhenFindingOperatingSystemUser_ThenOnlyOperatingSystemUserIsReturned', () async {
+    await repository.save(_user());
+    await repository.save(
+      _user(
+        id: 'os-user',
+        email: null,
+        authenticationMethod: AuthenticationMethod.operatingSystem,
+        verifierKey: null,
+      ),
+    );
 
-      final actual = await repository.findOperatingSystemUser();
+    final actual = await repository.findOperatingSystemUser();
 
-      expect(actual?.id, 'os-user');
-      expect(actual?.email, isNull);
-      expect(
-        actual?.authenticationMethod,
-        AuthenticationMethod.operatingSystem,
-      );
-      expect(actual?.verifierKey, isNull);
-    },
-  );
+    expect(actual?.id, 'os-user');
+    expect(actual?.email, isNull);
+    expect(actual?.authenticationMethod, AuthenticationMethod.operatingSystem);
+    expect(actual?.verifierKey, isNull);
+  });
 
-  test(
-    'GivenStoredUser_WhenAuthenticationTimeUpdatedAndUserDeleted_ThenMutationsTargetThatUser',
-    () async {
-      await repository.save(_user());
-      await repository.save(_user(id: 'user-2', email: 'second@example.com'));
+  test('GivenStoredUser_WhenAuthenticationTimeUpdatedAndUserDeleted_ThenMutationsTargetThatUser', () async {
+    await repository.save(_user());
+    await repository.save(_user(id: 'user-2', email: 'second@example.com'));
 
-      await repository.updateLastAuthenticatedAt(
-        'user-2',
-        DateTime.utc(2026, 8, 5, 14),
-      );
-      await repository.delete('user-1');
+    await repository.updateLastAuthenticatedAt(
+      'user-2',
+      DateTime.utc(2026, 8, 5, 14),
+    );
+    await repository.delete('user-1');
 
-      expect(
-        await repository.findByEmail(NormalizedEmail.parse('user@example.com')),
-        isNull,
-      );
-      final retained = await repository.findByEmail(
-        NormalizedEmail.parse('second@example.com'),
-      );
-      expect(retained?.lastAuthenticatedAt, DateTime.utc(2026, 8, 5, 14));
-    },
-  );
+    expect(
+      await repository.findByEmail(NormalizedEmail.parse('user@example.com')),
+      isNull,
+    );
+    final retained = await repository.findByEmail(
+      NormalizedEmail.parse('second@example.com'),
+    );
+    expect(retained?.lastAuthenticatedAt, DateTime.utc(2026, 8, 5, 14));
+  });
 
-  test(
-    'GivenAuditEvents_WhenAppended_ThenRedactedFieldsRemainSortableByTimestamp',
-    () async {
-      await repository.append(
-        _audit(
-          id: 'audit-2',
-          occurredAt: DateTime.utc(2026, 8, 5, 15),
-          action: AuthenticationAuditAction.signIn,
-          outcome: AuthenticationAuditOutcome.success,
-          details: '{"principal":"known"}',
-        ),
-      );
-      await repository.append(
-        _audit(
-          id: 'audit-1',
-          occurredAt: DateTime.utc(2026, 8, 5, 14),
-          action: AuthenticationAuditAction.signInFailed,
-          outcome: AuthenticationAuditOutcome.failure,
-          details: '{"principal":"unknown"}',
-        ),
-      );
+  test('GivenAuditEvents_WhenAppended_ThenRedactedFieldsRemainSortableByTimestamp', () async {
+    await repository.append(
+      _audit(
+        id: 'audit-2',
+        occurredAt: DateTime.utc(2026, 8, 5, 15),
+        action: AuthenticationAuditAction.signIn,
+        outcome: AuthenticationAuditOutcome.success,
+        details: '{"principal":"known"}',
+      ),
+    );
+    await repository.append(
+      _audit(
+        id: 'audit-1',
+        occurredAt: DateTime.utc(2026, 8, 5, 14),
+        action: AuthenticationAuditAction.signInFailed,
+        outcome: AuthenticationAuditOutcome.failure,
+        details: '{"principal":"unknown"}',
+      ),
+    );
 
-      final rows = await database
-          .customSelect(
-            'SELECT id, actor_id, action, target, outcome, occurred_at, details '
-            'FROM audit_events ORDER BY occurred_at, id',
+    final rows = await database
+        .customSelect(
+          'SELECT id, actor_id, action, target, outcome, occurred_at, details '
+          'FROM audit_events ORDER BY occurred_at, id',
+        )
+        .get();
+
+    expect(
+      rows
+          .map(
+            (row) => <Object?>[
+              row.read<String>('id'),
+              row.read<String>('actor_id'),
+              row.read<String>('action'),
+              row.read<String>('target'),
+              row.read<String>('outcome'),
+              DateTime.fromMillisecondsSinceEpoch(
+                row.read<int>('occurred_at') * 1000,
+                isUtc: true,
+              ),
+              row.read<String>('details'),
+            ],
           )
-          .get();
-
-      expect(
-        rows
-            .map(
-              (row) => <Object?>[
-                row.read<String>('id'),
-                row.read<String>('actor_id'),
-                row.read<String>('action'),
-                row.read<String>('target'),
-                row.read<String>('outcome'),
-                DateTime.fromMillisecondsSinceEpoch(
-                  row.read<int>('occurred_at') * 1000,
-                  isUtc: true,
-                ),
-                row.read<String>('details'),
-              ],
-            )
-            .toList(),
-        <List<Object?>>[
-          <Object?>[
-            'audit-1',
-            'actor-1',
-            'signInFailed',
-            'unknown',
-            'failure',
-            DateTime.utc(2026, 8, 5, 14),
-            '{"principal":"unknown"}',
-          ],
-          <Object?>[
-            'audit-2',
-            'actor-1',
-            'signIn',
-            'unknown',
-            'success',
-            DateTime.utc(2026, 8, 5, 15),
-            '{"principal":"known"}',
-          ],
+          .toList(),
+      <List<Object?>>[
+        <Object?>[
+          'audit-1',
+          'actor-1',
+          'signInFailed',
+          'unknown',
+          'failure',
+          DateTime.utc(2026, 8, 5, 14),
+          '{"principal":"unknown"}',
         ],
-      );
-    },
-  );
+        <Object?>[
+          'audit-2',
+          'actor-1',
+          'signIn',
+          'unknown',
+          'success',
+          DateTime.utc(2026, 8, 5, 15),
+          '{"principal":"known"}',
+        ],
+      ],
+    );
+  });
 
   test('GivenFailuresInsideAndOutsideTheWindow_WhenCountingThem_'
       'ThenOnlyTheRecentOnesCount', () async {

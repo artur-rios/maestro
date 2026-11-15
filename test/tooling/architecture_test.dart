@@ -26,6 +26,33 @@ void main() {
     },
   );
 
+  // Flutter 3.50 moved Material and Cupertino out of `package:flutter/`; the
+  // layers that must not reach the framework must not reach them either.
+  for (final (scenario, layer, import) in [
+    ('Domain', 'domain', 'package:material_ui/material_ui.dart'),
+    ('Application', 'application', 'package:cupertino_ui/cupertino_ui.dart'),
+    ('Data', 'data', 'package:material_ui/material_ui.dart'),
+  ]) {
+    test(
+      'Given${scenario}FrameworkImport_WhenScanned_ThenExactPathIsReported',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'maestro-architecture-',
+        );
+        addTearDown(() => root.delete(recursive: true));
+        final source = File('${root.path}/feature/$layer/broken.dart');
+        await source.parent.create(recursive: true);
+        await source.writeAsString("import '$import';\n");
+
+        final violations = await verifyArchitecture(root);
+
+        expect(violations, hasLength(1));
+        expect(p.normalize(violations.single.path), p.normalize(source.path));
+        expect(violations.single.import, import);
+      },
+    );
+  }
+
   test(
     'GivenProductionSources_WhenScanned_ThenOutwardDependenciesAreAbsent',
     () async {
@@ -34,17 +61,12 @@ void main() {
   );
 
   final mutableReleaseAssets = <String, String>{
-    'GitHubContinuous':
-        'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
-    'GitHubLatest':
-        'https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage',
-    'ExternalContinuous':
-        'https://downloads.example.com/tools/releases/download/continuous/tool-x86_64',
-    'ExternalLatest':
-        'http://downloads.example.com/tools/releases/latest/download/tool-x86_64',
+    'GitHubContinuous': 'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
+    'GitHubLatest': 'https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage',
+    'ExternalContinuous': 'https://downloads.example.com/tools/releases/download/continuous/tool-x86_64',
+    'ExternalLatest': 'http://downloads.example.com/tools/releases/latest/download/tool-x86_64',
     'ArbitraryMutable': 'https://downloads.example.com/tool/latest/tool-x86_64',
-    'PrereleaseVersion':
-        'https://github.com/example/tool/releases/download/1.9.2-rc.1/tool-x86_64',
+    'PrereleaseVersion': 'https://github.com/example/tool/releases/download/1.9.2-rc.1/tool-x86_64',
   };
   for (final MapEntry(key: scenario, value: mutableUrl)
       in mutableReleaseAssets.entries) {

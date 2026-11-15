@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/appearance/domain/appearance_mode.dart';
+import 'package:material_ui/material_ui.dart';
 
 ThemeMode flutterThemeMode(AppearanceMode mode) => switch (mode) {
   AppearanceMode.system => ThemeMode.system,
@@ -41,9 +41,8 @@ ThemeData maestroTheme(Brightness brightness) {
     extensions: <ThemeExtension<dynamic>>[tokens],
     scaffoldBackgroundColor: colorScheme.surface,
     dividerTheme: DividerThemeData(color: tokens.subtleBorder),
-    textTheme: ThemeData(
-      brightness: brightness,
-    ).textTheme.copyWith(bodySmall: metadataText, labelSmall: metadataText),
+    textTheme: ThemeData(brightness: brightness).textTheme
+        .copyWith(bodySmall: metadataText, labelSmall: metadataText),
     cardTheme: CardThemeData(
       color: tokens.navigatorSurface,
       elevation: 0,

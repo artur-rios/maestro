@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:maestro/app/maestro_theme_tokens.dart';
 import 'package:maestro/features/updates/presentation/update_controller.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class UpdatePanel extends StatefulWidget {
   const UpdatePanel({required this.createController, super.key});

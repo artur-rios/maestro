@@ -1,11 +1,11 @@
 # Building and Testing
 
-Maestro pins Flutter 3.47.2 in `.fvmrc`; that Flutter release bundles Dart 3.13.2, while `pubspec.yaml` declares the compatible Dart 3.x range. Use the pinned Flutter toolchain for local commands and CI parity.
+Maestro pins Flutter 3.50.0 in `.fvmrc`; that Flutter release bundles Dart 3.14.0, while `pubspec.yaml` declares the compatible Dart 3.x range. Use the pinned Flutter toolchain for local commands and CI parity.
 
 ## Windows prerequisites
 
 - Windows 10 or newer.
-- Flutter 3.47.2 on `PATH`, with Windows desktop enabled.
+- Flutter 3.50.0 on `PATH`, with Windows desktop enabled.
 - Visual Studio Build Tools with Desktop development with C++, MSVC, CMake, Ninja, and a Windows SDK.
 - Git and PowerShell.
 
@@ -13,12 +13,12 @@ The repository supplies the two UTF conversion helpers required by the Windows s
 
 ## Ubuntu prerequisites
 
-The supported CI baseline is Ubuntu 24.04. Install Flutter 3.47.2 plus:
+The supported CI baseline is Ubuntu 24.04. Install Flutter 3.50.0 plus:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
-  libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
+  libx11-dev libxi-dev libsecret-1-dev libsqlite3-dev libjsoncpp-dev \
   libayatana-appindicator3-dev dbus-x11 gnome-keyring xvfb
 ```
 

@@ -10,23 +10,20 @@ import 'package:maestro/features/runs/presentation/run_start_controller.dart';
 import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
-  test(
-    'GivenProjectAndWorkflows_WhenLoaded_ThenApplicableWorkflowAndSupervisedDefaultsAreSelected',
-    () async {
-      final controller = _controller();
-      addTearDown(controller.dispose);
+  test('GivenProjectAndWorkflows_WhenLoaded_ThenApplicableWorkflowAndSupervisedDefaultsAreSelected', () async {
+    final controller = _controller();
+    addTearDown(controller.dispose);
 
-      await controller.load();
+    await controller.load();
 
-      expect(controller.state.workflows.map((value) => value.id), <String>[
-        'workflow-1',
-      ]);
-      expect(controller.state.selectedWorkflow?.id, 'workflow-1');
-      expect(controller.state.deliveryMode, DeliveryMode.supervised);
-      expect(controller.state.branchWorkType, BranchWorkType.feature);
-      expect(controller.state.workItemLabel, 'Use-case identifier');
-    },
-  );
+    expect(controller.state.workflows.map((value) => value.id), <String>[
+      'workflow-1',
+    ]);
+    expect(controller.state.selectedWorkflow?.id, 'workflow-1');
+    expect(controller.state.deliveryMode, DeliveryMode.supervised);
+    expect(controller.state.branchWorkType, BranchWorkType.feature);
+    expect(controller.state.workItemLabel, 'Use-case identifier');
+  });
 
   test(
     'GivenTypedStartFailure_WhenStarted_ThenInputsAreRetainedForRetry',
@@ -54,58 +51,55 @@ void main() {
     },
   );
 
-  test(
-    'GivenTwoAcceptedStarts_WhenOutputAndCompletionArrive_ThenRunsRemainIndependentWithStableIdentity',
-    () async {
-      var next = 0;
-      final completions = <String, Completer<void>>{};
-      final events = RunSummaryEvents();
-      final controller = _controller(
-        starter: (_) async {
-          next++;
-          return RunStartAccepted(
-            runId: 'run-$next',
-            branchName: 'feature/run-$next',
-            worktreePath: 'worktree-$next',
-          );
-        },
-        execute: (runId) => (completions[runId] = Completer<void>()).future,
-        events: events,
-        statusFor: (runId) async => const RunPresentationSnapshot(
-          status: RunStatus.succeeded,
-          currentStep: 'Execute',
-        ),
-      );
-      addTearDown(controller.dispose);
-      await controller.load();
-      controller.setWorkItem('UC-06');
+  test('GivenTwoAcceptedStarts_WhenOutputAndCompletionArrive_ThenRunsRemainIndependentWithStableIdentity', () async {
+    var next = 0;
+    final completions = <String, Completer<void>>{};
+    final events = RunSummaryEvents();
+    final controller = _controller(
+      starter: (_) async {
+        next++;
+        return RunStartAccepted(
+          runId: 'run-$next',
+          branchName: 'feature/run-$next',
+          worktreePath: 'worktree-$next',
+        );
+      },
+      execute: (runId) => (completions[runId] = Completer<void>()).future,
+      events: events,
+      statusFor: (runId) async => const RunPresentationSnapshot(
+        status: RunStatus.succeeded,
+        currentStep: 'Execute',
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    controller.setWorkItem('UC-06');
 
-      await controller.start();
-      await controller.start();
-      events.add(
-        const RunLogSummary(
-          runId: 'run-1',
-          attemptId: 'attempt-1',
-          lastSequence: 0,
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
+    await controller.start();
+    await controller.start();
+    events.add(
+      const RunLogSummary(
+        runId: 'run-1',
+        attemptId: 'attempt-1',
+        lastSequence: 0,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
 
-      expect(controller.state.runs, hasLength(2));
-      expect(controller.state.runs.map((run) => run.runId), <String>[
-        'run-1',
-        'run-2',
-      ]);
-      // Only the run that published a summary refreshed its durable status.
-      expect(controller.state.runs.first.status, RunStatus.succeeded);
-      expect(controller.state.runs.last.status, RunStatus.running);
-      expect(controller.state.runs.last.currentStep, 'Execute');
-      completions['run-1']!.complete();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.state.runs.first.status, RunStatus.succeeded);
-    },
-  );
+    expect(controller.state.runs, hasLength(2));
+    expect(controller.state.runs.map((run) => run.runId), <String>[
+      'run-1',
+      'run-2',
+    ]);
+    // Only the run that published a summary refreshed its durable status.
+    expect(controller.state.runs.first.status, RunStatus.succeeded);
+    expect(controller.state.runs.last.status, RunStatus.running);
+    expect(controller.state.runs.last.currentStep, 'Execute');
+    completions['run-1']!.complete();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.runs.first.status, RunStatus.succeeded);
+  });
 
   test(
     'GivenDisposedController_WhenLateStartCompletes_ThenNoStateIsPublished',
@@ -130,222 +124,203 @@ void main() {
     },
   );
 
-  test(
-    'GivenStartupRecoveryOffers_WhenValidActionSelected_ThenSelectionIsDurableAndOfferCloses',
-    () async {
-      final selected = <RecoveryAction>[];
-      final offer = RunRecoveryOffer(
-        runId: 'interrupted-run',
-        projectId: 'project-1',
-        interruptedAttemptId: 'attempt-1',
-        evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
-        actions: const <RecoveryAction>{
-          RecoveryAction.rerunStepFresh,
-          RecoveryAction.restartWorkflow,
-        },
-      );
-      final controller = _controller(
-        recoveryOffers: <RunRecoveryOffer>[offer],
-        selectRecovery: (_, action) async => selected.add(action),
-      );
-      addTearDown(controller.dispose);
-
-      await controller.selectRecovery(offer, RecoveryAction.rerunStepFresh);
-
-      expect(selected, <RecoveryAction>[RecoveryAction.rerunStepFresh]);
-      expect(controller.state.recoveryOffers, isEmpty);
-      expect(controller.state.failure, isNull);
-    },
-  );
-
-  test(
-    'GivenFoundationRecoveryFinishesAfterControllerConstruction_WhenLoaded_ThenOfferIsPublished',
-    () async {
-      final offer = RunRecoveryOffer(
-        runId: 'late-interrupted-run',
-        projectId: 'project-1',
-        interruptedAttemptId: null,
-        evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
-        actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
-      );
-      final controller = _controller(
-        loadRecoveryOffers: () async => <RunRecoveryOffer>[offer],
-      );
-      addTearDown(controller.dispose);
-
-      await controller.load();
-
-      expect(controller.state.recoveryOffers, <RunRecoveryOffer>[offer]);
-    },
-  );
-
-  test(
-    'GivenRecoveryOffersForMultipleProjects_WhenLoaded_ThenOnlySelectedProjectOfferIsPublished',
-    () async {
-      RunRecoveryOffer offer(String runId, String projectId) =>
-          RunRecoveryOffer(
-            runId: runId,
-            projectId: projectId,
-            interruptedAttemptId: null,
-            evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
-            actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
-          );
-      final mine = offer('mine', 'project-1');
-      final other = offer('other', 'project-2');
-      final controller = _controller(
-        loadRecoveryOffers: () async => <RunRecoveryOffer>[other, mine],
-      );
-      addTearDown(controller.dispose);
-
-      await controller.load();
-
-      expect(controller.state.recoveryOffers, <RunRecoveryOffer>[mine]);
-    },
-  );
-
-  test(
-    'GivenStaleRecoveryOrStatusReadFailure_WhenObserved_ThenTypedFailureIsPublishedWithoutLosingEvidence',
-    () async {
-      final offer = RunRecoveryOffer(
-        runId: 'interrupted-run',
-        projectId: 'project-1',
-        interruptedAttemptId: null,
-        evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
-        actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
-      );
-      final completion = Completer<void>();
-      final controller = _controller(
-        recoveryOffers: <RunRecoveryOffer>[offer],
-        selectRecovery: (_, _) async => throw StateError('stale'),
-        starter: (_) async => const RunStartAccepted(
-          runId: 'run-1',
-          branchName: 'feature/run-1',
-          worktreePath: 'worktree-1',
-        ),
-        execute: (_) => completion.future,
-        statusFor: (_) async => throw StateError('read failed'),
-      );
-      addTearDown(controller.dispose);
-
-      await controller.selectRecovery(offer, RecoveryAction.restartWorkflow);
-      expect(controller.state.failure?.code, 'run.recovery.stale');
-      expect(controller.state.recoveryOffers, <RunRecoveryOffer>[offer]);
-      await controller.load();
-      controller.setWorkItem('UC-06');
-      await controller.start();
-      completion.complete();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.state.failure?.code, 'run.status.read');
-      expect(controller.state.runs.single.status, RunStatus.running);
-    },
-  );
-
-  test(
-    'GivenRecoverySelectionInFlight_WhenRepeatedOrInvalidActionRequested_ThenSelectionIsIdempotentAndInvalidIsTyped',
-    () async {
-      final completion = Completer<void>();
-      var calls = 0;
-      final offer = RunRecoveryOffer(
-        runId: 'interrupted-run',
-        projectId: 'project-1',
-        interruptedAttemptId: 'attempt-1',
-        evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
-        actions: const <RecoveryAction>{RecoveryAction.rerunStepFresh},
-      );
-      final controller = _controller(
-        recoveryOffers: <RunRecoveryOffer>[offer],
-        selectRecovery: (_, _) {
-          calls++;
-          return completion.future;
-        },
-      );
-      addTearDown(controller.dispose);
-
-      final first = controller.selectRecovery(
-        offer,
+  test('GivenStartupRecoveryOffers_WhenValidActionSelected_ThenSelectionIsDurableAndOfferCloses', () async {
+    final selected = <RecoveryAction>[];
+    final offer = RunRecoveryOffer(
+      runId: 'interrupted-run',
+      projectId: 'project-1',
+      interruptedAttemptId: 'attempt-1',
+      evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+      actions: const <RecoveryAction>{
         RecoveryAction.rerunStepFresh,
-      );
-      await controller.selectRecovery(offer, RecoveryAction.rerunStepFresh);
-      expect(calls, 1);
-      completion.complete();
-      await first;
+        RecoveryAction.restartWorkflow,
+      },
+    );
+    final controller = _controller(
+      recoveryOffers: <RunRecoveryOffer>[offer],
+      selectRecovery: (_, action) async => selected.add(action),
+    );
+    addTearDown(controller.dispose);
 
-      final invalidOffer = RunRecoveryOffer(
-        runId: 'another-run',
-        projectId: 'project-1',
-        interruptedAttemptId: null,
-        evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 14),
-        actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
-      );
-      final invalidController = _controller(
-        recoveryOffers: <RunRecoveryOffer>[invalidOffer],
-      );
-      addTearDown(invalidController.dispose);
-      await invalidController.selectRecovery(
-        invalidOffer,
-        RecoveryAction.retryWithPreservedContext,
-      );
-      expect(invalidController.state.failure?.code, 'run.recovery.invalid');
-    },
-  );
+    await controller.selectRecovery(offer, RecoveryAction.rerunStepFresh);
 
-  test(
-    'GivenOverlappingStatusReads_WhenOlderReadCompletesLast_ThenLatestStepAndStatusRemainVisible',
-    () async {
-      final execution = Completer<void>();
-      final reads = <Completer<RunPresentationSnapshot?>>[
-        Completer<RunPresentationSnapshot?>(),
-        Completer<RunPresentationSnapshot?>(),
-      ];
-      var readIndex = 0;
-      final events = RunSummaryEvents();
-      final controller = _controller(
-        starter: (_) async => const RunStartAccepted(
-          runId: 'run-1',
-          branchName: 'feature/run-1',
-          worktreePath: 'worktree-1',
-        ),
-        execute: (_) => execution.future,
-        events: events,
-        statusFor: (_) => reads[readIndex++].future,
-      );
-      addTearDown(controller.dispose);
-      await controller.load();
-      controller.setWorkItem('UC-06');
-      await controller.start();
-      events.add(
-        const RunLogSummary(
-          runId: 'run-1',
-          attemptId: 'attempt-1',
-          lastSequence: 0,
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      execution.complete();
-      await Future<void>.delayed(Duration.zero);
-      expect(readIndex, 2);
+    expect(selected, <RecoveryAction>[RecoveryAction.rerunStepFresh]);
+    expect(controller.state.recoveryOffers, isEmpty);
+    expect(controller.state.failure, isNull);
+  });
 
-      reads[1].complete(
-        const RunPresentationSnapshot(
-          status: RunStatus.succeeded,
-          currentStep: 'Review',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      reads[0].complete(
-        const RunPresentationSnapshot(
-          status: RunStatus.running,
-          currentStep: 'Execute',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
+  test('GivenFoundationRecoveryFinishesAfterControllerConstruction_WhenLoaded_ThenOfferIsPublished', () async {
+    final offer = RunRecoveryOffer(
+      runId: 'late-interrupted-run',
+      projectId: 'project-1',
+      interruptedAttemptId: null,
+      evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+      actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
+    );
+    final controller = _controller(
+      loadRecoveryOffers: () async => <RunRecoveryOffer>[offer],
+    );
+    addTearDown(controller.dispose);
 
-      expect(controller.state.runs.single.status, RunStatus.succeeded);
-      expect(controller.state.runs.single.currentStep, 'Review');
-    },
-  );
+    await controller.load();
+
+    expect(controller.state.recoveryOffers, <RunRecoveryOffer>[offer]);
+  });
+
+  test('GivenRecoveryOffersForMultipleProjects_WhenLoaded_ThenOnlySelectedProjectOfferIsPublished', () async {
+    RunRecoveryOffer offer(String runId, String projectId) => RunRecoveryOffer(
+      runId: runId,
+      projectId: projectId,
+      interruptedAttemptId: null,
+      evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+      actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
+    );
+    final mine = offer('mine', 'project-1');
+    final other = offer('other', 'project-2');
+    final controller = _controller(
+      loadRecoveryOffers: () async => <RunRecoveryOffer>[other, mine],
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+
+    expect(controller.state.recoveryOffers, <RunRecoveryOffer>[mine]);
+  });
+
+  test('GivenStaleRecoveryOrStatusReadFailure_WhenObserved_ThenTypedFailureIsPublishedWithoutLosingEvidence', () async {
+    final offer = RunRecoveryOffer(
+      runId: 'interrupted-run',
+      projectId: 'project-1',
+      interruptedAttemptId: null,
+      evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+      actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
+    );
+    final completion = Completer<void>();
+    final controller = _controller(
+      recoveryOffers: <RunRecoveryOffer>[offer],
+      selectRecovery: (_, _) async => throw StateError('stale'),
+      starter: (_) async => const RunStartAccepted(
+        runId: 'run-1',
+        branchName: 'feature/run-1',
+        worktreePath: 'worktree-1',
+      ),
+      execute: (_) => completion.future,
+      statusFor: (_) async => throw StateError('read failed'),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.selectRecovery(offer, RecoveryAction.restartWorkflow);
+    expect(controller.state.failure?.code, 'run.recovery.stale');
+    expect(controller.state.recoveryOffers, <RunRecoveryOffer>[offer]);
+    await controller.load();
+    controller.setWorkItem('UC-06');
+    await controller.start();
+    completion.complete();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state.failure?.code, 'run.status.read');
+    expect(controller.state.runs.single.status, RunStatus.running);
+  });
+
+  test('GivenRecoverySelectionInFlight_WhenRepeatedOrInvalidActionRequested_ThenSelectionIsIdempotentAndInvalidIsTyped', () async {
+    final completion = Completer<void>();
+    var calls = 0;
+    final offer = RunRecoveryOffer(
+      runId: 'interrupted-run',
+      projectId: 'project-1',
+      interruptedAttemptId: 'attempt-1',
+      evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 13),
+      actions: const <RecoveryAction>{RecoveryAction.rerunStepFresh},
+    );
+    final controller = _controller(
+      recoveryOffers: <RunRecoveryOffer>[offer],
+      selectRecovery: (_, _) {
+        calls++;
+        return completion.future;
+      },
+    );
+    addTearDown(controller.dispose);
+
+    final first = controller.selectRecovery(
+      offer,
+      RecoveryAction.rerunStepFresh,
+    );
+    await controller.selectRecovery(offer, RecoveryAction.rerunStepFresh);
+    expect(calls, 1);
+    completion.complete();
+    await first;
+
+    final invalidOffer = RunRecoveryOffer(
+      runId: 'another-run',
+      projectId: 'project-1',
+      interruptedAttemptId: null,
+      evidenceUpdatedAt: DateTime.utc(2026, 8, 6, 14),
+      actions: const <RecoveryAction>{RecoveryAction.restartWorkflow},
+    );
+    final invalidController = _controller(
+      recoveryOffers: <RunRecoveryOffer>[invalidOffer],
+    );
+    addTearDown(invalidController.dispose);
+    await invalidController.selectRecovery(
+      invalidOffer,
+      RecoveryAction.retryWithPreservedContext,
+    );
+    expect(invalidController.state.failure?.code, 'run.recovery.invalid');
+  });
+
+  test('GivenOverlappingStatusReads_WhenOlderReadCompletesLast_ThenLatestStepAndStatusRemainVisible', () async {
+    final execution = Completer<void>();
+    final reads = <Completer<RunPresentationSnapshot?>>[
+      Completer<RunPresentationSnapshot?>(),
+      Completer<RunPresentationSnapshot?>(),
+    ];
+    var readIndex = 0;
+    final events = RunSummaryEvents();
+    final controller = _controller(
+      starter: (_) async => const RunStartAccepted(
+        runId: 'run-1',
+        branchName: 'feature/run-1',
+        worktreePath: 'worktree-1',
+      ),
+      execute: (_) => execution.future,
+      events: events,
+      statusFor: (_) => reads[readIndex++].future,
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    controller.setWorkItem('UC-06');
+    await controller.start();
+    events.add(
+      const RunLogSummary(
+        runId: 'run-1',
+        attemptId: 'attempt-1',
+        lastSequence: 0,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    execution.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(readIndex, 2);
+
+    reads[1].complete(
+      const RunPresentationSnapshot(
+        status: RunStatus.succeeded,
+        currentStep: 'Review',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    reads[0].complete(
+      const RunPresentationSnapshot(
+        status: RunStatus.running,
+        currentStep: 'Execute',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state.runs.single.status, RunStatus.succeeded);
+    expect(controller.state.runs.single.currentStep, 'Review');
+  });
 }
 
 RunStartController _controller({

@@ -46,9 +46,8 @@ void main() {
   test('GivenEmptyPackage_WhenValidated_ThenThrowsStateError', () async {
     final directory = await _createDistributionDirectory();
     addTearDown(() => directory.delete(recursive: true));
-    await File(
-      '${directory.path}/maestro-linux-amd64.deb',
-    ).writeAsBytes(<int>[]);
+    await File('${directory.path}/maestro-linux-amd64.deb')
+        .writeAsBytes(<int>[]);
 
     await expectLater(
       validateDistributionPackages(directory),

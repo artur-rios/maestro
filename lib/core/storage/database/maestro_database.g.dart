@@ -9040,20 +9040,18 @@ abstract class _$MaestroDatabase extends GeneratedDatabase {
   ]);
 }
 
-typedef $$SettingsTableCreateCompanionBuilder =
-    SettingsCompanion Function({
-      required String key,
-      required String value,
-      Value<DateTime> updatedAt,
-      Value<int> rowid,
-    });
-typedef $$SettingsTableUpdateCompanionBuilder =
-    SettingsCompanion Function({
-      Value<String> key,
-      Value<String> value,
-      Value<DateTime> updatedAt,
-      Value<int> rowid,
-    });
+typedef $$SettingsTableCreateCompanionBuilder = SettingsCompanion Function({
+  required String key,
+  required String value,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
+typedef $$SettingsTableUpdateCompanionBuilder = SettingsCompanion Function({
+  Value<String> key,
+  Value<String> value,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
 
 class $$SettingsTableFilterComposer
     extends Composer<_$MaestroDatabase, $SettingsTable> {
@@ -9777,26 +9775,24 @@ typedef $$OwnedResourcesTableProcessedTableManager =
       OwnedResource,
       PrefetchHooks Function()
     >;
-typedef $$LocalUsersTableCreateCompanionBuilder =
-    LocalUsersCompanion Function({
-      required String id,
-      Value<String?> email,
-      required String authMethod,
-      Value<String?> verifierKey,
-      required DateTime createdAt,
-      Value<DateTime?> lastAuthenticatedAt,
-      Value<int> rowid,
-    });
-typedef $$LocalUsersTableUpdateCompanionBuilder =
-    LocalUsersCompanion Function({
-      Value<String> id,
-      Value<String?> email,
-      Value<String> authMethod,
-      Value<String?> verifierKey,
-      Value<DateTime> createdAt,
-      Value<DateTime?> lastAuthenticatedAt,
-      Value<int> rowid,
-    });
+typedef $$LocalUsersTableCreateCompanionBuilder = LocalUsersCompanion Function({
+  required String id,
+  Value<String?> email,
+  required String authMethod,
+  Value<String?> verifierKey,
+  required DateTime createdAt,
+  Value<DateTime?> lastAuthenticatedAt,
+  Value<int> rowid,
+});
+typedef $$LocalUsersTableUpdateCompanionBuilder = LocalUsersCompanion Function({
+  Value<String> id,
+  Value<String?> email,
+  Value<String> authMethod,
+  Value<String?> verifierKey,
+  Value<DateTime> createdAt,
+  Value<DateTime?> lastAuthenticatedAt,
+  Value<int> rowid,
+});
 
 final class $$LocalUsersTableReferences
     extends BaseReferences<_$MaestroDatabase, $LocalUsersTable, LocalUser> {
@@ -10069,10 +10065,11 @@ class $$LocalUsersTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (localRecoveryCodesRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       LocalUser,
                       $LocalUsersTable,
-                      LocalRecoveryCode
+                      LocalRecoveryCode,
+                      $LocalRecoveryCodesTable
                     >(
                       currentTable: table,
                       referencedTable: $$LocalUsersTableReferences
@@ -10083,8 +10080,8 @@ class $$LocalUsersTableTableManager
                             table,
                             p0,
                           ).localRecoveryCodesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.userId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'user_id',
                       typedResults: items,
                     ),
                 ];
@@ -10406,19 +10403,15 @@ class $$LocalRecoveryCodesTableTableManager
                     >
                   >(state) {
                     if (userId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.userId,
-                                referencedTable:
-                                    $$LocalRecoveryCodesTableReferences
-                                        ._userIdTable(db),
-                                referencedColumn:
-                                    $$LocalRecoveryCodesTableReferences
-                                        ._userIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.userId,
+                        referencedTable: $$LocalRecoveryCodesTableReferences
+                            ._userIdTable(db),
+                        referencedColumn: $$LocalRecoveryCodesTableReferences
+                            ._userIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -10695,28 +10688,26 @@ typedef $$AuditEventsTableProcessedTableManager =
       AuditEvent,
       PrefetchHooks Function()
     >;
-typedef $$ProjectsTableCreateCompanionBuilder =
-    ProjectsCompanion Function({
-      required String id,
-      required String name,
-      required String normalizedName,
-      required String folderPath,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
-typedef $$ProjectsTableUpdateCompanionBuilder =
-    ProjectsCompanion Function({
-      Value<String> id,
-      Value<String> name,
-      Value<String> normalizedName,
-      Value<String> folderPath,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
+typedef $$ProjectsTableCreateCompanionBuilder = ProjectsCompanion Function({
+  required String id,
+  required String name,
+  required String normalizedName,
+  required String folderPath,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
+typedef $$ProjectsTableUpdateCompanionBuilder = ProjectsCompanion Function({
+  Value<String> id,
+  Value<String> name,
+  Value<String> normalizedName,
+  Value<String> folderPath,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
 
 final class $$ProjectsTableReferences
     extends BaseReferences<_$MaestroDatabase, $ProjectsTable, Project> {
@@ -11080,10 +11071,11 @@ class $$ProjectsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (workflowProjectRefsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Project,
                           $ProjectsTable,
-                          WorkflowProjectRef
+                          WorkflowProjectRef,
+                          $WorkflowProjectRefsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ProjectsTableReferences
@@ -11094,17 +11086,16 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).workflowProjectRefsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.projectId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'project_id',
                           typedResults: items,
                         ),
                       if (workflowRunsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Project,
                           $ProjectsTable,
-                          WorkflowRun
+                          WorkflowRun,
+                          $WorkflowRunsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ProjectsTableReferences
@@ -11115,10 +11106,8 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).workflowRunsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.projectId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'project_id',
                           typedResults: items,
                         ),
                     ];
@@ -11146,32 +11135,30 @@ typedef $$ProjectsTableProcessedTableManager =
         bool workflowRunsRefs,
       })
     >;
-typedef $$WorkflowsTableCreateCompanionBuilder =
-    WorkflowsCompanion Function({
-      required String id,
-      required int revision,
-      Value<String?> name,
-      required bool isReusable,
-      required String unitType,
-      Value<bool> supervisedDelivery,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
-typedef $$WorkflowsTableUpdateCompanionBuilder =
-    WorkflowsCompanion Function({
-      Value<String> id,
-      Value<int> revision,
-      Value<String?> name,
-      Value<bool> isReusable,
-      Value<String> unitType,
-      Value<bool> supervisedDelivery,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> rowid,
-    });
+typedef $$WorkflowsTableCreateCompanionBuilder = WorkflowsCompanion Function({
+  required String id,
+  required int revision,
+  Value<String?> name,
+  required bool isReusable,
+  required String unitType,
+  Value<bool> supervisedDelivery,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
+typedef $$WorkflowsTableUpdateCompanionBuilder = WorkflowsCompanion Function({
+  Value<String> id,
+  Value<int> revision,
+  Value<String?> name,
+  Value<bool> isReusable,
+  Value<String> unitType,
+  Value<bool> supervisedDelivery,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> rowid,
+});
 
 final class $$WorkflowsTableReferences
     extends BaseReferences<_$MaestroDatabase, $WorkflowsTable, Workflow> {
@@ -11644,10 +11631,11 @@ class $$WorkflowsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (workflowStepsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Workflow,
                           $WorkflowsTable,
-                          WorkflowStep
+                          WorkflowStep,
+                          $WorkflowStepsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowsTableReferences
@@ -11658,17 +11646,16 @@ class $$WorkflowsTableTableManager
                                 table,
                                 p0,
                               ).workflowStepsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.workflowId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'workflow_id',
                           typedResults: items,
                         ),
                       if (workflowProjectRefsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Workflow,
                           $WorkflowsTable,
-                          WorkflowProjectRef
+                          WorkflowProjectRef,
+                          $WorkflowProjectRefsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowsTableReferences
@@ -11679,17 +11666,16 @@ class $$WorkflowsTableTableManager
                                 table,
                                 p0,
                               ).workflowProjectRefsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.workflowId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'workflow_id',
                           typedResults: items,
                         ),
                       if (workflowRunsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Workflow,
                           $WorkflowsTable,
-                          WorkflowRun
+                          WorkflowRun,
+                          $WorkflowRunsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowsTableReferences
@@ -11700,10 +11686,8 @@ class $$WorkflowsTableTableManager
                                 table,
                                 p0,
                               ).workflowRunsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.workflowId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'workflow_id',
                           typedResults: items,
                         ),
                     ];
@@ -12077,17 +12061,15 @@ class $$WorkflowStepsTableTableManager
                     >
                   >(state) {
                     if (workflowId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.workflowId,
-                                referencedTable: $$WorkflowStepsTableReferences
-                                    ._workflowIdTable(db),
-                                referencedColumn: $$WorkflowStepsTableReferences
-                                    ._workflowIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.workflowId,
+                        referencedTable: $$WorkflowStepsTableReferences
+                            ._workflowIdTable(db),
+                        referencedColumn: $$WorkflowStepsTableReferences
+                            ._workflowIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -12429,34 +12411,26 @@ class $$WorkflowProjectRefsTableTableManager
                     >
                   >(state) {
                     if (workflowId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.workflowId,
-                                referencedTable:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._workflowIdTable(db),
-                                referencedColumn:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._workflowIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.workflowId,
+                        referencedTable: $$WorkflowProjectRefsTableReferences
+                            ._workflowIdTable(db),
+                        referencedColumn: $$WorkflowProjectRefsTableReferences
+                            ._workflowIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (projectId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.projectId,
-                                referencedTable:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._projectIdTable(db),
-                                referencedColumn:
-                                    $$WorkflowProjectRefsTableReferences
-                                        ._projectIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.projectId,
+                        referencedTable: $$WorkflowProjectRefsTableReferences
+                            ._projectIdTable(db),
+                        referencedColumn: $$WorkflowProjectRefsTableReferences
+                            ._projectIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -13446,34 +13420,26 @@ class $$WorkflowRunsTableTableManager
                         >
                       >(state) {
                         if (projectId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.projectId,
-                                    referencedTable:
-                                        $$WorkflowRunsTableReferences
-                                            ._projectIdTable(db),
-                                    referencedColumn:
-                                        $$WorkflowRunsTableReferences
-                                            ._projectIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.projectId,
+                            referencedTable: $$WorkflowRunsTableReferences
+                                ._projectIdTable(db),
+                            referencedColumn: $$WorkflowRunsTableReferences
+                                ._projectIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (workflowId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.workflowId,
-                                    referencedTable:
-                                        $$WorkflowRunsTableReferences
-                                            ._workflowIdTable(db),
-                                    referencedColumn:
-                                        $$WorkflowRunsTableReferences
-                                            ._workflowIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.workflowId,
+                            referencedTable: $$WorkflowRunsTableReferences
+                                ._workflowIdTable(db),
+                            referencedColumn: $$WorkflowRunsTableReferences
+                                ._workflowIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -13481,10 +13447,11 @@ class $$WorkflowRunsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (runSnapshotsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunSnapshot
+                          RunSnapshot,
+                          $RunSnapshotsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13495,17 +13462,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runSnapshotsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runSnapshotStepsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunSnapshotStep
+                          RunSnapshotStep,
+                          $RunSnapshotStepsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13516,17 +13482,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runSnapshotStepsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runAttemptsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunAttempt
+                          RunAttempt,
+                          $RunAttemptsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13537,17 +13502,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runAttemptsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runLogSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunLogSegment
+                          RunLogSegment,
+                          $RunLogSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13558,17 +13522,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runLogSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (runRecoveryRequestsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          RunRecoveryRequest
+                          RunRecoveryRequest,
+                          $RunRecoveryRequestsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13579,17 +13542,16 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).runRecoveryRequestsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                       if (deliveryRecordsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           WorkflowRun,
                           $WorkflowRunsTable,
-                          DeliveryRecord
+                          DeliveryRecord,
+                          $DeliveryRecordsTable
                         >(
                           currentTable: table,
                           referencedTable: $$WorkflowRunsTableReferences
@@ -13600,10 +13562,8 @@ class $$WorkflowRunsTableTableManager
                                 table,
                                 p0,
                               ).deliveryRecordsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.runId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'run_id',
                           typedResults: items,
                         ),
                     ];
@@ -13903,17 +13863,15 @@ class $$RunSnapshotsTableTableManager
                     >
                   >(state) {
                     if (runId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.runId,
-                                referencedTable: $$RunSnapshotsTableReferences
-                                    ._runIdTable(db),
-                                referencedColumn: $$RunSnapshotsTableReferences
-                                    ._runIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.runId,
+                        referencedTable: $$RunSnapshotsTableReferences
+                            ._runIdTable(db),
+                        referencedColumn: $$RunSnapshotsTableReferences
+                            ._runIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -14460,19 +14418,15 @@ class $$RunSnapshotStepsTableTableManager
                         >
                       >(state) {
                         if (runId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.runId,
-                                    referencedTable:
-                                        $$RunSnapshotStepsTableReferences
-                                            ._runIdTable(db),
-                                    referencedColumn:
-                                        $$RunSnapshotStepsTableReferences
-                                            ._runIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.runId,
+                            referencedTable: $$RunSnapshotStepsTableReferences
+                                ._runIdTable(db),
+                            referencedColumn: $$RunSnapshotStepsTableReferences
+                                ._runIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -14480,10 +14434,11 @@ class $$RunSnapshotStepsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (runAttemptsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunSnapshotStep,
                           $RunSnapshotStepsTable,
-                          RunAttempt
+                          RunAttempt,
+                          $RunAttemptsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunSnapshotStepsTableReferences
@@ -14494,17 +14449,16 @@ class $$RunSnapshotStepsTableTableManager
                                 table,
                                 p0,
                               ).runAttemptsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.snapshotStepId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'snapshot_step_id',
                           typedResults: items,
                         ),
                       if (runLogSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunSnapshotStep,
                           $RunSnapshotStepsTable,
-                          RunLogSegment
+                          RunLogSegment,
+                          $RunLogSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunSnapshotStepsTableReferences
@@ -14515,10 +14469,8 @@ class $$RunSnapshotStepsTableTableManager
                                 table,
                                 p0,
                               ).runLogSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.snapshotStepId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'snapshot_step_id',
                           typedResults: items,
                         ),
                     ];
@@ -15161,34 +15113,26 @@ class $$RunAttemptsTableTableManager
                         >
                       >(state) {
                         if (runId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.runId,
-                                    referencedTable:
-                                        $$RunAttemptsTableReferences
-                                            ._runIdTable(db),
-                                    referencedColumn:
-                                        $$RunAttemptsTableReferences
-                                            ._runIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.runId,
+                            referencedTable: $$RunAttemptsTableReferences
+                                ._runIdTable(db),
+                            referencedColumn: $$RunAttemptsTableReferences
+                                ._runIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (snapshotStepId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.snapshotStepId,
-                                    referencedTable:
-                                        $$RunAttemptsTableReferences
-                                            ._snapshotStepIdTable(db),
-                                    referencedColumn:
-                                        $$RunAttemptsTableReferences
-                                            ._snapshotStepIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.snapshotStepId,
+                            referencedTable: $$RunAttemptsTableReferences
+                                ._snapshotStepIdTable(db),
+                            referencedColumn: $$RunAttemptsTableReferences
+                                ._snapshotStepIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -15196,10 +15140,11 @@ class $$RunAttemptsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (runLogSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunAttempt,
                           $RunAttemptsTable,
-                          RunLogSegment
+                          RunLogSegment,
+                          $RunLogSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunAttemptsTableReferences
@@ -15210,17 +15155,16 @@ class $$RunAttemptsTableTableManager
                                 table,
                                 p0,
                               ).runLogSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.attemptId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'attempt_id',
                           typedResults: items,
                         ),
                       if (runRecoveryRequestsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           RunAttempt,
                           $RunAttemptsTable,
-                          RunRecoveryRequest
+                          RunRecoveryRequest,
+                          $RunRecoveryRequestsTable
                         >(
                           currentTable: table,
                           referencedTable: $$RunAttemptsTableReferences
@@ -15231,10 +15175,8 @@ class $$RunAttemptsTableTableManager
                                 table,
                                 p0,
                               ).runRecoveryRequestsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.attemptId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'attempt_id',
                           typedResults: items,
                         ),
                     ];
@@ -15803,49 +15745,37 @@ class $$RunLogSegmentsTableTableManager
                         >
                       >(state) {
                         if (runId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.runId,
-                                    referencedTable:
-                                        $$RunLogSegmentsTableReferences
-                                            ._runIdTable(db),
-                                    referencedColumn:
-                                        $$RunLogSegmentsTableReferences
-                                            ._runIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.runId,
+                            referencedTable: $$RunLogSegmentsTableReferences
+                                ._runIdTable(db),
+                            referencedColumn: $$RunLogSegmentsTableReferences
+                                ._runIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (attemptId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.attemptId,
-                                    referencedTable:
-                                        $$RunLogSegmentsTableReferences
-                                            ._attemptIdTable(db),
-                                    referencedColumn:
-                                        $$RunLogSegmentsTableReferences
-                                            ._attemptIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.attemptId,
+                            referencedTable: $$RunLogSegmentsTableReferences
+                                ._attemptIdTable(db),
+                            referencedColumn: $$RunLogSegmentsTableReferences
+                                ._attemptIdTable(db)
+                                .id,
+                          ) as T;
                         }
                         if (snapshotStepId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.snapshotStepId,
-                                    referencedTable:
-                                        $$RunLogSegmentsTableReferences
-                                            ._snapshotStepIdTable(db),
-                                    referencedColumn:
-                                        $$RunLogSegmentsTableReferences
-                                            ._snapshotStepIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.snapshotStepId,
+                            referencedTable: $$RunLogSegmentsTableReferences
+                                ._snapshotStepIdTable(db),
+                            referencedColumn: $$RunLogSegmentsTableReferences
+                                ._snapshotStepIdTable(db)
+                                .id,
+                          ) as T;
                         }
 
                         return state;
@@ -16266,34 +16196,26 @@ class $$RunRecoveryRequestsTableTableManager
                     >
                   >(state) {
                     if (runId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.runId,
-                                referencedTable:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._runIdTable(db),
-                                referencedColumn:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._runIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.runId,
+                        referencedTable: $$RunRecoveryRequestsTableReferences
+                            ._runIdTable(db),
+                        referencedColumn: $$RunRecoveryRequestsTableReferences
+                            ._runIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (attemptId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.attemptId,
-                                referencedTable:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._attemptIdTable(db),
-                                referencedColumn:
-                                    $$RunRecoveryRequestsTableReferences
-                                        ._attemptIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.attemptId,
+                        referencedTable: $$RunRecoveryRequestsTableReferences
+                            ._attemptIdTable(db),
+                        referencedColumn: $$RunRecoveryRequestsTableReferences
+                            ._attemptIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -16886,19 +16808,15 @@ class $$DeliveryRecordsTableTableManager
                     >
                   >(state) {
                     if (runId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.runId,
-                                referencedTable:
-                                    $$DeliveryRecordsTableReferences
-                                        ._runIdTable(db),
-                                referencedColumn:
-                                    $$DeliveryRecordsTableReferences
-                                        ._runIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.runId,
+                        referencedTable: $$DeliveryRecordsTableReferences
+                            ._runIdTable(db),
+                        referencedColumn: $$DeliveryRecordsTableReferences
+                            ._runIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;

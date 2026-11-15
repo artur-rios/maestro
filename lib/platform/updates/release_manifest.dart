@@ -65,9 +65,8 @@ final class ReleaseManifest {
     return ReleaseManifest(
       version: version,
       publishedAt: DateTime.parse(_requiredString(json, 'publishedAt')).toUtc(),
-      keyExpiresAt: DateTime.parse(
-        _requiredString(json, 'keyExpiresAt'),
-      ).toUtc(),
+      keyExpiresAt: DateTime.parse(_requiredString(json, 'keyExpiresAt'))
+          .toUtc(),
       artifacts: rawArtifacts.map((artifact) {
         if (artifact is! Map<String, Object?>) {
           throw const FormatException('Artifact must be a JSON object.');

@@ -158,8 +158,7 @@ final class CodexAdapter implements AgentCliAdapter {
         session: AgentCliSession.authenticated,
         verification: AgentModelVerification.accountVerified,
         models: models,
-        guidance:
-            'Codex models were verified through the local authenticated session.',
+        guidance: 'Codex models were verified through the local authenticated session.',
       );
     } on Object {
       return _unverified(start.version!);
@@ -181,8 +180,7 @@ final class CodexAdapter implements AgentCliAdapter {
 
   AgentCliCatalog _unverified(String version) => _support.catalog(
     version: version,
-    guidance:
-        'Codex model discovery could not be verified. Retry from the project terminal.',
+    guidance: 'Codex model discovery could not be verified. Retry from the project terminal.',
   );
 }
 

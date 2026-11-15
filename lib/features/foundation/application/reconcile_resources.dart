@@ -64,8 +64,7 @@ final class ReconcileResources {
           ReconciliationFinding(
             resource: resource,
             reason: ReconciliationReason.externallyManaged,
-            message:
-                'Resource requires its owning Git or process adapter for cleanup.',
+            message: 'Resource requires its owning Git or process adapter for cleanup.',
           ),
         );
         continue;
