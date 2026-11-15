@@ -194,6 +194,9 @@ void main() {
       httpClient: _Client((_) => http.Response('{}', 200)),
       loopbackServerFactory: () async => server,
       randomBytes: (_) => List<int>.filled(32, 1),
+      // A frozen clock keeps the launch from spending the 1 ms deadline, so
+      // the timeout always comes from the callback wait, never the pre-check.
+      clock: () => DateTime.utc(2026, 8, 5),
       callbackTimeout: const Duration(milliseconds: 1),
     );
     await expectLater(
