@@ -116,7 +116,10 @@ void main() {
 
     test('GivenAStagedAppImage_WhenMaestroExits_ThenTheAppImageFileIsReplacedInPlaceAndRelaunched', () async {
       if (!Platform.isLinux) return;
-      final parent = await Process.start('sleep', <String>['1']);
+      // Maestro stays up until the test ends it, so the helper is seen
+      // waiting however slowly it starts, and nothing waits on a fixed sleep.
+      final parent = await Process.start('sleep', <String>['30']);
+      addTearDown(parent.kill);
 
       final replacing = replace(parentPid: parent.pid);
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -125,6 +128,8 @@ void main() {
         '#!/bin/sh\necho old\n',
         reason: 'nothing is replaced while Maestro is still running',
       );
+      parent.kill();
+      await parent.exitCode;
       final result = await replacing;
 
       expect(result.exitCode, 0, reason: '${result.stderr}');

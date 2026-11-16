@@ -364,6 +364,18 @@ void main() {
         )
         .timeout(const Duration(seconds: 8));
 
+    // On a loaded host the fixture may not even be running a second after the
+    // launch, which made the quiet window below prove nothing; wait until it
+    // reports the flood is starting.
+    final floodStarted = File('${progress.path}.started');
+    for (var poll = 0; poll < 400 && !await floodStarted.exists(); poll += 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+    expect(
+      await floodStarted.exists(),
+      isTrue,
+      reason: 'the fixture never started',
+    );
     await Future<void>.delayed(const Duration(seconds: 1));
     final chunksBeforeListen = await _readProgress(progress);
     expect(chunksBeforeListen, 0);

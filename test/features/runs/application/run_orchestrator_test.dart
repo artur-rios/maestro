@@ -820,7 +820,7 @@ void main() {
     final firstSummary = orchestrator.events.firstOutput;
     final execution = orchestrator.execute('run-1');
 
-    await firstSummary.timeout(const Duration(milliseconds: 100));
+    await firstSummary.timeout(const Duration(seconds: 10));
     final midstream = utf8.decode(
       repository.logs.expand((segment) => segment.bytes).toList(),
     );
@@ -881,7 +881,7 @@ void main() {
     final firstSummary = orchestrator.events.firstOutput;
     final execution = orchestrator.execute('run-1');
 
-    await firstSummary.timeout(const Duration(milliseconds: 100));
+    await firstSummary.timeout(const Duration(seconds: 10));
     final midstream = utf8.decode(
       repository.logs.expand((segment) => segment.bytes).toList(),
     );
@@ -939,7 +939,7 @@ void main() {
       final firstSummary = orchestrator.events.firstOutput;
       final execution = orchestrator.execute('run-1');
 
-      await firstSummary.timeout(const Duration(milliseconds: 100));
+      await firstSummary.timeout(const Duration(seconds: 10));
       final midstream = utf8.decode(
         repository.logs.expand((segment) => segment.bytes).toList(),
       );
@@ -1126,6 +1126,7 @@ void main() {
   );
 
   test('GivenPartialDurableBatch_WhenCadenceElapses_ThenItIsFlushed', () async {
+    final launcher = _TimedLauncher();
     final repository = _Repository()
       ..aggregates['run-1'] = _aggregate(
         'run-1',
@@ -1136,7 +1137,7 @@ void main() {
     var log = 0;
     final orchestrator = RunOrchestrator(
       repository: repository,
-      launcher: _TimedLauncher(),
+      launcher: launcher,
       resultFiles: _Results(),
       executableFor: (cli) => cli,
       environment: const <String, String>{},
@@ -1148,8 +1149,12 @@ void main() {
     final firstSummary = orchestrator.events.firstOutput;
     final execution = orchestrator.execute('run-1');
 
-    await firstSummary.timeout(const Duration(milliseconds: 80));
+    // The process cannot exit until it is released, so a summary (and durable
+    // log) can only come from the bounded cadence flushing the partial batch,
+    // however slowly the host runs. The timeout only stops a hang.
+    await firstSummary.timeout(const Duration(seconds: 10));
     expect(repository.logs, isNotEmpty);
+    launcher.release.complete();
     await execution;
   });
 
@@ -2200,12 +2205,16 @@ final class _Process implements StepProcess {
 }
 
 final class _TimedLauncher implements StepProcessLauncher {
+  final Completer<void> release = Completer<void>();
   @override
   Future<StepProcessStart> start(StepLaunchRequest request) async =>
-      StepProcessStart.started(_TimedProcess());
+      StepProcessStart.started(_TimedProcess(release.future));
 }
 
 final class _TimedProcess implements StepProcess {
+  _TimedProcess(this._release);
+
+  final Future<void> _release;
   final Completer<int> _exit = Completer<int>();
   @override
   Stream<StepOutputFrame> get frames async* {
@@ -2213,7 +2222,7 @@ final class _TimedProcess implements StepProcess {
       RunLogChannel.stdout,
       Uint8List.fromList(utf8.encode('tiny\n')),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _release;
     _exit.complete(0);
   }
 

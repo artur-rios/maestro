@@ -25,6 +25,9 @@ Future<void> main(List<String> arguments) async {
   if (mode == 'startupFlood') {
     final progress = File(arguments[1]);
     final chunk = List<int>.filled(64 * 1024, 0x66);
+    // Tells the test the flood is about to start, so its quiet window
+    // measures backpressure rather than how long this process took to start.
+    await File('${arguments[1]}.started').writeAsString('started', flush: true);
     for (var count = 1; count <= 512; count += 1) {
       stdout.add(chunk);
       await stdout.flush();
