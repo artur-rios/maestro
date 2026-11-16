@@ -8,7 +8,7 @@ import 'package:maestro/platform/common/command_runner.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  test('Given one documented identifier_When resolving_Then its normalized title is returned', () async {
+  test('GivenOneDocumentedIdentifier_WhenResolving_ThenItsNormalizedTitleIsReturned', () async {
     final resolver = DocumentedUseCaseResolver(
       source: _DocumentSource(
         '# Use Cases\n\n### UC-06: Start isolated workflow runs\n\nText.\n',
@@ -23,20 +23,23 @@ void main() {
     expect(item.title, 'Start isolated workflow runs');
   });
 
-  test('Given a duplicate documented identifier_When resolving_Then ambiguity is rejected', () async {
-    final resolver = DocumentedUseCaseResolver(
-      source: _DocumentSource('## UC-06 — First\n## UC-06 — Second\n'),
-    );
+  test(
+    'GivenADuplicateDocumentedIdentifier_WhenResolving_ThenAmbiguityIsRejected',
+    () async {
+      final resolver = DocumentedUseCaseResolver(
+        source: _DocumentSource('## UC-06 — First\n## UC-06 — Second\n'),
+      );
 
-    final result = await resolver.resolve('UC-06');
+      final result = await resolver.resolve('UC-06');
 
-    expect(
-      (result as WorkItemResolutionRejected).code,
-      'run.work_item.ambiguous',
-    );
-  });
+      expect(
+        (result as WorkItemResolutionRejected).code,
+        'run.work_item.ambiguous',
+      );
+    },
+  );
 
-  test('Given the production use-case specification_When resolving UC-06_Then its documented title is returned', () async {
+  test('GivenTheProductionUseCaseSpecification_WhenResolvingUC06_ThenItsDocumentedTitleIsReturned', () async {
     final resolver = DocumentedUseCaseResolver(
       source: FileUseCaseDocumentSource(
         p.join(
@@ -54,7 +57,7 @@ void main() {
     expect((item as UseCaseRunWorkItem).title, 'Start Isolated Workflow Runs');
   });
 
-  test('Given an accessible typed issue_When resolving_Then gh receives argument-array inputs', () async {
+  test('GivenAnAccessibleTypedIssue_WhenResolving_ThenGhReceivesArgumentArrayInputs', () async {
     final runner = _Runner(
       const CommandResult(
         exitCode: 0,
@@ -81,7 +84,7 @@ void main() {
     ]);
   });
 
-  test('Given GitHub denies access_When resolving_Then it fails closed without exposing stderr', () async {
+  test('GivenGitHubDeniesAccess_WhenResolving_ThenItFailsClosedWithoutExposingStderr', () async {
     final resolver = GitHubIssueWorkItemResolver(
       reader: CommandRunnerGitHubIssueReader(
         _Runner(
@@ -101,7 +104,7 @@ void main() {
     expect(rejected.message, isNot(contains('secret')));
   });
 
-  test('Given an oversized GitHub issue number_When resolving_Then typed validation rejects it without calling GitHub', () async {
+  test('GivenAnOversizedGitHubIssueNumber_WhenResolving_ThenTypedValidationRejectsItWithoutCallingGitHub', () async {
     final runner = _Runner(
       const CommandResult(exitCode: 0, stdout: '{}', stderr: ''),
     );

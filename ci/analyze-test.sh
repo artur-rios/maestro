@@ -29,4 +29,8 @@ dart format --output=none --set-exit-if-changed lib test integration_test test_s
 dart run tooling/verify_architecture.dart
 dart run tooling/verify_workflows.dart
 flutter analyze
-flutter test --coverage
+# The suite runs as four bundles side by side (tooling/test_bundles.dart says why): `flutter test` compiles one entry
+# point at a time and dart_test.yaml keeps the runner serial for Windows, so one entry point per test file spent most
+# of the check compiling and loading 130-odd files in a row. The flag overrides dart_test.yaml for this Linux run only.
+dart run tooling/test_bundles.dart build/test-bundles 4
+flutter test --coverage --concurrency 4 build/test-bundles

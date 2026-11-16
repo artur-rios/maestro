@@ -386,7 +386,7 @@ void main() {
     );
   });
 
-  test('GivenRunningAttempt_WhenCompletedThenRunAdvancesAtomicallyAndEvidenceStaysAppendOnly', () async {
+  test('GivenRunningAttempt_WhenCompleted_ThenRunAdvancesAtomicallyAndEvidenceStaysAppendOnly', () async {
     await _createRun(
       repository,
       run: _run(status: domain.RunStatus.running),
@@ -647,7 +647,7 @@ void main() {
   });
 
   test(
-    'GivenFinalRunningAttempt_WhenCompletedThenRunBecomesSucceeded',
+    'GivenFinalRunningAttempt_WhenCompleted_ThenRunBecomesSucceeded',
     () async {
       await _createRun(
         repository,
@@ -734,7 +734,7 @@ void main() {
     expect((await repository.findById('run-1'))!.attempts, hasLength(1));
   });
 
-  test('GivenRunningAttempt_WhenFailureCodeIsBlankThenEvidenceStaysActive_WhenValidThenRunFailsAtomically', () async {
+  test('GivenRunningAttempt_WhenFailedWithBlankThenValidCode_ThenBlankIsRejectedAndValidFailsTheRunAtomically', () async {
     await _createRun(
       repository,
       run: _run(status: domain.RunStatus.running),
@@ -904,7 +904,7 @@ void main() {
     );
   });
 
-  test('GivenInterruptedRun_WhenRecoveryRequestedThenRequestIsDurable_WhenRunIsNotInterruptedThenRejected', () async {
+  test('GivenInterruptedAndActiveRuns_WhenRecoveryIsRequested_ThenInterruptedIsDurableAndActiveIsRejected', () async {
     await _createRun(
       repository,
       run: _run(status: domain.RunStatus.interrupted),

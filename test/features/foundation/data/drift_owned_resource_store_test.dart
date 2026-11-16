@@ -15,7 +15,7 @@ void main() {
 
   tearDown(() => database.close());
 
-  test('Given a branch mutation_When intent is registered_Then its cleanup-pending record is durable before activation', () async {
+  test('GivenABranchMutation_WhenIntentIsRegistered_ThenItsCleanupPendingRecordIsDurableBeforeActivation', () async {
     const record = OwnedResourceRecord(
       id: 'run-1:branch',
       kind: OwnedResourceKind.branch,
@@ -39,7 +39,7 @@ void main() {
     expect(await database.select(database.ownedResources).get(), isEmpty);
   });
 
-  test('Given cleanup failed_When next restart queries pending_Then record remains retryable', () async {
+  test('GivenCleanupFailed_WhenNextRestartQueriesPending_ThenRecordRemainsRetryable', () async {
     const record = OwnedResourceRecord(
       id: 'run-1:process',
       kind: OwnedResourceKind.process,

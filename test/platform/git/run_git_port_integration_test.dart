@@ -56,7 +56,7 @@ void main() {
     }
   });
 
-  test('Given a tracked current base_When inspected_Then the advertised revision is verified', () async {
+  test('GivenATrackedCurrentBase_WhenInspected_ThenTheAdvertisedRevisionIsVerified', () async {
     final state = await git.inspectSource(source.path, baseBranch: 'main');
 
     expect(state.code, RunGitSourceStateCode.ready);
@@ -65,7 +65,7 @@ void main() {
   });
 
   test(
-    'Given an untracked source change_When inspected_Then the source is dirty',
+    'GivenAnUntrackedSourceChange_WhenInspected_ThenTheSourceIsDirty',
     () async {
       await File(p.join(source.path, 'untracked.txt')).writeAsString('dirty');
 
@@ -75,32 +75,35 @@ void main() {
     },
   );
 
-  test('Given the remote base advances_When inspected_Then the clean local base is stale', () async {
-    final publisher = Directory(p.join(root.path, 'publisher'));
-    await _git(root.path, <String>[
-      'clone',
-      '--branch',
-      'main',
-      p.join(root.path, 'remote.git'),
-      publisher.path,
-    ]);
-    await _git(publisher.path, <String>['config', 'user.name', 'Publisher']);
-    await _git(publisher.path, <String>[
-      'config',
-      'user.email',
-      'publisher@example.invalid',
-    ]);
-    await File(p.join(publisher.path, 'remote.txt')).writeAsString('new\n');
-    await _git(publisher.path, <String>['add', 'remote.txt']);
-    await _git(publisher.path, <String>['commit', '-m', 'advance']);
-    await _git(publisher.path, <String>['push', 'origin', 'main']);
+  test(
+    'GivenTheRemoteBaseAdvances_WhenInspected_ThenTheCleanLocalBaseIsStale',
+    () async {
+      final publisher = Directory(p.join(root.path, 'publisher'));
+      await _git(root.path, <String>[
+        'clone',
+        '--branch',
+        'main',
+        p.join(root.path, 'remote.git'),
+        publisher.path,
+      ]);
+      await _git(publisher.path, <String>['config', 'user.name', 'Publisher']);
+      await _git(publisher.path, <String>[
+        'config',
+        'user.email',
+        'publisher@example.invalid',
+      ]);
+      await File(p.join(publisher.path, 'remote.txt')).writeAsString('new\n');
+      await _git(publisher.path, <String>['add', 'remote.txt']);
+      await _git(publisher.path, <String>['commit', '-m', 'advance']);
+      await _git(publisher.path, <String>['push', 'origin', 'main']);
 
-    final state = await git.inspectSource(source.path, baseBranch: 'main');
+      final state = await git.inspectSource(source.path, baseBranch: 'main');
 
-    expect(state.code, RunGitSourceStateCode.baseStale);
-    expect(state.localRevision, revision);
-    expect(state.advertisedRevision, isNot(revision));
-  });
+      expect(state.code, RunGitSourceStateCode.baseStale);
+      expect(state.localRevision, revision);
+      expect(state.advertisedRevision, isNot(revision));
+    },
+  );
 
   group('defaultBranch', () {
     Future<String> publishDevelop() async {
@@ -121,7 +124,7 @@ void main() {
       'refs/heads/$branch',
     ]);
 
-    test('Given the remote names develop as its default_When resolved_Then develop is returned even when the local remote HEAD is stale', () async {
+    test('GivenTheRemoteNamesDevelopAsItsDefault_WhenResolved_ThenDevelopIsReturnedEvenWhenTheLocalRemoteHEADIsStale', () async {
       await publishDevelop();
       await setRemoteDefault('develop');
       // A clone made before the default branch changed keeps the old one.
@@ -130,7 +133,7 @@ void main() {
       expect(await git.defaultBranch(source.path), 'develop');
     });
 
-    test('Given the remote is unreachable_When resolved_Then the locally recorded remote HEAD is returned', () async {
+    test('GivenTheRemoteIsUnreachable_WhenResolved_ThenTheLocallyRecordedRemoteHEADIsReturned', () async {
       await publishDevelop();
       await _git(source.path, <String>[
         'remote',
@@ -148,13 +151,13 @@ void main() {
       expect(await git.defaultBranch(source.path), 'develop');
     });
 
-    test('Given a repository without a remote_When resolved_Then no default branch is claimed', () async {
+    test('GivenARepositoryWithoutARemote_WhenResolved_ThenNoDefaultBranchIsClaimed', () async {
       await _git(source.path, <String>['remote', 'remove', 'origin']);
 
       expect(await git.defaultBranch(source.path), isNull);
     });
 
-    test('Given a remote defaulting to develop_When a hotfix run starts_Then a fix branch is cut from develop', () async {
+    test('GivenARemoteDefaultingToDevelop_WhenAHotfixRunStarts_ThenAFixBranchIsCutFromDevelop', () async {
       final developRevision = await publishDevelop();
       await setRemoteDefault('develop');
       final service = _service(
@@ -180,7 +183,7 @@ void main() {
     });
   });
 
-  test('Given an existing branch and registered worktree_When queried_Then conflicts are detected', () async {
+  test('GivenAnExistingBranchAndRegisteredWorktree_WhenQueried_ThenConflictsAreDetected', () async {
     final worktree = p.join(root.path, 'worktrees', 'one');
     expect(
       await git.createBranch(
@@ -209,48 +212,51 @@ void main() {
     );
   });
 
-  test('Given two runs for one project_When isolated_Then both real worktrees coexist', () async {
-    final first = p.join(root.path, 'worktrees', 'run-a');
-    final second = p.join(root.path, 'worktrees', 'run-b');
-    for (final branch in <String>[
-      'feature/task-aaaaaaaa',
-      'feature/task-bbbbbbbb',
-    ]) {
-      expect(
-        await git.createBranch(
+  test(
+    'GivenTwoRunsForOneProject_WhenIsolated_ThenBothRealWorktreesCoexist',
+    () async {
+      final first = p.join(root.path, 'worktrees', 'run-a');
+      final second = p.join(root.path, 'worktrees', 'run-b');
+      for (final branch in <String>[
+        'feature/task-aaaaaaaa',
+        'feature/task-bbbbbbbb',
+      ]) {
+        expect(
+          await git.createBranch(
+            sourcePath: source.path,
+            branchName: branch,
+            revision: revision,
+          ),
+          isA<RunGitMutationSucceeded>(),
+        );
+      }
+
+      final results = await Future.wait(<Future<RunGitMutationResult>>[
+        git.addWorktree(
           sourcePath: source.path,
-          branchName: branch,
-          revision: revision,
+          branchName: 'feature/task-aaaaaaaa',
+          worktreePath: first,
         ),
-        isA<RunGitMutationSucceeded>(),
+        git.addWorktree(
+          sourcePath: source.path,
+          branchName: 'feature/task-bbbbbbbb',
+          worktreePath: second,
+        ),
+      ]);
+
+      expect(results, everyElement(isA<RunGitMutationSucceeded>()));
+      expect(
+        (await git.worktreePresence(source.path, first)).code,
+        RunGitPresenceCode.present,
       );
-    }
+      expect(
+        (await git.worktreePresence(source.path, second)).code,
+        RunGitPresenceCode.present,
+      );
+    },
+  );
 
-    final results = await Future.wait(<Future<RunGitMutationResult>>[
-      git.addWorktree(
-        sourcePath: source.path,
-        branchName: 'feature/task-aaaaaaaa',
-        worktreePath: first,
-      ),
-      git.addWorktree(
-        sourcePath: source.path,
-        branchName: 'feature/task-bbbbbbbb',
-        worktreePath: second,
-      ),
-    ]);
-
-    expect(results, everyElement(isA<RunGitMutationSucceeded>()));
-    expect(
-      (await git.worktreePresence(source.path, first)).code,
-      RunGitPresenceCode.present,
-    );
-    expect(
-      (await git.worktreePresence(source.path, second)).code,
-      RunGitPresenceCode.present,
-    );
-  });
-
-  test('Given real worktree creation reports a partial failure_When starting_Then only created run resources are removed', () async {
+  test('GivenRealWorktreeCreationReportsAPartialFailure_WhenStarting_ThenOnlyCreatedRunResourcesAreRemoved', () async {
     final repository = _Repository();
     final ownership = _Ownership();
     final service = StartIsolatedRun(
@@ -310,7 +316,7 @@ void main() {
     expect(repository.lastStatus, RunStatus.failed);
   });
 
-  test('Given real worktree add fails_When starting_Then the branch this run created is removed and the foreign folder is untouched', () async {
+  test('GivenRealWorktreeAddFails_WhenStarting_ThenTheBranchThisRunCreatedIsRemovedAndTheForeignFolderIsUntouched', () async {
     final repository = _Repository();
     final ownership = _Ownership();
     final service = _service(
@@ -351,7 +357,7 @@ void main() {
     expect(repository.lastStatus, RunStatus.failed);
   });
 
-  test('Given real worktree registration whose outcome is reported unknown_When starting_Then nothing is removed and cleanup is required', () async {
+  test('GivenRealWorktreeRegistrationWhoseOutcomeIsReportedUnknown_WhenStarting_ThenNothingIsRemovedAndCleanupIsRequired', () async {
     final repository = _Repository();
     final ownership = _Ownership();
     final service = _service(
@@ -388,7 +394,7 @@ void main() {
     expect(repository.lastStatus, RunStatus.failed);
   });
 
-  test('Given production worktree registration succeeds_When materialization fails_Then proven registration is compensated', () async {
+  test('GivenProductionWorktreeRegistrationSucceeds_WhenMaterializationFails_ThenProvenRegistrationIsCompensated', () async {
     final productionGit = CommandRunnerRunGitPort(
       _FailWorktreeMaterializationRunner(const ProcessCommandRunner()),
     );
@@ -422,7 +428,7 @@ void main() {
     );
   });
 
-  test('Given another actor wins the real branch race_When Maestro create fails_Then the competing branch remains', () async {
+  test('GivenAnotherActorWinsTheRealBranchRace_WhenMaestroCreateFails_ThenTheCompetingBranchRemains', () async {
     final service = _service(
       root: root,
       source: source,
@@ -442,7 +448,7 @@ void main() {
     );
   });
 
-  test('Given another actor wins the real worktree race_When Maestro add fails_Then the competing worktree remains', () async {
+  test('GivenAnotherActorWinsTheRealWorktreeRace_WhenMaestroAddFails_ThenTheCompetingWorktreeRemains', () async {
     final service = _service(
       root: root,
       source: source,

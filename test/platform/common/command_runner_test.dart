@@ -69,7 +69,7 @@ Future<void> main() async {
       addTearDown(() => root.delete(recursive: true));
       final child = File('${root.path}/child.dart');
       await child.writeAsString('''
-Future<void> main() async => Future<void>.delayed(const Duration(seconds: 10));
+Future<void> main() async => Future<void>.delayed(const Duration(seconds: 60));
 ''');
       final parent = File('${root.path}/parent.dart');
       final pidFile = File('${root.path}/child.pid');
@@ -85,7 +85,10 @@ Future<void> main(List<String> args) async {
 }
 ''');
 
-      final watch = Stopwatch()..start();
+      // The grandchild keeps the inherited pipe open for a minute, well past
+      // the request's timeout. A runner that waited for EOF would report that
+      // timeout; one that bounds the wait after the parent exits succeeds. No
+      // wall-clock assertion, so a slow host cannot fail it.
       final result = await const ProcessCommandRunner()
           .run(
             CommandRequest(
@@ -96,13 +99,13 @@ Future<void> main(List<String> args) async {
                 child.path,
                 pidFile.path,
               ],
-              timeout: const Duration(seconds: 2),
+              timeout: const Duration(seconds: 15),
             ),
           )
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 25));
 
+      expect(result.failureKind, isNull);
       expect(result.succeeded, isTrue);
-      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
       final childPid = int.parse(await pidFile.readAsString());
       // IR-05 bounds whole-tree cancellation to Windows job objects and Unix
       // process groups. `detachedWithStdio` calls setsid on Unix, so the child

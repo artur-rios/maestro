@@ -51,6 +51,18 @@ flutter analyze
 flutter test
 ```
 
+`flutter test` runs one test file per process, one after the other (`dart_test.yaml`), which is the reliable loop on
+Windows. The `analyze-test` check runs the same suite as four bundles side by side instead, each compiled once:
+
+```bash
+dart run tooling/test_bundles.dart build/test-bundles 4
+flutter test --coverage --concurrency 4 build/test-bundles
+```
+
+A bundle runs its share of the test files in one isolate, so a test that leaks state into the next file fails there
+and not under plain `flutter test`. Files that use the widget binding (`testWidgets`) are bundled apart from the rest,
+because the binding, once created, answers every `HttpClient` request in its isolate with HTTP 400.
+
 On Windows, use the repository wrapper when running Flutter tests from a
 long worktree path. It gives Sodium native assets a short same-drive temporary
 directory without changing your global environment:
