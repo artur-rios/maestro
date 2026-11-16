@@ -13,39 +13,42 @@ import 'package:maestro/platform/process/process_supervisor.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  test('builds noninteractive argument arrays for every supported CLI', () {
-    final adapter = ProductionStepCommandFactory();
-    final cases = <String, List<String>>{
-      'claude-code': <String>[
-        '--model',
-        'm',
-        '--print',
-        '--output-format',
-        'stream-json',
-      ],
-      'codex': <String>[
-        'exec',
-        '--model',
-        'm',
-        '--json',
-        '--skip-git-repo-check',
-        '-',
-      ],
-      'opencode': <String>['run', '--model', 'm'],
-    };
-    for (final entry in cases.entries) {
-      final command = adapter.create(
-        cli: entry.key,
-        model: 'm',
-        prompt: 'do it',
-        executable: entry.key,
-      );
-      expect(command.arguments, entry.value);
-      expect(command.stdinText, contains('do it'));
-    }
-  });
+  test(
+    'GivenEverySupportedCli_WhenCommandIsBuilt_ThenArgumentsAreNoninteractive',
+    () {
+      final adapter = ProductionStepCommandFactory();
+      final cases = <String, List<String>>{
+        'claude-code': <String>[
+          '--model',
+          'm',
+          '--print',
+          '--output-format',
+          'stream-json',
+        ],
+        'codex': <String>[
+          'exec',
+          '--model',
+          'm',
+          '--json',
+          '--skip-git-repo-check',
+          '-',
+        ],
+        'opencode': <String>['run', '--model', 'm'],
+      };
+      for (final entry in cases.entries) {
+        final command = adapter.create(
+          cli: entry.key,
+          model: 'm',
+          prompt: 'do it',
+          executable: entry.key,
+        );
+        expect(command.arguments, entry.value);
+        expect(command.stdinText, contains('do it'));
+      }
+    },
+  );
 
-  test('child environment is an allowlist and disables prompts', () {
+  test('GivenAmbientEnvironment_WhenChildEnvironmentIsBuilt_ThenItIsAnAllowlistWithoutPrompts', () {
     final environment = buildRunEnvironment(<String, String>{
       'PATH': '/usr/bin',
       'HOME': '/home/me',
@@ -73,7 +76,7 @@ void main() {
     expect(windows['PATH'], r'C:\Windows\System32;C:\Tools');
   });
 
-  test('command creation rejects shell-like unsupported CLI identifiers', () {
+  test('GivenShellLikeUnsupportedCliIdentifier_WhenCommandIsBuilt_ThenItIsRejected', () {
     expect(
       () => ProductionStepCommandFactory().create(
         cli: 'codex; calc',
@@ -85,96 +88,85 @@ void main() {
     );
   });
 
-  test(
-    'persists durable ownership before gated release and resolves on settle',
-    () async {
-      final temporary = await Directory.systemTemp.createTemp(
-        'maestro-owned-gate-',
-      );
-      addTearDown(() => temporary.delete(recursive: true));
-      final process = _Process(File(p.join(temporary.path, 'stdin')));
-      final ownership = _OwnershipStore();
-      final tree = _GatedTree(process, ownership);
-      final started =
-          await OwnedStepProcessLauncher(
-            processTree: tree,
-            ownership: ownership,
-            newResourceId: () => 'process-resource-1',
-            identityProvider: const _IdentityProvider(),
-          ).start(
-            const StepLaunchRequest(
-              runId: 'run-1',
-              attemptId: 'attempt-1',
-              cli: 'codex',
-              model: 'm',
-              executable: 'fixture-codex',
-              prompt: 'prompt',
-              workingDirectory: '/isolated',
-              environment: <String, String>{},
-            ),
-          );
+  test('GivenGatedLaunch_WhenReleased_ThenOwnershipIsDurableFirstAndResolvesOnSettle', () async {
+    final temporary = await Directory.systemTemp.createTemp(
+      'maestro-owned-gate-',
+    );
+    addTearDown(() => temporary.delete(recursive: true));
+    final process = _Process(File(p.join(temporary.path, 'stdin')));
+    final ownership = _OwnershipStore();
+    final tree = _GatedTree(process, ownership);
+    final started =
+        await OwnedStepProcessLauncher(
+          processTree: tree,
+          ownership: ownership,
+          newResourceId: () => 'process-resource-1',
+          identityProvider: const _IdentityProvider(),
+        ).start(
+          const StepLaunchRequest(
+            runId: 'run-1',
+            attemptId: 'attempt-1',
+            cli: 'codex',
+            model: 'm',
+            executable: 'fixture-codex',
+            prompt: 'prompt',
+            workingDirectory: '/isolated',
+            environment: <String, String>{},
+          ),
+        );
 
-      expect(tree.released, isTrue);
-      expect(ownership.events, <String>['pending', 'active', 'release']);
-      expect(ownership.record!.kind, OwnedResourceKind.process);
-      expect(ownership.record!.runId, 'run-1');
-      expect(ownership.record!.processId, 42);
-      expect(
-        DurableProcessIdentity.decode(ownership.record!.path).fingerprint,
-        'fingerprint-42',
-      );
+    expect(tree.released, isTrue);
+    expect(ownership.events, <String>['pending', 'active', 'release']);
+    expect(ownership.record!.kind, OwnedResourceKind.process);
+    expect(ownership.record!.runId, 'run-1');
+    expect(ownership.record!.processId, 42);
+    expect(
+      DurableProcessIdentity.decode(ownership.record!.path).fingerprint,
+      'fingerprint-42',
+    );
 
-      await started.process!.settle();
-      expect(ownership.events.last, 'resolved');
-      await process.stdin.close();
-    },
-  );
+    await started.process!.settle();
+    expect(ownership.events.last, 'resolved');
+    await process.stdin.close();
+  });
 
-  test(
-    'owned launcher streams both channels with an isolated environment',
-    () async {
-      final temporary = await Directory.systemTemp.createTemp(
-        'maestro-process-',
-      );
-      addTearDown(() => temporary.delete(recursive: true));
-      final process = _Process(
-        File('${temporary.path}${Platform.pathSeparator}stdin'),
-      );
-      final tree = _Tree(process);
-      final started = await OwnedStepProcessLauncher(processTree: tree).start(
-        const StepLaunchRequest(
-          cli: 'codex',
-          model: 'm',
-          executable: 'fixture-codex',
-          prompt: 'prompt',
-          workingDirectory: '/isolated',
-          environment: <String, String>{'PATH': 'bin', 'LEAK': 'no'},
-        ),
-      );
-      final collected = started.process!.frames.toList();
-      process.stdoutController.add(<int>[1]);
-      process.stderrController.add(<int>[2]);
-      await process.stdoutController.close();
-      await process.stderrController.close();
-      process.exit.complete(0);
+  test('GivenOwnedLauncher_WhenStepRuns_ThenBothChannelsStreamWithAnIsolatedEnvironment', () async {
+    final temporary = await Directory.systemTemp.createTemp('maestro-process-');
+    addTearDown(() => temporary.delete(recursive: true));
+    final process = _Process(
+      File('${temporary.path}${Platform.pathSeparator}stdin'),
+    );
+    final tree = _Tree(process);
+    final started = await OwnedStepProcessLauncher(processTree: tree).start(
+      const StepLaunchRequest(
+        cli: 'codex',
+        model: 'm',
+        executable: 'fixture-codex',
+        prompt: 'prompt',
+        workingDirectory: '/isolated',
+        environment: <String, String>{'PATH': 'bin', 'LEAK': 'no'},
+      ),
+    );
+    final collected = started.process!.frames.toList();
+    process.stdoutController.add(<int>[1]);
+    process.stderrController.add(<int>[2]);
+    await process.stdoutController.close();
+    await process.stderrController.close();
+    process.exit.complete(0);
 
-      final frames = await collected;
-      expect(
-        frames.map((frame) => frame.channel),
-        containsAll(<RunLogChannel>[
-          RunLogChannel.stdout,
-          RunLogChannel.stderr,
-        ]),
-      );
-      expect(tree.request!.includeParentEnvironment, isFalse);
-      expect(tree.request!.environment['LEAK'], isNull);
-      expect(tree.request!.arguments.first, 'exec');
-      expect(await started.process!.exitCode, 0);
-    },
-  );
+    final frames = await collected;
+    expect(
+      frames.map((frame) => frame.channel),
+      containsAll(<RunLogChannel>[RunLogChannel.stdout, RunLogChannel.stderr]),
+    );
+    expect(tree.request!.includeParentEnvironment, isFalse);
+    expect(tree.request!.environment['LEAK'], isNull);
+    expect(tree.request!.arguments.first, 'exec');
+    expect(await started.process!.exitCode, 0);
+  });
 
   test(
-    'defers native pipe drains and stdin until frames are listened',
+    'GivenUnlistenedFrames_WhenProcessStarts_ThenPipeDrainsAndStdinAreDeferred',
     () async {
       final temporary = await Directory.systemTemp.createTemp('maestro-lazy-');
       addTearDown(() => temporary.delete(recursive: true));
@@ -205,7 +197,7 @@ void main() {
     },
   );
 
-  test('Windows and Linux fixture processes stream through ownership boundary', () async {
+  test('GivenFixtureProcess_WhenRunOnWindowsOrLinux_ThenItStreamsThroughTheOwnershipBoundary', () async {
     final separator = Platform.pathSeparator;
     final fixture = Platform.isWindows
         ? '${Directory.current.path}${separator}test${separator}fixtures${separator}step_agent_windows.ps1'
@@ -350,44 +342,41 @@ void main() {
     },
   );
 
-  test(
-    'applies native backpressure before startup flood is listened',
-    () async {
-      final temporary = await Directory.systemTemp.createTemp(
-        'maestro-startup-flood-',
-      );
-      addTearDown(() => temporary.delete(recursive: true));
-      final progress = File(p.join(temporary.path, 'progress'));
-      final launcher = OwnedStepProcessLauncher(
-        commands: _StartupFloodCommands(progress.path),
-      );
-      final started = await launcher
-          .start(
-            StepLaunchRequest(
-              cli: 'codex',
-              model: 'fixture',
-              executable: _dartExecutable(),
-              prompt: 'prompt',
-              workingDirectory: Directory.current.path,
-              environment: Platform.environment,
-            ),
-          )
-          .timeout(const Duration(seconds: 8));
+  test('GivenStartupFloodBeforeListening_WhenProcessStarts_ThenNativeBackpressureApplies', () async {
+    final temporary = await Directory.systemTemp.createTemp(
+      'maestro-startup-flood-',
+    );
+    addTearDown(() => temporary.delete(recursive: true));
+    final progress = File(p.join(temporary.path, 'progress'));
+    final launcher = OwnedStepProcessLauncher(
+      commands: _StartupFloodCommands(progress.path),
+    );
+    final started = await launcher
+        .start(
+          StepLaunchRequest(
+            cli: 'codex',
+            model: 'fixture',
+            executable: _dartExecutable(),
+            prompt: 'prompt',
+            workingDirectory: Directory.current.path,
+            environment: Platform.environment,
+          ),
+        )
+        .timeout(const Duration(seconds: 8));
 
-      await Future<void>.delayed(const Duration(seconds: 1));
-      final chunksBeforeListen = await _readProgress(progress);
-      expect(chunksBeforeListen, 0);
+    await Future<void>.delayed(const Duration(seconds: 1));
+    final chunksBeforeListen = await _readProgress(progress);
+    expect(chunksBeforeListen, 0);
 
-      final outputBytes = await started.process!.frames.fold<int>(
-        0,
-        (sum, frame) => frame.channel == RunLogChannel.stdout
-            ? sum + frame.bytes.length
-            : sum,
-      );
-      expect(await started.process!.exitCode, 0);
-      expect(outputBytes, 32 * 1024 * 1024);
-    },
-  );
+    final outputBytes = await started.process!.frames.fold<int>(
+      0,
+      (sum, frame) => frame.channel == RunLogChannel.stdout
+          ? sum + frame.bytes.length
+          : sum,
+    );
+    expect(await started.process!.exitCode, 0);
+    expect(outputBytes, 32 * 1024 * 1024);
+  });
 }
 
 final class _StartupFloodCommands implements StepCommandFactory {

@@ -8,7 +8,7 @@ import 'package:maestro/platform/process/native_process_tree.dart';
 import 'package:maestro/platform/process/owned_process_recovery.dart';
 
 void main() {
-  test('parses Linux stat with spaces and parentheses in comm', () {
+  test('GivenLinuxStatWithSpacesAndParenthesesInComm_WhenParsed_ThenIdentityIsRead', () {
     final fields = List<String>.filled(22, '0')
       ..[0] = 'T'
       ..[1] = '1'
@@ -28,7 +28,7 @@ void main() {
     expect(snapshot.fingerprint, 'linux-start:987654:session:42');
   });
 
-  test('rejects malformed Linux stat and non-leader stopped identity', () {
+  test('GivenMalformedLinuxStatOrNonLeaderStoppedIdentity_WhenParsed_ThenItIsRejected', () {
     expect(() => LinuxProcessSnapshot.parse('not stat'), throwsFormatException);
     final fields = List<String>.filled(22, '0')
       ..[0] = 'T'
@@ -42,65 +42,56 @@ void main() {
     expect(snapshot.isStoppedSessionLeader, isFalse);
   });
 
-  test(
-    'missing leader with matching session members terminates the group',
-    () async {
-      final descendant = _snapshot(pid: 43, groupId: 42, sessionId: 42);
-      final table = _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
-        <LinuxProcessSnapshot>[descendant],
-        const <LinuxProcessSnapshot>[],
-      ]);
-      final control = _FakeLinuxGroupControl();
-      final outcome = await LinuxOwnedProcessRecovery(
-        processTable: table,
-        groupControl: control,
-      ).reconcile(_identity());
+  test('GivenMissingLeaderWithMatchingSessionMembers_WhenRecovered_ThenGroupIsTerminated', () async {
+    final descendant = _snapshot(pid: 43, groupId: 42, sessionId: 42);
+    final table = _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
+      <LinuxProcessSnapshot>[descendant],
+      const <LinuxProcessSnapshot>[],
+    ]);
+    final control = _FakeLinuxGroupControl();
+    final outcome = await LinuxOwnedProcessRecovery(
+      processTable: table,
+      groupControl: control,
+    ).reconcile(_identity());
 
-      expect(outcome, ProcessRecoveryOutcome.resolved);
-      expect(control.signals, <LinuxGroupSignal>[LinuxGroupSignal.terminate]);
-    },
-  );
+    expect(outcome, ProcessRecoveryOutcome.resolved);
+    expect(control.signals, <LinuxGroupSignal>[LinuxGroupSignal.terminate]);
+  });
 
-  test(
-    'reused group number in a different session is never signalled',
-    () async {
-      final foreign = _snapshot(pid: 99, groupId: 42, sessionId: 99);
-      final control = _FakeLinuxGroupControl();
-      final outcome = await LinuxOwnedProcessRecovery(
-        processTable: _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
-          <LinuxProcessSnapshot>[foreign],
-        ]),
-        groupControl: control,
-      ).reconcile(_identity());
+  test('GivenGroupNumberReusedInAnotherSession_WhenRecovered_ThenItIsNeverSignalled', () async {
+    final foreign = _snapshot(pid: 99, groupId: 42, sessionId: 99);
+    final control = _FakeLinuxGroupControl();
+    final outcome = await LinuxOwnedProcessRecovery(
+      processTable: _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
+        <LinuxProcessSnapshot>[foreign],
+      ]),
+      groupControl: control,
+    ).reconcile(_identity());
 
-      expect(outcome, ProcessRecoveryOutcome.resolved);
-      expect(control.signals, isEmpty);
-    },
-  );
+    expect(outcome, ProcessRecoveryOutcome.resolved);
+    expect(control.signals, isEmpty);
+  });
 
-  test(
-    'live leader with reused start time is retained without signalling',
-    () async {
-      final reusedLeader = _snapshot(
-        pid: 42,
-        groupId: 42,
-        sessionId: 42,
-        startTime: 999,
-      );
-      final control = _FakeLinuxGroupControl();
-      final outcome = await LinuxOwnedProcessRecovery(
-        processTable: _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
-          <LinuxProcessSnapshot>[reusedLeader],
-        ]),
-        groupControl: control,
-      ).reconcile(_identity());
+  test('GivenLiveLeaderWithReusedStartTime_WhenRecovered_ThenItIsRetainedWithoutSignalling', () async {
+    final reusedLeader = _snapshot(
+      pid: 42,
+      groupId: 42,
+      sessionId: 42,
+      startTime: 999,
+    );
+    final control = _FakeLinuxGroupControl();
+    final outcome = await LinuxOwnedProcessRecovery(
+      processTable: _FakeLinuxProcessTable(<List<LinuxProcessSnapshot>>[
+        <LinuxProcessSnapshot>[reusedLeader],
+      ]),
+      groupControl: control,
+    ).reconcile(_identity());
 
-      expect(outcome, ProcessRecoveryOutcome.retainedFailure);
-      expect(control.signals, isEmpty);
-    },
-  );
+    expect(outcome, ProcessRecoveryOutcome.retainedFailure);
+    expect(control.signals, isEmpty);
+  });
 
-  test('group reused after TERM resolves without signalling KILL', () async {
+  test('GivenGroupReusedAfterTerm_WhenRecovered_ThenItResolvesWithoutSignallingKill', () async {
     final descendant = _snapshot(pid: 43, groupId: 42, sessionId: 42);
     final reusedLeader = _snapshot(
       pid: 42,
@@ -121,56 +112,52 @@ void main() {
     expect(control.signals, <LinuxGroupSignal>[LinuxGroupSignal.terminate]);
   });
 
-  test(
-    'Linux gated identity survives exec and genuine recovery kills only match',
-    () async {
-      if (!Platform.isLinux) return;
-      const identityProvider = PlatformProcessIdentityProvider();
-      const recovery = PlatformOwnedProcessRecovery();
+  test('GivenLinuxGatedIdentityAfterExec_WhenRecovered_ThenOnlyTheGenuineMatchIsKilled', () async {
+    if (!Platform.isLinux) return;
+    const identityProvider = PlatformProcessIdentityProvider();
+    const recovery = PlatformOwnedProcessRecovery();
 
-      for (var launch = 0; launch < 5; launch++) {
-        DurableProcessIdentity? beforeExec;
-        final owned = await LinuxGroupProcessTree().startOwned(
-          const ProcessStartRequest(
-            executable: '/bin/sleep',
-            arguments: <String>['60'],
-          ),
-          (process) async {
-            beforeExec = await identityProvider.capture(process.pid);
-          },
-        );
-        final afterExec = await _waitForRunningIdentity(
-          identityProvider,
-          owned.pid,
-        );
-        expect(afterExec.fingerprint, beforeExec!.fingerprint);
-        expect(afterExec.groupId, beforeExec!.groupId);
+    for (var launch = 0; launch < 5; launch++) {
+      DurableProcessIdentity? beforeExec;
+      final owned = await LinuxGroupProcessTree().startOwned(
+        const ProcessStartRequest(
+          executable: '/bin/sleep',
+          arguments: <String>['60'],
+        ),
+        (process) async {
+          beforeExec = await identityProvider.capture(process.pid);
+        },
+      );
+      final afterExec = await _waitForRunningIdentity(
+        identityProvider,
+        owned.pid,
+      );
+      expect(afterExec.fingerprint, beforeExec!.fingerprint);
+      expect(afterExec.groupId, beforeExec!.groupId);
 
-        final mismatched = DurableProcessIdentity(
-          platform: beforeExec!.platform,
-          pid: beforeExec!.pid,
-          fingerprint: 'linux-start:1:session:${beforeExec!.groupId}',
-          groupId: beforeExec!.groupId,
-        );
-        expect(
-          await recovery.reconcile(mismatched),
-          ProcessRecoveryOutcome.retainedFailure,
-        );
-        expect(
-          await recovery.reconcile(beforeExec!),
-          ProcessRecoveryOutcome.resolved,
-        );
-        expect(
-          await owned.exitCode.timeout(const Duration(seconds: 2)),
-          isNot(0),
-        );
-      }
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+      final mismatched = DurableProcessIdentity(
+        platform: beforeExec!.platform,
+        pid: beforeExec!.pid,
+        fingerprint: 'linux-start:1:session:${beforeExec!.groupId}',
+        groupId: beforeExec!.groupId,
+      );
+      expect(
+        await recovery.reconcile(mismatched),
+        ProcessRecoveryOutcome.retainedFailure,
+      );
+      expect(
+        await recovery.reconcile(beforeExec!),
+        ProcessRecoveryOutcome.resolved,
+      );
+      expect(
+        await owned.exitCode.timeout(const Duration(seconds: 2)),
+        isNot(0),
+      );
+    }
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   test(
-    'Linux recovery terminates descendant after session leader exits',
+    'GivenSessionLeaderExited_WhenRecoveredOnLinux_ThenDescendantIsTerminated',
     () async {
       if (!Platform.isLinux) return;
       final directory = await Directory.systemTemp.createTemp(

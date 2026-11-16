@@ -9,7 +9,7 @@ import 'package:maestro/features/runs/data/owned_attempt_result_files.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  test('registers ownership before creating the result directory', () async {
+  test('GivenNewAttempt_WhenResultDirectoryIsCreated_ThenOwnershipIsRegisteredFirst', () async {
     final parent = await Directory.systemTemp.createTemp(
       'maestro-owned-result-',
     );
@@ -34,50 +34,53 @@ void main() {
     expect(ownership.resolved, <String>['resource-1']);
   });
 
-  test('retains quarantine ownership when locked cleanup fails', () async {
-    final parent = await Directory.systemTemp.createTemp(
-      'maestro-owned-quarantine-',
-    );
-    addTearDown(() => parent.delete(recursive: true));
-    final root = p.join(parent.path, 'results');
-    final ownership = _Ownership(root);
-    var resource = 0;
-    final files = OwnedAttemptResultFiles(
-      resultRoot: root,
-      ownership: ownership,
-      newResourceId: () => 'resource-${++resource}',
-      protocol: AttemptResultProtocol(
-        quarantineToken: () => 'locked-token',
-        deleteQuarantine: (_) async {
-          throw FileSystemException('locked');
-        },
-      ),
-    );
-    final path = await files.prepare(runId: 'run-1', attemptId: 'attempt-1');
-    await File(path).writeAsString(
-      '{"schema":1,"attemptId":"attempt-1","nonce":"nonce",'
-      '"outcome":"succeeded","context":"safe"}',
-    );
+  test(
+    'GivenLockedQuarantine_WhenCleanupFails_ThenOwnershipIsRetained',
+    () async {
+      final parent = await Directory.systemTemp.createTemp(
+        'maestro-owned-quarantine-',
+      );
+      addTearDown(() => parent.delete(recursive: true));
+      final root = p.join(parent.path, 'results');
+      final ownership = _Ownership(root);
+      var resource = 0;
+      final files = OwnedAttemptResultFiles(
+        resultRoot: root,
+        ownership: ownership,
+        newResourceId: () => 'resource-${++resource}',
+        protocol: AttemptResultProtocol(
+          quarantineToken: () => 'locked-token',
+          deleteQuarantine: (_) async {
+            throw FileSystemException('locked');
+          },
+        ),
+      );
+      final path = await files.prepare(runId: 'run-1', attemptId: 'attempt-1');
+      await File(path).writeAsString(
+        '{"schema":1,"attemptId":"attempt-1","nonce":"nonce",'
+        '"outcome":"succeeded","context":"safe"}',
+      );
 
-    final result = await files.consume(
-      path: path,
-      attemptId: 'attempt-1',
-      nonce: 'nonce',
-    );
-    await files.resolve(path);
+      final result = await files.consume(
+        path: path,
+        attemptId: 'attempt-1',
+        nonce: 'nonce',
+      );
+      await files.resolve(path);
 
-    expect((result as AttemptResultAccepted).context.value, 'safe');
-    expect(ownership.records, hasLength(2));
-    expect(ownership.pathExistedAtRegistration, <bool>[false, false]);
-    final quarantine = ownership.records.last;
-    expect(quarantine.kind, OwnedResourceKind.resultFile);
-    expect(quarantine.runId, 'run-1');
-    expect(p.basename(quarantine.path), '.quarantine-locked-token');
-    expect(await Directory(quarantine.path).exists(), isTrue);
-    expect(ownership.active, <String>['resource-1', 'resource-2']);
-    expect(ownership.resolved, <String>['resource-1']);
-    expect(ownership.quarantineExistedWhenOriginalResolved, isTrue);
-  });
+      expect((result as AttemptResultAccepted).context.value, 'safe');
+      expect(ownership.records, hasLength(2));
+      expect(ownership.pathExistedAtRegistration, <bool>[false, false]);
+      final quarantine = ownership.records.last;
+      expect(quarantine.kind, OwnedResourceKind.resultFile);
+      expect(quarantine.runId, 'run-1');
+      expect(p.basename(quarantine.path), '.quarantine-locked-token');
+      expect(await Directory(quarantine.path).exists(), isTrue);
+      expect(ownership.active, <String>['resource-1', 'resource-2']);
+      expect(ownership.resolved, <String>['resource-1']);
+      expect(ownership.quarantineExistedWhenOriginalResolved, isTrue);
+    },
+  );
 }
 
 final class _Ownership implements RunOwnedResourceStore {

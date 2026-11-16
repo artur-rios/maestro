@@ -457,75 +457,69 @@ void main() {
     );
   });
 
-  test(
-    'runs immutable steps in order and hands off only declared context',
-    () async {
-      final fixture = _Fixture(stepCount: 2);
-      fixture.launcher.results.addAll(<_Script>[
-        _Script(
-          frames: <StepOutputFrame>[
-            StepOutputFrame(
-              RunLogChannel.stdout,
-              Uint8List.fromList(utf8.encode('diagnostic-output-only\n')),
-            ),
-          ],
-          context: 'from-one',
-        ),
-        _Script(context: 'from-two'),
-      ]);
+  test('GivenImmutableSteps_WhenRun_ThenTheyRunInOrderAndHandOffOnlyDeclaredContext', () async {
+    final fixture = _Fixture(stepCount: 2);
+    fixture.launcher.results.addAll(<_Script>[
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('diagnostic-output-only\n')),
+          ),
+        ],
+        context: 'from-one',
+      ),
+      _Script(context: 'from-two'),
+    ]);
 
-      await fixture.orchestrator.execute('run-1');
+    await fixture.orchestrator.execute('run-1');
 
-      expect(
-        fixture.repository.begun.map((value) => value.snapshotStepId),
-        <String>['s0', 's1'],
-      );
-      expect(fixture.launcher.requests[1].prompt, contains('from-one'));
-      expect(
-        fixture.launcher.requests[1].prompt,
-        isNot(contains('diagnostic-output-only')),
-      );
-      expect(fixture.repository.completed, <String>['attempt-1', 'attempt-2']);
-    },
-  );
+    expect(
+      fixture.repository.begun.map((value) => value.snapshotStepId),
+      <String>['s0', 's1'],
+    );
+    expect(fixture.launcher.requests[1].prompt, contains('from-one'));
+    expect(
+      fixture.launcher.requests[1].prompt,
+      isNot(contains('diagnostic-output-only')),
+    );
+    expect(fixture.repository.completed, <String>['attempt-1', 'attempt-2']);
+  });
 
-  test(
-    'persists redacted split-frame output before publishing summaries',
-    () async {
-      final fixture = _Fixture(
-        stepCount: 1,
-        environment: const <String, String>{'OPENAI_API_KEY': 'split-secret'},
-      );
-      fixture.launcher.results.add(
-        _Script(
-          frames: <StepOutputFrame>[
-            StepOutputFrame(
-              RunLogChannel.stdout,
-              Uint8List.fromList(utf8.encode('token=split-')),
-            ),
-            StepOutputFrame(
-              RunLogChannel.stdout,
-              Uint8List.fromList(utf8.encode('secret\n')),
-            ),
-          ],
-        ),
-      );
-      fixture.orchestrator.events.listen((_) {
-        expect(fixture.repository.logs, isNotEmpty);
-      });
+  test('GivenSplitFrameOutput_WhenStreamed_ThenRedactedOutputIsPersistedBeforeSummaries', () async {
+    final fixture = _Fixture(
+      stepCount: 1,
+      environment: const <String, String>{'OPENAI_API_KEY': 'split-secret'},
+    );
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('token=split-')),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('secret\n')),
+          ),
+        ],
+      ),
+    );
+    fixture.orchestrator.events.listen((_) {
+      expect(fixture.repository.logs, isNotEmpty);
+    });
 
-      await fixture.orchestrator.execute('run-1');
+    await fixture.orchestrator.execute('run-1');
 
-      final output = utf8.decode(
-        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
-      );
-      expect(output, contains('[REDACTED]'));
-      expect(output, isNot(contains('split-secret')));
-    },
-  );
+    final output = utf8.decode(
+      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(output, contains('[REDACTED]'));
+    expect(output, isNot(contains('split-secret')));
+  });
 
   test(
-    'redacts a secret crossing the bounded no-newline flush boundary',
+    'GivenSecretCrossingNoNewlineFlushBoundary_WhenStreamed_ThenItIsRedacted',
     () async {
       final fixture = _Fixture(
         stepCount: 1,
@@ -557,84 +551,81 @@ void main() {
     },
   );
 
+  test('GivenResumedRun_WhenNextStepStarts_ThenPriorStepDeclaredContextIsHandedOff', () async {
+    final fixture = _Fixture(stepCount: 2);
+    fixture.repository.aggregates['run-1'] = _aggregate(
+      'run-1',
+      count: 2,
+      worktreePath: '/tmp/run-1',
+      currentStepPosition: 1,
+      attempts: <RunAttempt>[
+        RunAttempt(
+          id: 'attempt-earlier',
+          runId: 'run-1',
+          snapshotStepId: 's0',
+          attemptNumber: 1,
+          status: AttemptStatus.failed,
+          startedAt: DateTime.utc(2026),
+          completedAt: DateTime.utc(2026),
+          failureCode: 'run.step.nonzero_exit',
+        ),
+        RunAttempt(
+          id: 'attempt-advanced',
+          runId: 'run-1',
+          snapshotStepId: 's0',
+          attemptNumber: 2,
+          status: AttemptStatus.succeeded,
+          startedAt: DateTime.utc(2026),
+          completedAt: DateTime.utc(2026),
+          exitCode: 0,
+          declaredContext: DeclaredContext.parse('persisted-from-step-one'),
+        ),
+      ],
+    );
+    fixture.launcher.results.add(_Script(context: 'from-two'));
+
+    await fixture.orchestrator.execute('run-1');
+
+    expect(fixture.launcher.requests, hasLength(1));
+    expect(
+      fixture.launcher.requests.single.prompt,
+      contains('persisted-from-step-one'),
+    );
+    expect(fixture.launcher.requests.single.prompt, isNot(contains('(none)')));
+  });
+
   test(
-    'resumed run hands the prior step declared context to the next step',
+    'GivenIncompleteUtf8CodePoint_WhenSplitAcrossFrames_ThenItIsRetained',
     () async {
-      final fixture = _Fixture(stepCount: 2);
-      fixture.repository.aggregates['run-1'] = _aggregate(
-        'run-1',
-        count: 2,
-        worktreePath: '/tmp/run-1',
-        currentStepPosition: 1,
-        attempts: <RunAttempt>[
-          RunAttempt(
-            id: 'attempt-earlier',
-            runId: 'run-1',
-            snapshotStepId: 's0',
-            attemptNumber: 1,
-            status: AttemptStatus.failed,
-            startedAt: DateTime.utc(2026),
-            completedAt: DateTime.utc(2026),
-            failureCode: 'run.step.nonzero_exit',
-          ),
-          RunAttempt(
-            id: 'attempt-advanced',
-            runId: 'run-1',
-            snapshotStepId: 's0',
-            attemptNumber: 2,
-            status: AttemptStatus.succeeded,
-            startedAt: DateTime.utc(2026),
-            completedAt: DateTime.utc(2026),
-            exitCode: 0,
-            declaredContext: DeclaredContext.parse('persisted-from-step-one'),
-          ),
-        ],
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(<int>[0x63, 0x61, 0x66, 0xc3]),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(<int>[0xa9, 0x0a]),
+            ),
+          ],
+        ),
       );
-      fixture.launcher.results.add(_Script(context: 'from-two'));
 
       await fixture.orchestrator.execute('run-1');
 
-      expect(fixture.launcher.requests, hasLength(1));
       expect(
-        fixture.launcher.requests.single.prompt,
-        contains('persisted-from-step-one'),
-      );
-      expect(
-        fixture.launcher.requests.single.prompt,
-        isNot(contains('(none)')),
+        utf8.decode(
+          fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+        ),
+        'café\n',
       );
     },
   );
 
-  test('retains an incomplete UTF-8 code point across frames', () async {
-    final fixture = _Fixture(stepCount: 1);
-    fixture.launcher.results.add(
-      _Script(
-        frames: <StepOutputFrame>[
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(<int>[0x63, 0x61, 0x66, 0xc3]),
-          ),
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(<int>[0xa9, 0x0a]),
-          ),
-        ],
-      ),
-    );
-
-    await fixture.orchestrator.execute('run-1');
-
-    expect(
-      utf8.decode(
-        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
-      ),
-      'café\n',
-    );
-  });
-
   test(
-    'redacts an unresolved exact secret prefix when the stream closes',
+    'GivenUnresolvedExactSecretPrefix_WhenStreamCloses_ThenItIsRedacted',
     () async {
       const secret = 'split-secret';
       final fixture = _Fixture(
@@ -663,75 +654,42 @@ void main() {
     },
   );
 
-  test('redacts a prefixed secret key whose value spans frames', () async {
-    // GITHUB_TOKEN= has no word boundary before TOKEN, so the streaming
-    // hold-back never recognised it and flushed the first half verbatim.
-    final fixture = _Fixture(stepCount: 1);
-    fixture.launcher.results.add(
-      _Script(
-        frames: <StepOutputFrame>[
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(utf8.encode('export GITHUB_TOKEN=first-half')),
-          ),
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(utf8.encode('-second-half done\n')),
-          ),
-        ],
-      ),
-    );
+  test(
+    'GivenPrefixedSecretKeyValueSpanningFrames_WhenStreamed_ThenItIsRedacted',
+    () async {
+      // GITHUB_TOKEN= has no word boundary before TOKEN, so the streaming
+      // hold-back never recognised it and flushed the first half verbatim.
+      final fixture = _Fixture(stepCount: 1);
+      fixture.launcher.results.add(
+        _Script(
+          frames: <StepOutputFrame>[
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('export GITHUB_TOKEN=first-half')),
+            ),
+            StepOutputFrame(
+              RunLogChannel.stdout,
+              Uint8List.fromList(utf8.encode('-second-half done\n')),
+            ),
+          ],
+        ),
+      );
 
-    await fixture.orchestrator.execute('run-1');
+      await fixture.orchestrator.execute('run-1');
 
-    final output = utf8.decode(
-      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
-    );
-    expect(output, isNot(contains('first-half')));
-    expect(output, isNot(contains('second-half')));
-    expect(output, contains('GITHUB_TOKEN=[REDACTED]'));
-  });
-
-  test('resolves a pattern candidate before an interleaved channel', () async {
-    final fixture = _Fixture(stepCount: 1);
-    fixture.launcher.results.add(
-      _Script(
-        frames: <StepOutputFrame>[
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(utf8.encode('before token=split-')),
-          ),
-          StepOutputFrame(
-            RunLogChannel.stderr,
-            Uint8List.fromList(utf8.encode('stderr\n')),
-          ),
-          StepOutputFrame(
-            RunLogChannel.stdout,
-            Uint8List.fromList(utf8.encode('secret after\n')),
-          ),
-        ],
-      ),
-    );
-
-    await fixture.orchestrator.execute('run-1');
-
-    final output = utf8.decode(
-      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
-    );
-    expect(output, 'before [REDACTED]stderr\n\n');
-    expect(output, isNot(contains('split-')));
-    expect(output, isNot(contains('secret after')));
-  });
+      final output = utf8.decode(
+        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+      );
+      expect(output, isNot(contains('first-half')));
+      expect(output, isNot(contains('second-half')));
+      expect(output, contains('GITHUB_TOKEN=[REDACTED]'));
+    },
+  );
 
   test(
-    'keeps pattern suppression when an overlapping exact suffix mismatches',
+    'GivenPatternCandidate_WhenAnotherChannelInterleaves_ThenItIsResolvedFirst',
     () async {
-      final fixture = _Fixture(
-        stepCount: 1,
-        environment: const <String, String>{
-          'OPENAI_API_KEY': 'token=split-secret',
-        },
-      );
+      final fixture = _Fixture(stepCount: 1);
       fixture.launcher.results.add(
         _Script(
           frames: <StepOutputFrame>[
@@ -745,7 +703,7 @@ void main() {
             ),
             StepOutputFrame(
               RunLogChannel.stdout,
-              Uint8List.fromList(utf8.encode('mismatch,still-secret\nnext\n')),
+              Uint8List.fromList(utf8.encode('secret after\n')),
             ),
           ],
         ),
@@ -756,15 +714,51 @@ void main() {
       final output = utf8.decode(
         fixture.repository.logs.expand((segment) => segment.bytes).toList(),
       );
-      expect(output, 'before [REDACTED]stderr\n\nnext\n');
-      expect(output, isNot(contains('token=split-')));
-      expect(output, isNot(contains('mismatch')));
-      expect(output, isNot(contains('still-secret')));
+      expect(output, 'before [REDACTED]stderr\n\n');
+      expect(output, isNot(contains('split-')));
+      expect(output, isNot(contains('secret after')));
     },
   );
 
+  test('GivenOverlappingExactSuffixMismatch_WhenStreamed_ThenPatternSuppressionIsKept', () async {
+    final fixture = _Fixture(
+      stepCount: 1,
+      environment: const <String, String>{
+        'OPENAI_API_KEY': 'token=split-secret',
+      },
+    );
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('before token=split-')),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stderr,
+            Uint8List.fromList(utf8.encode('stderr\n')),
+          ),
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(utf8.encode('mismatch,still-secret\nnext\n')),
+          ),
+        ],
+      ),
+    );
+
+    await fixture.orchestrator.execute('run-1');
+
+    final output = utf8.decode(
+      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(output, 'before [REDACTED]stderr\n\nnext\n');
+    expect(output, isNot(contains('token=split-')));
+    expect(output, isNot(contains('mismatch')));
+    expect(output, isNot(contains('still-secret')));
+  });
+
   test(
-    'suppresses quoted commas and semicolons through the resumed line',
+    'GivenQuotedCommasAndSemicolons_WhenLineResumes_ThenTheyStaySuppressed',
     () async {
       final fixture = _Fixture(stepCount: 1);
       fixture.launcher.results.add(
@@ -800,7 +794,7 @@ void main() {
     },
   );
 
-  test('retains stdout redaction state across durable stderr frames', () async {
+  test('GivenDurableStderrFrames_WhenInterleaved_ThenStdoutRedactionStateIsRetained', () async {
     const secret = 'split-secret';
     final stderrText = 'stderr-before\n${'e' * (256 * 1024)}\nstderr-after\n';
     final repository = _Repository()
@@ -862,59 +856,56 @@ void main() {
     expect(reconstructed, 'stdout-before [REDACTED]$stderrText stdout-after\n');
   });
 
-  test(
-    'forced mid-stream flush uses lookahead before cutting a secret',
-    () async {
-      const secret = 'boundary-secret';
-      final repository = _Repository()
-        ..aggregates['run-1'] = _aggregate(
-          'run-1',
-          count: 1,
-          worktreePath: Directory.current.path,
-        );
-      final launcher = _BoundaryLauncher(secret);
-      var attempt = 0;
-      var log = 0;
-      final orchestrator = RunOrchestrator(
-        repository: repository,
-        launcher: launcher,
-        resultFiles: _Results(),
-        executableFor: (cli) => cli,
-        environment: const <String, String>{'OPENAI_API_KEY': secret},
-        newAttemptId: () => 'attempt-${++attempt}',
-        newLogId: () => 'log-${++log}',
-        newNonce: () => 'nonce',
-        now: () => DateTime.now().toUtc(),
+  test('GivenForcedMidStreamFlush_WhenASecretIsPending_ThenLookaheadPreventsCuttingIt', () async {
+    const secret = 'boundary-secret';
+    final repository = _Repository()
+      ..aggregates['run-1'] = _aggregate(
+        'run-1',
+        count: 1,
+        worktreePath: Directory.current.path,
       );
-      final firstSummary = orchestrator.events.firstOutput;
-      final execution = orchestrator.execute('run-1');
+    final launcher = _BoundaryLauncher(secret);
+    var attempt = 0;
+    var log = 0;
+    final orchestrator = RunOrchestrator(
+      repository: repository,
+      launcher: launcher,
+      resultFiles: _Results(),
+      executableFor: (cli) => cli,
+      environment: const <String, String>{'OPENAI_API_KEY': secret},
+      newAttemptId: () => 'attempt-${++attempt}',
+      newLogId: () => 'log-${++log}',
+      newNonce: () => 'nonce',
+      now: () => DateTime.now().toUtc(),
+    );
+    final firstSummary = orchestrator.events.firstOutput;
+    final execution = orchestrator.execute('run-1');
 
-      await firstSummary.timeout(const Duration(milliseconds: 100));
-      final midstream = utf8.decode(
-        repository.logs.expand((segment) => segment.bytes).toList(),
-      );
-      expect(midstream, isNotEmpty);
-      expect(midstream, isNot(contains('boundary')));
-      expect(midstream, isNot(contains('-secret')));
+    await firstSummary.timeout(const Duration(milliseconds: 100));
+    final midstream = utf8.decode(
+      repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(midstream, isNotEmpty);
+    expect(midstream, isNot(contains('boundary')));
+    expect(midstream, isNot(contains('-secret')));
 
-      launcher.release.complete();
-      await execution;
-      final output = utf8.decode(
-        repository.logs.expand((segment) => segment.bytes).toList(),
-      );
-      expect(output, isNot(contains(secret)));
-      expect(output, isNot(contains('boundary')));
-      expect(output, isNot(contains('-secret')));
-      expect(output, contains('[REDACTED]'));
-      expect(
-        output.replaceFirst('[REDACTED]', ''),
-        '${'x' * (64 * 1024 - 6)}${'z' * 505}',
-      );
-    },
-  );
+    launcher.release.complete();
+    await execution;
+    final output = utf8.decode(
+      repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(output, isNot(contains(secret)));
+    expect(output, isNot(contains('boundary')));
+    expect(output, isNot(contains('-secret')));
+    expect(output, contains('[REDACTED]'));
+    expect(
+      output.replaceFirst('[REDACTED]', ''),
+      '${'x' * (64 * 1024 - 6)}${'z' * 505}',
+    );
+  });
 
   test(
-    'forced mid-stream flush converges across overlapping secrets',
+    'GivenOverlappingSecrets_WhenFlushIsForcedMidStream_ThenRedactionConverges',
     () async {
       const leftSecret = 'left-shared';
       const rightSecret = 'shared-right';
@@ -976,33 +967,30 @@ void main() {
     },
   );
 
-  test(
-    'redacts an authorization value longer than the forced boundary',
-    () async {
-      final fixture = _Fixture(stepCount: 1);
-      fixture.launcher.results.add(
-        _Script(
-          frames: <StepOutputFrame>[
-            StepOutputFrame(
-              RunLogChannel.stdout,
-              Uint8List.fromList(
-                utf8.encode('prefix Authorization: Bearer ${'s' * 70000}\nend'),
-              ),
+  test('GivenAuthorizationValueLongerThanForcedBoundary_WhenStreamed_ThenItIsRedacted', () async {
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: <StepOutputFrame>[
+          StepOutputFrame(
+            RunLogChannel.stdout,
+            Uint8List.fromList(
+              utf8.encode('prefix Authorization: Bearer ${'s' * 70000}\nend'),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
 
-      await fixture.orchestrator.execute('run-1');
-      final output = utf8.decode(
-        fixture.repository.logs.expand((segment) => segment.bytes).toList(),
-      );
-      expect(output, 'prefix Authorization: Bearer [REDACTED]\nend');
-    },
-  );
+    await fixture.orchestrator.execute('run-1');
+    final output = utf8.decode(
+      fixture.repository.logs.expand((segment) => segment.bytes).toList(),
+    );
+    expect(output, 'prefix Authorization: Bearer [REDACTED]\nend');
+  });
 
   test(
-    'does not treat ordinary ambient PATH values as exact secrets',
+    'GivenOrdinaryAmbientPathValues_WhenStreamed_ThenTheyAreNotExactSecrets',
     () async {
       final fixture = _Fixture(
         stepCount: 1,
@@ -1029,7 +1017,7 @@ void main() {
     },
   );
 
-  test('coalesces newline floods and releases completed-run tails', () async {
+  test('GivenNewlineFlood_WhenRunCompletes_ThenSummariesCoalesceAndTailsAreReleased', () async {
     final fixture = _Fixture(stepCount: 1);
     fixture.launcher.results.add(
       _Script(
@@ -1057,46 +1045,43 @@ void main() {
     expect(summaries, lessThan(10));
   });
 
-  test(
-    'paused subscriber retains only latest alternating-channel summary',
-    () async {
-      final fixture = _Fixture(stepCount: 1);
-      fixture.launcher.results.add(
-        _Script(
-          frames: List<StepOutputFrame>.generate(
-            1000,
-            (index) => StepOutputFrame(
-              index.isEven ? RunLogChannel.stdout : RunLogChannel.stderr,
-              Uint8List.fromList(<int>[index & 0xff]),
-            ),
+  test('GivenPausedSubscriber_WhenChannelsAlternate_ThenOnlyTheLatestSummaryIsRetained', () async {
+    final fixture = _Fixture(stepCount: 1);
+    fixture.launcher.results.add(
+      _Script(
+        frames: List<StepOutputFrame>.generate(
+          1000,
+          (index) => StepOutputFrame(
+            index.isEven ? RunLogChannel.stdout : RunLogChannel.stderr,
+            Uint8List.fromList(<int>[index & 0xff]),
           ),
         ),
-      );
-      RunLogSummary? delivered;
-      final subscription = fixture.orchestrator.events.listen(
-        (summary) => delivered = summary,
-      )..pause();
+      ),
+    );
+    RunLogSummary? delivered;
+    final subscription = fixture.orchestrator.events.listen(
+      (summary) => delivered = summary,
+    )..pause();
 
-      await fixture.orchestrator.execute('run-1');
+    await fixture.orchestrator.execute('run-1');
 
-      expect(subscription.pendingCount, 1);
-      subscription.resume();
-      await Future<void>.delayed(Duration.zero);
-      expect(delivered!.lastSequence, fixture.repository.logs.length - 1);
-      expect(
-        fixture.repository.logs.map((segment) => segment.channel).take(4),
-        <RunLogChannel>[
-          RunLogChannel.stdout,
-          RunLogChannel.stderr,
-          RunLogChannel.stdout,
-          RunLogChannel.stderr,
-        ],
-      );
-      subscription.cancel();
-    },
-  );
+    expect(subscription.pendingCount, 1);
+    subscription.resume();
+    await Future<void>.delayed(Duration.zero);
+    expect(delivered!.lastSequence, fixture.repository.logs.length - 1);
+    expect(
+      fixture.repository.logs.map((segment) => segment.channel).take(4),
+      <RunLogChannel>[
+        RunLogChannel.stdout,
+        RunLogChannel.stderr,
+        RunLogChannel.stdout,
+        RunLogChannel.stderr,
+      ],
+    );
+    subscription.cancel();
+  });
 
-  test('summary listeners are asynchronous isolated and coalesced', () async {
+  test('GivenSummaryListeners_WhenSummariesArePublished_ThenTheyAreAsyncIsolatedAndCoalesced', () async {
     final events = RunSummaryEvents();
     final received = <int>[];
     events.listen((summary) {
@@ -1123,21 +1108,24 @@ void main() {
     expect(survivor, <int>[999]);
   });
 
-  test('waits for owned process settlement before reading a result', () async {
-    final settlement = Completer<void>();
-    final fixture = _Fixture(stepCount: 1)
-      ..launcher.results.add(_Script(settlement: settlement));
+  test(
+    'GivenOwnedProcess_WhenAttemptEnds_ThenSettlementPrecedesReadingTheResult',
+    () async {
+      final settlement = Completer<void>();
+      final fixture = _Fixture(stepCount: 1)
+        ..launcher.results.add(_Script(settlement: settlement));
 
-    final execution = fixture.orchestrator.execute('run-1');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      final execution = fixture.orchestrator.execute('run-1');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    expect(fixture.results.consumeCount, 0);
-    settlement.complete();
-    await execution;
-    expect(fixture.results.consumeCount, 1);
-  });
+      expect(fixture.results.consumeCount, 0);
+      settlement.complete();
+      await execution;
+      expect(fixture.results.consumeCount, 1);
+    },
+  );
 
-  test('flushes a partial durable batch on the bounded time cadence', () async {
+  test('GivenPartialDurableBatch_WhenCadenceElapses_ThenItIsFlushed', () async {
     final repository = _Repository()
       ..aggregates['run-1'] = _aggregate(
         'run-1',
@@ -1166,7 +1154,7 @@ void main() {
   });
 
   test(
-    'nonzero and spawn failures terminate the current run with evidence',
+    'GivenNonzeroExitOrSpawnFailure_WhenStepRuns_ThenRunTerminatesWithEvidence',
     () async {
       final nonzero = _Fixture(stepCount: 2)
         ..launcher.results.add(_Script(exitCode: 9));
@@ -1181,55 +1169,58 @@ void main() {
     },
   );
 
-  test('maps post-attempt exception boundaries to typed failures', () async {
-    Future<void> verify(
-      String code,
-      void Function(_Fixture fixture) arrange,
-    ) async {
-      final fixture = _Fixture(stepCount: 1);
-      arrange(fixture);
-      await fixture.orchestrator.execute('run-1');
-      expect(fixture.repository.failed.single.$2, code);
-    }
+  test(
+    'GivenPostAttemptException_WhenStepEnds_ThenItMapsToATypedFailure',
+    () async {
+      Future<void> verify(
+        String code,
+        void Function(_Fixture fixture) arrange,
+      ) async {
+        final fixture = _Fixture(stepCount: 1);
+        arrange(fixture);
+        await fixture.orchestrator.execute('run-1');
+        expect(fixture.repository.failed.single.$2, code);
+      }
 
-    await verify('run.step.result_prepare', (fixture) {
-      fixture.results.prepareError = true;
-    });
-    await verify('run.step.executor_lookup', (fixture) {
-      fixture.lookupError = true;
-    });
-    await verify('run.step.spawn_exception', (fixture) {
-      fixture.launcher.throwOnStart = true;
-    });
-    await verify('run.step.stream_failed', (fixture) {
-      fixture.launcher.results.add(const _Script(streamError: true));
-    });
-    await verify('run.step.stream_failed', (fixture) {
-      fixture.results.resolveError = true;
-      fixture.launcher.results.add(const _Script(streamError: true));
-    });
-    await verify('run.step.log_persist', (fixture) {
-      fixture.repository.appendFailures = _unlimitedAppendFailures;
-      fixture.launcher.results.add(
-        _Script(
-          frames: <StepOutputFrame>[
-            StepOutputFrame(
-              RunLogChannel.stdout,
-              Uint8List.fromList(utf8.encode('evidence\n')),
-            ),
-          ],
-        ),
-      );
-    });
-    await verify('run.step.result_read', (fixture) {
-      fixture.results.consumeError = true;
-      fixture.launcher.results.add(const _Script());
-    });
-    await verify('run.step.result_cleanup', (fixture) {
-      fixture.results.resolveError = true;
-      fixture.launcher.results.add(const _Script());
-    });
-  });
+      await verify('run.step.result_prepare', (fixture) {
+        fixture.results.prepareError = true;
+      });
+      await verify('run.step.executor_lookup', (fixture) {
+        fixture.lookupError = true;
+      });
+      await verify('run.step.spawn_exception', (fixture) {
+        fixture.launcher.throwOnStart = true;
+      });
+      await verify('run.step.stream_failed', (fixture) {
+        fixture.launcher.results.add(const _Script(streamError: true));
+      });
+      await verify('run.step.stream_failed', (fixture) {
+        fixture.results.resolveError = true;
+        fixture.launcher.results.add(const _Script(streamError: true));
+      });
+      await verify('run.step.log_persist', (fixture) {
+        fixture.repository.appendFailures = _unlimitedAppendFailures;
+        fixture.launcher.results.add(
+          _Script(
+            frames: <StepOutputFrame>[
+              StepOutputFrame(
+                RunLogChannel.stdout,
+                Uint8List.fromList(utf8.encode('evidence\n')),
+              ),
+            ],
+          ),
+        );
+      });
+      await verify('run.step.result_read', (fixture) {
+        fixture.results.consumeError = true;
+        fixture.launcher.results.add(const _Script());
+      });
+      await verify('run.step.result_cleanup', (fixture) {
+        fixture.results.resolveError = true;
+        fixture.launcher.results.add(const _Script());
+      });
+    },
+  );
 
   test('GivenPauseRequestedMidStep_WhenTheStepCompletes_ThenTheRunPausesBeforeTheNextStep', () async {
     // Given: a two-step run whose first step is still executing.
@@ -1500,124 +1491,131 @@ void main() {
     },
   );
 
-  test('two run IDs can overlap while each run remains serial', () async {
-    final fixture = _Fixture(stepCount: 1);
-    final first = Completer<void>();
-    final second = Completer<void>();
-    fixture.launcher.results.addAll(<_Script>[
-      _Script(gate: first),
-      _Script(gate: second),
-    ]);
-    fixture.repository.aggregates['run-2'] = fixture.aggregate('run-2');
+  test(
+    'GivenTwoRunIds_WhenRunConcurrently_ThenTheyOverlapAndEachStaysSerial',
+    () async {
+      final fixture = _Fixture(stepCount: 1);
+      final first = Completer<void>();
+      final second = Completer<void>();
+      fixture.launcher.results.addAll(<_Script>[
+        _Script(gate: first),
+        _Script(gate: second),
+      ]);
+      fixture.repository.aggregates['run-2'] = fixture.aggregate('run-2');
 
-    final one = fixture.orchestrator.execute('run-1');
-    final two = fixture.orchestrator.execute('run-2');
-    await Future<void>.delayed(Duration.zero);
-    expect(fixture.launcher.requests, hasLength(2));
-    first.complete();
-    second.complete();
-    await Future.wait(<Future<void>>[one, two]);
+      final one = fixture.orchestrator.execute('run-1');
+      final two = fixture.orchestrator.execute('run-2');
+      await Future<void>.delayed(Duration.zero);
+      expect(fixture.launcher.requests, hasLength(2));
+      first.complete();
+      second.complete();
+      await Future.wait(<Future<void>>[one, two]);
+    },
+  );
+
+  test('GivenRealProcess_WhenStepRuns_ThenNonceBoundResultIsWrittenWithPriorContext', () async {
+    final real = await _RealFixture.create(mode: 'success', stepCount: 2);
+    addTearDown(real.dispose);
+
+    await real.orchestrator.execute('run-1');
+
+    expect(real.repository.completed, <String>['attempt-1', 'attempt-2']);
+    expect(real.repository.failed, isEmpty);
+    expect(real.repository.logs, isNotEmpty);
   });
 
   test(
-    'real process writes nonce-bound results and receives prior context',
+    'GivenRealNonzeroProcess_WhenStepRuns_ThenOutputIsPreservedAndRunFails',
     () async {
-      final real = await _RealFixture.create(mode: 'success', stepCount: 2);
+      final real = await _RealFixture.create(mode: 'nonzero', stepCount: 1);
       addTearDown(real.dispose);
 
       await real.orchestrator.execute('run-1');
 
-      expect(real.repository.completed, <String>['attempt-1', 'attempt-2']);
-      expect(real.repository.failed, isEmpty);
-      expect(real.repository.logs, isNotEmpty);
+      expect(real.repository.failed.single.$2, 'run.step.nonzero_exit');
+      expect(
+        utf8.decode(
+          real.repository.logs.expand((segment) => segment.bytes).toList(),
+        ),
+        contains('nonzero-evidence'),
+      );
     },
   );
-
-  test('real nonzero process preserves output and fails the run', () async {
-    final real = await _RealFixture.create(mode: 'nonzero', stepCount: 1);
-    addTearDown(real.dispose);
-
-    await real.orchestrator.execute('run-1');
-
-    expect(real.repository.failed.single.$2, 'run.step.nonzero_exit');
-    expect(
-      utf8.decode(
-        real.repository.logs.expand((segment) => segment.bytes).toList(),
-      ),
-      contains('nonzero-evidence'),
-    );
-  });
-
-  test('real sustained output is byte-preserving under backpressure', () async {
-    final real = await _RealFixture.create(mode: 'flood', stepCount: 1);
-    addTearDown(real.dispose);
-
-    await real.orchestrator.execute('run-1');
-
-    expect(
-      real.repository.logs
-          .where((segment) => segment.channel == RunLogChannel.stdout)
-          .fold<int>(0, (sum, segment) => sum + segment.bytes.length),
-      200000,
-    );
-    expect(
-      real.repository.logs
-          .where((segment) => segment.channel == RunLogChannel.stdout)
-          .length,
-      lessThanOrEqualTo(16),
-    );
-  });
-
-  test('settles a surviving child before quarantining its result', () async {
-    final real = await _RealFixture.create(
-      mode: 'survivingChildSwap',
-      stepCount: 1,
-    );
-    addTearDown(real.dispose);
-    final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
-
-    await real.orchestrator.execute('run-1');
-    final childPid = int.parse(
-      (await File('$resultPath.child.pid').readAsString()).trim(),
-    );
-
-    // Settlement is asserted by the child being gone, not by outrunning it.
-    // The child would only swap the result long after this poll expires, so a
-    // surviving child fails here rather than by winning a race. Report the
-    // recorded outcome first: a settlement that reported termination failure
-    // fails the attempt, and naming that code distinguishes an unsettled tree
-    // from a swap that landed.
-    expect(
-      real.repository.failed,
-      isEmpty,
-      reason: '${real.repository.failed}',
-    );
-    expect(real.repository.completed, <String>['attempt-1']);
-    expect(
-      await _waitUntilProcessExits(childPid),
-      isTrue,
-      reason: 'child $childPid survived settlement',
-    );
-    expect(await File('$resultPath.swap-marker').exists(), isFalse);
-    expect(await File(resultPath).exists(), isFalse);
-  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test(
-    'two real owned processes overlap instead of serializing globally',
+    'GivenRealSustainedOutput_WhenBackpressured_ThenBytesArePreserved',
     () async {
-      final real = await _RealFixture.create(mode: 'overlap', stepCount: 1);
+      final real = await _RealFixture.create(mode: 'flood', stepCount: 1);
       addTearDown(real.dispose);
-      real.repository.aggregates['run-2'] = real.aggregate('run-2', count: 1);
 
-      await Future.wait(<Future<void>>[
-        real.orchestrator.execute('run-1'),
-        real.orchestrator.execute('run-2'),
-      ]);
+      await real.orchestrator.execute('run-1');
 
-      expect(real.repository.completed, hasLength(2));
-      expect(real.repository.failed, isEmpty);
+      expect(
+        real.repository.logs
+            .where((segment) => segment.channel == RunLogChannel.stdout)
+            .fold<int>(0, (sum, segment) => sum + segment.bytes.length),
+        200000,
+      );
+      expect(
+        real.repository.logs
+            .where((segment) => segment.channel == RunLogChannel.stdout)
+            .length,
+        lessThanOrEqualTo(16),
+      );
     },
   );
+
+  test(
+    'GivenSurvivingChild_WhenAttemptEnds_ThenItSettlesBeforeResultQuarantine',
+    () async {
+      final real = await _RealFixture.create(
+        mode: 'survivingChildSwap',
+        stepCount: 1,
+      );
+      addTearDown(real.dispose);
+      final resultPath = p.join(real.root.path, 'results', 'attempt-1.json');
+
+      await real.orchestrator.execute('run-1');
+      final childPid = int.parse(
+        (await File('$resultPath.child.pid').readAsString()).trim(),
+      );
+
+      // Settlement is asserted by the child being gone, not by outrunning it.
+      // The child would only swap the result long after this poll expires, so a
+      // surviving child fails here rather than by winning a race. Report the
+      // recorded outcome first: a settlement that reported termination failure
+      // fails the attempt, and naming that code distinguishes an unsettled tree
+      // from a swap that landed.
+      expect(
+        real.repository.failed,
+        isEmpty,
+        reason: '${real.repository.failed}',
+      );
+      expect(real.repository.completed, <String>['attempt-1']);
+      expect(
+        await _waitUntilProcessExits(childPid),
+        isTrue,
+        reason: 'child $childPid survived settlement',
+      );
+      expect(await File('$resultPath.swap-marker').exists(), isFalse);
+      expect(await File(resultPath).exists(), isFalse);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test('GivenTwoRealOwnedProcesses_WhenRunConcurrently_ThenTheyOverlapInsteadOfSerializing', () async {
+    final real = await _RealFixture.create(mode: 'overlap', stepCount: 1);
+    addTearDown(real.dispose);
+    real.repository.aggregates['run-2'] = real.aggregate('run-2', count: 1);
+
+    await Future.wait(<Future<void>>[
+      real.orchestrator.execute('run-1'),
+      real.orchestrator.execute('run-2'),
+    ]);
+
+    expect(real.repository.completed, hasLength(2));
+    expect(real.repository.failed, isEmpty);
+  });
 
   test('GivenCancelWithNoLiveProcess_WhenTheRunIsExecutedLater_'
       'ThenTheStaleRequestDoesNotVoidIt', () async {

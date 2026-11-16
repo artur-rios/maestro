@@ -300,7 +300,7 @@ void main() {
     );
   });
 
-  test('GivenDeclaredContext_WhenAtBoundaryThenAccepted_WhenOverBoundaryThenRejected', () {
+  test('GivenDeclaredContext_WhenAtAndOverTheBoundary_ThenAtIsAcceptedAndOverIsRejected', () {
     expect(
       DeclaredContext.parse(List<String>.filled(262144, 'x').join()).bytes,
       262144,

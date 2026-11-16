@@ -257,7 +257,7 @@ void main() {
       '/repo\u0000suffix',
     ]) {
       test(
-        'GivenMalformedGitOutput_${output.length}_WhenValidated_ThenTransient',
+        'GivenMalformedGitOutputOfLength${output.length}_WhenValidated_ThenTransient',
         () async {
           final runner = _RecordingRunner(_success(output));
           final validator = _validator(

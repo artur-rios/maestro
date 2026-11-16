@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 
 void main() {
   test(
-    'failed job termination still closes the kill-on-close handle',
+    'GivenJobTerminationFails_WhenClosed_ThenKillOnCloseHandleIsStillClosed',
     () async {
       final api = _FailingTerminationApi();
       final termination = WindowsJobTermination(api, Completer<int>().future);

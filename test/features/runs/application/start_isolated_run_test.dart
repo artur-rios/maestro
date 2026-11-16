@@ -13,7 +13,7 @@ import 'package:maestro/features/workflows/domain/workflow_models.dart';
 
 void main() {
   group('StartIsolatedRun', () {
-    test('Given a dirty source_When starting_Then validation stops before work-item resolution and persistence', () async {
+    test('GivenADirtySource_WhenStarting_ThenValidationStopsBeforeWorkItemResolutionAndPersistence', () async {
       final fixture = _Fixture(sourceState: const RunGitSourceState.dirty());
 
       final result = await fixture.service(fixture.request);
@@ -25,7 +25,7 @@ void main() {
       expect(fixture.gitMutations, isEmpty);
     });
 
-    test('Given an inaccessible work item_When starting_Then workflow and agent checks do not run', () async {
+    test('GivenAnInaccessibleWorkItem_WhenStarting_ThenWorkflowAndAgentChecksDoNotRun', () async {
       final fixture = _Fixture(
         workItemResult: const WorkItemResolutionRejected(
           code: 'run.work_item.inaccessible',
@@ -41,16 +41,19 @@ void main() {
       expect(fixture.createdRuns, isEmpty);
     });
 
-    test('Given an invalid workflow_When starting_Then fresh agent readiness is not queried', () async {
-      final fixture = _Fixture(workflow: _workflow(assigned: false));
+    test(
+      'GivenAnInvalidWorkflow_WhenStarting_ThenFreshAgentReadinessIsNotQueried',
+      () async {
+        final fixture = _Fixture(workflow: _workflow(assigned: false));
 
-      final result = await fixture.service(fixture.request);
+        final result = await fixture.service(fixture.request);
 
-      expect((result as RunStartRejected).code, 'run.workflow.invalid');
-      expect(fixture.calls, <String>['project', 'source', 'workItem']);
-    });
+        expect((result as RunStartRejected).code, 'run.workflow.invalid');
+        expect(fixture.calls, <String>['project', 'source', 'workItem']);
+      },
+    );
 
-    test('Given fresh agent readiness fails_When starting_Then no intent or Git resource is created', () async {
+    test('GivenFreshAgentReadinessFails_WhenStarting_ThenNoIntentOrGitResourceIsCreated', () async {
       final fixture = _Fixture(agentsReady: false);
 
       final result = await fixture.service(fixture.request);
@@ -66,21 +69,24 @@ void main() {
       expect(fixture.ownership, isEmpty);
     });
 
-    test('Given a stale tracked base_When starting_Then it fails before persistence', () async {
-      final fixture = _Fixture(
-        sourceState: const RunGitSourceState.ready(
-          localRevision: 'local',
-          advertisedRevision: 'remote',
-        ),
-      );
+    test(
+      'GivenAStaleTrackedBase_WhenStarting_ThenItFailsBeforePersistence',
+      () async {
+        final fixture = _Fixture(
+          sourceState: const RunGitSourceState.ready(
+            localRevision: 'local',
+            advertisedRevision: 'remote',
+          ),
+        );
 
-      final result = await fixture.service(fixture.request);
+        final result = await fixture.service(fixture.request);
 
-      expect((result as RunStartRejected).code, 'run.git.base_stale');
-      expect(fixture.createdRuns, isEmpty);
-    });
+        expect((result as RunStartRejected).code, 'run.git.base_stale');
+        expect(fixture.createdRuns, isEmpty);
+      },
+    );
 
-    test('Given valid inputs_When starting_Then ownership intent precedes every Git mutation', () async {
+    test('GivenValidInputs_WhenStarting_ThenOwnershipIntentPrecedesEveryGitMutation', () async {
       final fixture = _Fixture();
 
       final result = await fixture.service(fixture.request);
@@ -103,7 +109,7 @@ void main() {
       expect(fixture.createdRuns.single.snapshot.sourceRevision, 'abc123');
     });
 
-    test('Given the repository names a default branch_When starting_Then the run is based on it', () async {
+    test('GivenTheRepositoryNamesADefaultBranch_WhenStarting_ThenTheRunIsBasedOnIt', () async {
       final fixture = _Fixture(remoteDefaultBranch: 'develop');
 
       final result = await fixture.service(fixture.request);
@@ -112,7 +118,7 @@ void main() {
       expect(fixture.inspectedBaseBranches, <String>['develop']);
     });
 
-    test('Given the default branch cannot be resolved_When starting_Then the fallback base branch is used', () async {
+    test('GivenTheDefaultBranchCannotBeResolved_WhenStarting_ThenTheFallbackBaseBranchIsUsed', () async {
       final fixture = _Fixture();
 
       final result = await fixture.service(fixture.request);
@@ -121,7 +127,7 @@ void main() {
       expect(fixture.inspectedBaseBranches, <String>['main']);
     });
 
-    test('Given the resolved base branch is missing locally_When starting_Then the rejection names that branch', () async {
+    test('GivenTheResolvedBaseBranchIsMissingLocally_WhenStarting_ThenTheRejectionNamesThatBranch', () async {
       final fixture = _Fixture(
         remoteDefaultBranch: 'develop',
         sourceState: const RunGitSourceState.baseMissing(),
@@ -136,7 +142,7 @@ void main() {
       expect(fixture.createdRuns, isEmpty);
     });
 
-    test('Given each branch work type_When starting_Then the branch is a feature or fix branch the branch policy accepts', () async {
+    test('GivenEachBranchWorkType_WhenStarting_ThenTheBranchIsAFeatureOrFixBranchTheBranchPolicyAccepts', () async {
       const expectedPrefixes = <BranchWorkType, String>{
         BranchWorkType.feature: 'feature/',
         BranchWorkType.fix: 'fix/',
@@ -159,7 +165,7 @@ void main() {
       }
     });
 
-    test('Given work-item text with no branch-safe characters_When starting_Then the branch still satisfies the branch policy', () async {
+    test('GivenWorkItemTextWithNoBranchSafeCharacters_WhenStarting_ThenTheBranchStillSatisfiesTheBranchPolicy', () async {
       for (final text in <String>['***', '  Ünïcødé — Ação!  ', '-._-']) {
         final fixture = _Fixture(
           runId: 'Run-ABCD.1234',
@@ -176,7 +182,7 @@ void main() {
       }
     });
 
-    test('Given the same work item_When two runs start_Then branch and worktree identities remain isolated', () async {
+    test('GivenTheSameWorkItem_WhenTwoRunsStart_ThenBranchAndWorktreeIdentitiesRemainIsolated', () async {
       final first = _Fixture(runId: 'run-aaaaaaaa');
       final second = _Fixture(runId: 'run-bbbbbbbb');
 
@@ -189,7 +195,7 @@ void main() {
       expect(firstResult.worktreePath, isNot(secondResult.worktreePath));
     });
 
-    test('Given worktree creation partially succeeds_When Git reports failure_Then only this run resources are compensated', () async {
+    test('GivenWorktreeCreationPartiallySucceeds_WhenGitReportsFailure_ThenOnlyThisRunResourcesAreCompensated', () async {
       final fixture = _Fixture(failWorktreeAfterCreation: true);
 
       final result = await fixture.service(fixture.request);
@@ -206,7 +212,7 @@ void main() {
       expect(fixture.events.last, 'transition:starting-failed');
     });
 
-    test('Given worktree compensation throws_When start fails_Then run fails with cleanup required', () async {
+    test('GivenWorktreeCompensationThrows_WhenStartFails_ThenRunFailsWithCleanupRequired', () async {
       final fixture = _Fixture(
         failWorktreeAfterCreation: true,
         failRemoveWorktree: true,
@@ -220,7 +226,7 @@ void main() {
       expect(fixture.events, isNot(contains('resolved:branch')));
     });
 
-    test('Given branch compensation throws_When start fails_Then run fails with cleanup required', () async {
+    test('GivenBranchCompensationThrows_WhenStartFails_ThenRunFailsWithCleanupRequired', () async {
       final fixture = _Fixture(
         failWorktreeAfterCreation: true,
         failDeleteBranch: true,
@@ -234,7 +240,7 @@ void main() {
       expect(fixture.events, isNot(contains('resolved:branch')));
     });
 
-    test('Given a concurrent actor creates the branch after precheck_When Maestro creation fails_Then that branch is never deleted', () async {
+    test('GivenAConcurrentActorCreatesTheBranchAfterPrecheck_WhenMaestroCreationFails_ThenThatBranchIsNeverDeleted', () async {
       final fixture = _Fixture(concurrentBranchConflict: true);
 
       final result = await fixture.service(fixture.request);
@@ -244,7 +250,7 @@ void main() {
       expect(fixture.branches, isNotEmpty);
     });
 
-    test('Given a concurrent actor creates the worktree after precheck_When Maestro creation fails_Then only the proven Maestro branch is deleted', () async {
+    test('GivenAConcurrentActorCreatesTheWorktreeAfterPrecheck_WhenMaestroCreationFails_ThenOnlyTheProvenMaestroBranchIsDeleted', () async {
       final fixture = _Fixture(concurrentWorktreeConflict: true);
 
       final result = await fixture.service(fixture.request);
@@ -258,7 +264,7 @@ void main() {
       expect(fixture.worktrees, isNotEmpty);
     });
 
-    test('Given branch presence cannot be inspected_When starting_Then it fails closed before persistence', () async {
+    test('GivenBranchPresenceCannotBeInspected_WhenStarting_ThenItFailsClosedBeforePersistence', () async {
       final fixture = _Fixture(branchPresenceInaccessible: true);
 
       final result = await fixture.service(fixture.request);
@@ -268,7 +274,7 @@ void main() {
       expect(fixture.gitMutations, isEmpty);
     });
 
-    test('Given worktree presence cannot be inspected_When starting_Then it fails closed before persistence', () async {
+    test('GivenWorktreePresenceCannotBeInspected_WhenStarting_ThenItFailsClosedBeforePersistence', () async {
       final fixture = _Fixture(worktreePresenceInaccessible: true);
 
       final result = await fixture.service(fixture.request);
@@ -278,7 +284,7 @@ void main() {
       expect(fixture.gitMutations, isEmpty);
     });
 
-    test('Given branch creation outcome is unknown_When starting_Then pending ownership is retained and nothing is deleted', () async {
+    test('GivenBranchCreationOutcomeIsUnknown_WhenStarting_ThenPendingOwnershipIsRetainedAndNothingIsDeleted', () async {
       final fixture = _Fixture(branchMutationUnknown: true);
 
       final result = await fixture.service(fixture.request);
@@ -288,7 +294,7 @@ void main() {
       expect(fixture.events, isNot(contains('resolved:branch')));
     });
 
-    test('Given worktree creation outcome is unknown and no worktree is registered_When starting_Then the branch this run created is deleted', () async {
+    test('GivenWorktreeCreationOutcomeIsUnknownAndNoWorktreeIsRegistered_WhenStarting_ThenTheBranchThisRunCreatedIsDeleted', () async {
       final fixture = _Fixture(worktreeMutationUnknown: true);
 
       final result = await fixture.service(fixture.request);
@@ -305,7 +311,7 @@ void main() {
       expect(fixture.events.last, 'transition:starting-failed');
     });
 
-    test('Given worktree creation outcome is unknown and a worktree is registered at the run path_When starting_Then nothing is removed and cleanup is required', () async {
+    test('GivenWorktreeCreationOutcomeIsUnknownAndAWorktreeIsRegisteredAtTheRunPath_WhenStarting_ThenNothingIsRemovedAndCleanupIsRequired', () async {
       final fixture = _Fixture(
         worktreeMutationUnknown: true,
         worktreeRegisteredBeforeUnknown: true,
@@ -322,7 +328,7 @@ void main() {
       expect(fixture.events.last, 'transition:starting-failed');
     });
 
-    test('Given worktree creation outcome is unknown and registration cannot be inspected_When starting_Then nothing is removed and cleanup is required', () async {
+    test('GivenWorktreeCreationOutcomeIsUnknownAndRegistrationCannotBeInspected_WhenStarting_ThenNothingIsRemovedAndCleanupIsRequired', () async {
       final fixture = _Fixture(
         worktreeMutationUnknown: true,
         worktreeProbeInaccessible: true,
@@ -337,7 +343,7 @@ void main() {
       expect(fixture.events.last, 'transition:starting-failed');
     });
 
-    test('Given the run cannot leave the queue_When starting_Then it is failed and the start is rejected before any Git mutation', () async {
+    test('GivenTheRunCannotLeaveTheQueue_WhenStarting_ThenItIsFailedAndTheStartIsRejectedBeforeAnyGitMutation', () async {
       final fixture = _Fixture(failStartingTransition: true);
 
       final result = await fixture.service(fixture.request);
@@ -354,7 +360,7 @@ void main() {
       expect(fixture.ownership, isEmpty);
     });
 
-    test('Given path becomes unsafe immediately before branch mutation_When starting_Then it fails without Git mutation', () async {
+    test('GivenPathBecomesUnsafeImmediatelyBeforeBranchMutation_WhenStarting_ThenItFailsWithoutGitMutation', () async {
       final fixture = _Fixture(unsafeOnPathInspection: 2);
 
       final result = await fixture.service(fixture.request);
@@ -363,7 +369,7 @@ void main() {
       expect(fixture.gitMutations, isEmpty);
     });
 
-    test('Given path becomes unsafe immediately before worktree mutation_When starting_Then proven branch is compensated', () async {
+    test('GivenPathBecomesUnsafeImmediatelyBeforeWorktreeMutation_WhenStarting_ThenProvenBranchIsCompensated', () async {
       final fixture = _Fixture(unsafeOnPathInspection: 3);
 
       final result = await fixture.service(fixture.request);
